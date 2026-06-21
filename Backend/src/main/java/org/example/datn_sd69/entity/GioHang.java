@@ -6,17 +6,13 @@ import org.example.datn_sd69.entity.base.BaseEntity;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "DanhSachYeuThichs")
+@Table(name = "GioHangs")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-public class DanhSachYeuThich extends BaseEntity {
+public class GioHang extends BaseEntity {
     @ManyToOne
     @JoinColumn(name = "KhachHangId", nullable = false)
     private KhachHang khachHang;
 
-    @ManyToOne
-    @JoinColumn(name = "BienTheSanPhamId", nullable = false)
-    private BienTheSanPham bienTheSanPham;
-
-    @Column(name = "NgayThem")
-    private LocalDateTime ngayThem;
+    @Column(name = "NgayTao", columnDefinition = "DATETIME DEFAULT GETDATE()")
+    private LocalDateTime ngayTao;
 }

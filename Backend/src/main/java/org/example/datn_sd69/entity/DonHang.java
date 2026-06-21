@@ -60,4 +60,7 @@ public class DonHang extends BaseEntity {
 
     @Column(name = "NgayTao")
     private LocalDateTime ngayTao; // Giữ nguyên trường của SQL gốc
+
+    @Column(name = "NgayCapNhat")
+    private LocalDateTime ngayCapNhat;
 }
