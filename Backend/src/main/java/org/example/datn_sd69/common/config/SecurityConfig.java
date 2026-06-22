@@ -1,5 +1,6 @@
 package org.example.datn_sd69.common.config;
 
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,36 +29,39 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(); // Mã hóa chuẩn thực tế
+        return new BCryptPasswordEncoder();
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http.csrf(csrf -> csrf.disable()) // Tắt CSRF vì dùng JWT
-
-                // 1. SỬA CHÍ MẠNG: Bật cấu hình CORS chuẩn thay vì dùng .disable() để chặn Postman/Vue 3 bắn PUT
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // Không dùng Session
+        http
+                .csrf(csrf -> csrf.disable()) // Tắt CSRF vì dùng cấu trúc RESTful JWT
+                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Kích hoạt CORS chuẩn
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Cho phép tất cả truy cập vào API Auth (Đăng nhập, đăng ký)
+                        // 1. Cho phép tất cả truy cập vào API Đăng nhập, Đăng ký công khai
                         .requestMatchers("/api/auth/**").permitAll()
 
-                        // 2. SỬA CHÍ MẠNG: Mở khóa thông suốt cho API tài khoản (Chấp nhận cả có hoặc không có /v1, chấp nhận mọi phương thức PUT/POST)
+                        // 2. Cho phép truy cập tự do vào cụm API tài khoản khách hàng cũ của bạn
                         .requestMatchers("/api/v1/customer/account/**").permitAll()
                         .requestMatchers("/api/customer/account/**").permitAll()
 
-                        // Các API khác yêu cầu phải có Token hợp lệ
+                        // 3. ĐÃ SỬA: Mở khóa cả đường dẫn gốc và đường dẫn con của Favorites
+                        .requestMatchers("/api/user/favorites").permitAll()   // Mở khóa cho lệnh GET (gốc)
+                        .requestMatchers("/api/user/favorites/**").permitAll() // Mở khóa cho lệnh POST (/toggle) và nhánh con
+                        .requestMatchers("/api/user/profile/**").permitAll()
+
+                        // Tất cả các API quản trị hoặc API khác còn lại bắt buộc phải có Token qua JwtAuthFilter
                         .anyRequest().authenticated()
                 );
 
-        // Nhúng cái JwtAuthFilter của bạn vào trước bước kiểm tra tài khoản của Spring
+        // Đính kèm bộ lọc JWT lọc request trước khi xử lý phân quyền
         http.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-    // 3. THÊM ĐOẠN NÀY: Hàm cấu hình CORS cho phép Postman/Browser gửi mọi Method (PUT, POST, GET, OPTIONS) lên Server
+    // Cấu hình CORS mở rộng giúp Frontend Vite (chạy cổng 5173) không bị trình duyệt chặn dữ liệu
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
