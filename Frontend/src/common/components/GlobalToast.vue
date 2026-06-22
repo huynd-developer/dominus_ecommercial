@@ -1,91 +1,52 @@
-<!-- frontend/src/common/components/GlobalToast.vue -->
 <template>
-  <!-- Vùng chứa cố định ở góc trên bên phải, z-index cực cao để đè mọi Modal/Offcanvas -->
-  <div class="toast-wrapper">
-    <TransitionGroup name="toast-slide" tag="div" class="d-flex flex-column gap-2">
+  <div class="toast-container position-fixed bottom-0 end-0 p-3 z-3">
+    <transition-group name="toast-fade">
       <div 
-        v-for="toast in appStore.toasts" 
-        :key="toast.id"
-        class="custom-toast shadow-lg d-flex align-items-center p-3"
-        :class="getToastClass(toast.type)"
+        v-for="toast in toasts" 
+        :key="toast.id" 
+        :class="['custom-toast d-flex align-items-center gap-3 p-3 rounded-3 shadow-lg mb-2', toast.type]"
       >
-        <!-- Icon theo trạng thái -->
-        <div class="toast-icon me-3">
-          <i v-if="toast.type === 'success'" class="bi bi-check-circle-fill text-success fs-4"></i>
-          <i v-else-if="toast.type === 'error'" class="bi bi-exclamation-triangle-fill text-danger fs-4"></i>
-          <i v-else class="bi bi-info-circle-fill text-warning fs-4"></i>
-        </div>
-        
-        <!-- Nội dung -->
-        <div class="flex-grow-1">
-          <h6 class="mb-0 fw-bold text-dark">{{ getToastTitle(toast.type) }}</h6>
-          <span class="small text-muted fw-medium">{{ toast.message }}</span>
-        </div>
-
-        <!-- Nút Đóng -->
-        <button 
-          @click="appStore.removeToast(toast.id)" 
-          class="btn btn-sm btn-link text-muted p-0 ms-3 shadow-none border-0"
-        >
-          <i class="bi bi-x-lg fs-5"></i>
-        </button>
+        <i :class="['bi', toast.type === 'success' ? 'bi-check-circle-fill text-success' : 'bi-exclamation-triangle-fill text-warning']"></i>
+        <span class="text-xs fw-medium">{{ toast.message }}</span>
+        <button @click="removeToast(toast.id)" class="btn-close btn-close-white ms-auto text-xs" style="scale: 0.8;"></button>
       </div>
-    </TransitionGroup>
+    </transition-group>
   </div>
 </template>
 
-<script setup lang="ts">
-import { useAppStore } from '@/common/store/app.store';
+<script setup>
+import { ref } from 'vue';
 
-const appStore = useAppStore();
+const toasts = ref([]);
+let counter = 0;
 
-const getToastTitle = (type: string) => {
-  if (type === 'success') return 'Thành công';
-  if (type === 'error') return 'Đã xảy ra lỗi';
-  return 'Thông báo';
+// Hàm kích hoạt Toast (Sẽ được gọi từ bên ngoài)
+const show = (message, type = 'success') => {
+  const id = counter++;
+  toasts.value.push({ id, message, type });
+
+  // Tự động xóa sau 3 giây
+  setTimeout(() => {
+    removeToast(id);
+  }, 3000);
 };
 
-const getToastClass = (type: string) => {
-  if (type === 'success') return 'border-start border-4 border-success';
-  if (type === 'error') return 'border-start border-4 border-danger';
-  return 'border-start border-4 border-warning';
+const removeToast = (id) => {
+  toasts.value = toasts.value.filter(t => t.id !== id);
 };
+
+// Xuất hàm này ra ngoài để component cha (App.vue) có thể tóm được nó
+defineExpose({ show });
 </script>
 
 <style scoped>
-/* Container cố định góc phải màn hình */
-.toast-wrapper {
-  position: fixed;
-  top: 24px;
-  right: 24px;
-  z-index: 99999; /* Đảm bảo luôn nằm trên cùng */
-  pointer-events: none; /* Xuyên click ở khoảng trống */
-  width: 320px;
-  max-width: calc(100vw - 48px);
-}
+.toast-container { max-width: 350px; }
+.custom-toast { background: #111625; color: white; border: 1px solid rgba(255, 255, 255, 0.1); min-width: 280px; }
+.custom-toast.warning { border-left: 4px solid #c59346; }
+.custom-toast.success { border-left: 4px solid #198754; }
 
-/* Thẻ thông báo */
-.custom-toast {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px); /* Hiệu ứng kính mờ */
-  border-radius: 12px;
-  pointer-events: auto; /* Cho phép click vào nút Đóng */
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-}
-
-/* Animation khi thông báo trượt ra/vào */
-.toast-slide-enter-active,
-.toast-slide-leave-active {
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.toast-slide-enter-from {
-  opacity: 0;
-  transform: translateX(100%) scale(0.9);
-}
-
-.toast-slide-leave-to {
-  opacity: 0;
-  transform: translateX(100%);
-}
+/* Hiệu ứng mượt mà */
+.toast-fade-enter-active, .toast-fade-leave-active { transition: all 0.3s ease; }
+.toast-fade-enter-from { opacity: 0; transform: translateY(30px) scale(0.9); }
+.toast-fade-leave-to { opacity: 0; transform: translateX(50px); }
 </style>
