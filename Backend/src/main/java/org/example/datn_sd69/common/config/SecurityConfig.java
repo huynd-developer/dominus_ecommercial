@@ -22,25 +22,20 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(); // Mã hóa chuẩn thực tế
+        return new BCryptPasswordEncoder();
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http.csrf(csrf -> csrf.disable()) // Tắt CSRF vì dùng JWT
+        http.csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // Không dùng Session
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // 1. Cho phép tất cả truy cập vào API Auth (Đăng nhập, đăng ký)
                         .requestMatchers("/api/auth/**").permitAll()
-
-                        // 2. Các API khác yêu cầu phải có Token hợp lệ
                         .anyRequest().authenticated()
                 );
 
-        // Nhúng cái JwtAuthFilter của bạn vào trước bước kiểm tra tài khoản của Spring
         http.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
-
         return http.build();
     }
 }

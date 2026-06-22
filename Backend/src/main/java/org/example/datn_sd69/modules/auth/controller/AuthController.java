@@ -1,5 +1,7 @@
 package org.example.datn_sd69.modules.auth.controller;
 
+// NHỚ IMPORT CÁI NÀY VÀO
+import jakarta.validation.Valid;
 import org.example.datn_sd69.modules.auth.dto.LoginRequest;
 import org.example.datn_sd69.modules.auth.dto.RegisterCustomerRequest;
 import org.example.datn_sd69.modules.auth.service.AuthService;
@@ -15,7 +17,8 @@ public class AuthController {
     private AuthService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterCustomerRequest request) {
+    // Thêm @Valid vào đây
+    public ResponseEntity<?> register(@Valid @RequestBody RegisterCustomerRequest request) {
         try {
             return ResponseEntity.ok(authService.registerCustomer(request));
         } catch (RuntimeException e) {
@@ -24,7 +27,8 @@ public class AuthController {
     }
 
     @PostMapping("/login/customer")
-    public ResponseEntity<?> loginCustomer(@RequestBody LoginRequest request) {
+    // Thêm @Valid vào đây
+    public ResponseEntity<?> loginCustomer(@Valid @RequestBody LoginRequest request) {
         try {
             return ResponseEntity.ok(authService.loginCustomer(request));
         } catch (RuntimeException e) {
@@ -33,7 +37,8 @@ public class AuthController {
     }
 
     @PostMapping("/login/employee")
-    public ResponseEntity<?> loginEmployee(@RequestBody LoginRequest request) {
+    // Thêm @Valid vào đây
+    public ResponseEntity<?> loginEmployee(@Valid @RequestBody LoginRequest request) {
         try {
             return ResponseEntity.ok(authService.loginEmployee(request));
         } catch (RuntimeException e) {
