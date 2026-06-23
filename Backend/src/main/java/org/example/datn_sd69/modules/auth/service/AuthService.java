@@ -20,7 +20,6 @@ public class AuthService {
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private JwtUtils jwtUtils;
 
-    // 1. API Đăng Ký Customer
     public String registerCustomer(RegisterCustomerRequest req) {
         if (khachHangRepository.existsByEmail(req.getEmail())) {
             throw new RuntimeException("Email đã được sử dụng!");
@@ -30,14 +29,13 @@ public class AuthService {
         newCustomer.setHoTen(req.getName());
         newCustomer.setEmail(req.getEmail());
         newCustomer.setSoDienThoai(req.getPhone());
-        newCustomer.setMatKhauMaHoa(passwordEncoder.encode(req.getPassword())); // Mã hóa Password
-        newCustomer.setTrangThai(1); // 1 = Active
+        newCustomer.setMatKhauMaHoa(passwordEncoder.encode(req.getPassword()));
+        newCustomer.setTrangThai(1);
 
         khachHangRepository.save(newCustomer);
         return "Đăng ký tài khoản thành công!";
     }
 
-    // 2. API Đăng Nhập Customer
     public String loginCustomer(LoginRequest req) {
         KhachHang kh = khachHangRepository.findByEmail(req.getEmail())
                 .orElseThrow(() -> new RuntimeException("Tài khoản không tồn tại!"));
@@ -45,12 +43,12 @@ public class AuthService {
         if (kh.getTrangThai() == 0) throw new RuntimeException("Tài khoản đã bị khóa!");
 
         if (passwordEncoder.matches(req.getPassword(), kh.getMatKhauMaHoa())) {
-            return jwtUtils.generateCustomerToken(kh.getEmail());
+            // ĐÃ SỬA: Truyền thêm kh.getId() vào làm tham số thứ hai
+            return jwtUtils.generateCustomerToken(kh.getEmail(), kh.getId().longValue());
         }
         throw new RuntimeException("Sai mật khẩu!");
     }
 
-    // 3. API Đăng Nhập Employee
     public String loginEmployee(LoginRequest req) {
         NhanVien nv = nhanVienRepository.findByEmail(req.getEmail())
                 .orElseThrow(() -> new RuntimeException("Tài khoản nhân viên không tồn tại!"));
@@ -58,7 +56,8 @@ public class AuthService {
         if (nv.getTrangThai() == 0) throw new RuntimeException("Tài khoản nhân viên bị khóa!");
 
         if (passwordEncoder.matches(req.getPassword(), nv.getMatKhauMaHoa())) {
-            return jwtUtils.generateEmployeeToken(nv.getEmail(), nv.getVaiTro().getId());
+            // ĐÃ SỬA: Truyền thêm nv.getId() vào làm tham số thứ hai
+            return jwtUtils.generateEmployeeToken(nv.getEmail(), nv.getId().longValue(), nv.getVaiTro().getId());
         }
         throw new RuntimeException("Sai mật khẩu!");
     }
