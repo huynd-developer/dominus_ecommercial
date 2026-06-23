@@ -1,0 +1,78 @@
+/* Nhúng font chữ cao cấp từ Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* Bảng màu chuẩn từ ảnh thiết kế DOMINUS */
+  --dominus-navy-dark: #0b0f19;    /* Màu nền đen của banner */
+  --dominus-navy-text: #111625;    /* Màu chữ chính, màu nút active */
+  --dominus-gold: #c59346;         /* Màu vàng gold đặc trưng */
+  --dominus-gold-light: #f7f3eb;   /* Màu nền kem nhẹ */
+  --dominus-gray-bg: #f8f9fa;      /* Màu nền ô input */
+  --dominus-gray-text: #6c757d;    /* Màu chữ ghi chú phụ */
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background-color: var(--dominus-gold-light);
+  color: var(--dominus-navy-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Font chữ Tiêu đề Sang trọng (Dùng cho Tên thương hiệu, Tiêu đề lớn) */
+.font-luxury {
+  font-family: 'Cinzel', Georgia, serif;
+  letter-spacing: 0.05em;
+}
+
+/* Các Class bổ trợ để đồng bộ UI giống ảnh */
+.text-gold { color: var(--dominus-gold) !important; }
+.text-navy { color: var(--dominus-navy-text) !important; }
+.bg-navy-dark { background: linear-gradient(135deg, #0b0f19 0%, #161c2a 100%) !important; }
+
+/* Custom lại Input cho giống hệt ảnh (Bo góc vừa phải, nền xám nhạt, không viền) */
+.dominus-input {
+  background-color: var(--dominus-gray-bg) !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  padding: 10px 16px !important;
+  color: var(--dominus-navy-text) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.dominus-input:focus {
+  background-color: #ffffff !important;
+  border-color: var(--dominus-gold) !important;
+  box-shadow: 0 0 0 3px rgba(197, 147, 70, 0.1) !important;
+  outline: none;
+}
+
+/* Nút bấm bo tròn viền (Pill) */
+.btn-dominus-primary {
+  background-color: var(--dominus-gold) !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 50px !important;
+  padding: 10px 28px !important;
+  font-size: 0.85rem !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease;
+}
+.btn-dominus-primary:hover {
+  background-color: #b08139 !important;
+  transform: translateY(-1px);
+}
+
+.btn-dominus-secondary {
+  background-color: #ffffff !important;
+  color: var(--dominus-navy-text) !important;
+  border: 1px solid #dcdcdc !important;
+  border-radius: 50px !important;
+  padding: 10px 28px !important;
+  font-size: 0.85rem !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease;
+}
+.btn-dominus-secondary:hover {
+  background-color: var(--dominus-gray-bg) !important;
+}
