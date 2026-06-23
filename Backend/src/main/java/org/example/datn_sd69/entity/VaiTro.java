@@ -8,9 +8,9 @@ import org.example.datn_sd69.entity.base.BaseEntity;
 @Table(name = "VaiTros")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class VaiTro extends BaseEntity {
-    @Column(name = "TenVaiTro", nullable = false, length = 100)
+    @Column(name = "TenVaiTro", nullable = false, length = 255)
     private String tenVaiTro;
 
-    @Column(name = "MoTa", length = 255)
+    @Column(name = "MoTa", length = 500)
     private String moTa;
 }

@@ -10,7 +10,7 @@ import org.example.datn_sd69.entity.base.BaseEntity;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class NongDo extends BaseEntity {
 
-    @Column(name = "TenNongDo", nullable = false, length = 100)
+    @Column(name = "TenNongDo", nullable = false, length = 255)
     private String tenNongDo;
 
     @Column(name = "TrangThai")

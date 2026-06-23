@@ -1,6 +1,5 @@
 package org.example.datn_sd69.modules.auth.controller;
 
-// NHỚ IMPORT CÁI NÀY VÀO
 import jakarta.validation.Valid;
 import org.example.datn_sd69.modules.auth.dto.LoginRequest;
 import org.example.datn_sd69.modules.auth.dto.RegisterCustomerRequest;
@@ -8,6 +7,8 @@ import org.example.datn_sd69.modules.auth.service.AuthService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -17,32 +18,28 @@ public class AuthController {
     private AuthService authService;
 
     @PostMapping("/register")
-    // Thêm @Valid vào đây
     public ResponseEntity<?> register(@Valid @RequestBody RegisterCustomerRequest request) {
-        try {
-            return ResponseEntity.ok(authService.registerCustomer(request));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        // Nếu có lỗi, Spring tự ném ra và GlobalExceptionHandler sẽ bắt
+        return ResponseEntity.ok(authService.registerCustomer(request));
     }
 
     @PostMapping("/login/customer")
-    // Thêm @Valid vào đây
     public ResponseEntity<?> loginCustomer(@Valid @RequestBody LoginRequest request) {
-        try {
-            return ResponseEntity.ok(authService.loginCustomer(request));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(401).body(e.getMessage());
+        // Tốt nhất nên trả về định dạng JSON kiểu {"accessToken": "chuỗi_token"}
+        // Giả sử authService trả về String token, ta bọc nó vào Map để thành JSON
+        Object result = authService.loginCustomer(request);
+        if (result instanceof String) {
+            return ResponseEntity.ok(Map.of("accessToken", result));
         }
+        return ResponseEntity.ok(result);
     }
 
     @PostMapping("/login/employee")
-    // Thêm @Valid vào đây
     public ResponseEntity<?> loginEmployee(@Valid @RequestBody LoginRequest request) {
-        try {
-            return ResponseEntity.ok(authService.loginEmployee(request));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(401).body(e.getMessage());
+        Object result = authService.loginEmployee(request);
+        if (result instanceof String) {
+            return ResponseEntity.ok(Map.of("accessToken", result));
         }
+        return ResponseEntity.ok(result);
     }
 }

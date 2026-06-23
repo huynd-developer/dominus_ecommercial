@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class KhachHang extends BaseEntity {
     @ManyToOne
-    @JoinColumn(name = "VaiTroId") // Có thể null
+    @JoinColumn(name = "VaiTroId", nullable = false)
     private VaiTro vaiTro;
 
     @Column(name = "HoTen", nullable = false)
@@ -19,10 +19,10 @@ public class KhachHang extends BaseEntity {
     @Column(name = "Email", nullable = false, unique = true)
     private String email;
 
-    @Column(name = "MatKhauMaHoa", nullable = false, columnDefinition = "VARCHAR(MAX)")
+    @Column(name = "MatKhauMaHoa", nullable = false, length = 255)
     private String matKhauMaHoa;
 
-    @Column(name = "SoDienThoai", length = 15)
+    @Column(name = "SoDienThoai", length = 15,unique = true)
     private String soDienThoai;
 
     @Column(name = "DiaChiMacDinh", length = 500)

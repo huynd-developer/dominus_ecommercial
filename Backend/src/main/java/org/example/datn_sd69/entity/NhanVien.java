@@ -19,10 +19,10 @@ public class NhanVien extends BaseEntity {
     @Column(name = "Email", nullable = false, unique = true)
     private String email;
 
-    @Column(name = "MatKhauMaHoa", nullable = false, columnDefinition = "VARCHAR(MAX)")
+    @Column(name = "MatKhauMaHoa", nullable = false, length = 255)
     private String matKhauMaHoa;
 
-    @Column(name = "SoDienThoai", length = 15)
+    @Column(name = "SoDienThoai", length = 15, unique = true)
     private String soDienThoai;
 
     @Column(name = "DiaChi", length = 500)

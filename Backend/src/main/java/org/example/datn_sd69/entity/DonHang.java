@@ -25,7 +25,7 @@ public class DonHang extends BaseEntity {
     @JoinColumn(name = "MaGiamGiaId")
     private MaGiamGia maGiamGia;
 
-    @Column(name = "LoaiDonHang", nullable = false, length = 20)
+    @Column(name = "LoaiDonHang", nullable = false, length = 50)
     private String loaiDonHang; // 'Online' hoac 'POS'
 
     @Column(name = "TenNguoiNhan")
@@ -37,7 +37,7 @@ public class DonHang extends BaseEntity {
     @Column(name = "DiaChiGiaoHang", length = 500)
     private String diaChiGiaoHang;
 
-    @Column(name = "HinhThucThanhToan", nullable = false, length = 20)
+    @Column(name = "HinhThucThanhToan", nullable = false, columnDefinition = "NVARCHAR(50)")
     private String hinhThucThanhToan; // 'COD', 'TienMat', 'VNPay'
 
     @Column(name = "TongTienHang", nullable = false)
@@ -54,9 +54,6 @@ public class DonHang extends BaseEntity {
 
     @Column(name = "TrangThaiDonHang")
     private Integer trangThaiDonHang; // 0: Cho duyet, 1: Dang giao, 2: Hoan thanh, 3: Huy
-
-    @Column(name = "MaGiaoDichVnPay", length = 100)
-    private String maGiaoDichVnPay;
 
     @Column(name = "NgayTao")
     private LocalDateTime ngayTao; // Giữ nguyên trường của SQL gốc

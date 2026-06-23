@@ -14,7 +14,7 @@ public class HinhAnh extends BaseEntity {
     @JoinColumn(name = "SanPhamId", nullable = false)
     private SanPham sanPham;
 
-    @Column(name = "DuongDanAnh", nullable = false, columnDefinition = "VARCHAR(MAX)")
+    @Column(name = "DuongDanAnh", nullable = false, length = 2048)
     private String duongDanAnh;
 
     @Column(name = "LaAnhChinh")

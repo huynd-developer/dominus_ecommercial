@@ -13,9 +13,6 @@ public class DanhMuc extends BaseEntity {
     @Column(name = "TenDanhMuc", nullable = false)
     private String tenDanhMuc;
 
-    @Column(name = "MoTa", columnDefinition = "NVARCHAR(MAX)")
-    private String moTa;
-
     @Column(name = "TrangThai")
     private Integer trangThai;
 }
