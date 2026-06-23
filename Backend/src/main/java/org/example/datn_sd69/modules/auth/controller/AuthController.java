@@ -19,27 +19,21 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@Valid @RequestBody RegisterCustomerRequest request) {
-        // Nếu có lỗi, Spring tự ném ra và GlobalExceptionHandler sẽ bắt
-        return ResponseEntity.ok(authService.registerCustomer(request));
+        String message = authService.registerCustomer(request);
+        // Trả về chuẩn JSON thay vì plain text
+        return ResponseEntity.ok(Map.of("message", message));
     }
 
     @PostMapping("/login/customer")
     public ResponseEntity<?> loginCustomer(@Valid @RequestBody LoginRequest request) {
-        // Tốt nhất nên trả về định dạng JSON kiểu {"accessToken": "chuỗi_token"}
-        // Giả sử authService trả về String token, ta bọc nó vào Map để thành JSON
-        Object result = authService.loginCustomer(request);
-        if (result instanceof String) {
-            return ResponseEntity.ok(Map.of("accessToken", result));
-        }
-        return ResponseEntity.ok(result);
+        // Nhận trực tiếp String và bọc vào JSON
+        String token = authService.loginCustomer(request);
+        return ResponseEntity.ok(Map.of("accessToken", token));
     }
 
     @PostMapping("/login/employee")
     public ResponseEntity<?> loginEmployee(@Valid @RequestBody LoginRequest request) {
-        Object result = authService.loginEmployee(request);
-        if (result instanceof String) {
-            return ResponseEntity.ok(Map.of("accessToken", result));
-        }
-        return ResponseEntity.ok(result);
+        String token = authService.loginEmployee(request);
+        return ResponseEntity.ok(Map.of("accessToken", token));
     }
 }

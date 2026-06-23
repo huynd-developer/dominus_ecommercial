@@ -14,5 +14,5 @@ public interface KhachHangRepository extends JpaRepository<KhachHang, Long> {
 
     // Kiểm tra xem Email đã tồn tại trong database chưa (dùng cho Đăng ký)
     boolean existsByEmail(String email);
-
+    boolean existsBySoDienThoai(String soDienThoai);
 }
