@@ -1,67 +1,89 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
+import { createRouter, createWebHistory } from "vue-router";
+import type { RouteRecordRaw } from "vue-router";
+import { useAuthStore } from "@/modules/auth/stores/authStore";
+import { h } from "vue"; 
 
 const routes: Array<RouteRecordRaw> = [
   {
-    path: '/login', // Chỉ khai báo 1 lần duy nhất cho Khách hàng
-    name: 'CustomerLogin',
-    component: () => import('@/modules/auth/views/CustomerLoginView.vue'),
-    meta: { requiresGuest: true }
+    path: "/login",
+    name: "Login",
+    component: () => import("@/modules/auth/views/CustomerLoginView.vue"),
   },
   {
-    path: '/admin/login', 
-    name: 'EmployeeLogin',
-    component: () => import('@/modules/auth/views/EmployeeLoginView.vue'),
-    meta: { requiresGuest: true }
+    path: "/admin/login",
+    name: "AdminLogin",
+    component: () => import("@/modules/auth/views/EmployeeLoginView.vue"),
   },
   {
-    path: '/register', // Chỉ khai báo 1 lần duy nhất
-    name: 'Register',
-    component: () => import('@/modules/auth/views/RegisterView.vue'),
-    meta: { requiresGuest: true }
-  }
+    path: "/register",
+    name: "Register",
+    component: () => import("@/modules/auth/views/RegisterView.vue"),
+  },
+  {
+    path: "/admin/dashboard",
+    name: "AdminDashboard",
+    // Trang trắng tạm thời bằng hàm h của Vue
+    component: {
+      render: () => h('div', { style: 'padding: 100px; text-align: center; font-family: sans-serif; color: #333;' }, [
+        h('h1', '🎉 Đăng nhập thành công!'),
+        h('p', 'Đây là trang trắng tạm thời của ông giáo.')
+      ])
+    },
+    meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER", "CASHIER"] },
+  },
+  {
+    path: "/customer/profile", 
+    name: "CustomerProfile",
+    component: () => import("@/modules/auth/views/CustomerLoginView.vue"), 
+    meta: { requiresAuth: true, allowedRoles: ["USER"] },
+  },
+  // 🎯 ĐÃ XÓA BỎ ROUTE /admin/dashboard BỊ TRÙNG LẶP Ở ĐÂY NHA ÔNG!
 ];
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
 });
 
-// Middleware chặn quyền tối ưu - Bỏ `next()` để sửa cảnh báo màu vàng
-router.beforeEach((to, from) => {
-  const token = localStorage.getItem('accessToken');
-  const currentUserRaw = localStorage.getItem('currentUser');
-  let userRole = 'USER';
+router.beforeEach((to) => {
+  const authStore = useAuthStore();
   
-  if (currentUserRaw) {
-    try {
-      const userObj = JSON.parse(currentUserRaw);
-      userRole = userObj.role || 'USER';
-    } catch (e) {
-      userRole = 'USER';
+  // Chuẩn hóa quyền thành chữ HOA để so sánh tuyệt đối an toàn
+  const userRole = (authStore.role || "").toUpperCase();
+
+  // LUỒNG 1: Đã đăng nhập thì cấm quay lại trang login/register
+  if (
+    authStore.isAuthenticated &&
+    ["Login", "AdminLogin", "Register"].includes(to.name as string)
+  ) {
+    const adminRoles = ["OWNER", "MANAGER", "CASHIER"];
+    if (adminRoles.includes(userRole)) {
+      return { path: "/admin/dashboard" };
     }
+    return { path: "/" };
   }
 
-  const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
-  const requiresGuest = to.matched.some(record => record.meta.requiresGuest);
-
-  if (requiresAuth) {
-    if (!token) {
-      alert('Vui lòng đăng nhập để truy cập chức năng này!');
-      return '/login'; // Chuẩn mới: return string thay vì next()
+  // LUỒNG 2: Chặn quyền truy cập các trang bảo mật
+  if (to.meta.requiresAuth) {
+    if (!authStore.isAuthenticated) {
+      if (to.path.startsWith("/admin")) {
+        return { name: "AdminLogin" };
+      }
+      return { name: "Login" };
     }
 
-    const allowedRoles = to.meta.roles as string[];
+    const allowedRoles = to.meta.allowedRoles as string[];
+    
+    // 👇 CHỖ NÀY: Dùng userRole đã ép chữ HOA để so sánh, bao mượt, bao khớp! 👇
     if (allowedRoles && !allowedRoles.includes(userRole)) {
-      alert('Bạn không có quyền truy cập vào khu vực này!');
-      return from.path && from.path !== '/login' ? from.path : '/';
+      alert(
+        "Cảnh báo bảo mật: Tài khoản của bạn không có quyền truy cập vào hệ thống Quản trị!"
+      );
+      return { path: "/admin/login" }; 
     }
   }
 
-  if (requiresGuest && token) {
-    return userRole === 'USER' ? '/' : '/admin/dashboard';
-  }
-
-  return true; // Cho phép qua guard thay vì gọi next()
+  return true;
 });
 
 export default router;
