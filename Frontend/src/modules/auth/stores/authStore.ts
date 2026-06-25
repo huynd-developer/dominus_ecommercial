@@ -27,7 +27,12 @@ export const useAuthStore = defineStore('auth', {
         this.setAuthData(response.data);
         return { success: true };
       } catch (error: any) {
-        return { success: false, message: error.response?.data?.message || 'Đăng nhập thất bại!' };
+        // Bổ sung: Bắt mảng lỗi (Validation Map) giống hệt hàm register
+        const errorData = error.response?.data;
+        if (typeof errorData === 'object' && !errorData.message) {
+          return { success: false, validationErrors: errorData };
+        }
+        return { success: false, message: errorData?.message || 'Đăng nhập thất bại!' };
       }
     },
 
@@ -38,18 +43,22 @@ export const useAuthStore = defineStore('auth', {
         this.setAuthData(response.data);
         return { success: true };
       } catch (error: any) {
-        return { success: false, message: error.response?.data?.message || 'Đăng nhập quản trị thất bại!' };
+        // Bổ sung: Bắt mảng lỗi (Validation Map) giống hệt hàm register
+        const errorData = error.response?.data;
+        if (typeof errorData === 'object' && !errorData.message) {
+          return { success: false, validationErrors: errorData };
+        }
+        return { success: false, message: errorData?.message || 'Đăng nhập quản trị thất bại!' };
       }
     },
 
-    // Luồng đăng ký tài khoản Customer
+    // Luồng đăng ký tài khoản Customer (Giữ nguyên gốc của ông)
     async registerCustomer(payload: any) {
       try {
         const response = await api.post('/auth/register', payload);
         return { success: true, message: response.data.message };
       } catch (error: any) {
         const errorData = error.response?.data;
-        // Nếu BE trả về cụm lỗi Validation Map (MethodArgumentNotValidException)
         if (typeof errorData === 'object' && !errorData.message) {
           return { success: false, validationErrors: errorData };
         }
@@ -57,13 +66,9 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    // Helper thiết lập dữ liệu sạch
-    // Helper thiết lập dữ liệu sạch
-    setAuthData(data: any) { // Đổi tạm thành any để log không bị lỗi ép kiểu ép cấu trúc
-      // 👇 CHÈN DÒNG NÀY VÀO ĐỂ XEM BACKEND ĐANG TRẢ VỀ CÁI GÌ 👇
+    // Helper thiết lập dữ liệu sạch (Giữ nguyên gốc của ông)
+    setAuthData(data: any) { 
       console.log("📦 Cấu trúc JSON thực tế từ Backend:", data);
-
-      // Tạm thời giữ nguyên để chạy thử xem log ra sao
       this.token = data.token;
       this.role = data.role;
       this.name = data.name;
@@ -72,7 +77,7 @@ export const useAuthStore = defineStore('auth', {
       localStorage.setItem('name', data.name || '');
     },
 
-    // Đăng xuất xóa sạch dấu vết
+    // Đăng xuất xóa sạch dấu vết (Giữ nguyên gốc của ông)
     logout() {
       this.token = null;
       this.role = null;
