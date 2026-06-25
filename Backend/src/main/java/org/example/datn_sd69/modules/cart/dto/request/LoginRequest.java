@@ -1,4 +1,4 @@
-package org.example.datn_sd69.modules.auth.dto.request;
+package org.example.datn_sd69.modules.auth.cart.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
