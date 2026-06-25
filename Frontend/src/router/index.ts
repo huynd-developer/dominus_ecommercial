@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
 import { h } from "vue"; 
+import { usePosStore } from "@/modules/pos/stores/posStore";
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -37,6 +38,15 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import("@/modules/auth/views/CustomerLoginView.vue"), 
     meta: { requiresAuth: true, allowedRoles: ["USER"] },
   },
+  {
+  path: "/admin/pos",
+  name: "DominusPOS",
+  component: () => import("@/modules/pos/views/posView.vue"), // Đã thay thế hàm h() bằng component POS thực tế
+  meta: { 
+    requiresAuth: true, 
+    allowedRoles: ["MANAGER", "CASHIER"] // Chỉ cho phép Manager và Cashier truy cập
+  }
+}
   // 🎯 ĐÃ XÓA BỎ ROUTE /admin/dashboard BỊ TRÙNG LẶP Ở ĐÂY NHA ÔNG!
 ];
 
