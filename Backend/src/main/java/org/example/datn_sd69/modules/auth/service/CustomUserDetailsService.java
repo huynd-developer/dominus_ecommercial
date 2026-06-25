@@ -23,7 +23,7 @@ public class CustomUserDetailsService implements UserDetailsService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy user với email: " + email));
 
-        boolean enabled = user.getStatus() == 1; // Nếu status = 1 thì tài khoản hợp lệ
+        boolean enabled = user.getStatus() == 1;
 
         return new org.springframework.security.core.userdetails.User(
                 user.getEmail(),
