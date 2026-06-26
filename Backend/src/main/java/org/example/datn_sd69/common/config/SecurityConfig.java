@@ -60,7 +60,7 @@ public class SecurityConfig {
 
                         // Nhóm Khách hàng: chỉ user mới được vào các API của khách
                         .requestMatchers("/api/customer/**").hasAuthority("USER")
-
+                        .requestMatchers("/api/danh-muc/**").permitAll() //dang ko có token, nen them dong de test categorycontroller
                         // Các API còn lại bắt buộc phải có token mới được gọi
                         .anyRequest().authenticated()
                 )
