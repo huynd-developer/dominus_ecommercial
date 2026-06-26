@@ -1,4 +1,4 @@
-package org.example.datn_sd69.modules.cart.dto.request;
+package org.example.datn_sd69.modules.auth.dto.request;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
