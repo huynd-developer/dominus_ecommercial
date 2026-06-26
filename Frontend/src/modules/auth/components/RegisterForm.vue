@@ -8,7 +8,7 @@
       <h4 class="form-title text-secondary fw-semibold m-0">Tạo tài khoản</h4>
     </div>
 
-    <form @submit.prevent="handleRegister">
+    <form @submit.prevent="handleRegister" novalidate>
       <div class="mb-3">
         <label class="form-label text-dark fw-semibold small">Họ và tên</label>
         <div class="input-group-custom" :class="{ 'has-error': validationErrors.name }">
