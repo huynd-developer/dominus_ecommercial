@@ -175,16 +175,29 @@ router.beforeEach((to, from) => {
 
     const allowedRoles = to.meta.allowedRoles as string[];
     
-    // CHỖ ĐÃ SỬA: Xử lý khi user cố tình gõ link không có quyền truy cập
+    // CHỖ ĐÃ SỬA: Xử lý khi user cố tình gõ link không có quyền hoặc bị push nhầm sau khi Login
     if (allowedRoles && !allowedRoles.includes(userRole)) {
-      // 1. ĐÃ XÓA: Bỏ hoàn toàn hàm alert() thông báo phiền phức.
+      
+      // 1. Bẻ lái nếu đến từ trang Đăng nhập (tức là vừa login xong nhưng bị đẩy nhầm vào trang cấm như Dashboard)
+      if (from.name === "AdminLogin" || from.name === "Login") {
+        if (["CASHIER", "MANAGER"].includes(userRole)) {
+          return { path: "/admin/pos" };
+        }
+        if (userRole === "OWNER") {
+          return { path: "/admin/dashboard" };
+        }
+        return { path: "/" };
+      }
 
-      // 2. Nếu user đang lướt trong app mà bấm nhầm link cấm, giữ nguyên họ ở trang cũ (from.fullPath)
+      // 2. Nếu đang lướt trong app mà bấm nhầm link cấm -> Giữ nguyên ở trang hiện tại
       if (from.matched.length > 0) {
+        // MẸO: Bạn nên gọi 1 hàm Toast Notification (thông báo góc màn hình) ở đây.
+        // VD: toast.error("Bạn không có quyền truy cập trang này!");
+        // Để user biết tại sao bấm nút mà không chuyển trang, tránh việc họ tưởng web lỗi.
         return from.fullPath;
       }
       
-      // 3. Nếu gõ link trực tiếp từ thanh địa chỉ (chưa có lịch sử) thì đá về đúng trang chủ của Role đó
+      // 3. Nếu gõ link trực tiếp từ thanh địa chỉ (chưa có lịch sử)
       if (["CASHIER", "MANAGER"].includes(userRole)) {
         return { path: "/admin/pos" };
       }
@@ -192,7 +205,7 @@ router.beforeEach((to, from) => {
         return { path: "/admin/dashboard" };
       }
       
-      // Nếu là USER thông thường gõ bừa link admin -> Đá về trang chủ Storefront công cộng
+      // Default fallback
       return { path: "/" }; 
     }
   }
