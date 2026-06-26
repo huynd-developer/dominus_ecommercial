@@ -1,13 +1,9 @@
-package org.example.datn_sd69.modules.oder.service;
+package org.example.datn_sd69.modules.oder.dto.service;
 
 import jakarta.transaction.Transactional;
-import org.example.datn_sd69.entity.Cart;
-import org.example.datn_sd69.entity.CartItem;
-import org.example.datn_sd69.entity.Order;
-import org.example.datn_sd69.entity.ProductVariant;
-import org.example.datn_sd69.modules.oder.dto.OrderRequest;
-import org.example.datn_sd69.repository.CartRepository;
-import org.example.datn_sd69.repository.ProductVariantRepository;
+import org.example.datn_sd69.entity.*;
+import org.example.datn_sd69.modules.oder.dto.request.OrderRequest;
+import org.example.datn_sd69.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +16,9 @@ public class OrderService {
     @Autowired private OrderRepository orderRepo;
     @Autowired private OrderItemRepository orderItemRepo;
     @Autowired private ProductVariantRepository variantRepo;
+
+    // Đã bỏ chữ 'final' ở đây để không bị lỗi compile Java
+    @Autowired private CartItemRepository cartItemRepository;
 
     @Transactional
     public Order placeOrder(Integer customerId, OrderRequest request) {
@@ -53,7 +52,6 @@ public class OrderService {
 
         // 3. Tạo Order
         Order order = new Order();
-        order.setCustomerId(cart.getCustomer().getUserId()); // Giả định CustomerId là UserID
         order.setOrderType("ONLINE");
         order.setCustomerName(request.getCustomerName());
         order.setCustomerPhone(request.getCustomerPhone());
@@ -69,14 +67,29 @@ public class OrderService {
             OrderItem orderItem = new OrderItem();
             orderItem.setOrder(order);
             orderItem.setProductVariant(item.getProductVariant());
-            orderItem.setQuantity(item.getQuantity());
-            orderItem.setOriginalPrice(item.getProductVariant().getPrice());
-            orderItem.setFinalPrice(item.getProductVariant().getPrice());
+
+            int qty = item.getQuantity();
+            BigDecimal price = item.getProductVariant().getPrice();
+
+            orderItem.setQuantity(qty);
+            orderItem.setOriginalPrice(price);
+
+            // Tính FinalPrice cho đúng luật SQL: (Price * Quantity) - Discount
+            // Vì hiện tại chưa có tính năng giảm giá nên trừ 0 (hoặc bỏ qua trừ)
+            BigDecimal finalPrice = price.multiply(BigDecimal.valueOf(qty));
+            orderItem.setFinalPrice(finalPrice);
+
             orderItemRepo.save(orderItem);
         }
 
+        // ==========================================
         // 5. Xóa giỏ hàng sau khi đặt thành công
-        // (M viết hàm clearCart trong CartService hoặc xử lý ở đây)
+        // ==========================================
+
+        // Bắn lệnh xuống thẳng DB để xóa sạch các item này
+        cartItemRepository.deleteAll(cart.getCartItems());
+
+        // Xóa tạm trong bộ nhớ (object) để đồng bộ dữ liệu
         cart.getCartItems().clear();
         cartRepo.save(cart);
 

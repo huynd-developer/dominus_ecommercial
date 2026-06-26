@@ -1,4 +1,10 @@
 package org.example.datn_sd69.repository;
 
-public class ProductVariantRepository {
+import org.example.datn_sd69.entity.ProductVariant;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface ProductVariantRepository extends JpaRepository<ProductVariant, Integer> {
+    // Các hàm CRUD cơ bản JpaRepository đã lo hết
 }

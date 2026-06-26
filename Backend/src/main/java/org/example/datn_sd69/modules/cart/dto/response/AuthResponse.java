@@ -1,4 +1,4 @@
-package org.example.datn_sd69.modules.auth.cart.dto.response;
+package org.example.datn_sd69.modules.cart.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

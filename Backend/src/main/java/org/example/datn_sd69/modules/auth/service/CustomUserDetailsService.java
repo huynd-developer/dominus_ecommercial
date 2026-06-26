@@ -1,7 +1,6 @@
 package org.example.datn_sd69.modules.auth.service; // Hoặc package ông định đặt
 
 import lombok.RequiredArgsConstructor;
-// Nhớ Alt + Enter để import User và UserRepository của ông vào nhé
 import org.example.datn_sd69.entity.User;
 import org.example.datn_sd69.repository.UserRepository;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -9,6 +8,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
 
@@ -19,6 +19,7 @@ public class CustomUserDetailsService implements UserDetailsService {
     private final UserRepository userRepository;
 
     @Override
+    @Transactional
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy user với email: " + email));

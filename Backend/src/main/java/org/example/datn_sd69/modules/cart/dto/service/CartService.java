@@ -2,9 +2,11 @@ package org.example.datn_sd69.modules.cart.dto.service;
 
 import org.example.datn_sd69.entity.Cart;
 import org.example.datn_sd69.entity.CartItem;
+import org.example.datn_sd69.entity.Customer;
 import org.example.datn_sd69.entity.ProductVariant;
 import org.example.datn_sd69.repository.CartItemRepository;
 import org.example.datn_sd69.repository.CartRepository;
+import org.example.datn_sd69.repository.CustomerRepository;
 import org.example.datn_sd69.repository.ProductVariantRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -18,11 +20,19 @@ public class CartService {
     @Autowired private CartRepository cartRepo;
     @Autowired private CartItemRepository cartItemRepo;
     @Autowired private ProductVariantRepository variantRepo;
+    @Autowired private CustomerRepository customerRepo;
 
     @Transactional
     public CartItem addVariantToCart(Integer customerId, Integer variantId, Integer quantity) {
-        Cart cart = cartRepo.findByCustomerId(customerId)
-                .orElseGet(() -> cartRepo.save(new Cart(customerId)));
+        // CartService.java
+        Cart cart = cartRepo.findByCustomerUserId(customerId)
+                .orElseGet(() -> {
+                    Customer customer = customerRepo.findById(customerId)
+                            .orElseThrow(() -> new RuntimeException("Không tìm thấy dữ liệu Khách hàng!"));
+                    Cart newCart = new Cart();
+                    newCart.setCustomer(customer);
+                    return cartRepo.save(newCart);
+                });
 
         ProductVariant variant = variantRepo.findById(variantId)
                 .orElseThrow(() -> new RuntimeException("Biến thể không tồn tại"));
@@ -76,6 +86,8 @@ public class CartService {
 
     // Thêm hàm getCartByCustomerId để phục vụ api lấy giỏ hàng
     public Cart getCartByCustomerId(Integer customerId) {
-        return cartRepo.findByCustomerId(customerId).orElse(null);
+        System.out.println("DEBUG: Đang tìm giỏ hàng cho CustomerId = " + customerId);
+        return cartRepo.findByCustomerUserId(customerId).orElse(null);
     }
+
 }
