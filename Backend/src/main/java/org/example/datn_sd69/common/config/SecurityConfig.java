@@ -54,7 +54,7 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         // Cho phép tất cả truy cập API đăng nhập, đăng ký
                         .requestMatchers("/api/auth/**").permitAll()
-
+                        .requestMatchers("/api/setup-test-data").permitAll()
                         // Nhóm Nhân sự: owner, manager, cashier mới được vào các API bắt đầu bằng /api/admin/
                         .requestMatchers("/api/admin/**").hasAnyAuthority("OWNER", "MANAGER", "CASHIER")
 
