@@ -4,7 +4,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.modules.auth.dto.request.LoginRequest;
 import org.example.datn_sd69.modules.auth.dto.request.RegisterRequest;
-import org.example.datn_sd69.modules.auth.dto.request.response.AuthResponse;
+import org.example.datn_sd69.modules.auth.dto.response.AuthResponse;
 import org.example.datn_sd69.modules.auth.service.AuthService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

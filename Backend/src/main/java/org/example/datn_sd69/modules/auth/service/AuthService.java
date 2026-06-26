@@ -8,7 +8,7 @@ import org.example.datn_sd69.entity.Role;
 import org.example.datn_sd69.entity.User;
 import org.example.datn_sd69.modules.auth.dto.request.LoginRequest;
 import org.example.datn_sd69.modules.auth.dto.request.RegisterRequest;
-import org.example.datn_sd69.modules.auth.dto.request.response.AuthResponse;
+import org.example.datn_sd69.modules.auth.dto.response.AuthResponse;
 import org.example.datn_sd69.repository.CustomerRepository;
 import org.example.datn_sd69.repository.RoleRepository;
 import org.example.datn_sd69.repository.UserRepository;
