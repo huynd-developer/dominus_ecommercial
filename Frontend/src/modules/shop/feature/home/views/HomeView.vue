@@ -275,7 +275,7 @@ const featuredProducts: Product[] = [
 }
 
 .section-title {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: 'Playfair Display', serif;
   font-size: 30px;
   color: #0a192f;
   letter-spacing: 0.5px;

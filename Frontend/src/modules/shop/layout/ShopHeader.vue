@@ -1,25 +1,21 @@
 <template>
-  <div class="shop-header bg-white">
+  <div class="shop-header">
     <div class="container-fluid px-4 px-lg-5 h-100">
       <div class="row align-items-center h-100">
         <!-- Logo -->
         <div class="col-4 col-lg-3">
-          <RouterLink to="/" class="text-decoration-none d-inline-block">
-            <div class="brand-logo text-center">
-              <!-- Logo ảnh -->
-              <img
-                v-if="!logoLoadFailed"
-                :src="logoAura"
-                alt="AURA PERFUME"
-                class="brand-logo-img"
-                @error="logoLoadFailed = true"
-              />
+          <RouterLink to="/" class="brand-logo-link text-decoration-none d-inline-flex align-items-center">
+            <img
+              v-if="!logoLoadFailed"
+              :src="logoAura"
+              alt="AURA PERFUME"
+              class="brand-logo-img"
+              @error="logoLoadFailed = true"
+            />
 
-              <!-- Logo chữ dự phòng nếu ảnh lỗi -->
-              <template v-else>
-                <div class="brand-name">AURA</div>
-                <div class="brand-subtitle">PERFUME</div>
-              </template>
+            <div v-else class="brand-logo-text">
+              <div class="brand-name">AURA</div>
+              <div class="brand-subtitle">PERFUME</div>
             </div>
           </RouterLink>
         </div>
@@ -77,52 +73,68 @@ const logoLoadFailed = ref(false);
 
 <style scoped>
 .shop-header {
-  min-height: 80px;
+  min-height: 92px;
+  background:
+    radial-gradient(circle at top left, rgba(189, 154, 95, 0.16), transparent 32%),
+    linear-gradient(135deg, #030d1a 0%, #07182f 52%, #0a192f 100%);
+  border-bottom: 1px solid rgba(189, 154, 95, 0.28);
 }
 
-.brand-logo {
-  line-height: 1;
-  color: #0a192f;
+.brand-logo-link {
+  min-height: 92px;
 }
 
 .brand-logo-img {
-  height: 58px;
+  height: 76px;
   width: auto;
-  max-width: 180px;
+  max-width: 260px;
   object-fit: contain;
   display: block;
 }
 
+.brand-logo-text {
+  text-align: center;
+  line-height: 1;
+}
+
 .brand-name {
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 38px;
-  letter-spacing: 9px;
+  font-size: 46px;
+  letter-spacing: 10px;
   font-weight: 500;
-  color: #0a192f;
+  color: #bd9a5f;
 }
 
 .brand-subtitle {
-  margin-top: 6px;
-  font-size: 11px;
-  letter-spacing: 7px;
+  margin-top: 7px;
+  font-size: 12px;
+  letter-spacing: 8px;
   color: #bd9a5f;
   font-weight: 600;
 }
 
 .search-wrapper {
-  max-width: 620px;
+  max-width: 680px;
 }
 
 .search-input {
-  height: 44px;
-  padding-left: 24px;
-  padding-right: 54px;
-  border-color: #dee2e6;
-  color: #0a192f;
+  height: 48px;
+  padding-left: 26px;
+  padding-right: 56px;
+  border: 1px solid rgba(189, 154, 95, 0.45);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
   font-size: 15px;
+  backdrop-filter: blur(8px);
+}
+
+.search-input::placeholder {
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .search-input:focus {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
   border-color: #bd9a5f;
   box-shadow: 0 0 0 0.2rem rgba(189, 154, 95, 0.18);
 }
@@ -130,15 +142,14 @@ const logoLoadFailed = ref(false);
 .search-icon {
   position: absolute;
   top: 50%;
-  right: 20px;
+  right: 22px;
   transform: translateY(-50%);
-  font-size: 17px;
-  color: #0a192f;
-  opacity: 0.75;
+  font-size: 18px;
+  color: #bd9a5f;
 }
 
 .header-action {
-  color: #0a192f;
+  color: #ffffff;
   font-weight: 600;
   font-size: 15px;
   transition: color 0.2s ease;
@@ -149,39 +160,42 @@ const logoLoadFailed = ref(false);
 }
 
 .action-icon-circle {
-  width: 34px;
-  height: 34px;
-  border: 1px solid rgba(10, 25, 47, 0.16);
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(189, 154, 95, 0.65);
   border-radius: 50%;
+  color: #bd9a5f;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.05);
   transition: all 0.2s ease;
 }
 
 .action-icon-circle i {
-  font-size: 18px;
+  font-size: 19px;
   line-height: 1;
 }
 
 .header-action:hover .action-icon-circle {
+  background: #bd9a5f;
+  color: #030d1a;
   border-color: #bd9a5f;
-  background: rgba(189, 154, 95, 0.08);
 }
 
 .cart-badge {
   position: absolute;
-  top: -8px;
-  right: -10px;
-  min-width: 18px;
-  height: 18px;
+  top: -9px;
+  right: -11px;
+  min-width: 19px;
+  height: 19px;
   padding: 0 5px;
   border-radius: 999px;
-  background: #050505;
-  color: #ffffff;
+  background: #ffffff;
+  color: #030d1a;
+  border: 1px solid #bd9a5f;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -193,18 +207,34 @@ const logoLoadFailed = ref(false);
     padding: 16px 0;
   }
 
+  .brand-logo-link {
+    min-height: auto;
+  }
+
+  .brand-logo-img {
+    height: 58px;
+    max-width: 180px;
+  }
+
+  .brand-name {
+    font-size: 34px;
+    letter-spacing: 7px;
+  }
+
+  .brand-subtitle {
+    letter-spacing: 5px;
+  }
+}
+
+@media (max-width: 575.98px) {
   .brand-logo-img {
     height: 46px;
     max-width: 140px;
   }
 
-  .brand-name {
-    font-size: 30px;
-    letter-spacing: 6px;
-  }
-
-  .brand-subtitle {
-    letter-spacing: 5px;
+  .action-icon-circle {
+    width: 34px;
+    height: 34px;
   }
 }
 </style>

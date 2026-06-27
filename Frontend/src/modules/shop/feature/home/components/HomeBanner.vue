@@ -58,7 +58,8 @@ import { RouterLink } from 'vue-router';
 }
 
 .banner-title {
-  font-family: Georgia, 'Times New Roman', serif;
+  /* Thay font ở đây */
+  font-family: 'Playfair Display', serif; 
   color: #ffffff;
   font-size: clamp(42px, 5vw, 76px);
   line-height: 1.08;
