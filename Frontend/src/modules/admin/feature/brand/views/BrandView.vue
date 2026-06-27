@@ -44,7 +44,7 @@ const { store, searchQuery, filteredBrands, handleToggleStatus, handleDelete, ha
 
 const showModal = ref(false);
 const isEditing = ref(false);
-const activeData = ref<Brand>({ name: '', description: '', status: 1 });
+const activeData = ref<Brand | any>({ name: '', description: '', status: 1 });
 
 const openAdd = () => {
   isEditing.value = false;
@@ -58,7 +58,17 @@ const openEdit = (brand: Brand) => {
   showModal.value = true;
 };
 
-const onSave = async (data: Brand) => {
+// ĐÃ SỬA HÀM NÀY: Hứng object gồm data và file từ Modal
+const onSave = async (payload: { data: any, file: File | null }) => {
+  const { data, file } = payload;
+  
+  // NẾU CÓ CHỌN ẢNH -> TẠO LINK ẢO ĐỂ HIỂN THỊ TẠM THỜI
+  if (file) {
+    // Lưu ý: Đổi 'image' thành 'mainImageUrl' hoặc đúng tên trường ảnh trong file type của bạn
+    data.image = URL.createObjectURL(file); 
+  }
+
+  // Truyền data đã có link ảnh vào store để lưu
   await handleSave(data, isEditing.value);
   showModal.value = false;
 };
