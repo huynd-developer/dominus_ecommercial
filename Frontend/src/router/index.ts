@@ -2,7 +2,8 @@ import { createRouter, createWebHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
 import { h } from "vue"; 
-
+import MainLayout from '../layouts/MainLayout.vue';
+import HomeView from '../views/client/HomeView.vue';
 // Layout quản trị của Admin
 import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
 
@@ -145,7 +146,18 @@ const routes: Array<RouteRecordRaw> = [
         name: "AdminEmployees",
         component: mockPage('Quản lý Nhân viên', 'Huy'),
         meta: { requiresAuth: true, allowedRoles: ["OWNER"] },
+      },
+      {
+    path: '/test-home',
+    component: MainLayout,
+    children: [
+      {
+        path: '',
+        name: 'home',
+        component: HomeView
       }
+    ]
+  }
     ]
   }
 ];
@@ -153,6 +165,7 @@ const routes: Array<RouteRecordRaw> = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+
 });
 
 // Logic Bảo Mật Định Tuyến Toàn Cục
