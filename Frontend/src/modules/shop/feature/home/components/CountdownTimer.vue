@@ -2,18 +2,21 @@
   <div class="countdown-timer d-flex align-items-center gap-2">
     <div class="time-box">
       <span>{{ hours }}</span>
+      <small>Giờ</small>
     </div>
 
     <span class="time-separator">:</span>
 
     <div class="time-box">
       <span>{{ minutes }}</span>
+      <small>Phút</small>
     </div>
 
     <span class="time-separator">:</span>
 
     <div class="time-box">
       <span>{{ seconds }}</span>
+      <small>Giây</small>
     </div>
   </div>
 </template>
@@ -26,26 +29,41 @@ const seconds = '40';
 
 <style scoped>
 .countdown-timer {
-  font-family: 'Courier New', monospace;
+  font-family: "Segoe UI", Arial, sans-serif;
 }
 
 .time-box {
-  width: 46px;
-  height: 38px;
-  border-radius: 8px;
-  background: #f1f3f5;
-  border: 1px solid #dee2e6;
-  color: #111827;
+  min-width: 54px;
+  height: 46px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid rgba(189, 154, 95, 0.26);
+  color: var(--aura-black);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-weight: 800;
+  box-shadow: 0 8px 22px rgba(5, 16, 36, 0.055);
+}
+
+.time-box span {
+  font-family: "Consolas", "Courier New", monospace;
   font-size: 18px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.time-box small {
+  margin-top: 3px;
+  font-size: 9px;
+  text-transform: uppercase;
+  color: var(--aura-muted);
+  font-weight: 700;
 }
 
 .time-separator {
   font-size: 18px;
   font-weight: 800;
-  color: #0a192f;
+  color: var(--aura-gold);
 }
 </style>
