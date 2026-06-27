@@ -1,4 +1,4 @@
-package org.example.datn_sd69.modules.brand.response;
+package org.example.datn_sd69.modules.brand.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

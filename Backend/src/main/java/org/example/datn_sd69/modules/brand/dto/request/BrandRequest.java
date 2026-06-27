@@ -1,4 +1,4 @@
-package org.example.datn_sd69.modules.brand.request;
+package org.example.datn_sd69.modules.brand.dto.request;
 
 import lombok.Getter;
 import lombok.Setter;

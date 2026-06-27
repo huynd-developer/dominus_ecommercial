@@ -8,6 +8,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface BrandRepository extends JpaRepository<Brand, Integer> {
-    // Tìm kiếm theo tên (không phân biệt hoa thường) và Phân trang
-    Page<Brand> findByNameContainingIgnoreCase(String name, Pageable pageable);
+    boolean existsByNameIgnoreCaseAndStatusNot(String name, Integer status);
+    boolean existsByNameIgnoreCaseAndIdNotAndStatusNot(String name, Integer id, Integer status);
 }

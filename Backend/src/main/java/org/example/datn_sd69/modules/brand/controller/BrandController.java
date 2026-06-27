@@ -1,110 +1,73 @@
 package org.example.datn_sd69.modules.brand.controller;
 
-import org.example.datn_sd69.modules.brand.request.BrandRequest;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.example.datn_sd69.modules.brand.dto.request.BrandRequest;
+import org.example.datn_sd69.modules.brand.service.BrandService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/thuong-hieu")
-@CrossOrigin("*")
+@RequiredArgsConstructor
 public class BrandController {
 
-    // 1. Xem danh sách (Phân trang + Tìm kiếm)
-    // TẤT CẢ các role đều được xem (Bao phủ mọi case chữ Hoa/Thường từ DB)
-    @PreAuthorize("hasAnyAuthority(" +
-            "'OWNER', 'Owner', 'owner', " +
-            "'MANAGER', 'Manager', 'manager', " +
-            "'CASHIER', 'Cashier', 'cashier', " +
-            "'USER', 'User', 'user')")
+    private final BrandService brandService;
+
+    // 1. Xem danh sách (Ai cũng xem được)
     @GetMapping
-    public ResponseEntity<?> getAll(
-            @RequestParam(defaultValue = "") String keyword,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
-    ) {
-        List<Map<String, Object>> mockBrands = List.of(
-                Map.of("id", 1, "name", "Gucci", "description", "Thương hiệu thời trang Ý", "status", 1),
-                Map.of("id", 2, "name", "Dior", "description", "Nước hoa xa xỉ Pháp", "status", 1),
-                Map.of("id", 3, "name", "Chanel", "description", "Thời trang đẳng cấp", "status", 1)
-        );
-
+    public ResponseEntity<?> getAll() {
         return ResponseEntity.ok(Map.of(
-                "content", mockBrands,
-                "totalElements", mockBrands.size(),
-                "totalPages", 1,
-                "size", size,
-                "number", page,
-                "message", "Test Mock Data: Lấy danh sách thành công!"
+                "status", "Thành công",
+                "message", "Lấy danh sách thương hiệu thành công",
+                "data", brandService.getAllBrands()
         ));
     }
 
-    // 2. Xem chi tiết 1 Brand theo ID
-    // TẤT CẢ các role đều được xem
-    @PreAuthorize("hasAnyAuthority(" +
-            "'OWNER', 'Owner', 'owner', " +
-            "'MANAGER', 'Manager', 'manager', " +
-            "'CASHIER', 'Cashier', 'cashier', " +
-            "'USER', 'User', 'user')")
-    @GetMapping("/{id}")
-    public ResponseEntity<?> getById(@PathVariable Integer id) {
-        return ResponseEntity.ok(Map.of(
-                "id", id,
-                "name", "Thương hiệu Test " + id,
-                "description", "Mô tả giả lập cho ID " + id,
-                "status", 1
-        ));
-    }
-
-    // 3. Thêm mới Brand
-    // Chỉ OWNER, MANAGER, CASHIER được phép làm (Cấm USER)
-    @PreAuthorize("hasAnyAuthority(" +
-            "'OWNER', 'Owner', 'owner', " +
-            "'MANAGER', 'Manager', 'manager', " +
-            "'CASHIER', 'Cashier', 'cashier')")
+    // 2. Thêm mới Brand (Chỉ MANAGER và OWNER)
+    @PreAuthorize("hasAnyAuthority('Manager', 'Owner')")
     @PostMapping
-    public ResponseEntity<?> create(@RequestBody BrandRequest request) {
+    public ResponseEntity<?> create(@Valid @RequestBody BrandRequest request) {
         return ResponseEntity.ok(Map.of(
-                "id", 99,
-                "name", request.getName(),
-                "description", request.getDescription(),
-                "status", request.getStatus(),
-                "message", "Test Mock Data: Thêm mới thành công!"
+                "status", "Thành công",
+                "message", "Tạo thương hiệu mới thành công",
+                "data", brandService.createBrand(request)
         ));
     }
 
-    // 4. Cập nhật Brand
-    // Chỉ OWNER, MANAGER, CASHIER được phép làm
-    @PreAuthorize("hasAnyAuthority(" +
-            "'OWNER', 'Owner', 'owner', " +
-            "'MANAGER', 'Manager', 'manager', " +
-            "'CASHIER', 'Cashier', 'cashier')")
+    // 3. Cập nhật Brand (Chỉ MANAGER và OWNER)
+    @PreAuthorize("hasAnyAuthority('Manager', 'Owner')")
     @PutMapping("/{id}")
-    public ResponseEntity<?> update(@PathVariable Integer id, @RequestBody BrandRequest request) {
+    public ResponseEntity<?> update(
+            @PathVariable Integer id,
+            @Valid @RequestBody BrandRequest request) {
         return ResponseEntity.ok(Map.of(
-                "id", id,
-                "name", request.getName(),
-                "description", request.getDescription(),
-                "status", request.getStatus(),
-                "message", "Test Mock Data: Cập nhật thành công!"
+                "status", "Thành công",
+                "message", "Cập nhật thương hiệu thành công",
+                "data", brandService.updateBrand(id, request)
         ));
     }
 
-    // 5. Xóa mềm Brand (Chuyển Status về 0)
-    // Chỉ OWNER, MANAGER, CASHIER được phép làm
-    @PreAuthorize("hasAnyAuthority(" +
-            "'OWNER', 'Owner', 'owner', " +
-            "'MANAGER', 'Manager', 'manager', " +
-            "'CASHIER', 'Cashier', 'cashier')")
+    // 4. Xóa mềm Brand (Chỉ OWNER)
+    @PreAuthorize("hasAuthority('Owner')")
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable Integer id) {
-        return ResponseEntity.ok(Map.of(
-                "id", id,
-                "status", 0,
-                "message", "Test Mock Data: Xóa thành công ID " + id
-        ));
+        try {
+            brandService.deleteBrand(id);
+            return ResponseEntity.ok(java.util.Map.of(
+                    "message", "Đã khóa thương hiệu thành công!"
+            ));
+        } catch (RuntimeException e) {
+            // Bắt lỗi "kẹt sản phẩm" và trả về status 400 kèm thông báo JSON
+            return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST)
+                    .body(java.util.Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            // Bắt các lỗi không xác định khác
+            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(java.util.Map.of("message", "Đã có lỗi hệ thống xảy ra!"));
+        }
     }
 }
