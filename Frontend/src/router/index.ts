@@ -2,6 +2,9 @@ import { createRouter, createWebHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
 import { h } from "vue"; 
+import ProductDetailView from '@/modules/shop/feature/product/ProductDetailView.vue';
+import CartView from '@/modules/shop/feature/cart/CartViews.vue';
+import CheckoutView from '@/modules/shop/feature/checkout/CheckoutViews.vue';
 
 // Layout quản trị của Admin
 import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
@@ -18,6 +21,23 @@ const routes: Array<RouteRecordRaw> = [
   // ==========================================
   // LUỒNG AUTH & STOREFRONT (GIAO DIỆN KHÁCH)
   // ==========================================
+  {
+    path: "/product", 
+    name: "ProductDetail",
+    component: ProductDetailView,
+  },
+  {
+    path: "/cart",
+    name: "Cart",
+    component: CartView,
+    meta: { requiresAuth: true, allowedRoles: ["USER"] }, // Chỉ User mới được vào Giỏ hàng
+  },
+  {
+    path: "/checkout",
+    name: "Checkout",
+    component: CheckoutView,
+    meta: { requiresAuth: true, allowedRoles: ["USER"] }, // Chỉ User mới được vào Thanh toán
+  },
   {
     path: "/login",
     name: "Login",
@@ -142,7 +162,6 @@ const router = createRouter({
   routes,
 });
 
-// Logic Bảo Mật Định Tuyến Toàn Cục
 // Logic Bảo Mật Định Tuyến Toàn Cục
 // CHỖ ĐÃ SỬA: Nhận thêm tham số `from` để lấy thông tin trang trước đó của user
 router.beforeEach((to, from) => {
