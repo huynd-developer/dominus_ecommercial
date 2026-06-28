@@ -22,23 +22,15 @@ public class AdminProductController {
     private final ProductService productService;
 
     /**
-     * Danh sách sản phẩm + tìm kiếm + phân trang
+     * Danh sách sản phẩm
      */
     @GetMapping
     public ResponseEntity<Page<ProductResponse>> getAll(
-
             @RequestParam(defaultValue = "") String keyword,
-
             @RequestParam(defaultValue = "0") int page,
-
             @RequestParam(defaultValue = "10") int size
-
     ) {
-
-        return ResponseEntity.ok(
-                productService.getAll(keyword, page, size)
-        );
-
+        return ResponseEntity.ok(productService.getAll(keyword, page, size));
     }
 
     /**
@@ -48,88 +40,62 @@ public class AdminProductController {
     public ResponseEntity<ProductResponse> getById(
             @PathVariable Integer id
     ) {
-
-        return ResponseEntity.ok(
-                productService.getById(id)
-        );
-
+        return ResponseEntity.ok(productService.getById(id));
     }
 
     /**
      * Thêm sản phẩm
      */
-    @PostMapping(
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
-    )
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ProductResponse> create(
 
             @Valid
-            @RequestPart("product")
-            ProductRequest request,
+            @ModelAttribute ProductRequest request,
 
-            @RequestPart(value = "primaryImage", required = false)
+            @RequestParam(value = "primaryImage", required = false)
             MultipartFile primaryImage,
 
-            @RequestPart(value = "images", required = false)
+            @RequestParam(value = "images", required = false)
             List<MultipartFile> images
 
     ) {
 
         return ResponseEntity.ok(
-
                 productService.create(
-
                         request,
-
                         primaryImage,
-
                         images
-
                 )
-
         );
-
     }
 
     /**
      * Sửa sản phẩm
      */
-    @PutMapping(
-            value = "/{id}",
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
-    )
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ProductResponse> update(
 
             @PathVariable Integer id,
 
             @Valid
-            @RequestPart("product")
-            ProductRequest request,
+            @ModelAttribute ProductRequest request,
 
-            @RequestPart(value = "primaryImage", required = false)
+            @RequestParam(value = "primaryImage", required = false)
             MultipartFile primaryImage,
 
-            @RequestPart(value = "images", required = false)
+            @RequestParam(value = "images", required = false)
             List<MultipartFile> images
 
     ) {
 
         return ResponseEntity.ok(
-
                 productService.update(
-
                         id,
-
                         request,
-
                         primaryImage,
-
                         images
-
                 )
-
         );
-
     }
 
     /**
@@ -142,10 +108,7 @@ public class AdminProductController {
 
         productService.delete(id);
 
-        return ResponseEntity.ok(
-                "Xóa sản phẩm thành công."
-        );
-
+        return ResponseEntity.ok("Xóa sản phẩm thành công.");
     }
 
 }
