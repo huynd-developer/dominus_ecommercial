@@ -1,21 +1,44 @@
 <template>
   <div class="page-wrapper">
-    <header class="lp-header">
+    <header class="dark-navbar">
       <div class="logo-section">
         <img src="@/assets/Logo.png" alt="Dominus" class="brand-logo" @click="$router.push('/')" />
       </div>
-      <div class="header-features">
-        <div class="feature-item"><svg class="icon-hdr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><p>Sản phẩm<br>chính hãng</p></div>
-        <div class="feature-item"><svg class="icon-hdr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="10" width="8" height="12" rx="2"/><path d="M10 10V6a2 2 0 014 0v4"/><path d="M9 2h6v2H9z"/></svg><p>Hương thơm<br>chuẩn Pháp</p></div>
-        <div class="feature-item"><svg class="icon-hdr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg><p>Đóng gói<br>sang trọng</p></div>
-        <div class="feature-item"><svg class="icon-hdr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18v-6a9 9 0 0118 0v6"/><path d="M21 19a2 2 0 01-2 2h-1v-6h3v4zM3 19a2 2 0 002 2h1v-6H3v4z"/></svg><p>Tư vấn tận tâm<br>24/7</p></div>
-        <div class="feature-item"><svg class="icon-hdr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg><p>Thanh toán bảo mật<br>100% an toàn</p></div>
-        
-        <div class="header-actions">
-          <div class="nav-cart" @click="$router.push('/cart')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
-            <span class="cart-badge" v-if="cartCount > 0">{{ cartCount }}</span>
+
+      <div class="nav-right">
+        <div class="nav-item account-menu">
+          <div class="nav-trigger">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>Tài khoản</span>
+            <svg class="chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
           </div>
+
+          <div class="dropdown-content">
+            <div class="dropdown-header">
+              <div class="avatar">H</div>
+              <div class="user-info">
+                <span class="user-name">Hoàng Khách Hàng</span>
+                <span class="rank-badge">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12l4 6-10 13L2 9z"/></svg>
+                  BRONZE RANK - 0 PTS
+                </span>
+              </div>
+            </div>
+            <ul class="dropdown-list">
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Thông tin cá nhân</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg> Sản phẩm yêu thích</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Lịch sử đơn hàng</li>
+              <li class="logout" @click="handleLogout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Đăng xuất</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="nav-item cart-btn" @click="$router.push('/cart')">
+          <div class="cart-icon-wrapper">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+            <span class="cart-badge">{{ cartCount || 0 }}</span>
+          </div>
+          <span>Giỏ hàng</span>
         </div>
       </div>
     </header>
@@ -223,7 +246,7 @@ const selectedVariant = ref<Variant>(product.value.variants[1] as Variant);
 const quantity = ref<number>(1);
 const showToast = ref(false);
 const showErrorToast = ref(false);
-const cartCount = ref(0); // Quản lý số lượng giỏ hàng trên Navbar
+const cartCount = ref(0); 
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
 
@@ -231,13 +254,19 @@ const selectVariant = (variant: Variant) => { selectedVariant.value = variant; q
 const decreaseQty = () => { if (quantity.value > 1) quantity.value--; };
 const increaseQty = () => { if (quantity.value < selectedVariant.value.stock) quantity.value++; };
 
-// Lấy số lượng giỏ hàng hiện tại khi load trang
+const handleLogout = () => {
+  if (confirm("Bạn có chắc chắn muốn đăng xuất?")) {
+    localStorage.removeItem("token");
+    router.push("/login");
+  }
+};
+
 const fetchCartCount = async () => {
   const token = localStorage.getItem('token');
   if (token) {
     try {
       const res = await axios.get('http://localhost:8080/api/v1/customer/cart/my-cart', { headers: { Authorization: `Bearer ${token}` } });
-      cartCount.value = res.data.length; // Số lượng loại mặt hàng trong giỏ
+      cartCount.value = res.data.length; 
     } catch (error) { console.error(error); }
   }
 };
@@ -257,9 +286,8 @@ const addToCart = async () => {
       { headers: { Authorization: `Bearer ${token}` } }
     );
     
-    // Thành công -> Bật Toast và Tăng số lượng giỏ hàng lên Navbar
     showToast.value = true;
-    fetchCartCount(); // Gọi lại API để chốt chuẩn số mới nhất
+    fetchCartCount(); 
     setTimeout(() => { showToast.value = false; }, 4000);
     
   } catch (error: any) {
@@ -267,11 +295,9 @@ const addToCart = async () => {
   }
 };
 
-// Hàm xử lý Mua Ngay (Thêm vào giỏ r chuyển thẳng sang Checkout)
 const buyNow = async () => {
   const token = localStorage.getItem('token');
 
-  // Chặn nếu chưa đăng nhập
   if (!token) {
     showErrorToast.value = true;
     setTimeout(() => { showErrorToast.value = false; }, 4000);
@@ -279,13 +305,11 @@ const buyNow = async () => {
   }
 
   try {
-    // 1. Nhét hàng vào giỏ trước
     await axios.post('http://localhost:8080/api/v1/customer/cart/add', 
       { productVariantId: selectedVariant.value.id, quantity: quantity.value }, 
       { headers: { Authorization: `Bearer ${token}` } }
     );
     
-    // 2. Thành công phát là phi thẳng sang trang Thanh toán
     router.push('/checkout');
     
   } catch (error: any) {
@@ -303,27 +327,51 @@ onMounted(() => {
 .page-wrapper { background-color: #fafbfc; min-height: 100vh; padding-bottom: 50px; color: #06132b; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
 
 /* =========================================
-   NAVBAR CSS (Mới thêm)
+   DARK NAVBAR LUXURY CSS
 ========================================== */
-.lp-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 40px; background: white; border-bottom: 1px solid #eee; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+.dark-navbar { 
+  display: flex; justify-content: space-between; align-items: center; 
+  padding: 0 40px; height: 70px; 
+  background-color: #08101f; 
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05); 
+}
 .logo-section { display: flex; align-items: center; }
-.brand-logo { height: 45px; object-fit: contain; cursor: pointer; transition: 0.2s; }
+.brand-logo { height: 35px; object-fit: contain; cursor: pointer; transition: 0.2s; filter: brightness(0) invert(1) sepia(1) saturate(5) hue-rotate(3deg); }
 .brand-logo:hover { opacity: 0.8; }
-.header-features { display: flex; align-items: center; gap: 30px; }
-.feature-item { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #06132b; font-weight: 500;}
-.icon-hdr { width: 22px; height: 22px; color: #b78d52; }
-.feature-item p { margin: 0; line-height: 1.4; }
 
-/* Nút Giỏ hàng trên Navbar */
-.header-actions { padding-left: 30px; border-left: 1px solid #eaeaea; display: flex; align-items: center; }
-.nav-cart { position: relative; cursor: pointer; color: #06132b; transition: 0.2s; }
-.nav-cart:hover { color: #b78d52; }
-.nav-cart svg { width: 28px; height: 28px; }
-.cart-badge { position: absolute; top: -6px; right: -8px; background: #b78d52; color: white; font-size: 11px; font-weight: bold; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.nav-right { display: flex; align-items: center; gap: 30px; height: 100%; }
+.nav-item { display: flex; align-items: center; gap: 8px; color: #fdfdfd; font-size: 14px; cursor: pointer; height: 100%; transition: 0.2s; position: relative; }
+.nav-item:hover, .nav-item:hover .nav-icon { color: #b78d52; }
+.nav-icon { width: 22px; height: 22px; color: #fdfdfd; transition: 0.2s; }
 
-/* =========================================
-   PRODUCT LAYOUT (Đã bọc lại để không vỡ form)
-========================================== */
+.cart-icon-wrapper { position: relative; display: flex; align-items: center; }
+.cart-badge { position: absolute; top: -8px; right: -8px; background: #b78d52; color: white; font-size: 11px; font-weight: bold; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+
+.account-menu { position: relative; }
+.nav-trigger { display: flex; align-items: center; gap: 8px; height: 100%; }
+.chevron-down { width: 16px; height: 16px; margin-left: -2px; }
+
+.dropdown-content { position: absolute; top: 100%; right: -20px; width: 260px; background: white; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); opacity: 0; visibility: hidden; transition: all 0.2s ease-in-out; transform: translateY(10px); z-index: 100; border: 1px solid #eaeaea;}
+.account-menu:hover .dropdown-content { opacity: 1; visibility: visible; transform: translateY(0); }
+.dropdown-content::before { content: ''; position: absolute; top: -6px; right: 50px; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 6px solid white; }
+
+.dropdown-header { display: flex; align-items: center; gap: 15px; padding: 20px; border-bottom: 1px solid #f0f0f0; }
+.avatar { width: 45px; height: 45px; border-radius: 50%; background: #c19b6c; color: white; font-size: 20px; font-weight: bold; display: flex; align-items: center; justify-content: center; }
+.user-info { display: flex; flex-direction: column; gap: 5px; }
+.user-name { color: #111; font-weight: bold; font-size: 15px; }
+.rank-badge { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #b78d52; color: #b78d52; background: #faf7f2; padding: 3px 8px; border-radius: 20px; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;}
+.rank-badge svg { width: 12px; height: 12px; }
+
+.dropdown-list { list-style: none; margin: 0; padding: 10px 0; }
+.dropdown-list li { display: flex; align-items: center; gap: 12px; padding: 12px 20px; color: #333; font-size: 14px; font-weight: 500; transition: 0.2s; }
+.dropdown-list li svg { width: 18px; height: 18px; color: #a0aec0; }
+.dropdown-list li:hover { background: #f8fafc; color: #b78d52; }
+.dropdown-list li:hover svg { color: #b78d52; }
+.dropdown-list li.logout { color: #dc3545; border-top: 1px solid #f0f0f0; margin-top: 5px; padding-top: 15px;}
+.dropdown-list li.logout svg { color: #dc3545; }
+.dropdown-list li.logout:hover { background: #fff5f5; }
+
+/* Product Layout */
 .product-layout { display: flex; gap: 40px; max-width: 1400px; margin: 40px auto; padding: 0 20px; }
 
 /* Filter Sidebar */
@@ -405,9 +453,7 @@ onMounted(() => {
 .icon-policy { width: 24px; height: 24px; color: #b78d52; }
 .policy-item strong { color: #4a5568; font-size: 13px; }
 
-/* =========================================
-   LUXURY TOAST NOTIFICATION CSS
-========================================== */
+/* TOAST CSS */
 .luxury-toast {
   position: fixed;
   bottom: 40px;
