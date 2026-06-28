@@ -102,22 +102,24 @@ public class OrderService {
         response.put("message", "Đặt hàng thành công!");
 
         if ("VNPAY".equalsIgnoreCase(request.getPaymentMethod())) {
-            // YÊU CẦU TASK: Trỏ request thanh toán sang môi trường VNPay Sandbox với tmnCode=GX7E4QMO
-            // Đây là URL giả lập cấu trúc VNPay. Trong thực tế nhóm bạn sẽ cần class VNPayConfig để hash mã vnp_SecureHash.
+            // Lấy thời gian thực tế của hệ thống để VNPay không báo quá hạn
+            java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+            String vnpCreateDate = java.time.LocalDateTime.now().format(formatter);
+
             String vnpayUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html" +
                     "?vnp_Version=2.1.0" +
                     "&vnp_Command=pay" +
                     "&vnp_TmnCode=GX7E4QMO" +
-                    "&vnp_Amount=" + (finalAmount.longValue() * 100) + // VNPay quy định nhân 100
+                    "&vnp_Amount=" + (finalAmount.longValue() * 100) +
                     "&vnp_CurrCode=VND" +
-                    "&vnp_TxnRef=" + order.getId() +
+                    "&vnp_TxnRef=" + order.getId() + "_" + vnpCreateDate + // Thêm time vào đuôi để chống trùng mã đơn
                     "&vnp_OrderInfo=Thanh toan don hang " + order.getId() +
                     "&vnp_OrderType=other" +
                     "&vnp_Locale=vn" +
-                    "&vnp_ReturnUrl=http://localhost:5173/payment-return" + // Trả về FE của bạn
+                    "&vnp_ReturnUrl=http://localhost:5173/payment-return" +
                     "&vnp_IpAddr=127.0.0.1" +
-                    "&vnp_CreateDate=20230101120000" +
-                    "&vnp_SecureHash=MOCK_HASH_DE_TEST"; // Phải dùng HMAC-SHA512 để gen thật
+                    "&vnp_CreateDate=" + vnpCreateDate + // TRUYỀN GIỜ THỰC TẾ VÀO ĐÂY
+                    "&vnp_SecureHash=MOCK_HASH_DE_TEST";
 
             response.put("paymentUrl", vnpayUrl);
         }
