@@ -110,8 +110,6 @@ public class OrderService {
             java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
             String vnpCreateDate = java.time.LocalDateTime.now().format(formatter);
 
-            // ⚠️ QUAN TRỌNG: M phải điền cái chuỗi HashSecret lấy từ mail VNPay Sandbox vào đây
-            // Mã TmnCode của m đang là GX7E4QMO nên bắt buộc phải có SecretKey đi kèm
             String vnp_HashSecret = "4NBUT8VATC523HQV2EO329GO1BU1E00F";
 
             Map<String, String> vnp_Params = new HashMap<>();
