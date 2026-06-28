@@ -37,3 +37,7 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+.idea/
+node_modules/
+Frontend/node_modules/
