@@ -63,6 +63,13 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import("@/modules/auth/views/CustomerLoginView.vue"),
     meta: { requiresAuth: true, allowedRoles: ["USER"] },
   },
+  // {
+  //       path: "brands",
+  //       name: "AdminBrands",
+  //       // Đổi từ ThuongHieu.vue sang BrandView.vue đúng theo cấu trúc thực tế của bạn
+  //       component: () => import("@/modules/admin/feature/brand/views/BrandView.vue"),
+  //       meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
+  //     },
 
   // ==========================================
   // LUỒNG ADMIN QUẢN TRỊ (Khớp chính xác với TopHeader)
@@ -103,7 +110,7 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "brands",
         name: "AdminBrands",
-        component: mockPage("Thương hiệu (Brand)", "Đức"),
+        component: import("@/modules/admin/feature/brand/views/BrandView.vue"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
