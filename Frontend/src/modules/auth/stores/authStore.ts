@@ -7,6 +7,22 @@ interface AuthState {
   name: string | null;
 }
 
+// 1. BỔ SUNG GÓI TYPE CHO TYPESCRIPT
+export interface AuthResponse {
+  success: boolean;
+  message?: string;
+  validationErrors?: Record<string, string>;
+}
+
+// 2. ÉP KIỂU TRẢ VỀ CỦA HELPER LÀ AuthResponse
+const handleAuthError = (error: any, defaultMessage: string): AuthResponse => {
+  const errorData = error.response?.data;
+  if (typeof errorData === 'object' && !errorData.message) {
+    return { success: false, validationErrors: errorData };
+  }
+  return { success: false, message: errorData?.message || defaultMessage };
+};
+
 export const useAuthStore = defineStore('auth', {
   state: (): AuthState => ({
     token: localStorage.getItem('token'),
@@ -16,73 +32,68 @@ export const useAuthStore = defineStore('auth', {
 
   getters: {
     isAuthenticated: (state) => !!state.token,
-    isAdminSection: (state) => ['OWNER', 'MANAGER', 'CASHIER'].includes(state.role || ''),
+    
+    // ĐÂY LÀ CHỖ QUAN TRỌNG NHẤT ĐỂ FIX LỖI 403:
+    isAdminSection: (state) => {
+      // Ép tất cả về chữ IN HOA và xóa tiền tố ROLE_ (nếu có)
+      const cleanRole = (state.role || '').toUpperCase().replace('ROLE_', '');
+      return ['OWNER', 'MANAGER', 'CASHIER'].includes(cleanRole);
+    },
   },
 
   actions: {
-    // Luồng đăng nhập Customer
-    async loginCustomer(payload: any) {
+    // 3. ÉP KIỂU TRẢ VỀ CHO CÁC HÀM LÀ Promise<AuthResponse>
+    async loginCustomer(payload: any): Promise<AuthResponse> {
       try {
         const response = await api.post('/auth/login/customer', payload);
         this.setAuthData(response.data);
-        return { success: true };
+        return { success: true }; 
       } catch (error: any) {
-        // Bổ sung: Bắt mảng lỗi (Validation Map) giống hệt hàm register
-        const errorData = error.response?.data;
-        if (typeof errorData === 'object' && !errorData.message) {
-          return { success: false, validationErrors: errorData };
-        }
-        return { success: false, message: errorData?.message || 'Đăng nhập thất bại!' };
+        return handleAuthError(error, 'Đăng nhập thất bại!');
       }
     },
 
-    // Luồng đăng nhập Nhân viên / Admin
-    async loginEmployee(payload: any) {
+    async loginEmployee(payload: any): Promise<AuthResponse> {
       try {
         const response = await api.post('/auth/login/employee', payload);
         this.setAuthData(response.data);
         return { success: true };
       } catch (error: any) {
-        // Bổ sung: Bắt mảng lỗi (Validation Map) giống hệt hàm register
-        const errorData = error.response?.data;
-        if (typeof errorData === 'object' && !errorData.message) {
-          return { success: false, validationErrors: errorData };
-        }
-        return { success: false, message: errorData?.message || 'Đăng nhập quản trị thất bại!' };
+        return handleAuthError(error, 'Đăng nhập quản trị thất bại!');
       }
     },
 
-    // Luồng đăng ký tài khoản Customer (Giữ nguyên gốc của ông)
-    async registerCustomer(payload: any) {
+    async registerCustomer(payload: any): Promise<AuthResponse> {
       try {
         const response = await api.post('/auth/register', payload);
         return { success: true, message: response.data.message };
       } catch (error: any) {
-        const errorData = error.response?.data;
-        if (typeof errorData === 'object' && !errorData.message) {
-          return { success: false, validationErrors: errorData };
-        }
-        return { success: false, message: errorData?.message || 'Đăng ký thất bại!' };
+        return handleAuthError(error, 'Đăng ký thất bại!');
       }
     },
 
-    // Helper thiết lập dữ liệu sạch (Giữ nguyên gốc của ông)
+    // Giữ nguyên 100% logic setAuthData
     setAuthData(data: any) { 
       console.log("📦 Cấu trúc JSON thực tế từ Backend:", data);
-      this.token = data.token;
-      this.role = data.role;
-      this.name = data.name;
-      localStorage.setItem('token', data.token || '');
-      localStorage.setItem('role', data.role || '');
-      localStorage.setItem('name', data.name || '');
+      
+      if (data.token) localStorage.setItem('token', data.token);
+      if (data.role) localStorage.setItem('role', data.role);
+      if (data.name) localStorage.setItem('name', data.name);
+
+      this.token = data.token || null;
+      this.role = data.role || null;
+      this.name = data.name || null;
     },
 
-    // Đăng xuất xóa sạch dấu vết (Giữ nguyên gốc của ông)
+    // Giữ nguyên 100% logic logout
     logout() {
+      localStorage.removeItem('token');
+      localStorage.removeItem('role');
+      localStorage.removeItem('name');
+
       this.token = null;
       this.role = null;
       this.name = null;
-      localStorage.clear();
     },
   },
 });

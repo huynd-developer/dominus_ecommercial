@@ -8,6 +8,22 @@ const api = axios.create({
   },
 });
 
+// BỔ SUNG CHỖ CẦN SỬA: Interceptor kẹp Token trước khi gửi request đi
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`; // Nhét token vào Header
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+// KẾT THÚC PHẦN BỔ SUNG
+
+// GIỮ NGUYÊN HOÀN TOÀN CODE CŨ PHÍA DƯỚI
 api.interceptors.response.use(
   (response) => response,
   (error) => {

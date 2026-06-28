@@ -5,8 +5,8 @@ import { h } from "vue";
 
 // Layout quản trị của Admin
 import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
-
 import ShopLayout from "@/modules/shop/layout/ShopLayout.vue";
+
 // Hàm tạo trang tạm thời phục vụ giai đoạn phát triển
 const mockPage = (title: string, assignee: string) => ({
   render: () =>
@@ -70,6 +70,8 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: "/admin",
     component: AdminLayout,
+    redirect: "/admin/dashboard", 
+    meta: { requiresAuth: true },
     children: [
       {
         path: "dashboard",
@@ -92,7 +94,6 @@ const routes: Array<RouteRecordRaw> = [
         component: mockPage("Quản lý Sản phẩm", "Trung"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
-      // 👇 Phân hệ Thuộc tính sản phẩm của Đức (Đã đồng bộ chi tiết) 👇
       {
         path: "categories",
         name: "AdminCategories",
@@ -129,7 +130,6 @@ const routes: Array<RouteRecordRaw> = [
         component: mockPage("Loại vỏ chai", "Đức"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
-      // ----------------------------------------------------------------
       {
         path: "orders",
         name: "AdminOrders",
@@ -173,73 +173,76 @@ const router = createRouter({
 });
 
 // Logic Bảo Mật Định Tuyến Toàn Cục
-// Logic Bảo Mật Định Tuyến Toàn Cục
-// CHỖ ĐÃ SỬA: Nhận thêm tham số `from` để lấy thông tin trang trước đó của user
-router.beforeEach((to, from) => {
+// CHỖ THAY ĐỔI: Bỏ tham số `next` ở callback của beforeEach
+router.beforeEach(async (to, from) => {
   const authStore = useAuthStore();
 
-  // Chuẩn hóa quyền: Chuyển sang chữ HOA và bóc tách tiền tố ROLE_
+  // ĐẢM BẢO STATE ĐƯỢC ĐỒNG BỘ: Đọc trực tiếp từ LocalStorage nếu Pinia chưa kịp load lại
+  if (!authStore.isAuthenticated && localStorage.getItem('token')) {
+    // Giữ nguyên phần nhắc nhở logic đồng bộ của bạn
+  }
+
   const userRole = (authStore.role || "").toUpperCase().replace("ROLE_", "");
 
-  // LUỒNG 1: Ngăn chặn tài khoản đã đăng nhập quay lại các trang đăng ký/đăng nhập
+  // ==========================================
+  // LUỒNG 1: ĐÃ ĐĂNG NHẬP THÌ KHÔNG CHO RA LOGIN
+  // ==========================================
   if (
     authStore.isAuthenticated &&
     ["Login", "AdminLogin", "Register"].includes(to.name as string)
   ) {
     if (userRole === "OWNER") {
-      return { path: "/admin/dashboard" };
+      return { path: "/admin/dashboard", replace: true }; // Thay thế: next({...}) -> return {...}
     } else if (["MANAGER", "CASHIER"].includes(userRole)) {
-      return { path: "/admin/pos" };
+      return { path: "/admin/pos", replace: true };
     }
-    return { path: "/" };
+    return { path: "/", replace: true };
   }
 
-  // LUỒNG 2: Kiểm soát quyền truy cập chi tiết từng trang nội bộ
+  // ==========================================
+  // LUỒNG 2: KIỂM TRA QUYỀN TRUY CẬP NỘI BỘ
+  // ==========================================
   if (to.meta.requiresAuth) {
     if (!authStore.isAuthenticated) {
       if (to.path.startsWith("/admin")) {
-        return { name: "AdminLogin" };
+        return { name: "AdminLogin", replace: true };
       }
-      return { name: "Login" };
+      return { name: "Login", replace: true };
     }
 
     const allowedRoles = to.meta.allowedRoles as string[];
 
-    // CHỖ ĐÃ SỬA: Xử lý khi user cố tình gõ link không có quyền hoặc bị push nhầm sau khi Login
     if (allowedRoles && !allowedRoles.includes(userRole)) {
-      // 1. Bẻ lái nếu đến từ trang Đăng nhập (tức là vừa login xong nhưng bị đẩy nhầm vào trang cấm như Dashboard)
+      // 1. Nếu vừa đăng nhập xong bị đá sang link cấm không đúng quyền hạn
       if (from.name === "AdminLogin" || from.name === "Login") {
         if (["CASHIER", "MANAGER"].includes(userRole)) {
-          return { path: "/admin/pos" };
+          return { path: "/admin/pos", replace: true };
         }
         if (userRole === "OWNER") {
-          return { path: "/admin/dashboard" };
+          return { path: "/admin/dashboard", replace: true };
         }
-        return { path: "/" };
+        return { path: "/", replace: true };
       }
 
-      // 2. Nếu đang lướt trong app mà bấm nhầm link cấm -> Giữ nguyên ở trang hiện tại
+      // 2. Nếu đang thao tác nội bộ mà bấm nhầm link cấm
       if (from.matched.length > 0) {
-        // MẸO: Bạn nên gọi 1 hàm Toast Notification (thông báo góc màn hình) ở đây.
-        // VD: toast.error("Bạn không có quyền truy cập trang này!");
-        // Để user biết tại sao bấm nút mà không chuyển trang, tránh việc họ tưởng web lỗi.
-        return from.fullPath;
+        return from.fullPath; // Trả về chính vị trí hiện tại để hủy điều hướng
       }
 
-      // 3. Nếu gõ link trực tiếp từ thanh địa chỉ (chưa có lịch sử)
+      // 3. Nếu gõ link trực tiếp lên thanh URL nhưng sai Role
       if (["CASHIER", "MANAGER"].includes(userRole)) {
-        return { path: "/admin/pos" };
+        return { path: "/admin/pos", replace: true };
       }
       if (userRole === "OWNER") {
-        return { path: "/admin/dashboard" };
+        return { path: "/admin/dashboard", replace: true };
       }
 
-      // Default fallback
-      return { path: "/" };
+      return { path: "/", replace: true };
     }
   }
 
-  return true;
+  // Hoàn toàn hợp lệ -> cho phép đi tiếp (không cần gọi next() nữa)
+  return true; 
 });
 
 export default router;

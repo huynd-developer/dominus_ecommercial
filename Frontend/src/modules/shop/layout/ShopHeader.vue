@@ -2,7 +2,6 @@
   <div class="shop-header">
     <div class="container-fluid px-4 px-lg-5 h-100">
       <div class="row align-items-center h-100">
-        <!-- Logo -->
         <div class="col-4 col-lg-3">
           <RouterLink
             to="/"
@@ -23,7 +22,6 @@
           </RouterLink>
         </div>
 
-        <!-- Search -->
         <div class="col-12 col-lg-6 order-3 order-lg-2 mt-3 mt-lg-0">
           <div class="search-wrapper position-relative mx-auto">
             <input
@@ -45,10 +43,8 @@
           </div>
         </div>
 
-        <!-- Account / Cart -->
         <div class="col-8 col-lg-3 order-2 order-lg-3">
           <div class="d-flex align-items-center justify-content-end gap-3 gap-lg-4">
-            <!-- Account Dropdown -->
             <div class="account-dropdown-wrapper">
               <button
                 type="button"
@@ -64,8 +60,7 @@
               </button>
 
               <div class="account-dropdown">
-                <!-- Chưa đăng nhập -->
-                <div v-if="!isLoggedIn" class="guest-dropdown">
+                <div v-if="!isAuthenticated" class="guest-dropdown">
                   <p class="dropdown-title mb-3">Tài khoản khách hàng</p>
 
                   <RouterLink to="/login" class="btn dropdown-login-btn w-100 mb-2">
@@ -77,7 +72,6 @@
                   </RouterLink>
                 </div>
 
-                <!-- Đã đăng nhập -->
                 <div v-else class="logged-dropdown">
                   <div class="user-block d-flex align-items-center gap-3">
                     <div class="user-avatar">
@@ -85,11 +79,11 @@
                     </div>
 
                     <div class="user-info">
-                      <div class="user-name">{{ userProfile.name }}</div>
+                      <div class="user-name">{{ name || 'Khách hàng' }}</div>
 
                       <div class="rank-badge mt-1">
                         <i class="bi bi-gem me-1"></i>
-                        {{ userProfile.rank }} Rank - {{ userProfile.points }} Pts
+                        {{ userRank }} Rank - {{ userPoints }} Pts
                       </div>
                     </div>
                   </div>
@@ -119,7 +113,6 @@
               </div>
             </div>
 
-            <!-- Cart -->
             <RouterLink
               to="/cart"
               class="header-action cart-action d-flex align-items-center gap-2 text-decoration-none position-relative"
@@ -140,28 +133,59 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
+import { storeToRefs } from 'pinia';
+import { useAuthStore } from '@/modules/auth/stores/authStore'; 
+import api from '@/common/api'; 
 import logoAura from '@/assets/logo.png';
-
+import Swal from 'sweetalert2';
 const router = useRouter();
+const authStore = useAuthStore();
+
+// Lấy state từ store (đảm bảo reactive)
+const { isAuthenticated, name } = storeToRefs(authStore);
 
 const logoLoadFailed = ref(false);
 const keyword = ref('');
 
-const isLoggedIn = ref(true);
+// Trạng thái Rank và Điểm lấy từ API
+const userRank = ref('Bronze');
+const userPoints = ref(0);
 
-const userProfile = ref({
-  name: 'Nguyễn Văn A',
-  rank: 'Gold',
-  points: 1500
+// Tính toán Avatar từ tên thật
+const userInitial = computed(() => {
+  if (!name.value) return 'U';
+  const nameParts = name.value.trim().split(' ');
+  return nameParts[nameParts.length - 1]?.charAt(0).toUpperCase() || 'U';
 });
 
-// TODO: Fetch User Profile API sau khi login thành công
+// Hàm lấy thông tin Rank và Điểm
+const fetchCustomerProfile = async () => {
+  // SỬA CHỖ NÀY: Chỉ gọi API nếu đã đăng nhập VÀ tài khoản KHÔNG PHẢI là Nhân viên
+  if (isAuthenticated.value && !authStore.isAdminSection) {
+    try {
+      const res = await api.get('/customer/profile');
+      userRank.value = res.data.customerRank || 'Bronze';
+      userPoints.value = res.data.loyaltyPoints || 0;
+    } catch (error) {
+      console.error('Lỗi lấy thông tin Rank/Điểm:', error);
+    }
+  }
+};
 
-const userInitial = computed(() => {
-  const nameParts = userProfile.value.name.trim().split(' ');
-  return nameParts[nameParts.length - 1]?.charAt(0).toUpperCase() || 'U';
+// Gọi API khi component vừa load lên
+onMounted(() => {
+  fetchCustomerProfile();
+});
+
+// Chờ và gọi API lại nếu người dùng vừa mới đăng nhập thành công
+watch(isAuthenticated, async (newVal) => {
+  if (newVal) {
+    // SỬA CHỖ NÀY: Xóa hoàn toàn khối setTimeout 200ms đi.
+    // Giờ đây gọi thẳng luôn vì authStore đã lưu Token xong xuôi rồi.
+    await fetchCustomerProfile();
+  }
 });
 
 const handleSearch = () => {
@@ -181,11 +205,36 @@ const handleSearch = () => {
 };
 
 const handleLogout = () => {
-  // TODO: Call API logout / clear token / clear auth store
-  isLoggedIn.value = false;
-  router.push('/');
+  Swal.fire({
+    title: 'Xác nhận đăng xuất?',
+    text: 'Bạn có chắc chắn muốn rời khỏi phiên làm việc này không?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#bd9a5f', // Giữ màu Vàng Gold cho nút Đồng ý để làm điểm nhấn thương hiệu
+    cancelButtonColor: '#6c757d',  // Nút Hủy chuyển sang màu xám nhẹ hợp với nền trắng
+    confirmButtonText: 'Đồng ý',
+    cancelButtonText: 'Hủy',
+    background: '#ffffff',         // 👇 Đổi thành Nền Màu Trắng
+    color: '#000000',              // 👇 Đổi thành Chữ Màu Đen
+    iconColor: '#dc3545',          // Đổi icon cảnh báo sang màu đỏ (hoặc #bd9a5f tùy bạn) để nổi bật trên nền trắng
+    customClass: {
+      popup: 'border-gold-sweetalert' // Vẫn giữ viền gold mỏng nếu bạn muốn, hoặc bỏ dòng customClass này đi nếu muốn trắng tinh khôi
+    }
+  }).then((result) => {
+    // Nếu người dùng nhấn nút "Đồng ý"
+    if (result.isConfirmed) {
+      // Thực hiện các bước xóa session
+      authStore.logout();
+      
+      userRank.value = 'Bronze';
+      userPoints.value = 0;
+      
+      // Chuyển về trang chủ
+      router.push('/');
+    }
+  });
 };
-</script>
+</script> 
 
 <style scoped>
 .shop-header {
@@ -385,6 +434,7 @@ const handleLogout = () => {
   pointer-events: none;
 }
 
+/* --- GIỮ NGUYÊN ĐOẠN CŨ NÀY CỦA BẠN --- */
 .account-dropdown::before {
   content: "";
   position: absolute;
@@ -396,6 +446,17 @@ const handleLogout = () => {
   border-left: 1px solid rgba(189, 154, 95, 0.18);
   border-top: 1px solid rgba(189, 154, 95, 0.18);
   transform: rotate(45deg);
+}
+
+/* --- THÊM CHÍNH XÁC ĐOẠN MỚI NÀY VÀO NGAY DƯỚI --- */
+.account-dropdown::after {
+  content: "";
+  position: absolute;
+  top: -24px; /* Phủ ngược lên trên 24px để dính liền vào nút bấm */
+  left: 0;
+  width: 100%;
+  height: 24px; /* Tạo một cầu nối vô hình cao 24px */
+  background: transparent; /* Hoàn toàn trong suốt */
 }
 
 .account-dropdown-wrapper:hover .account-dropdown {

@@ -69,9 +69,9 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { reactive, ref, onMounted, onUnmounted } from 'vue'; // BỔ SUNG: onMounted và onUnmounted
 import { useAuthStore } from '../stores/authStore';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router'; 
 
 const props = defineProps({
   isAdminMode: { type: Boolean, default: false }
@@ -79,36 +79,77 @@ const props = defineProps({
 
 const authStore = useAuthStore();
 const router = useRouter();
+const route = useRoute(); 
 
 const credentials = reactive({ email: '', password: '' });
 const loading = ref(false);
 const errorMessage = ref('');
 const showPassword = ref(false); 
 
-// Bổ sung: Biến lưu mảng lỗi từng dòng
+// Biến lưu mảng lỗi từng dòng
 const validationErrors = ref<Record<string, string>>({});
+
+// ==========================================
+// TẤM KHIÊN BẢO VỆ: Đuổi người dùng ra nếu họ đã đăng nhập thành công
+const checkAuthAndRedirect = () => {
+  if (authStore.isAuthenticated) {
+    const userRole = (authStore.role || '').toUpperCase().replace('ROLE_', '');
+    
+    if (props.isAdminMode) {
+      if (userRole === 'OWNER') {
+        router.replace('/admin/dashboard');
+      } else if (['MANAGER', 'CASHIER'].includes(userRole)) {
+        router.replace('/admin/pos');
+      }
+    } else {
+      router.replace('/');
+    }
+  }
+};
+
+// Hàm xử lý phá vỡ bộ nhớ đệm BFCache của trình duyệt khi ấn nút Back
+const handlePageShow = (event: PageTransitionEvent) => {
+  if (event.persisted) { // Nếu trang bị ép tải lại từ lịch sử đóng băng
+    checkAuthAndRedirect();
+  }
+};
+
+onMounted(() => {
+  // 1. Chạy ngay khi vừa vào trang để kiểm tra xem đã có Token chưa
+  checkAuthAndRedirect();
+  
+  // 2. Lắng nghe trình duyệt xem có ai vừa ấn nút "Quay lại" không
+  window.addEventListener('pageshow', handlePageShow);
+});
+
+onUnmounted(() => {
+  // Hủy lắng nghe khi rời khỏi trang để tránh rò rỉ bộ nhớ
+  window.removeEventListener('pageshow', handlePageShow);
+});
+// ==========================================
 
 const handleLogin = async () => {
   loading.value = true;
   errorMessage.value = '';
-  validationErrors.value = {}; // Bổ sung: Reset lỗi khi ấn login lại
+  validationErrors.value = {}; 
   
   const result = props.isAdminMode 
     ? await authStore.loginEmployee(credentials)
     : await authStore.loginCustomer(credentials);
 
   if (result.success) {
+    const redirectPath = route.query.redirect as string;
+
     if (props.isAdminMode) {
-      router.replace('/admin/dashboard');
+      router.replace(redirectPath || '/admin/dashboard');
     } else {
-      router.replace('/');
+      router.replace(redirectPath || '/');
     }
   } else {
-    // Bổ sung: Tách luồng lỗi. Lỗi Validation thì gán vào validationErrors, lỗi chung thì gán vào errorMessage
     if (result.validationErrors) {
       validationErrors.value = result.validationErrors;
     } else {
-      errorMessage.value = result.message;
+      errorMessage.value = result.message || 'Đã xảy ra lỗi.';
     }
   }
   loading.value = false;
