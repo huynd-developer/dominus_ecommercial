@@ -1,5 +1,6 @@
 <template>
   <div class="page-wrapper">
+    <!-- Navbar -->
     <header class="lp-header">
       <div class="logo-section">
         <img src="@/assets/Logo.png" alt="Dominus" class="brand-logo" @click="$router.push('/')" />
@@ -11,6 +12,7 @@
         <div class="feature-item"><svg class="icon-hdr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18v-6a9 9 0 0118 0v6"/><path d="M21 19a2 2 0 01-2 2h-1v-6h3v4zM3 19a2 2 0 002 2h1v-6H3v4z"/></svg><p>Tư vấn tận tâm<br>24/7</p></div>
         <div class="feature-item"><svg class="icon-hdr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg><p>Thanh toán bảo mật<br>100% an toàn</p></div>
         
+        <!-- Nút Giỏ hàng -->
         <div class="header-actions">
           <div class="nav-cart" @click="$router.push('/cart')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
@@ -20,8 +22,10 @@
       </div>
     </header>
 
+    <!-- Main Layout Full Width -->
     <main class="main-content full-width">
       
+      <!-- CỘT TRÁI: Form nhập liệu -->
       <div class="checkout-left">
         <div class="step-section">
           <div class="step-header">
@@ -62,6 +66,57 @@
               <textarea v-model="orderForm.note" @input="validateNote" maxlength="50" placeholder="Giao hàng trong giờ hành chính..."></textarea>
             </div>
           </div>
+
+          <!-- YÊU CẦU XUẤT HÓA ĐƠN VAT MỚI THÊM -->
+          <div class="vat-section-wrapper">
+            <div class="vat-toggle-box">
+              <div class="vat-toggle-info">
+                <div class="vat-toggle-title">
+                  <svg class="icon-receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                  <strong>Yêu cầu xuất hóa đơn GTGT (VAT)</strong>
+                </div>
+                <span class="vat-sub">Hệ thống sẽ gửi hóa đơn điện tử qua email doanh nghiệp của bạn.</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" v-model="orderForm.requireVat">
+                <span class="slider round"></span>
+              </label>
+            </div>
+
+            <div class="vat-form-box" v-if="orderForm.requireVat">
+              <h4 class="vat-form-title">Thông tin doanh nghiệp</h4>
+              
+              <div class="form-row">
+                <div class="form-group half">
+                  <label>Mã số thuế *</label>
+                  <div class="input-box">
+                    <input type="text" v-model="orderForm.vatTaxCode" placeholder="Nhập mã số thuế công ty" />
+                  </div>
+                </div>
+                <div class="form-group half">
+                  <label>Email nhận hóa đơn *</label>
+                  <div class="input-box">
+                    <input type="email" v-model="orderForm.vatEmail" placeholder="accounting@company.com" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Tên công ty / đơn vị *</label>
+                <div class="input-box">
+                  <input type="text" v-model="orderForm.vatCompanyName" placeholder="Công ty TNHH..." />
+                </div>
+              </div>
+
+              <div class="form-group mb-0">
+                <label>Địa chỉ công ty (Theo GPKD) *</label>
+                <div class="input-box">
+                  <input type="text" v-model="orderForm.vatCompanyAddress" placeholder="Số nhà, tên đường, quận/huyện, tỉnh/thành phố..." />
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- KẾT THÚC KHỐI VAT -->
         </div>
 
         <div class="divider"></div>
@@ -98,6 +153,7 @@
         </div>
       </div>
 
+      <!-- CỘT PHẢI: Bill tóm tắt -->
       <div class="checkout-right">
         <h3 class="summary-title">Đơn hàng của bạn ({{ totalItems }})</h3>
         
@@ -140,7 +196,14 @@ const orderForm = ref({
   customerPhone: '',
   shippingAddress: '',
   note: '', 
-  paymentMethod: 'COD'
+  paymentMethod: 'COD',
+  
+  // Dữ liệu VAT thêm mới
+  requireVat: false,
+  vatTaxCode: '',
+  vatEmail: '',
+  vatCompanyName: '',
+  vatCompanyAddress: ''
 });
 
 const cartItems = ref<any[]>([]);
@@ -171,7 +234,14 @@ const loadCartSummary = async () => {
 
 const handlePlaceOrder = async () => {
   if (!orderForm.value.customerName.trim() || !orderForm.value.customerPhone.trim() || !orderForm.value.shippingAddress.trim()) {
-    alert("Vui lòng điền thông tin hợp lệ!"); return;
+    alert("Vui lòng điền thông tin giao hàng hợp lệ!"); return;
+  }
+  
+  // Validate sơ bộ form VAT nếu khách tick vào
+  if (orderForm.value.requireVat) {
+    if (!orderForm.value.vatTaxCode.trim() || !orderForm.value.vatEmail.trim() || !orderForm.value.vatCompanyName.trim() || !orderForm.value.vatCompanyAddress.trim()) {
+      alert("Vui lòng điền đầy đủ thông tin xuất hóa đơn VAT!"); return;
+    }
   }
 
   isSubmitting.value = true;
@@ -225,6 +295,7 @@ onMounted(loadCartSummary);
 
 .form-row { display: flex; gap: 20px; }
 .form-group { margin-bottom: 20px; width: 100%; }
+.form-group.mb-0 { margin-bottom: 0; }
 .form-group.half { flex: 1; }
 .form-group label { display: block; font-size: 14px; color: #333; margin-bottom: 8px; font-weight: 500; }
 .input-box { display: flex; align-items: center; border: 1px solid #ddd; border-radius: 6px; padding: 0 15px; background: white; transition: 0.2s; }
@@ -233,6 +304,35 @@ onMounted(loadCartSummary);
 .input-icon { width: 18px; height: 18px; color: #a0aec0; margin-right: 10px; flex-shrink: 0;}
 .input-box input { flex: 1; border: none; padding: 14px 0; outline: none; font-size: 14px; color: #333; }
 .input-box textarea { flex: 1; border: none; padding: 0 0 14px 0; outline: none; font-size: 14px; color: #333; min-height: 80px; resize: none; font-family: inherit;}
+
+/* =========================================
+   VAT SECTION CSS (Mới Thêm)
+========================================== */
+.vat-section-wrapper { margin-top: 25px; margin-bottom: 20px; }
+.vat-toggle-box { display: flex; justify-content: space-between; align-items: center; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px 20px; background: white; }
+.vat-toggle-info { display: flex; flex-direction: column; gap: 4px; }
+.vat-toggle-title { display: flex; align-items: center; gap: 8px; color: #1a202c; }
+.icon-receipt { width: 18px; height: 18px; color: #4a5568; }
+.vat-sub { font-size: 13px; color: #718096; }
+
+/* Nút Toggle (Switch) */
+.switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e0; transition: .4s; }
+.slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; }
+input:checked + .slider { background-color: #3182ce; } /* Màu xanh dương khi bật */
+input:checked + .slider:before { transform: translateX(20px); }
+.slider.round { border-radius: 24px; }
+.slider.round:before { border-radius: 50%; }
+
+/* Khung form VAT màu xanh nhạt */
+.vat-form-box { background: #ebf8ff; border: 1px solid #bee3f8; border-radius: 8px; padding: 20px; margin-top: 15px; }
+.vat-form-title { margin: 0 0 15px 0; color: #2b6cb0; font-size: 15px; font-weight: 600; }
+.vat-form-box .form-group label { color: #2d3748; }
+.vat-form-box .input-box { border-color: #bee3f8; }
+.vat-form-box .input-box:focus-within { border-color: #3182ce; box-shadow: 0 0 0 1px #3182ce; }
+
+/* ========================================= */
 
 .divider { height: 1px; background: #f0f0f0; margin: 30px 0; }
 

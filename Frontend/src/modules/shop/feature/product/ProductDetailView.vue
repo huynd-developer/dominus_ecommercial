@@ -145,7 +145,7 @@
               <button class="btn-add-cart" @click="addToCart">
                 <svg class="icon-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg> THÊM VÀO GIỎ HÀNG
               </button>
-              <button class="btn-buy-now">MUA NGAY ➔</button>
+              <button class="btn-buy-now" @click="buyNow">MUA NGAY ➔</button>
             </div>
 
             <div class="policy-footer">
@@ -261,6 +261,32 @@ const addToCart = async () => {
     showToast.value = true;
     fetchCartCount(); // Gọi lại API để chốt chuẩn số mới nhất
     setTimeout(() => { showToast.value = false; }, 4000);
+    
+  } catch (error: any) {
+    alert(error.response?.data?.message || 'Có lỗi xảy ra, vui lòng thử lại!');
+  }
+};
+
+// Hàm xử lý Mua Ngay (Thêm vào giỏ r chuyển thẳng sang Checkout)
+const buyNow = async () => {
+  const token = localStorage.getItem('token');
+
+  // Chặn nếu chưa đăng nhập
+  if (!token) {
+    showErrorToast.value = true;
+    setTimeout(() => { showErrorToast.value = false; }, 4000);
+    return;
+  }
+
+  try {
+    // 1. Nhét hàng vào giỏ trước
+    await axios.post('http://localhost:8080/api/v1/customer/cart/add', 
+      { productVariantId: selectedVariant.value.id, quantity: quantity.value }, 
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    
+    // 2. Thành công phát là phi thẳng sang trang Thanh toán
+    router.push('/checkout');
     
   } catch (error: any) {
     alert(error.response?.data?.message || 'Có lỗi xảy ra, vui lòng thử lại!');
