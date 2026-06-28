@@ -390,7 +390,9 @@ const handleLogout = () => {
         showConfirmButton: false,
       });
       setTimeout(() => {
-        router.push({ name: "AdminLogin" }); 
+        // SỬA CHỖ NÀY: Dùng window.location.href để ép trình duyệt Hard Reload
+        // Xóa sạch hoàn toàn BFCache và bộ nhớ RAM cũ của Cashier
+        window.location.href = "/admin/login"; 
       }, 1500);
     }
   });

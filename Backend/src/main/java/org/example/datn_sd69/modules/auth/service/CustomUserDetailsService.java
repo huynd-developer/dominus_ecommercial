@@ -1,7 +1,6 @@
-package org.example.datn_sd69.modules.auth.service; // Hoặc package ông định đặt
+package org.example.datn_sd69.modules.auth.service;
 
 import lombok.RequiredArgsConstructor;
-// Nhớ Alt + Enter để import User và UserRepository của ông vào nhé
 import org.example.datn_sd69.entity.User;
 import org.example.datn_sd69.repository.UserRepository;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -22,7 +21,8 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     @Transactional
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        User user = userRepository.findByEmail(email)
+        // CHỈ SỬA Ở ĐÂY: Đổi từ findByEmail -> findWithRoleByEmail
+        User user = userRepository.findWithRoleByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy user với email: " + email));
 
         boolean enabled = user.getStatus() == 1;
@@ -30,10 +30,10 @@ public class CustomUserDetailsService implements UserDetailsService {
         return new org.springframework.security.core.userdetails.User(
                 user.getEmail(),
                 user.getPasswordHash(),
-                enabled,             // enabled: truyền vào đây
-                true,                // accountNonExpired
-                true,                // credentialsNonExpired
-                true,                // accountNonLocked
+                enabled,
+                true,
+                true,
+                true,
                 Collections.singletonList(new SimpleGrantedAuthority(user.getRole().getName()))
         );
     }
