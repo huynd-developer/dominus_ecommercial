@@ -1,4 +1,4 @@
-package org.example.datn_sd69.modules.oder.dto.request;
+package org.example.datn_sd69.modules.order.dto.request;
 
 import lombok.Data;
 

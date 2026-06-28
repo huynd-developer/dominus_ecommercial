@@ -1,27 +1,26 @@
-package org.example.datn_sd69.modules.oder.dto.service;
+package org.example.datn_sd69.modules.order.service;
 
 import jakarta.transaction.Transactional;
 import org.example.datn_sd69.entity.*;
-import org.example.datn_sd69.modules.oder.dto.request.OrderRequest;
+import org.example.datn_sd69.modules.order.dto.request.OrderRequest;
 import org.example.datn_sd69.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 public class OrderService {
-    @Autowired
-    private CartRepository cartRepo;
+    @Autowired private CartRepository cartRepo;
     @Autowired private OrderRepository orderRepo;
     @Autowired private OrderItemRepository orderItemRepo;
     @Autowired private ProductVariantRepository variantRepo;
-
-    // Đã bỏ chữ 'final' ở đây để không bị lỗi compile Java
     @Autowired private CartItemRepository cartItemRepository;
 
     @Transactional
-    public Order placeOrder(Integer customerId, OrderRequest request) {
+    public Map<String, Object> placeOrder(Integer customerId, OrderRequest request) {
         // 1. Lấy giỏ hàng
         Cart cart = cartRepo.findByCustomerUserId(customerId)
                 .orElseThrow(() -> new RuntimeException("Giỏ hàng trống"));
@@ -36,7 +35,7 @@ public class OrderService {
         for (CartItem item : cart.getCartItems()) {
             ProductVariant variant = item.getProductVariant();
 
-            // Kiểm tra tồn kho trước khi đặt
+            // Kiểm tra tồn kho trước khi đặt (Chống Overselling)
             if (variant.getStockQuantity() < item.getQuantity()) {
                 throw new RuntimeException("Sản phẩm " + variant.getSku() + " chỉ còn " + variant.getStockQuantity() + " trong kho!");
             }
@@ -50,14 +49,22 @@ public class OrderService {
             totalAmount = totalAmount.add(lineTotal);
         }
 
+        // ÁP DỤNG CÔNG THỨC TÍNH TIỀN CỦA TASK
+        BigDecimal discountAmount = BigDecimal.ZERO; // Hiện tại discount = 0
+        BigDecimal finalAmount = totalAmount.subtract(discountAmount); // FinalAmount = TotalAmount - DiscountAmount
+
         // 3. Tạo Order
         Order order = new Order();
-        order.setOrderType("ONLINE");
+        order.setOrderType("ONLINE"); // Yêu cầu task
         order.setCustomerName(request.getCustomerName());
         order.setCustomerPhone(request.getCustomerPhone());
         order.setShippingAddress(request.getShippingAddress());
         order.setTotalAmount(totalAmount);
-        order.setFinalAmount(totalAmount); // Hiện tại không có giảm giá
+
+        // Cần đảm bảo Entity Order của bạn có trường discountAmount nhé
+        // order.setDiscountAmount(discountAmount);
+
+        order.setFinalAmount(finalAmount);
         order.setPaymentMethod(request.getPaymentMethod());
         order.setStatus(0); // Chờ xác nhận
         order = orderRepo.save(order);
@@ -74,25 +81,47 @@ public class OrderService {
             orderItem.setQuantity(qty);
             orderItem.setOriginalPrice(price);
 
-            // Tính FinalPrice cho đúng luật SQL: (Price * Quantity) - Discount
-            // Vì hiện tại chưa có tính năng giảm giá nên trừ 0 (hoặc bỏ qua trừ)
             BigDecimal finalPrice = price.multiply(BigDecimal.valueOf(qty));
             orderItem.setFinalPrice(finalPrice);
+
+            orderItem.setNote(request.getNote());
 
             orderItemRepo.save(orderItem);
         }
 
-        // ==========================================
-        // 5. Xóa giỏ hàng sau khi đặt thành công
-        // ==========================================
-
-        // Bắn lệnh xuống thẳng DB để xóa sạch các item này
+        // 5. Xóa giỏ hàng
         cartItemRepository.deleteAll(cart.getCartItems());
-
-        // Xóa tạm trong bộ nhớ (object) để đồng bộ dữ liệu
         cart.getCartItems().clear();
         cartRepo.save(cart);
 
-        return order;
+        // ==========================================
+        // 6. XỬ LÝ TRẢ VỀ DỮ LIỆU ĐỂ FE REDIRECT (VNPay / COD)
+        // ==========================================
+        Map<String, Object> response = new HashMap<>();
+        response.put("orderId", order.getId());
+        response.put("message", "Đặt hàng thành công!");
+
+        if ("VNPAY".equalsIgnoreCase(request.getPaymentMethod())) {
+            // YÊU CẦU TASK: Trỏ request thanh toán sang môi trường VNPay Sandbox với tmnCode=GX7E4QMO
+            // Đây là URL giả lập cấu trúc VNPay. Trong thực tế nhóm bạn sẽ cần class VNPayConfig để hash mã vnp_SecureHash.
+            String vnpayUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html" +
+                    "?vnp_Version=2.1.0" +
+                    "&vnp_Command=pay" +
+                    "&vnp_TmnCode=GX7E4QMO" +
+                    "&vnp_Amount=" + (finalAmount.longValue() * 100) + // VNPay quy định nhân 100
+                    "&vnp_CurrCode=VND" +
+                    "&vnp_TxnRef=" + order.getId() +
+                    "&vnp_OrderInfo=Thanh toan don hang " + order.getId() +
+                    "&vnp_OrderType=other" +
+                    "&vnp_Locale=vn" +
+                    "&vnp_ReturnUrl=http://localhost:5173/payment-return" + // Trả về FE của bạn
+                    "&vnp_IpAddr=127.0.0.1" +
+                    "&vnp_CreateDate=20230101120000" +
+                    "&vnp_SecureHash=MOCK_HASH_DE_TEST"; // Phải dùng HMAC-SHA512 để gen thật
+
+            response.put("paymentUrl", vnpayUrl);
+        }
+
+        return response;
     }
 }
