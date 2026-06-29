@@ -1,46 +1,61 @@
-import { reactive, computed } from 'vue'
+import { defineStore } from 'pinia'
 
-// SỬA DỨT ĐIỂM: Khai báo trực tiếp Interface Product tại đây thay vì import từ file không tồn tại
+// Định nghĩa kiểu dữ liệu cho sản phẩm
 export interface Product {
   id: number | string;
   name: string;
   price: number;
-  image?: string; // Tùy chọn: có thể có ảnh hoặc không
+  image?: string;
 }
 
-// Tạo một kho dữ liệu dùng chung cho toàn bộ app
-export const cartStore = reactive({
-  items: [] as Array<{ product: Product; quantity: number }>,
-  isOpen: false, // Trạng thái mở/đóng của Cart Drawer
+// Khai báo Pinia Store
+export const useCartStore = defineStore('cart', {
+  state: () => ({
+    items: [] as Array<{ product: Product; quantity: number }>,
+    isOpen: false,
+  }),
 
-  // Mở / Đóng giỏ hàng
-  toggleCart() {
-    this.isOpen = !this.isOpen
+  getters: {
+    cartTotal: (state) => state.items.reduce((total, item) => total + (item.product.price * item.quantity), 0),
+    cartCount: (state) => state.items.reduce((count, item) => count + item.quantity, 0),
   },
 
-  // Thêm vào giỏ
-  addToCart(product: Product, quantity: number) {
-    const existingItem = this.items.find(item => item.product.id === product.id)
-    if (existingItem) {
-      existingItem.quantity += quantity
-    } else {
-      this.items.push({ product, quantity })
+  actions: {
+    toggleCart() {
+      this.isOpen = !this.isOpen
+    },
+
+    // Thêm hàm này vào
+  updateQuantity(cartItemId: number, currentQty: number, change: number, stockQty: number) {
+    const newQty = currentQty + change;
+    
+    // Logic chặn không cho vượt quá tồn kho
+    if (newQty < 1) return;
+    if (newQty > stockQty) {
+      alert(`Sản phẩm này chỉ còn tối đa ${stockQty} cái trong kho!`);
+      return;
     }
-    this.isOpen = true // Thêm xong tự động mở giỏ hàng
+
+    // Tìm item trong giỏ để cập nhật
+    const item = this.items.find(i => i.product.id === cartItemId);
+    if (item) {
+      item.quantity = newQty;
+    }
   },
 
-  // Xóa khỏi giỏ
-  removeItem(productId: number | string) {
-    this.items = this.items.filter(item => item.product.id !== productId)
+    addToCart(product: Product, quantity: number) {
+      const existingItem = this.items.find(item => item.product.id === product.id)
+      if (existingItem) {
+        existingItem.quantity += quantity
+      } else {
+        this.items.push({ product, quantity })
+      }
+      this.isOpen = true
+    },
+
+    removeItem(productId: number | string) {
+      this.items = this.items.filter(item => item.product.id !== productId)
+    }
   }
 })
 
-// Tính tổng tiền
-export const cartTotal = computed(() => {
-  return cartStore.items.reduce((total, item) => total + (item.product.price * item.quantity), 0)
-})
-
-// Tính tổng số lượng món
-export const cartCount = computed(() => {
-  return cartStore.items.reduce((count, item) => count + item.quantity, 0)
-})
