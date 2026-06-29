@@ -1,18 +1,21 @@
 <template>
   <div class="page-wrapper">
+    <!-- NAVBAR TÔNG TỐI LUXURY (Icon viền tròn) -->
     <header class="dark-navbar">
       <div class="logo-section">
         <img src="@/assets/Logo.png" alt="Dominus" class="brand-logo" @click="$router.push('/')" />
       </div>
 
       <div class="nav-right">
+        <!-- TÀI KHOẢN -->
         <div class="nav-item account-menu">
           <div class="nav-trigger">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            <span>Tài khoản</span>
+            <div class="circle-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+            <span class="nav-text">Tài khoản</span>
             <svg class="chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
           </div>
 
+          <!-- Dropdown Sổ xuống -->
           <div class="dropdown-content">
             <div class="dropdown-header">
               <div class="avatar">H</div>
@@ -33,12 +36,13 @@
           </div>
         </div>
 
+        <!-- GIỎ HÀNG -->
         <div class="nav-item cart-btn" @click="$router.push('/cart')">
-          <div class="cart-icon-wrapper">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+          <div class="circle-icon cart-wrapper">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
             <span class="cart-badge">{{ cartCount || 0 }}</span>
           </div>
-          <span>Giỏ hàng</span>
+          <span class="nav-text">Giỏ hàng</span>
         </div>
       </div>
     </header>
@@ -329,28 +333,36 @@ onMounted(() => {
 /* =========================================
    DARK NAVBAR LUXURY CSS
 ========================================== */
-.dark-navbar { 
-  display: flex; justify-content: space-between; align-items: center; 
-  padding: 0 40px; height: 70px; 
-  background-color: #08101f; 
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05); 
+.dark-navbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0 40px; height: 70px;
+  background-color: #08101f; /* Navy đậm */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 .logo-section { display: flex; align-items: center; }
-.brand-logo { height: 35px; object-fit: contain; cursor: pointer; transition: 0.2s; filter: brightness(0) invert(1) sepia(1) saturate(5) hue-rotate(3deg); }
+.brand-logo { height: 100px; object-fit: contain; cursor: pointer; transition: 0.2s; filter: brightness(0) invert(1) sepia(1) saturate(5) hue-rotate(3deg); }
 .brand-logo:hover { opacity: 0.8; }
 
 .nav-right { display: flex; align-items: center; gap: 30px; height: 100%; }
-.nav-item { display: flex; align-items: center; gap: 8px; color: #fdfdfd; font-size: 14px; cursor: pointer; height: 100%; transition: 0.2s; position: relative; }
-.nav-item:hover, .nav-item:hover .nav-icon { color: #b78d52; }
-.nav-icon { width: 22px; height: 22px; color: #fdfdfd; transition: 0.2s; }
-
-.cart-icon-wrapper { position: relative; display: flex; align-items: center; }
-.cart-badge { position: absolute; top: -8px; right: -8px; background: #b78d52; color: white; font-size: 11px; font-weight: bold; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-
-.account-menu { position: relative; }
+.nav-item { display: flex; align-items: center; gap: 8px; cursor: pointer; height: 100%; position: relative; }
 .nav-trigger { display: flex; align-items: center; gap: 8px; height: 100%; }
-.chevron-down { width: 16px; height: 16px; margin-left: -2px; }
 
+/* Vòng tròn bọc Icon */
+.circle-icon { width: 36px; height: 36px; border: 1px solid #718096; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: 0.3s; color: #a0aec0; }
+.circle-icon svg { width: 18px; height: 18px; }
+.nav-text { color: #fdfdfd; font-size: 14px; font-weight: 500; transition: 0.3s; }
+.chevron-down { width: 14px; height: 14px; color: #a0aec0; transition: 0.3s; }
+
+/* Hiệu ứng Hover nháy vàng */
+.nav-item:hover .circle-icon { border-color: #b78d52; color: #b78d52; }
+.nav-item:hover .nav-text { color: #b78d52; }
+.nav-item:hover .chevron-down { color: #b78d52; }
+
+/* Giỏ hàng Badge */
+.cart-wrapper { position: relative; }
+.cart-badge { position: absolute; top: -6px; right: -6px; background: #b78d52; color: white; font-size: 11px; font-weight: bold; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #08101f; }
+
+/* Dropdown Sổ xuống */
 .dropdown-content { position: absolute; top: 100%; right: -20px; width: 260px; background: white; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); opacity: 0; visibility: hidden; transition: all 0.2s ease-in-out; transform: translateY(10px); z-index: 100; border: 1px solid #eaeaea;}
 .account-menu:hover .dropdown-content { opacity: 1; visibility: visible; transform: translateY(0); }
 .dropdown-content::before { content: ''; position: absolute; top: -6px; right: 50px; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 6px solid white; }

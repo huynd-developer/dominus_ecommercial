@@ -7,6 +7,7 @@ import { h } from "vue";
 import ProductDetailView from '@/modules/shop/feature/product/ProductDetailView.vue';
 import CartView from '@/modules/shop/feature/cart/CartViews.vue';
 import CheckoutView from '@/modules/shop/feature/checkout/CheckoutViews.vue';
+import PaymentReturnView from '@/modules/shop/feature/checkout/PaymentReturnView.vue';
 
 // Layout quản trị của Admin & Shop
 import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
@@ -66,6 +67,11 @@ const routes: Array<RouteRecordRaw> = [
     name: "Checkout",
     component: CheckoutView,
     meta: { requiresAuth: true, allowedRoles: ["USER"] }, 
+  },
+  {
+    path: "/payment-return",
+    name: "PaymentReturn",
+    component: PaymentReturnView,
   },
   
   // Các trang Auth
