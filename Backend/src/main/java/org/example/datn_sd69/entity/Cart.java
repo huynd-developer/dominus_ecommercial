@@ -1,10 +1,5 @@
 package org.example.datn_sd69.entity;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToOne;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -13,6 +8,7 @@ import org.example.datn_sd69.entity.base.BaseEntity;
 import org.hibernate.annotations.Nationalized;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "Cart")
@@ -24,4 +20,7 @@ public class Cart extends BaseEntity {
 
     @Column(name = "CreatedAt")
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @OneToMany(mappedBy = "cart", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<CartItem> cartItems;
 }
