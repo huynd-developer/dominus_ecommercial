@@ -143,9 +143,7 @@ const authStore = useAuthStore();
 const isCollapsed = ref(false);
 
 const toggleSidebar = () => {
-  isCollapsed.value = !isCollapsed.value;
-  // Bắn Event ra môi trường global để layout bọc ngoài co giãn nội dung chính 
-  window.dispatchEvent(new CustomEvent('sidebar-toggle', { detail: isCollapsed.value }));
+  // POS flow yêu cầu không tự thu gọn sidebar: disable toggle
 };
 
 const currentUser = ref(
