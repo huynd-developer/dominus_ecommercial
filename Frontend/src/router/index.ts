@@ -105,7 +105,6 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import("@/modules/auth/views/CustomerLoginView.vue"),
     meta: { requiresAuth: true, allowedRoles: ["USER"] },
   },
-
   // ==========================================
   // LUỒNG ADMIN QUẢN TRỊ
   // ==========================================
