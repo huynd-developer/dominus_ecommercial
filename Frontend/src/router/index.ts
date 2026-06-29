@@ -56,7 +56,7 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "pos", 
         name: "AdminPOS",
-        component: () => import("@/modules/pos/views/posView.vue"),
+        component: mockPage('Bán hàng POS', 'Đan & Trung'),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER", "CASHIER"] }, 
       },
       {
