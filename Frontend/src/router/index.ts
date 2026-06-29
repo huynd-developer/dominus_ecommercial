@@ -63,7 +63,15 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import("@/modules/auth/views/CustomerLoginView.vue"),
     meta: { requiresAuth: true, allowedRoles: ["USER"] },
   },
-
+{
+        path: "pos",
+        name: "AdminPOS",
+        component: () => import("@/modules/pos/views/PosView.vue"),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
+      },
   // ==========================================
   // LUỒNG ADMIN QUẢN TRỊ (Khớp chính xác với TopHeader)
   // ==========================================
@@ -79,15 +87,7 @@ const routes: Array<RouteRecordRaw> = [
         component: mockPage("Tổng quan (Báo cáo)", "Huy"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER"] },
       },
-      {
-        path: "pos",
-        name: "AdminPOS",
-        component: mockPage("Bán hàng POS", "Đan & Trung"),
-        meta: {
-          requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
-        },
-      },
+      
       {
         path: "products",
         name: "AdminProducts",
