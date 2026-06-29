@@ -1,6 +1,7 @@
 package org.example.datn_sd69.common.config;
 
 import lombok.RequiredArgsConstructor;
+import org.example.datn_sd69.enums.RoleType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -56,10 +57,14 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
 
                         // Nhóm Nhân sự: owner, manager, cashier mới được vào các API bắt đầu bằng /api/admin/
-                        .requestMatchers("/api/admin/**").hasAnyAuthority("OWNER", "MANAGER", "CASHIER")
+                        .requestMatchers("/api/admin/**").hasAnyAuthority(
+                                RoleType.OWNER.name(),
+                                RoleType.MANAGER.name(),
+                                RoleType.CASHIER.name()
+                        )
 
                         // Nhóm Khách hàng: chỉ user mới được vào các API của khách
-                        .requestMatchers("/api/customer/**").hasAuthority("USER")
+                        .requestMatchers("/api/customer/**").hasAuthority(RoleType.USER.name())
 
                         // Các API còn lại bắt buộc phải có token mới được gọi
                         .anyRequest().authenticated()
@@ -69,6 +74,7 @@ public class SecurityConfig {
 
         return http.build();
     }
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
