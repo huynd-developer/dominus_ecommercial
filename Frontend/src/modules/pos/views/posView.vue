@@ -18,9 +18,9 @@
 
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
-import posHeader from '../components/posHeader.vue'
-import productGrid from '../components/productGrid.vue'
-import cartSideBar from '../components/cartSideBar.vue'
+import posHeader from '../components/PosHeader.vue'
+import productGrid from '../components/ProductGrid.vue'
+import cartSideBar from '../components/CartSideBar.vue'
 
 // Bộ nhớ tạm để khôi phục lại trạng thái ban đầu cho Admin Layout khi thoát POS
 const originalStyles = new Map()
