@@ -306,8 +306,17 @@ const handleLogout = () => {
   }).then((result) => {
     if (result.isConfirmed) {
       authStore.logout();
-      Swal.fire({ icon: "success", title: "Đã đăng xuất", timer: 1500, showConfirmButton: false });
-      setTimeout(() => { router.push({ name: "AdminLogin" }); }, 1500);
+      Swal.fire({
+        icon: "success",
+        title: "Đã đăng xuất",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+      setTimeout(() => {
+        // SỬA CHỖ NÀY: Dùng window.location.href để ép trình duyệt Hard Reload
+        // Xóa sạch hoàn toàn BFCache và bộ nhớ RAM cũ của Cashier
+        window.location.href = "/admin/login"; 
+      }, 1500);
     }
   });
 };

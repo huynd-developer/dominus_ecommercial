@@ -1,23 +1,47 @@
 import { createRouter, createWebHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
-import { h } from "vue"; 
+import { h } from "vue";
 
 // Layout quản trị của Admin
 import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
+import ShopLayout from "@/modules/shop/layout/ShopLayout.vue";
 
 // Hàm tạo trang tạm thời phục vụ giai đoạn phát triển
 const mockPage = (title: string, assignee: string) => ({
-  render: () => h('div', { style: 'padding: 80px; text-align: center; font-family: sans-serif; color: #333;' }, [
-    h('h1', `🚧 Trang ${title}`),
-    h('p', `Giao diện đang được xây dựng bởi: ${assignee}. Sau khi code xong file Vue, hãy mở comment import trong router ra!`)
-  ])
+  render: () =>
+    h(
+      "div",
+      {
+        style:
+          "padding: 80px; text-align: center; font-family: sans-serif; color: #333;",
+      },
+      [
+        h("h1", `🚧 Trang ${title}`),
+        h(
+          "p",
+          `Giao diện đang được xây dựng bởi: ${assignee}. Sau khi code xong file Vue, hãy mở comment import trong router ra!`
+        ),
+      ]
+    ),
 });
 
 const routes: Array<RouteRecordRaw> = [
   // ==========================================
   // LUỒNG AUTH & STOREFRONT (GIAO DIỆN KHÁCH)
   // ==========================================
+  {
+    path: "/",
+    component: () => import("@/modules/shop/layout/ShopLayout.vue"),
+    children: [
+      {
+        path: "",
+        name: "shop-home",
+        component: () =>
+          import("@/modules/shop/feature/home/views/HomeView.vue"),
+      },
+    ],
+  },
   {
     path: "/login",
     name: "Login",
@@ -34,9 +58,9 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import("@/modules/auth/views/RegisterView.vue"),
   },
   {
-    path: "/customer/profile", 
+    path: "/customer/profile",
     name: "CustomerProfile",
-    component: () => import("@/modules/auth/views/CustomerLoginView.vue"), 
+    component: () => import("@/modules/auth/views/CustomerLoginView.vue"),
     meta: { requiresAuth: true, allowedRoles: ["USER"] },
   },
 
@@ -45,96 +69,102 @@ const routes: Array<RouteRecordRaw> = [
   // ==========================================
   {
     path: "/admin",
-    component: AdminLayout, 
+    component: AdminLayout,
+    redirect: "/admin/dashboard", 
+    meta: { requiresAuth: true },
     children: [
       {
-        path: "dashboard", 
+        path: "dashboard",
         name: "AdminDashboard",
-        component: mockPage('Tổng quan (Báo cáo)', 'Huy'),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER"] }, 
+        component: mockPage("Tổng quan (Báo cáo)", "Huy"),
+        meta: { requiresAuth: true, allowedRoles: ["OWNER"] },
       },
       {
-        path: "pos", 
+        path: "pos",
         name: "AdminPOS",
-        component: mockPage('Bán hàng POS', 'Đan & Trung'),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER", "CASHIER"] }, 
+        component: mockPage("Bán hàng POS", "Đan & Trung"),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
       },
       {
         path: "products",
         name: "AdminProducts",
-        component: mockPage('Quản lý Sản phẩm', 'Trung'),
+        component: mockPage("Quản lý Sản phẩm", "Trung"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
-      // 👇 Phân hệ Thuộc tính sản phẩm của Đức (Đã đồng bộ chi tiết) 👇
       {
         path: "categories",
         name: "AdminCategories",
-        component: mockPage('Danh mục (Category)', 'Đức'),
+        component: mockPage("Danh mục (Category)", "Đức"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "brands",
         name: "AdminBrands",
-        component: mockPage('Thương hiệu (Brand)', 'Đức'),
+        component: mockPage("Thương hiệu (Brand)", "Đức"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "fragrance-families",
         name: "AdminFragranceFamilies",
-        component: mockPage('Nhóm hương', 'Đức'),
+        component: mockPage("Nhóm hương", "Đức"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "capacities",
         name: "AdminCapacities",
-        component: mockPage('Dung tích (Capacity)', 'Đức'),
+        component: mockPage("Dung tích (Capacity)", "Đức"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "concentrations",
         name: "AdminConcentrations",
-        component: mockPage('Nồng độ (Concentration)', 'Đức'),
+        component: mockPage("Nồng độ (Concentration)", "Đức"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "bottle-types",
         name: "AdminBottleTypes",
-        component: mockPage('Loại vỏ chai', 'Đức'),
+        component: mockPage("Loại vỏ chai", "Đức"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
-      // ----------------------------------------------------------------
       {
         path: "orders",
         name: "AdminOrders",
-        component: mockPage('Quản lý Đơn hàng', 'Trung'),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER", "CASHIER"] },
+        component: mockPage("Quản lý Đơn hàng", "Trung"),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
       },
       {
         path: "vouchers",
         name: "AdminVouchers",
-        component: mockPage('Hệ thống Voucher', 'Hiếu'),
+        component: mockPage("Hệ thống Voucher", "Hiếu"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "flash-sale",
         name: "AdminFlashSale",
-        component: mockPage('Quản lý Flash Sale', 'Huy'),
+        component: mockPage("Quản lý Flash Sale", "Huy"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "customers",
         name: "AdminCustomers",
-        component: mockPage('Quản lý Khách hàng', 'Huy'),
+        component: mockPage("Quản lý Khách hàng", "Huy"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "employees",
         name: "AdminEmployees",
-        component: mockPage('Quản lý Nhân viên', 'Huy'),
+        component: mockPage("Quản lý Nhân viên", "Huy"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER"] },
-      }
-    ]
-  }
+      },
+    ],
+  },
 ];
 
 const router = createRouter({
@@ -143,61 +173,76 @@ const router = createRouter({
 });
 
 // Logic Bảo Mật Định Tuyến Toàn Cục
-// Logic Bảo Mật Định Tuyến Toàn Cục
-// CHỖ ĐÃ SỬA: Nhận thêm tham số `from` để lấy thông tin trang trước đó của user
-router.beforeEach((to, from) => {
+// CHỖ THAY ĐỔI: Bỏ tham số `next` ở callback của beforeEach
+router.beforeEach(async (to, from) => {
   const authStore = useAuthStore();
-  
-  // Chuẩn hóa quyền: Chuyển sang chữ HOA và bóc tách tiền tố ROLE_
+
+  // ĐẢM BẢO STATE ĐƯỢC ĐỒNG BỘ: Đọc trực tiếp từ LocalStorage nếu Pinia chưa kịp load lại
+  if (!authStore.isAuthenticated && localStorage.getItem('token')) {
+    // Giữ nguyên phần nhắc nhở logic đồng bộ của bạn
+  }
+
   const userRole = (authStore.role || "").toUpperCase().replace("ROLE_", "");
 
-  // LUỒNG 1: Ngăn chặn tài khoản đã đăng nhập quay lại các trang đăng ký/đăng nhập
+  // ==========================================
+  // LUỒNG 1: ĐÃ ĐĂNG NHẬP THÌ KHÔNG CHO RA LOGIN
+  // ==========================================
   if (
     authStore.isAuthenticated &&
     ["Login", "AdminLogin", "Register"].includes(to.name as string)
   ) {
     if (userRole === "OWNER") {
-      return { path: "/admin/dashboard" };
+      return { path: "/admin/dashboard", replace: true }; // Thay thế: next({...}) -> return {...}
     } else if (["MANAGER", "CASHIER"].includes(userRole)) {
-      return { path: "/admin/pos" }; 
+      return { path: "/admin/pos", replace: true };
     }
-    return { path: "/" };
+    return { path: "/", replace: true };
   }
 
-  // LUỒNG 2: Kiểm soát quyền truy cập chi tiết từng trang nội bộ
+  // ==========================================
+  // LUỒNG 2: KIỂM TRA QUYỀN TRUY CẬP NỘI BỘ
+  // ==========================================
   if (to.meta.requiresAuth) {
     if (!authStore.isAuthenticated) {
       if (to.path.startsWith("/admin")) {
-        return { name: "AdminLogin" };
+        return { name: "AdminLogin", replace: true };
       }
-      return { name: "Login" };
+      return { name: "Login", replace: true };
     }
 
     const allowedRoles = to.meta.allowedRoles as string[];
-    
-    // CHỖ ĐÃ SỬA: Xử lý khi user cố tình gõ link không có quyền truy cập
-    if (allowedRoles && !allowedRoles.includes(userRole)) {
-      // 1. ĐÃ XÓA: Bỏ hoàn toàn hàm alert() thông báo phiền phức.
 
-      // 2. Nếu user đang lướt trong app mà bấm nhầm link cấm, giữ nguyên họ ở trang cũ (from.fullPath)
-      if (from.matched.length > 0) {
-        return from.fullPath;
+    if (allowedRoles && !allowedRoles.includes(userRole)) {
+      // 1. Nếu vừa đăng nhập xong bị đá sang link cấm không đúng quyền hạn
+      if (from.name === "AdminLogin" || from.name === "Login") {
+        if (["CASHIER", "MANAGER"].includes(userRole)) {
+          return { path: "/admin/pos", replace: true };
+        }
+        if (userRole === "OWNER") {
+          return { path: "/admin/dashboard", replace: true };
+        }
+        return { path: "/", replace: true };
       }
-      
-      // 3. Nếu gõ link trực tiếp từ thanh địa chỉ (chưa có lịch sử) thì đá về đúng trang chủ của Role đó
+
+      // 2. Nếu đang thao tác nội bộ mà bấm nhầm link cấm
+      if (from.matched.length > 0) {
+        return from.fullPath; // Trả về chính vị trí hiện tại để hủy điều hướng
+      }
+
+      // 3. Nếu gõ link trực tiếp lên thanh URL nhưng sai Role
       if (["CASHIER", "MANAGER"].includes(userRole)) {
-        return { path: "/admin/pos" };
+        return { path: "/admin/pos", replace: true };
       }
       if (userRole === "OWNER") {
-        return { path: "/admin/dashboard" };
+        return { path: "/admin/dashboard", replace: true };
       }
-      
-      // Nếu là USER thông thường gõ bừa link admin -> Đá về trang chủ Storefront công cộng
-      return { path: "/" }; 
+
+      return { path: "/", replace: true };
     }
   }
 
-  return true;
+  // Hoàn toàn hợp lệ -> cho phép đi tiếp (không cần gọi next() nữa)
+  return true; 
 });
 
 export default router;

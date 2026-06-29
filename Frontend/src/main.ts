@@ -7,7 +7,6 @@ import router from './router' // 1. ĐÃ BỎ DẤU // Ở ĐÂY
 import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap/dist/js/bootstrap.bundle.min.js'
 import 'bootstrap-icons/font/bootstrap-icons.css'
-
 // 1. Khởi tạo instance của ứng dụng Vue và Pinia trước
 const app = createApp(App)
 const pinia = createPinia()
