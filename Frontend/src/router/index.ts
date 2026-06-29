@@ -112,15 +112,7 @@ const routes: Array<RouteRecordRaw> = [
         component: mockPage("Tổng quan (Báo cáo)", "Huy"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER"] },
       },
-      {
-        path: "pos",
-        name: "AdminPOS",
-        component: mockPage("Bán hàng POS", "Đan & Trung"),
-        meta: {
-          requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
-        },
-      },
+      
       {
         path: "products",
         name: "AdminProducts",

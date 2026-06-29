@@ -6,5 +6,4 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface ProductVariantRepository extends JpaRepository<ProductVariant, Integer> {
-    // Các hàm CRUD cơ bản JpaRepository đã lo hết
 }

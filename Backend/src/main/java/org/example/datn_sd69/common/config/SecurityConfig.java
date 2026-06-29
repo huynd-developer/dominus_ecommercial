@@ -6,7 +6,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -23,7 +22,6 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -54,15 +52,14 @@ public class SecurityConfig {
                 // 4. Phân quyền API
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/error").permitAll()
-
-                        // Đã TRẢ VỀ NGUYÊN BẢN để không làm hỏng cấu trúc AuthController
+                        // Cho phép tất cả truy cập API đăng nhập, đăng ký
                         .requestMatchers("/api/auth/**").permitAll()
 
-                        // Nhóm Nhân sự: owner, manager, cashier
-                        .requestMatchers("/api/v1/admin/**").hasAnyAuthority("OWNER", "MANAGER", "CASHIER")
+                        // Nhóm Nhân sự: owner, manager, cashier mới được vào các API bắt đầu bằng /api/admin/
+                        .requestMatchers("/api/admin/**").hasAnyAuthority("OWNER", "MANAGER", "CASHIER")
 
-                        // Nhóm Khách hàng: Đã hạ bảo mật, chỉ cần có token hợp lệ (đã login) là vào được để test
-                        .requestMatchers("/api/v1/customer/**").authenticated()
+                        // Nhóm Khách hàng: chỉ user mới được vào các API của khách
+                        .requestMatchers("/api/customer/**").hasAuthority("USER")
 
                         // Các API còn lại bắt buộc phải có token mới được gọi
                         .anyRequest().authenticated()
@@ -72,11 +69,10 @@ public class SecurityConfig {
 
         return http.build();
     }
-
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173", "http://localhost:5174")); // URL của FE
+        configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173")); // URL của FE
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Cache-Control"));
         configuration.setAllowCredentials(true);

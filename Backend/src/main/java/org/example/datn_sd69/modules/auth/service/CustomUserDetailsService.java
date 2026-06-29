@@ -21,11 +21,13 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     @Transactional
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        // CHỈ SỬA Ở ĐÂY: Đổi từ findByEmail -> findWithRoleByEmail
         User user = userRepository.findWithRoleByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy user với email: " + email));
 
         boolean enabled = user.getStatus() == 1;
+
+        // CHUẨN HÓA LOGIC THỰC TẾ: Ép Role về IN HOA để khớp với config bảo mật
+        String authorityName = user.getRole().getName().toUpperCase();
 
         return new org.springframework.security.core.userdetails.User(
                 user.getEmail(),
@@ -34,7 +36,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                 true,
                 true,
                 true,
-                Collections.singletonList(new SimpleGrantedAuthority(user.getRole().getName()))
+                Collections.singletonList(new SimpleGrantedAuthority(authorityName))
         );
     }
 }
