@@ -58,20 +58,21 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import("@/modules/auth/views/RegisterView.vue"),
   },
   {
+    path: "/admin/pos",
+    name: "AdminPOS",
+    component: () => import("@/modules/pos/views/PosView.vue"),
+    meta: {
+      requiresAuth: true,
+      allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+    },
+  },
+  {
     path: "/customer/profile",
     name: "CustomerProfile",
     component: () => import("@/modules/auth/views/CustomerLoginView.vue"),
     meta: { requiresAuth: true, allowedRoles: ["USER"] },
   },
-{
-        path: "pos",
-        name: "AdminPOS",
-        component: () => import("@/modules/pos/views/PosView.vue"),
-        meta: {
-          requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
-        },
-      },
+
   // ==========================================
   // LUỒNG ADMIN QUẢN TRỊ (Khớp chính xác với TopHeader)
   // ==========================================
