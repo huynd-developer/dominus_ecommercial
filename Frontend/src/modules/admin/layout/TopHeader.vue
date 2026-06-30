@@ -1,6 +1,19 @@
 <template>
-  <aside class="sidebar-glass position-fixed top-0 start-0 bottom-0 d-flex flex-column shadow-sm" style="z-index: 1050; width: 260px">
-   <div class="py-1 px-2 d-flex align-items-center justify-content-center border-bottom border-slate-100 flex-shrink-0 overflow-hidden" style="height: 75px;">
+  <aside 
+    class="sidebar-glass position-fixed top-0 bottom-0 d-flex flex-column shadow-sm transition-all-premium" 
+    :class="{ 'sidebar-hidden': isCollapsed }"
+    style="z-index: 1050; width: 260px"
+  >
+    <button 
+      type="button"
+      @click="toggleSidebar"
+      class="toggle-sidebar-btn position-absolute top-50 start-100 translate-middle shadow d-flex align-items-center justify-content-center"
+      :title="isCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'"
+    >
+      <i :class="['bi', isCollapsed ? 'bi-chevron-right' : 'bi-chevron-left', 'fw-bold']"></i>
+    </button>
+
+    <div class="py-1 px-2 d-flex align-items-center justify-content-center border-bottom border-slate-100 flex-shrink-0 overflow-hidden" style="height: 75px;">
       <img 
         src="@/assets/logo.png" 
         alt="Dominus Logo" 
@@ -126,11 +139,22 @@ const route = useRoute();
 const currentTime = ref("");
 const authStore = useAuthStore();
 
+// Báo trạng thái thu/mở lên AdminLayout.vue để layout dịch margin-left theo
+const emit = defineEmits<{ (e: "collapse-change", value: boolean): void }>();
+
+// Quản lý trạng thái Ẩn / Hiện của Sidebar — lưu localStorage để giữ trạng thái khi F5
+const isCollapsed = ref(localStorage.getItem("sidebarCollapsed") === "1");
+
+const toggleSidebar = () => {
+  isCollapsed.value = !isCollapsed.value;
+  localStorage.setItem("sidebarCollapsed", isCollapsed.value ? "1" : "0");
+  emit("collapse-change", isCollapsed.value);
+};
+
 const currentUser = ref(
   JSON.parse(localStorage.getItem("currentUser") || "{}")
 );
 
-// CHỖ ĐÃ SỬA: Đổi từ ref sang reactive để Vue bắt trọn Reactivity động 100%
 const openMenus = reactive<Record<string, boolean>>({});
 
 const toggleMenu = (id: string) => {
@@ -188,84 +212,24 @@ const menuItems = [
     icon: "bi-box-seam",
     roles: ["OWNER", "MANAGER"],
     children: [
-      {
-        id: "products",
-        path: "/admin/products",
-        name: "Sản phẩm & Biến thể",
-        icon: "bi-box",
-        roles: ["OWNER", "MANAGER"],
-      },
-      {
-        id: "categories",
-        path: "/admin/categories",
-        name: "Danh mục (Category)",
-        icon: "bi-folder2",
-        roles: ["OWNER", "MANAGER"],
-      },
-      {
-        id: "brands",
-        path: "/admin/brands",
-        name: "Thương hiệu (Brand)",
-        icon: "bi-award",
-        roles: ["OWNER", "MANAGER"],
-      },
-      {
-        id: "fragrance-families",
-        path: "/admin/fragrance-families",
-        name: "Nhóm hương",
-        icon: "bi-droplet",
-        roles: ["OWNER", "MANAGER"],
-      },
-      {
-        id: "capacities",
-        path: "/admin/capacities",
-        name: "Dung tích (Capacity)",
-        icon: "bi-moisture",
-        roles: ["OWNER", "MANAGER"],
-      },
-      {
-        id: "concentrations",
-        path: "/admin/concentrations",
-        name: "Nồng độ (Concentration)",
-        icon: "bi-funnel",
-        roles: ["OWNER", "MANAGER"],
-      },
-      {
-        id: "bottle-types",
-        path: "/admin/bottle-types",
-        name: "Loại vỏ chai",
-        icon: "bi-cylinder",
-        roles: ["OWNER", "MANAGER"],
-      },
+      { id: "products", path: "/admin/products", name: "Sản phẩm & Biến thể", icon: "bi-box", roles: ["OWNER", "MANAGER"] },
+      { id: "categories", path: "/admin/categories", name: "Danh mục (Category)", icon: "bi-folder2", roles: ["OWNER", "MANAGER"] },
+      { id: "brands", path: "/admin/brands", name: "Thương hiệu (Brand)", icon: "bi-award", roles: ["OWNER", "MANAGER"] },
+      { id: "fragrance-families", path: "/admin/fragrance-families", name: "Nhóm hương", icon: "bi-droplet", roles: ["OWNER", "MANAGER"] },
+      { id: "capacities", path: "/admin/capacities", name: "Dung tích (Capacity)", icon: "bi-moisture", roles: ["OWNER", "MANAGER"] },
+      { id: "concentrations", path: "/admin/concentrations", name: "Nồng độ (Concentration)", icon: "bi-funnel", roles: ["OWNER", "MANAGER"] },
+      { id: "bottle-types", path: "/admin/bottle-types", name: "Loại vỏ chai", icon: "bi-cylinder", roles: ["OWNER", "MANAGER"] },
     ],
   },
-  {
-    id: "orders",
-    path: "/admin/orders",
-    name: "Quản lý đơn hàng",
-    icon: "bi-receipt",
-    roles: ["OWNER", "MANAGER", "CASHIER"],
-  },
+  { id: "orders", path: "/admin/orders", name: "Quản lý đơn hàng", icon: "bi-receipt", roles: ["OWNER", "MANAGER", "CASHIER"] },
   {
     id: "promotions-group",
     name: "Chương trình khuyến mãi",
     icon: "bi-ticket-perforated",
     roles: ["OWNER", "MANAGER"],
     children: [
-      {
-        id: "vouchers",
-        path: "/admin/vouchers",
-        name: "Mã giảm giá (Voucher)",
-        icon: "bi-tags",
-        roles: ["OWNER", "MANAGER"],
-      },
-      {
-        id: "flash-sale",
-        path: "/admin/flash-sale",
-        name: "Flash Sale",
-        icon: "bi-lightning-charge",
-        roles: ["OWNER", "MANAGER"],
-      },
+      { id: "vouchers", path: "/admin/vouchers", name: "Mã giảm giá (Voucher)", icon: "bi-tags", roles: ["OWNER", "MANAGER"] },
+      { id: "flash-sale", path: "/admin/flash-sale", name: "Flash Sale", icon: "bi-lightning-charge", roles: ["OWNER", "MANAGER"] },
     ],
   },
   {
@@ -274,20 +238,8 @@ const menuItems = [
     icon: "bi-people",
     roles: ["OWNER", "MANAGER"],
     children: [
-      {
-        id: "customers",
-        path: "/admin/customers",
-        name: "Khách hàng (Customer)",
-        icon: "bi-person-heart",
-        roles: ["OWNER", "MANAGER"],
-      },
-      {
-        id: "employees",
-        path: "/admin/employees",
-        name: "Nhân viên (Employee)",
-        icon: "bi-person-badge",
-        roles: ["OWNER"],
-      },
+      { id: "customers", path: "/admin/customers", name: "Khách hàng (Customer)", icon: "bi-person-heart", roles: ["OWNER", "MANAGER"] },
+      { id: "employees", path: "/admin/employees", name: "Nhân viên (Employee)", icon: "bi-person-badge", roles: ["OWNER"] },
     ],
   },
 ];
@@ -296,9 +248,7 @@ const filteredMenuItems = computed(() => {
   return menuItems.reduce((acc: any[], item) => {
     if (item.roles.includes(userRole.value)) {
       if (item.children) {
-        const filteredChildren = item.children.filter((child) =>
-          child.roles.includes(userRole.value)
-        );
+        const filteredChildren = item.children.filter((child) => child.roles.includes(userRole.value));
         if (filteredChildren.length > 0) {
           acc.push({ ...item, children: filteredChildren });
         }
@@ -311,30 +261,19 @@ const filteredMenuItems = computed(() => {
 });
 
 const showProfile = ref(false);
-const toggleProfile = () => {
-  showProfile.value = !showProfile.value;
-};
-const closeAllMenus = () => {
-  showProfile.value = false;
-};
+const toggleProfile = () => { showProfile.value = !showProfile.value; };
+const closeAllMenus = () => { showProfile.value = false; };
 
 const handleShiftHandover = async () => {
   showProfile.value = false;
   try {
     const userId = currentUser.value.id || currentUser.value.userId || 0;
     if (!userId) {
-      return Swal.fire({
-        icon: "error",
-        title: "Lỗi",
-        text: "Không xác định được danh tính nhân viên!",
-      });
+      return Swal.fire({ icon: "error", title: "Lỗi", text: "Không xác định được danh tính nhân viên!" });
     }
     const res = await request.get(`/shifts/summary?userId=${userId}`);
     const data = res.data;
-    const formattedRevenue = new Intl.NumberFormat("vi-VN", {
-      style: "currency",
-      currency: "VND",
-    }).format(data.totalRevenue || 0);
+    const formattedRevenue = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(data.totalRevenue || 0);
 
     Swal.fire({
       title: "Tổng kết ca làm việc",
@@ -347,25 +286,12 @@ const handleShiftHandover = async () => {
       cancelButtonText: "Đóng",
     }).then((result) => {
       if (result.isConfirmed) {
-        Swal.fire({
-          icon: "success",
-          title: "Chốt ca thành công!",
-          text: "Phiếu bàn giao đang được in...",
-          timer: 2000,
-          showConfirmButton: false,
-        });
-        setTimeout(() => {
-          authStore.logout();
-          router.push({ name: "AdminLogin" }); 
-        }, 2000);
+        Swal.fire({ icon: "success", title: "Chốt ca thành công!", text: "Phiếu bàn giao đang được in...", timer: 2000, showConfirmButton: false });
+        setTimeout(() => { authStore.logout(); router.push({ name: "AdminLogin" }); }, 2000);
       }
     });
   } catch (error) {
-    Swal.fire({
-      icon: "error",
-      title: "Lỗi",
-      text: "Không thể kết nối đến máy chủ hoặc phiên làm việc đã hết hạn.",
-    });
+    Swal.fire({ icon: "error", title: "Lỗi", text: "Không thể kết nối đến máy chủ hoặc phiên làm việc đã hết hạn." });
   }
 };
 
@@ -390,7 +316,7 @@ const handleLogout = () => {
         showConfirmButton: false,
       });
       setTimeout(() => {
-        router.push({ name: "AdminLogin" }); 
+        window.location.href = "/admin/login"; 
       }, 1500);
     }
   });
@@ -407,12 +333,14 @@ onMounted(() => {
   timer = setInterval(updateClock, 1000);
   window.addEventListener("click", closeAllMenus);
 
-  // CHỖ ĐÃ SỬA: Đăng ký toàn bộ Key con vào Reactive để đảm bảo bắt trọn tương tác click
   menuItems.forEach((item) => {
     if (item.children) {
       openMenus[item.id] = isGroupActive(item) ? true : false;
     }
   });
+
+  // Báo trạng thái thu/mở ban đầu cho layout cha (vd: nếu trước đó user đã thu gọn rồi F5 lại)
+  emit("collapse-change", isCollapsed.value);
 });
 
 onUnmounted(() => {
@@ -428,104 +356,64 @@ onUnmounted(() => {
   -webkit-backdrop-filter: blur(12px);
   border-right: 1px solid #e2e8f0;
 }
-.menu-scroll-container::-webkit-scrollbar {
-  width: 4px;
+
+.sidebar-hidden {
+  transform: translateX(-260px) !important;
 }
-.menu-scroll-container::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+
+.toggle-sidebar-btn {
+  width: 34px;
+  height: 34px;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 50%;
+  z-index: 1060;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.nav-pill-vertical {
-  color: #475569;
-  border-radius: 12px;
-  padding: 10px 16px;
-  font-size: 0.85rem;
-  border: none;
-  background: transparent;
-}
-.nav-pill-vertical.active {
-  background-color: #111111 !important;
-  color: #ffffff !important;
-}
-.hover-bg-slate-100:hover {
-  background-color: #f1f5f9 !important;
-  color: #111111 !important;
-}
-.nav-icon-width {
-  width: 24px;
-  text-align: center;
-}
-.arrow-icon {
-  font-size: 0.75rem;
+
+.toggle-sidebar-btn i {
+  font-size: 0.95rem;
+  color: #1e293b;
   transition: transform 0.2s ease;
 }
-.rotate-180 {
-  transform: rotate(180deg);
+
+.toggle-sidebar-btn:hover {
+  background-color: #111111;
+  border-color: #111111;
+  transform: translate(-50%, -50%) scale(1.08);
 }
-.shadow-peel {
-  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.1);
+.toggle-sidebar-btn:hover i {
+  color: #ffffff;
 }
-.bg-dark-peel {
-  background-color: #111111 !important;
+
+.transition-all-premium {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
-.text-dark-peel {
-  color: #111111 !important;
-}
-.cursor-pointer {
-  cursor: pointer;
-}
-.logo-box {
-  width: 38px;
-  height: 38px;
-}
-.avatar-box {
-  width: 36px;
-  height: 36px;
-  font-size: 0.85rem;
-}
-.time-box {
-  font-size: 0.75rem;
-}
-.submenu-wrapper {
-  transition: all 0.2s ease-in-out;
-}
-.dropdown-item-custom {
-  font-size: 0.8rem;
-  color: #64748b !important;
-  border-radius: 8px;
-}
-.dropdown-icon {
-  color: #94a3b8 !important;
-  font-size: 0.85rem;
-  width: 20px;
-  text-align: center;
-}
-.dropdown-item-custom:hover {
-  background-color: #f8fafc !important;
-  color: #111111 !important;
-}
-.active-child {
-  background-color: #f1f5f9 !important;
-  color: #111111 !important;
-  font-weight: 700 !important;
-}
-.active-child .dropdown-icon {
-  color: #111111 !important;
-}
-.user-profile-box {
-  border: 1px solid transparent;
-}
-.user-profile-box:hover {
-  background-color: #f1f5f9;
-}
-.dropdown-item-custom-btn {
-  transition: background-color 0.2s;
-  font-size: 0.85rem;
-}
-.dropdown-item-custom-btn:hover {
-  background-color: #f1f5f9 !important;
-}
-.animate__faster {
-  animation-duration: 0.2s;
-}
+
+.menu-scroll-container::-webkit-scrollbar { width: 4px; }
+.menu-scroll-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.nav-pill-vertical { color: #475569; border-radius: 12px; padding: 10px 16px; font-size: 0.85rem; border: none; background: transparent; }
+.nav-pill-vertical.active { background-color: #111111 !important; color: #ffffff !important; }
+.hover-bg-slate-100:hover { background-color: #f1f5f9 !important; color: #111111 !important; }
+.nav-icon-width { width: 24px; text-align: center; }
+.arrow-icon { font-size: 0.75rem; transition: transform 0.2s ease; }
+.rotate-180 { transform: rotate(180deg); }
+.shadow-peel { box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.1); }
+.bg-dark-peel { background-color: #111111 !important; }
+.text-dark-peel { color: #111111 !important; }
+.cursor-pointer { cursor: pointer; }
+.avatar-box { width: 36px; height: 36px; font-size: 0.85rem; }
+.time-box { font-size: 0.75rem; }
+.dropdown-item-custom { font-size: 0.8rem; color: #64748b !important; border-radius: 8px; }
+.dropdown-icon { color: #94a3b8 !important; font-size: 0.85rem; width: 20px; text-align: center; }
+.dropdown-item-custom:hover { background-color: #f8fafc !important; color: #111111 !important; }
+.active-child { background-color: #f1f5f9 !important; color: #111111 !important; font-weight: 700 !important; }
+.active-child .dropdown-icon { color: #111111 !important; }
+.user-profile-box { border: 1px solid transparent; }
+.user-profile-box:hover { background-color: #f1f5f9; }
+.dropdown-item-custom-btn { transition: background-color 0.2s; font-size: 0.85rem; }
+.dropdown-item-custom-btn:hover { background-color: #f1f5f9 !important; }
+.animate__faster { animation-duration: 0.2s; }
 </style>
