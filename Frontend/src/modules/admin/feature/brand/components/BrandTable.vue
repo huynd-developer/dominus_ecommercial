@@ -16,21 +16,18 @@ const emit = defineEmits<{
       
       <thead class="bg-white text-muted small fw-medium tracking-wider text-uppercase" style="position: sticky; top: 0; z-index: 1">
         <tr>
-          <th class="ps-4 py-3 border-bottom font-weight-normal" style="width: 8%">Hình ảnh</th>
-          <th class="py-3 border-bottom font-weight-normal" style="width: 22%">Tên sản phẩm</th>
-          <th class="py-3 border-bottom font-weight-normal" style="width: 12%">Thương hiệu</th>
-          <th class="py-3 border-bottom font-weight-normal" style="width: 15%">Nhóm hương</th>
-          <th class="py-3 border-bottom font-weight-normal" style="width: 15%">Giá biến thể</th>
-          <th class="py-3 border-bottom font-weight-normal" style="width: 10%">Tồn kho</th>
-          <th class="py-3 border-bottom font-weight-normal text-center" style="width: 10%">Trạng thái</th>
-          <th class="text-end pe-4 py-3 border-bottom font-weight-normal" style="width: 8%">Thao tác</th>
+          <th class="ps-4 py-3 border-bottom font-weight-normal" style="width: 10%">Hình ảnh</th>
+          <th class="py-3 border-bottom font-weight-normal" style="width: 25%">Tên thương hiệu</th>
+          <th class="py-3 border-bottom font-weight-normal" style="width: 35%">Mô tả (Description)</th>
+          <th class="py-3 border-bottom font-weight-normal text-center" style="width: 15%">Trạng thái</th>
+          <th class="text-end pe-4 py-3 border-bottom font-weight-normal" style="width: 15%">Thao tác</th>
         </tr>
       </thead>
       
       <tbody>
         <tr v-if="brands.length === 0">
-          <td colspan="8" class="text-center py-5 text-muted fw-medium">
-            Chưa có dữ liệu.
+          <td colspan="5" class="text-center py-5 text-muted fw-medium">
+            Chưa có dữ liệu thương hiệu.
           </td>
         </tr>
         
@@ -52,19 +49,7 @@ const emit = defineEmits<{
           </td>
           
           <td class="py-3 border-bottom border-light text-muted">
-            {{ (brand as any).brandName || 'N/A' }}
-          </td>
-          
-          <td class="py-3 border-bottom border-light text-muted">
-            {{ (brand as any).fragranceGroup || 'N/A' }}
-          </td>
-
-          <td class="py-3 border-bottom border-light text-muted">
-            {{ (brand as any).priceRange || '0 đ' }}
-          </td>
-
-          <td class="py-3 border-bottom border-light text-dark fw-medium">
-            {{ (brand as any).stock || 0 }}
+            {{ brand.description || 'Chưa có mô tả' }}
           </td>
           
           <td class="py-3 border-bottom border-light text-center">
