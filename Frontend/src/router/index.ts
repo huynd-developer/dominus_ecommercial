@@ -129,7 +129,7 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "categories",
         name: "AdminCategories",
-        component: mockPage("Danh mục (Category)", "Đức"),
+        component: () => import("@/modules/admin/feature/category/views/CategoryView.vue"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {

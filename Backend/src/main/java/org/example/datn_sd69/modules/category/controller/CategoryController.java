@@ -5,10 +5,11 @@ import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.Category;
 import org.example.datn_sd69.modules.category.dto.request.CategoryRequest;
 import org.example.datn_sd69.modules.category.service.CategoryService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/categories")
@@ -18,10 +19,19 @@ public class CategoryController {
 
     private final CategoryService categoryService;
 
-    // 1. Lấy danh sách danh mục
+    // 1. Lấy danh sách danh mục (Kết hợp Tìm kiếm & Phân trang)
     @GetMapping
-    public ResponseEntity<List<Category>> getAllCategories() {
-        return ResponseEntity.ok(categoryService.getAll());
+    public ResponseEntity<Page<Category>> getAllCategories(
+            @RequestParam(name = "keyword", required = false) String keyword,
+            @RequestParam(name = "page", defaultValue = "0") int page, // Spring Boot đếm trang từ 0
+            @RequestParam(name = "size", defaultValue = "5") int size) { // Mặc định 5 item/trang
+
+        Pageable pageable = PageRequest.of(page, size);
+
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            return ResponseEntity.ok(categoryService.search(keyword, pageable));
+        }
+        return ResponseEntity.ok(categoryService.getAll(pageable));
     }
 
     // 2. Lấy chi tiết một danh mục
