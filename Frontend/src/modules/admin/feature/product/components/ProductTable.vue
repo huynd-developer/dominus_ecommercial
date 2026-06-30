@@ -23,9 +23,9 @@
 
                     <th width="260">Tên sản phẩm</th>
 
-                    <th>Brand</th>
+                    <th>Thương hiệu</th>
 
-                    <th>Category</th>
+                    <th>Danh mục</th>
 
                     <th>Nồng độ</th>
 
