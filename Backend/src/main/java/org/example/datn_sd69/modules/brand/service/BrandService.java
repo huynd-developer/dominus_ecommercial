@@ -15,5 +15,7 @@ public interface BrandService {
     void deleteBrand(Integer id);
     String uploadLogo(MultipartFile file) throws IOException;
     Brand getBrandById(Integer id);
-    Page<Brand> getBrandsWithPagination(int page, int size);
+
+    // Sửa ở đây: Khai báo thêm String keyword cho giống hệt bên BrandServiceImpl
+    Page<Brand> getBrandsWithPagination(String keyword, int page, int size);
 }
