@@ -12,6 +12,47 @@
       </div>
     </div>
 
+    <!-- KHU VỰC TÌM KHÁCH HÀNG THEO SĐT — GỌI API THẬT -->
+    <div class="customer-section mb-3 shrink-0">
+      <div v-if="!posStore.selectedCustomer" class="d-flex align-items-center gap-2">
+        <div class="input-wrapper flex-grow-1 position-relative d-flex align-items-center">
+          <i class="bi bi-person text-muted-custom position-absolute start-0 ms-3 font-sm"></i>
+          <input
+            type="text"
+            v-model="posStore.customerPhoneInput"
+            placeholder="SĐT khách hàng (bỏ trống = khách vãng lai)"
+            class="promo-input w-100 rounded-3 font-sm text-light transition-all"
+            @keydown.enter="handleSearchCustomer"
+          />
+        </div>
+        <button
+          type="button"
+          @click="handleSearchCustomer"
+          :disabled="posStore.isSearchingCustomer"
+          class="apply-promo-btn py-2 px-3 rounded-3 font-sm fw-bold transition-all shrink-0"
+        >
+          <i v-if="posStore.isSearchingCustomer" class="bi bi-arrow-repeat"></i>
+          <span v-else>Tìm</span>
+        </button>
+      </div>
+
+      <div v-else class="customer-found-pill d-flex align-items-center justify-content-between rounded-3 px-3 py-2">
+        <div class="d-flex flex-column">
+          <span class="text-light font-sm fw-bold">{{ posStore.selectedCustomer.name }}</span>
+          <span class="text-muted-custom font-xs">
+            {{ posStore.selectedCustomer.phone }} · {{ posStore.selectedCustomer.loyaltyPoints }} điểm tích lũy
+          </span>
+        </div>
+        <button type="button" class="btn-clear-customer border-0 bg-transparent" @click="posStore.clearSelectedCustomer()">
+          <i class="bi bi-x-circle text-muted-custom"></i>
+        </button>
+      </div>
+
+      <p v-if="posStore.customerLookupMessage && !posStore.selectedCustomer" class="font-xs mb-0 mt-1 text-muted-custom">
+        {{ posStore.customerLookupMessage }}
+      </p>
+    </div>
+
     <div v-if="posStore.cart.length === 0" class="flex-grow-1 d-flex flex-column justify-content-center align-items-center text-center py-5 empty-state-box">
       <div class="mb-3 empty-icon-wrap">
         <i class="bi bi-bag-x display-4 text-muted-custom opacity-25"></i>
@@ -41,7 +82,7 @@
               <i class="bi bi-dash-lg font-xs"></i>
             </button>
             <span class="qty-number px-1 font-xs fw-black">{{ item.quantity }}</span>
-            <button class="qty-btn" type="button" @click.stop="posStore.addToCart(item)">
+            <button class="qty-btn" type="button" @click.stop="posStore.increaseQuantity(item.id)">
               <i class="bi bi-plus-lg font-xs"></i>
             </button>
           </div>
@@ -59,22 +100,34 @@
         <span class="text-light fw-medium">{{ formatPrice(posStore.cartTotal) }} ₫</span>
       </div>
 
+      <!-- Hiển thị số tiền giảm thực tế SAU KHI checkout thành công, vì BE mới là nơi tính đúng -->
+      <div v-if="posStore.lastOrder && posStore.lastOrder.discountAmount > 0" class="d-flex justify-content-between mb-2 text-success font-xs">
+        <span>Giảm giá ({{ posStore.appliedVoucherCode }})</span>
+        <span class="fw-medium">-{{ formatPrice(posStore.lastOrder.discountAmount) }} ₫</span>
+      </div>
+
       <div class="promo-code-container d-flex align-items-center gap-2 mb-3">
         <div class="input-wrapper flex-grow-1 position-relative d-flex align-items-center">
           <i class="bi bi-ticket-perforated text-muted-custom position-absolute start-0 ms-3 font-sm"></i>
           <input 
             type="text" 
-            v-model="promoCode" 
+            v-model="posStore.voucherCode" 
             placeholder="Nhập mã giảm giá..." 
             class="promo-input w-100 rounded-3 font-sm text-light transition-all"
             :disabled="posStore.cart.length === 0"
           />
         </div>
+        <!--
+          GIẢI THÍCH NGHIỆP VỤ: BE chỉ validate voucher thật tại lúc gọi /checkout
+          (xem PosServiceImpl mục 3.5) — không có endpoint riêng để "preview" số tiền
+          giảm trước. Nên nút "Áp dụng" ở đây CHỈ lưu mã vào store để gửi kèm khi
+          bấm XÁC NHẬN THANH TOÁN, không gọi API riêng nào cả.
+        -->
         <button 
           type="button" 
           @click="handleApplyPromo"
           class="apply-promo-btn py-2 px-3 rounded-3 font-sm fw-bold transition-all shrink-0"
-          :disabled="!promoCode.trim() || posStore.cart.length === 0"
+          :disabled="!posStore.voucherCode.trim() || posStore.cart.length === 0"
         >
           Áp dụng
         </button>
@@ -107,11 +160,21 @@
         </button>
       </div>
 
+      <p v-if="posStore.checkoutError" class="text-danger font-xs mb-2">
+        <i class="bi bi-exclamation-circle"></i> {{ posStore.checkoutError }}
+      </p>
+
+      <p v-if="vnpayPendingMessage" class="text-info font-xs mb-2">
+        <i class="bi bi-info-circle"></i> {{ vnpayPendingMessage }}
+      </p>
+
       <button 
         class="submit-pay-btn w-100 py-3 rounded-3 text-dark fw-black font-sm tracking-wider transition-all" 
-        :disabled="posStore.cart.length === 0"
+        :disabled="posStore.cart.length === 0 || posStore.isCheckingOut"
+        @click="handleSubmitPayment"
       >
-        XÁC NHẬN THANH TOÁN
+        <i v-if="posStore.isCheckingOut" class="bi bi-arrow-repeat"></i>
+        <span v-else>XÁC NHẬN THANH TOÁN</span>
       </button>
     </div>
   </div>
@@ -123,14 +186,104 @@ import { usePosStore } from '../stores/posStore'
 
 const posStore = usePosStore()
 const activePayment = ref('cash')
-const promoCode = ref('')
+const vnpayPendingMessage = ref('')
 
 const formatPrice = (val) => new Intl.NumberFormat('vi-VN').format(val || 0)
 
 const handleApplyPromo = () => {
-  if (!promoCode.value.trim()) return
-  // Viết thêm logic xử lý API hoặc đẩy mã vào posStore tại đây
-  console.log('Đang áp dụng mã giảm giá:', promoCode.value)
+  const code = posStore.voucherCode.trim()
+  if (!code) return
+  posStore.setVoucherCode(code)
+}
+
+const handleSearchCustomer = () => {
+  posStore.searchCustomerByPhone()
+}
+
+const handleSubmitPayment = async () => {
+  vnpayPendingMessage.value = ''
+  const method = activePayment.value === 'cash' ? 'CASH' : 'VNPAY'
+
+  const result = await posStore.checkout(method)
+
+  if (!result.success) return
+
+  if (method === 'CASH') {
+    printInvoice(result.order)
+    return
+  }
+
+  if (result.order?.vnpayPaymentUrl) {
+    window.open(result.order.vnpayPaymentUrl, '_blank')
+    vnpayPendingMessage.value = `Đơn #${result.order.orderId} đang chờ khách thanh toán qua VNPay. Kho và voucher đã được giữ.`
+  }
+}
+
+// SỬA: map đúng theo PosOrderResponse / InvoiceItem trả về từ BE
+// (trước đây dùng nhầm it.name / it.price / order.subTotal / order.total -> không tồn tại trong DTO thật)
+const printInvoice = (order) => {
+  if (!order) return
+  const win = window.open('', '_blank', 'width=380,height=600')
+  if (!win) return
+
+  const itemsHtml = (order.items || []).map(it => `
+    <tr>
+      <td>
+        ${it.productName}
+        ${it.capacityLabel ? `<br/><span style="color:#666;font-size:10px">${it.capacityLabel} · ${it.sku}</span>` : ''}
+      </td>
+      <td style="text-align:center">${it.quantity}</td>
+      <td style="text-align:right">${formatPrice(it.unitPrice)}</td>
+      <td style="text-align:right">${formatPrice(it.lineTotal)}</td>
+    </tr>
+  `).join('')
+
+  const createdAtStr = order.createdAt
+    ? new Date(order.createdAt).toLocaleString('vi-VN')
+    : new Date().toLocaleString('vi-VN')
+
+  win.document.write(`
+    <html>
+      <head>
+        <title>Hóa đơn #${order.orderId}</title>
+        <style>
+          body { font-family: monospace; font-size: 12px; padding: 16px; }
+          h2 { text-align: center; margin: 0 0 4px; }
+          .sub { text-align: center; color: #555; margin-bottom: 4px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+          td { padding: 4px 0; vertical-align: top; }
+          .line { border-top: 1px dashed #000; margin: 6px 0; }
+          .total-row { font-weight: bold; font-size: 14px; }
+          .info-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+        </style>
+      </head>
+      <body>
+        <h2>DOMINUS POS</h2>
+        <div class="sub">Hóa đơn bán hàng #${order.orderId}</div>
+        <div class="sub">${createdAtStr}</div>
+        <div class="line"></div>
+
+        <div class="info-row"><span>Khách hàng</span><span>${order.customerName || 'Khách vãng lai'}</span></div>
+        ${order.customerPhone ? `<div class="info-row"><span>SĐT</span><span>${order.customerPhone}</span></div>` : ''}
+        <div class="info-row"><span>Thu ngân</span><span>${order.cashierName || '-'}</span></div>
+        <div class="info-row"><span>Thanh toán</span><span>${order.paymentMethod === 'CASH' ? 'Tiền mặt' : 'Chuyển khoản'}</span></div>
+
+        <div class="line"></div>
+        <table>${itemsHtml}</table>
+        <div class="line"></div>
+
+        <table>
+          <tr><td>Tạm tính</td><td style="text-align:right">${formatPrice(order.totalAmount)}</td></tr>
+          ${order.discountAmount > 0 ? `<tr><td>Giảm giá</td><td style="text-align:right">-${formatPrice(order.discountAmount)}</td></tr>` : ''}
+          <tr class="total-row"><td>TỔNG CỘNG</td><td style="text-align:right">${formatPrice(order.finalAmount)}</td></tr>
+        </table>
+        <div class="line"></div>
+        <p style="text-align:center">Cảm ơn quý khách!</p>
+        <script>window.onload = () => { window.print(); }<\/script>
+      </body>
+    </html>
+  `)
+  win.document.close()
 }
 </script>
 
@@ -151,6 +304,18 @@ const handleApplyPromo = () => {
 .font-sm { font-size: 0.875rem; }
 .font-xs { font-size: 0.75rem; }
 .fw-black { font-weight: 900; }
+
+/* KHÁCH HÀNG ĐÃ TÌM ĐƯỢC */
+.customer-found-pill {
+  background-color: #131c31;
+  border: 1px solid #222f4f;
+}
+.btn-clear-customer {
+  cursor: pointer;
+}
+.btn-clear-customer:hover i {
+  color: #ef4444 !important;
+}
 
 /* DANH SÁCH MÓN */
 .cart-item-row { 
