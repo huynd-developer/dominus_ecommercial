@@ -21,19 +21,21 @@ public class BrandController {
 
     private final BrandService brandService;
 
-    // 1. Xem danh sách (Ai cũng xem được)
+    // 1. Xem danh sách (ĐÃ THÊM KẾT HỢP TÌM KIẾM) - Đã mở permitAll bên SecurityConfig nên không cần PreAuthorize
     @GetMapping
     public ResponseEntity<?> getAll(
+            @RequestParam(name = "keyword", required = false) String keyword,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
+
         return ResponseEntity.ok(Map.of(
                 "status", "Thành công",
                 "message", "Lấy danh sách thương hiệu phân trang thành công",
-                "data", brandService.getBrandsWithPagination(page, size)
+                "data", brandService.getBrandsWithPagination(keyword, page, size)
         ));
     }
 
-    // ĐÃ THÊM: Tìm kiếm Brand theo ID (Ai cũng xem được)
+    // Lấy chi tiết Brand - Đã mở permitAll bên SecurityConfig nên không cần PreAuthorize
     @GetMapping("/{id}")
     public ResponseEntity<?> getById(@PathVariable Integer id) {
         try {
@@ -49,8 +51,8 @@ public class BrandController {
         }
     }
 
-    // 2. Thêm mới Brand (Chỉ MANAGER và OWNER)
-    @PreAuthorize("hasAnyAuthority('Manager', 'Owner')")
+    // 2. Thêm mới Brand (Đã sửa thành MANAGER, OWNER)
+    @PreAuthorize("hasAnyAuthority('MANAGER', 'OWNER')")
     @PostMapping
     public ResponseEntity<?> create(@Valid @RequestBody BrandRequest request) {
         return ResponseEntity.ok(Map.of(
@@ -60,8 +62,8 @@ public class BrandController {
         ));
     }
 
-    // 3. Cập nhật Brand (Chỉ MANAGER và OWNER)
-    @PreAuthorize("hasAnyAuthority('Manager', 'Owner')")
+    // 3. Cập nhật Brand (Đã sửa thành MANAGER, OWNER)
+    @PreAuthorize("hasAnyAuthority('MANAGER', 'OWNER')")
     @PutMapping("/{id}")
     public ResponseEntity<?> update(
             @PathVariable Integer id,
@@ -73,8 +75,8 @@ public class BrandController {
         ));
     }
 
-    // 4. Xóa mềm Brand (Chỉ OWNER)
-    @PreAuthorize("hasAuthority('Owner')")
+    // 4. Xóa mềm Brand (Đã sửa thành OWNER)
+    @PreAuthorize("hasAuthority('OWNER')")
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable Integer id) {
         try {
@@ -83,28 +85,24 @@ public class BrandController {
                     "message", "Đã khóa thương hiệu thành công!"
             ));
         } catch (RuntimeException e) {
-            // Bắt lỗi "kẹt sản phẩm" và trả về status 400 kèm thông báo JSON
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("message", e.getMessage()));
         } catch (Exception e) {
-            // Bắt các lỗi không xác định khác
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("message", "Đã có lỗi hệ thống xảy ra!"));
         }
     }
 
-    // 5. Upload Logo (Đã thêm Validate và đồng bộ kiểu trả về JSON)
-    @PreAuthorize("hasAnyAuthority('Manager', 'Owner')") // Thêm phân quyền cho đồng bộ
+    // 5. Upload Logo (Đã sửa thành MANAGER, OWNER)
+    @PreAuthorize("hasAnyAuthority('MANAGER', 'OWNER')")
     @PostMapping("/upload-logo")
     public ResponseEntity<?> uploadLogo(@RequestParam("file") MultipartFile file) {
-        // Validate file rỗng
         if (file.isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
                     "message", "Vui lòng chọn một file ảnh để upload!"
             ));
         }
 
-        // Validate định dạng ảnh
         String contentType = file.getContentType();
         List<String> allowedTypes = Arrays.asList("image/jpeg", "image/png", "image/jpg", "image/webp");
         if (contentType == null || !allowedTypes.contains(contentType.toLowerCase())) {
@@ -113,7 +111,6 @@ public class BrandController {
             ));
         }
 
-        // Validate dung lượng (Tối đa 5MB)
         long maxSize = 5 * 1024 * 1024;
         if (file.getSize() > maxSize) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(

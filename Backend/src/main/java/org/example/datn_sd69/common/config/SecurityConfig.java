@@ -54,13 +54,13 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         // Cho phép tất cả truy cập API đăng nhập, đăng ký
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/setup-test-data").permitAll()
+
                         // Nhóm Nhân sự: owner, manager, cashier mới được vào các API bắt đầu bằng /api/admin/
                         .requestMatchers("/api/admin/**").hasAnyAuthority("OWNER", "MANAGER", "CASHIER")
 
                         // Nhóm Khách hàng: chỉ user mới được vào các API của khách
                         .requestMatchers("/api/customer/**").hasAuthority("USER")
-                        .requestMatchers("/api/danh-muc/**").permitAll() //dang ko có token, nen them dong de test categorycontroller
+
                         // Các API còn lại bắt buộc phải có token mới được gọi
                         .anyRequest().authenticated()
                 )

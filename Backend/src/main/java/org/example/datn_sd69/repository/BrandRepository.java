@@ -10,4 +10,5 @@ import org.springframework.stereotype.Repository;
 public interface BrandRepository extends JpaRepository<Brand, Integer> {
     boolean existsByNameIgnoreCaseAndStatusNot(String name, Integer status);
     boolean existsByNameIgnoreCaseAndIdNotAndStatusNot(String name, Integer id, Integer status);
+    Page<Brand> findByNameContainingIgnoreCase(String keyword, Pageable pageable);
 }
