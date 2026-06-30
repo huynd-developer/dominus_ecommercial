@@ -50,4 +50,17 @@ public class CategoryController {
         categoryService.delete(id);
         return ResponseEntity.ok("Xóa danh mục thành công!");
     }
+
+    @GetMapping
+    public ResponseEntity<List<Category>> getAllCategories(
+            @RequestParam(name = "keyword", required = false) String keyword) {
+
+        // Nếu client có gửi keyword lên thì gọi hàm search
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            return ResponseEntity.ok(categoryService.search(keyword));
+        }
+
+        // Nếu không có keyword thì lấy tất cả như cũ
+        return ResponseEntity.ok(categoryService.getAll());
+    }
 }

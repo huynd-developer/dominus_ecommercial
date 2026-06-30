@@ -53,4 +53,11 @@ public class CategoryServiceImpl implements CategoryService {
         category.setStatus(0);
         categoryRepository.save(category);
     }
+    @Override
+    public List<Category> search(String keyword) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return categoryRepository.findAll();
+        }
+        return categoryRepository.findByNameContainingIgnoreCase(keyword.trim());
+    }
 }

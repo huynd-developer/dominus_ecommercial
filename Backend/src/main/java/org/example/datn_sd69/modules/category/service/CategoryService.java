@@ -11,4 +11,5 @@ public interface CategoryService {
     Category create(CategoryRequest request); // Đổi ở đây
     Category update(Integer id, CategoryRequest request); // Đổi ở đây
     void delete(Integer id);
+    List<Category> search(String keyword);
 }
