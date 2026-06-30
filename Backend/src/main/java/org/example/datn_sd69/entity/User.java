@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
 @Table(name = "Users")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor
 public class User extends BaseEntity {
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "RoleId", nullable = false)
     private Role role;
 

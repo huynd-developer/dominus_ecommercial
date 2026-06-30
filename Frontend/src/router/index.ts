@@ -3,7 +3,13 @@ import type { RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
 import { h } from "vue";
 
-// Layout quản trị của Admin
+// Import các trang của m
+import ProductDetailView from "@/modules/shop/feature/product/ProductDetailView.vue";
+import CartView from "@/modules/shop/feature/cart/CartViews.vue";
+import CheckoutView from "@/modules/shop/feature/checkout/CheckoutViews.vue";
+import PaymentReturnView from "@/modules/shop/feature/checkout/PaymentReturnView.vue";
+
+// Layout quản trị của Admin & Shop
 import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
 import ShopLayout from "@/modules/shop/layout/ShopLayout.vue";
 import ProductListView from "@/modules/admin/feature/product/views/ProductListView.vue";
@@ -33,9 +39,11 @@ const routes: Array<RouteRecordRaw> = [
   // ==========================================
   // LUỒNG AUTH & STOREFRONT (GIAO DIỆN KHÁCH)
   // ==========================================
+
+  // Code của Team (Trang chủ)
   {
     path: "/",
-    component: () => import("@/modules/shop/layout/ShopLayout.vue"),
+    component: ShopLayout,
     children: [
       {
         path: "",
@@ -45,6 +53,32 @@ const routes: Array<RouteRecordRaw> = [
       },
     ],
   },
+
+  // Code của m (Chi tiết SP, Giỏ hàng, Thanh toán)
+  {
+    path: "/product",
+    name: "ProductDetail",
+    component: ProductDetailView,
+  },
+  {
+    path: "/cart",
+    name: "Cart",
+    component: CartView,
+    meta: { requiresAuth: true, allowedRoles: ["USER"] },
+  },
+  {
+    path: "/checkout",
+    name: "Checkout",
+    component: CheckoutView,
+    meta: { requiresAuth: true, allowedRoles: ["USER"] },
+  },
+  {
+    path: "/payment-return",
+    name: "PaymentReturn",
+    component: PaymentReturnView,
+  },
+
+  // Các trang Auth
   {
     path: "/login",
     name: "Login",
@@ -60,36 +94,34 @@ const routes: Array<RouteRecordRaw> = [
     name: "Register",
     component: () => import("@/modules/auth/views/RegisterView.vue"),
   },
+
   {
     path: "/customer/profile",
     name: "CustomerProfile",
     component: () => import("@/modules/auth/views/CustomerLoginView.vue"),
     meta: { requiresAuth: true, allowedRoles: ["USER"] },
   },
-
   // ==========================================
-  // LUỒNG ADMIN QUẢN TRỊ (Khớp chính xác với TopHeader)
+  // LUỒNG ADMIN QUẢN TRỊ
   // ==========================================
   {
     path: "/admin",
     component: AdminLayout,
-    redirect: "/admin/dashboard", 
+    redirect: "/admin/dashboard",
     meta: { requiresAuth: true },
     children: [
+     
       {
         path: "dashboard",
         name: "AdminDashboard",
         component: mockPage("Tổng quan (Báo cáo)", "Huy"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER"] },
       },
-      {
+{
         path: "pos",
         name: "AdminPOS",
-        component: mockPage("Bán hàng POS", "Đan & Trung"),
-        meta: {
-          requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
-        },
+        component: () => import("@/modules/pos/views/PosView.vue"),
+        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER", "CASHIER"] },
       },
       {
   path: "products",
@@ -118,7 +150,7 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "categories",
         name: "AdminCategories",
-        component: mockPage("Danh mục (Category)", "Đức"),
+        component: () => import("@/modules/admin/feature/category/views/CategoryView.vue"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
@@ -191,16 +223,16 @@ const routes: Array<RouteRecordRaw> = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+
 });
 
-// Logic Bảo Mật Định Tuyến Toàn Cục
-// CHỖ THAY ĐỔI: Bỏ tham số `next` ở callback của beforeEach
+// Logic Bảo Mật Định Tuyến Toàn Cục (Đã gộp code của m và team)
 router.beforeEach(async (to, from) => {
   const authStore = useAuthStore();
 
   // ĐẢM BẢO STATE ĐƯỢC ĐỒNG BỘ: Đọc trực tiếp từ LocalStorage nếu Pinia chưa kịp load lại
-  if (!authStore.isAuthenticated && localStorage.getItem('token')) {
-    // Giữ nguyên phần nhắc nhở logic đồng bộ của bạn
+  if (!authStore.isAuthenticated && localStorage.getItem("token")) {
+    // Giữ nguyên phần nhắc nhở logic đồng bộ của team
   }
 
   const userRole = (authStore.role || "").toUpperCase().replace("ROLE_", "");
@@ -213,7 +245,7 @@ router.beforeEach(async (to, from) => {
     ["Login", "AdminLogin", "Register"].includes(to.name as string)
   ) {
     if (userRole === "OWNER") {
-      return { path: "/admin/dashboard", replace: true }; // Thay thế: next({...}) -> return {...}
+      return { path: "/admin/dashboard", replace: true };
     } else if (["MANAGER", "CASHIER"].includes(userRole)) {
       return { path: "/admin/pos", replace: true };
     }
@@ -247,7 +279,7 @@ router.beforeEach(async (to, from) => {
 
       // 2. Nếu đang thao tác nội bộ mà bấm nhầm link cấm
       if (from.matched.length > 0) {
-        return from.fullPath; // Trả về chính vị trí hiện tại để hủy điều hướng
+        return from.fullPath;
       }
 
       // 3. Nếu gõ link trực tiếp lên thanh URL nhưng sai Role
@@ -262,8 +294,7 @@ router.beforeEach(async (to, from) => {
     }
   }
 
-  // Hoàn toàn hợp lệ -> cho phép đi tiếp (không cần gọi next() nữa)
-  return true; 
+  return true;
 });
 
 export default router;

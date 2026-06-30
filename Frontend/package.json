@@ -11,9 +11,11 @@
     "type-check": "vue-tsc --build"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.3.0",
     "axios": "^1.18.0",
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1",
+    "element-plus": "^2.14.2",
     "pinia": "^3.0.4",
     "sweetalert2": "^11.26.25",
     "vue": "^3.5.32",

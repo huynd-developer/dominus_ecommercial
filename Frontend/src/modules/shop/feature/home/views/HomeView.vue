@@ -292,7 +292,7 @@ const featuredProducts: Product[] = [
 }
 
 .section-title {
-  font-family: var(--aura-serif);
+  font-family: Arial, sans-serif !important;
   font-size: clamp(28px, 2.4vw, 38px);
   color: var(--aura-black);
   font-weight: 700;
