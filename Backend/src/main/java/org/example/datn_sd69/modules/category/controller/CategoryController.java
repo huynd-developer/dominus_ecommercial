@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -40,12 +41,14 @@ public class CategoryController {
     }
 
     // 3. Thêm mới danh mục (Validate qua DTO)
+    @PreAuthorize("hasAnyAuthority('MANAGER', 'OWNER')")
     @PostMapping
     public ResponseEntity<Category> createCategory(@Valid @RequestBody CategoryRequest categoryRequest) {
         return ResponseEntity.ok(categoryService.create(categoryRequest));
     }
 
     // 4. Cập nhật danh mục (Validate qua DTO)
+    @PreAuthorize("hasAnyAuthority('MANAGER', 'OWNER')")
     @PutMapping("/{id}")
     public ResponseEntity<Category> updateCategory(
             @PathVariable Integer id,
@@ -54,6 +57,7 @@ public class CategoryController {
     }
 
     // 5. Xóa danh mục
+    @PreAuthorize("hasAuthority('OWNER')")
     @DeleteMapping("/{id}")
     public ResponseEntity<String> deleteCategory(@PathVariable Integer id) {
         categoryService.delete(id);

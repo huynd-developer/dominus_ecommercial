@@ -21,21 +21,21 @@ public class BrandController {
 
     private final BrandService brandService;
 
-    // 1. Xem danh sách (ĐÃ THÊM KẾT HỢP TÌM KIẾM)
+    // 1. Xem danh sách (ĐÃ THÊM KẾT HỢP TÌM KIẾM) - Đã mở permitAll bên SecurityConfig nên không cần PreAuthorize
     @GetMapping
     public ResponseEntity<?> getAll(
-            @RequestParam(name = "keyword", required = false) String keyword, // Hứng keyword từ FE
+            @RequestParam(name = "keyword", required = false) String keyword,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
         return ResponseEntity.ok(Map.of(
                 "status", "Thành công",
                 "message", "Lấy danh sách thương hiệu phân trang thành công",
-                "data", brandService.getBrandsWithPagination(keyword, page, size) // Truyền thẳng xuống Service
+                "data", brandService.getBrandsWithPagination(keyword, page, size)
         ));
     }
 
-    // Lấy chi tiết Brand (Giữ nguyên)
+    // Lấy chi tiết Brand - Đã mở permitAll bên SecurityConfig nên không cần PreAuthorize
     @GetMapping("/{id}")
     public ResponseEntity<?> getById(@PathVariable Integer id) {
         try {
@@ -51,8 +51,8 @@ public class BrandController {
         }
     }
 
-    // 2. Thêm mới Brand (Giữ nguyên)
-    @PreAuthorize("hasAnyAuthority('Manager', 'Owner')")
+    // 2. Thêm mới Brand (Đã sửa thành MANAGER, OWNER)
+    @PreAuthorize("hasAnyAuthority('MANAGER', 'OWNER')")
     @PostMapping
     public ResponseEntity<?> create(@Valid @RequestBody BrandRequest request) {
         return ResponseEntity.ok(Map.of(
@@ -62,8 +62,8 @@ public class BrandController {
         ));
     }
 
-    // 3. Cập nhật Brand (Giữ nguyên)
-    @PreAuthorize("hasAnyAuthority('Manager', 'Owner')")
+    // 3. Cập nhật Brand (Đã sửa thành MANAGER, OWNER)
+    @PreAuthorize("hasAnyAuthority('MANAGER', 'OWNER')")
     @PutMapping("/{id}")
     public ResponseEntity<?> update(
             @PathVariable Integer id,
@@ -75,8 +75,8 @@ public class BrandController {
         ));
     }
 
-    // 4. Xóa mềm Brand (Giữ nguyên)
-    @PreAuthorize("hasAuthority('Owner')")
+    // 4. Xóa mềm Brand (Đã sửa thành OWNER)
+    @PreAuthorize("hasAuthority('OWNER')")
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable Integer id) {
         try {
@@ -93,8 +93,8 @@ public class BrandController {
         }
     }
 
-    // 5. Upload Logo (Giữ nguyên)
-    @PreAuthorize("hasAnyAuthority('Manager', 'Owner')")
+    // 5. Upload Logo (Đã sửa thành MANAGER, OWNER)
+    @PreAuthorize("hasAnyAuthority('MANAGER', 'OWNER')")
     @PostMapping("/upload-logo")
     public ResponseEntity<?> uploadLogo(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
