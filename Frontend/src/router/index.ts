@@ -202,6 +202,7 @@ const routes: Array<RouteRecordRaw> = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+
 });
 
 // Logic Bảo Mật Định Tuyến Toàn Cục (Đã gộp code của m và team)
