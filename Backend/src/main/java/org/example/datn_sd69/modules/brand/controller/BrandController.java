@@ -26,7 +26,7 @@ public class BrandController {
                 "data", brandService.getAllBrands()
         ));
     }
-
+        
     // 2. Thêm mới Brand (Chỉ MANAGER và OWNER)
     @PreAuthorize("hasAnyAuthority('Manager', 'Owner')")
     @PostMapping
