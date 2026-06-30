@@ -1,19 +1,16 @@
 <template>
   <header class="d-flex justify-content-between align-items-center mb-2 px-0 pt-1 pb-1 select-none header-premium w-100 overflow-hidden gap-3">
-    
-    <div class="d-flex align-items-center min-w-0 flex-shrink-0">
-      <h4 class="mb-0 fw-black brand-text text-nowrap">DOMINUS POS</h4>
-    </div>
-
     <div class="flex-grow-1 max-w-search mx-md-4 mx-2">
       <div class="search-premium-box position-relative d-flex align-items-center w-100">
         <i class="bi bi-search text-muted-custom position-absolute start-0 ms-3 font-xs"></i>
         <input 
+          ref="searchInputRef"
           type="text" 
           v-model="searchQuery" 
           placeholder="Tìm nhanh sản phẩm, mã đơn hàng... (F4)" 
           class="search-premium-input w-100 rounded-3 font-xs text-light transition-all"
           @input="handleSearch"
+          @keydown.enter="handleScanSku"
         />
         <button 
           v-if="searchQuery" 
@@ -24,28 +21,25 @@
           <i class="bi bi-x-circle-fill text-muted-custom opacity-50 font-xs"></i>
         </button>
       </div>
+      <p v-if="scanMessage" class="font-xs mb-0 mt-1 ps-1" :class="scanSuccess ? 'text-success' : 'text-danger'">
+        {{ scanMessage }}
+      </p>
     </div>
-    
-    <div class="d-flex align-items-center gap-2 gap-sm-3 text-light flex-shrink-0">
-      <div class="font-xs dark-time px-3 py-1.5 rounded-3 d-flex align-items-center gap-1.5 fw-bold text-nowrap">
-        <i class="bi bi-clock-fill text-gold"></i> {{ time }}
-      </div>
-      
-      <div class="user-pill d-flex align-items-center gap-2 rounded-pill px-3 py-1 transition-all text-nowrap">
-        <el-avatar :size="22" class="avatar-gold text-dark fw-black font-xs">N</el-avatar>
-        <span class="fw-bold font-xs text-light-custom">Ngô Boss</span>
-      </div>
-    </div>
-
   </header>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import { usePosStore } from '../stores/posStore'
 
+const posStore = usePosStore()
 const time = ref('')
 const searchQuery = ref('')
+const searchInputRef = ref(null)
+const scanMessage = ref('')
+const scanSuccess = ref(false)
 let timer = null
+let scanMessageTimeout = null
 
 const updateTime = () => {
   const now = new Date()
@@ -55,17 +49,52 @@ const updateTime = () => {
   })
 }
 
+// Gõ tay để lọc list ProductGrid (dùng tạm vì product list đang là mock).
+// Việc lọc thật được làm trong posStore.searchQuery / filteredProducts.
 const handleSearch = () => {
-  console.log('Từ khóa tìm kiếm:', searchQuery.value)
+  posStore.searchQuery = searchQuery.value
+}
+
+// Bấm Enter = coi như vừa bắn mã vạch xong -> gọi API thật tìm theo SKU
+// Đây là nghiệp vụ chính: máy quét mã vạch thường gửi chuỗi SKU rồi tự bắn phím Enter
+const handleScanSku = async () => {
+  const value = searchQuery.value.trim()
+  if (!value) return
+
+  const result = await posStore.addToCartBySku(value)
+
+  scanSuccess.value = result.success
+  scanMessage.value = result.success
+    ? 'Đã thêm vào giỏ hàng'
+    : (result.message || 'Có lỗi xảy ra')
+
+  if (scanMessageTimeout) clearTimeout(scanMessageTimeout)
+  scanMessageTimeout = setTimeout(() => { scanMessage.value = '' }, 2500)
+
+  if (result.success) {
+    searchQuery.value = ''
+    posStore.searchQuery = ''
+  }
+}
+
+// Phím tắt F4 để focus nhanh vào ô tìm kiếm, phục vụ cashier dùng bàn phím/máy quét
+const handleGlobalKeydown = (e) => {
+  if (e.key === 'F4') {
+    e.preventDefault()
+    searchInputRef.value?.focus()
+  }
 }
 
 onMounted(() => {
   updateTime()
   timer = setInterval(updateTime, 1000)
+  window.addEventListener('keydown', handleGlobalKeydown)
 })
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  if (scanMessageTimeout) clearTimeout(scanMessageTimeout)
+  window.removeEventListener('keydown', handleGlobalKeydown)
 })
 </script>
 
@@ -143,4 +172,5 @@ onUnmounted(() => {
 .text-nowrap {
   white-space: nowrap !important;
 }
+
 </style>

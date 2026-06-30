@@ -139,11 +139,16 @@ const route = useRoute();
 const currentTime = ref("");
 const authStore = useAuthStore();
 
-// Quản lý trạng thái Ẩn / Hiện của Sidebar
-const isCollapsed = ref(false);
+// Báo trạng thái thu/mở lên AdminLayout.vue để layout dịch margin-left theo
+const emit = defineEmits<{ (e: "collapse-change", value: boolean): void }>();
+
+// Quản lý trạng thái Ẩn / Hiện của Sidebar — lưu localStorage để giữ trạng thái khi F5
+const isCollapsed = ref(localStorage.getItem("sidebarCollapsed") === "1");
 
 const toggleSidebar = () => {
-  // POS flow yêu cầu không tự thu gọn sidebar: disable toggle
+  isCollapsed.value = !isCollapsed.value;
+  localStorage.setItem("sidebarCollapsed", isCollapsed.value ? "1" : "0");
+  emit("collapse-change", isCollapsed.value);
 };
 
 const currentUser = ref(
@@ -311,8 +316,6 @@ const handleLogout = () => {
         showConfirmButton: false,
       });
       setTimeout(() => {
-        // SỬA CHỖ NÀY: Dùng window.location.href để ép trình duyệt Hard Reload
-        // Xóa sạch hoàn toàn BFCache và bộ nhớ RAM cũ của Cashier
         window.location.href = "/admin/login"; 
       }, 1500);
     }
@@ -335,6 +338,9 @@ onMounted(() => {
       openMenus[item.id] = isGroupActive(item) ? true : false;
     }
   });
+
+  // Báo trạng thái thu/mở ban đầu cho layout cha (vd: nếu trước đó user đã thu gọn rồi F5 lại)
+  emit("collapse-change", isCollapsed.value);
 });
 
 onUnmounted(() => {
@@ -344,7 +350,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* THANH SIDEBAR NỀN MỜ GLASSMORPHISM */
 .sidebar-glass {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(12px);
@@ -352,12 +357,10 @@ onUnmounted(() => {
   border-right: 1px solid #e2e8f0;
 }
 
-/* KHI THU GỌN: Đẩy toàn bộ Sidebar sang trái khuất màn hình */
 .sidebar-hidden {
   transform: translateX(-260px) !important;
 }
 
-/* NÚT MŨI TÊN DỌC VIỀN (ĐÃ PHÓNG TO LÊN 34PX) */
 .toggle-sidebar-btn {
   width: 34px;
   height: 34px;
@@ -370,14 +373,12 @@ onUnmounted(() => {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Icon mũi tên bên trong */
 .toggle-sidebar-btn i {
   font-size: 0.95rem;
   color: #1e293b;
   transition: transform 0.2s ease;
 }
 
-/* Hiệu ứng tương tác Hover Đậm chất Luxury */
 .toggle-sidebar-btn:hover {
   background-color: #111111;
   border-color: #111111;
@@ -387,12 +388,10 @@ onUnmounted(() => {
   color: #ffffff;
 }
 
-/* Thiết lập hiệu ứng chuyển động Bezier mượt mà cho Sidebar */
 .transition-all-premium {
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-/* CÁC STYLE HỆ THỐNG MENU NỘI BỘ */
 .menu-scroll-container::-webkit-scrollbar { width: 4px; }
 .menu-scroll-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 .nav-pill-vertical { color: #475569; border-radius: 12px; padding: 10px 16px; font-size: 0.85rem; border: none; background: transparent; }

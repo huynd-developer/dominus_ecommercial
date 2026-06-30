@@ -24,7 +24,15 @@
     </div>
 
     <el-scrollbar class="flex-grow-1 product-scroll-container pe-2">
-      <div class="row g-3 row-cols-2 row-cols-md-3 row-cols-lg-3 row-cols-xl-3 row-cols-xxl-3 pb-4">
+      <div v-if="posStore.isLoadingProducts" class="text-center py-5 text-muted-custom font-sm">
+        Đang tải sản phẩm...
+      </div>
+
+      <div v-else-if="posStore.filteredProducts.length === 0" class="text-center py-5 text-muted-custom font-sm">
+        Không tìm thấy sản phẩm phù hợp
+      </div>
+
+      <div v-else class="row g-3 row-cols-2 row-cols-md-3 row-cols-lg-3 row-cols-xl-3 row-cols-xxl-3 pb-4">
         <div class="col" v-for="product in posStore.filteredProducts" :key="product.id">
           <div 
             class="product-luxury-card rounded-3 overflow-hidden position-relative h-100 d-flex flex-column border transition-all" 
@@ -56,11 +64,18 @@
 </template>
 
 <script setup>
+import { onMounted } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { usePosStore } from '../stores/posStore'
 
 const posStore = usePosStore()
 const formatPrice = (val) => new Intl.NumberFormat('vi-VN').format(val || 0)
+
+// Gọi đây để sau này khi BE có API list sản phẩm thật,
+// chỉ cần sửa logic trong posStore.fetchProducts(), component này không đổi gì
+onMounted(() => {
+  posStore.fetchProducts()
+})
 </script>
 
 <style scoped>
