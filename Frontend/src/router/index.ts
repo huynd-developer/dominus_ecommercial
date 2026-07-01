@@ -3,6 +3,7 @@ import type { RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
 import { h } from "vue";
 
+
 // Import các trang của m
 import ProductDetailView from "@/modules/shop/feature/product/ProductDetailView.vue";
 import CartView from "@/modules/shop/feature/cart/CartViews.vue";
@@ -135,7 +136,7 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "brands",
         name: "AdminBrands",
-        component: mockPage("Thương hiệu (Brand)", "Đức"),
+        component: () => import("@/modules/admin/feature/brand/views/BrandView.vue"), 
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {

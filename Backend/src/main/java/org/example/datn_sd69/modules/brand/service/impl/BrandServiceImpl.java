@@ -94,9 +94,12 @@ public class BrandServiceImpl implements BrandService {
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
 
         if (keyword != null && !keyword.trim().isEmpty()) {
-            return brandRepository.findByNameContainingIgnoreCase(keyword.trim(), pageable);
+            // Dòng 97: Sửa thành gọi hàm mới, truyền thêm tham số 0 (nghĩa là loại bỏ status = 0)
+            return brandRepository.findByNameContainingIgnoreCaseAndStatusNot(keyword.trim(), 0, pageable);
         }
-        return brandRepository.findAll(pageable);
+
+        // Dòng 99: Thay findAll() bằng hàm mới, cũng truyền tham số 0 để loại bỏ đồ đã xóa
+        return brandRepository.findByStatusNot(0, pageable);
     }
 
     // 2. Hàm cho Khách: Lấy danh sách đang hoạt động (Status = 1)
