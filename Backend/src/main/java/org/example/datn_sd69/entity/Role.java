@@ -24,4 +24,7 @@ public class Role extends BaseEntity {
     @Nationalized
     @Column(name = "Description", length = 255)
     private String description;
+
+    @Column(name = "IsDeleted")
+    private Boolean isDeleted = false;
 }
