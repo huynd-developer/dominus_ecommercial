@@ -11,11 +11,15 @@ import java.util.Optional;
 
 @Repository
 public interface ConcentrationRepository extends JpaRepository<Concentration, Integer> {
-    List<Concentration> findByStatusNot(Integer status);
 
-    Page<Concentration> findByStatusNot(Integer status, Pageable pageable);
+    // Lấy tất cả bản ghi chưa bị xóa
+    List<Concentration> findByIsDeletedFalse();
 
-    Page<Concentration> findByStatus(Integer status, Pageable pageable);
+    // Lấy tất cả bản ghi chưa bị xóa (có phân trang)
+    Page<Concentration> findByIsDeletedFalse(Pageable pageable);
+
+    // Lấy các bản ghi chưa bị xóa VÀ có trạng thái cụ thể
+    Page<Concentration> findByStatusAndIsDeletedFalse(Integer status, Pageable pageable);
 
     // Dùng để check trùng lặp tên (không phân biệt hoa thường)
     Optional<Concentration> findByNameIgnoreCase(String name);
