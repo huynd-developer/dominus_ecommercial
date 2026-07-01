@@ -15,13 +15,13 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/brand")
+@RequestMapping("/api/admin/brands") // ĐÃ ĐỔI THÀNH API ADMIN
 @RequiredArgsConstructor
-public class BrandController {
+public class AdminBrandController {
 
     private final BrandService brandService;
 
-    // 1. Xem danh sách (ĐÃ THÊM KẾT HỢP TÌM KIẾM) - Đã mở permitAll bên SecurityConfig nên không cần PreAuthorize
+    // 1. Xem danh sách (Cho Admin, thấy cả trạng thái 0 và 1)
     @GetMapping
     public ResponseEntity<?> getAll(
             @RequestParam(name = "keyword", required = false) String keyword,
@@ -35,7 +35,7 @@ public class BrandController {
         ));
     }
 
-    // Lấy chi tiết Brand - Đã mở permitAll bên SecurityConfig nên không cần PreAuthorize
+    // Lấy chi tiết Brand
     @GetMapping("/{id}")
     public ResponseEntity<?> getById(@PathVariable Integer id) {
         try {
@@ -51,7 +51,7 @@ public class BrandController {
         }
     }
 
-    // 2. Thêm mới Brand (Đã sửa thành MANAGER, OWNER)
+    // 2. Thêm mới Brand
     @PreAuthorize("hasAnyAuthority('MANAGER', 'OWNER')")
     @PostMapping
     public ResponseEntity<?> create(@Valid @RequestBody BrandRequest request) {
@@ -62,7 +62,7 @@ public class BrandController {
         ));
     }
 
-    // 3. Cập nhật Brand (Đã sửa thành MANAGER, OWNER)
+    // 3. Cập nhật Brand
     @PreAuthorize("hasAnyAuthority('MANAGER', 'OWNER')")
     @PutMapping("/{id}")
     public ResponseEntity<?> update(
@@ -75,7 +75,7 @@ public class BrandController {
         ));
     }
 
-    // 4. Xóa mềm Brand (Đã sửa thành OWNER)
+    // 4. Xóa mềm Brand
     @PreAuthorize("hasAuthority('OWNER')")
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable Integer id) {
@@ -93,7 +93,7 @@ public class BrandController {
         }
     }
 
-    // 5. Upload Logo (Đã sửa thành MANAGER, OWNER)
+    // 5. Upload Logo
     @PreAuthorize("hasAnyAuthority('MANAGER', 'OWNER')")
     @PostMapping("/upload-logo")
     public ResponseEntity<?> uploadLogo(@RequestParam("file") MultipartFile file) {

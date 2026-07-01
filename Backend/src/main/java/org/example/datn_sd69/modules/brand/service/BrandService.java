@@ -16,6 +16,9 @@ public interface BrandService {
     String uploadLogo(MultipartFile file) throws IOException;
     Brand getBrandById(Integer id);
 
-    // Sửa ở đây: Khai báo thêm String keyword cho giống hệt bên BrandServiceImpl
+    // Dành cho Admin (Lấy tất cả)
     Page<Brand> getBrandsWithPagination(String keyword, int page, int size);
+
+    // Dành cho Khách (Chỉ lấy trạng thái hoạt động)
+    Page<Brand> getActiveBrands(String keyword, int page, int size);
 }

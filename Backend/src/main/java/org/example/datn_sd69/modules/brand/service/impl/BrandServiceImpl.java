@@ -34,7 +34,6 @@ public class BrandServiceImpl implements BrandService {
     @Override
     @Transactional
     public Brand createBrand(BrandRequest request) {
-        // LOGIC CHECK TRÙNG TÊN CỦA ÔNG TUI GIỮ NGUYÊN (QUÁ CHUẨN RỒI)
         if (brandRepository.existsByNameIgnoreCaseAndStatusNot(request.getName().trim(), 0)) {
             throw new RuntimeException("Thương hiệu '" + request.getName() + "' đã tồn tại và đang hoạt động!");
         }
@@ -53,7 +52,6 @@ public class BrandServiceImpl implements BrandService {
         Brand brand = brandRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy thương hiệu!"));
 
-        // LOGIC CHECK TRÙNG TÊN KHI SỬA CỦA ÔNG
         if (brandRepository.existsByNameIgnoreCaseAndIdNotAndStatusNot(request.getName().trim(), id, 0)) {
             throw new RuntimeException("Tên thương hiệu đã bị trùng với một hãng khác đang hoạt động!");
         }
@@ -90,17 +88,25 @@ public class BrandServiceImpl implements BrandService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy thương hiệu với ID: " + id));
     }
 
-    // ĐÃ SỬA LẠI: Kết hợp Tìm kiếm và Phân trang vào chung 1 hàm
+    // 1. Hàm cho Admin: Kết hợp Tìm kiếm và Phân trang (Lấy tất cả trạng thái)
     @Override
     public Page<Brand> getBrandsWithPagination(String keyword, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
 
-        // Nếu client có gửi keyword lên thì tìm kiếm
         if (keyword != null && !keyword.trim().isEmpty()) {
             return brandRepository.findByNameContainingIgnoreCase(keyword.trim(), pageable);
         }
-
-        // Nếu không có keyword thì trả về tất cả
         return brandRepository.findAll(pageable);
+    }
+
+    // 2. Hàm cho Khách: Lấy danh sách đang hoạt động (Status = 1)
+    @Override
+    public Page<Brand> getActiveBrands(String keyword, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
+
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            return brandRepository.findByNameContainingIgnoreCaseAndStatus(keyword.trim(), 1, pageable);
+        }
+        return brandRepository.findByStatus(1, pageable);
     }
 }

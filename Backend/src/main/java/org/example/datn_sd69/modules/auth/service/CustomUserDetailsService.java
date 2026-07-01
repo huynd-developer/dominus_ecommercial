@@ -36,15 +36,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                 true,
                 true,
                 true,
-<<<<<<< HEAD
-                Collections.singletonList(
-                        new SimpleGrantedAuthority(
-                                user.getRole().getName().toUpperCase()
-                        )
-                )
-=======
                 Collections.singletonList(new SimpleGrantedAuthority(authorityName))
->>>>>>> c61e180324915a0dbb773be4feca64c04a1b626c
         );
     }
 }
