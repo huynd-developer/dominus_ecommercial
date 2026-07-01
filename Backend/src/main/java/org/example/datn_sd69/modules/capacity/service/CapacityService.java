@@ -14,9 +14,6 @@ public interface CapacityService {
     Capacity update(Integer id, CapacityRequest request);
     void delete(Integer id);
 
-    // Phân trang cho Admin (tất cả trừ thằng đã xóa)
     Page<Capacity> getAll(Pageable pageable);
-
-    // Phân trang cho Khách hàng (chỉ lấy đang hoạt động)
     Page<Capacity> getActiveCapacities(int page, int size);
 }

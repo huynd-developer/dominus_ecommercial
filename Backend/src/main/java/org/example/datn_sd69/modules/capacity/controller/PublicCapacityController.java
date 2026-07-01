@@ -8,13 +8,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/capacities") // ĐƯỜNG DẪN PUBLIC CHO KHÁCH
+@RequestMapping("/api/capacities")
 @RequiredArgsConstructor
 public class PublicCapacityController {
 
     private final CapacityService capacityService;
 
-    // Khách hàng xem danh mục đang hoạt động (Trạng thái = 1)
     @GetMapping
     public ResponseEntity<Page<Capacity>> getActiveCapacities(
             @RequestParam(name = "page", defaultValue = "0") int page,
