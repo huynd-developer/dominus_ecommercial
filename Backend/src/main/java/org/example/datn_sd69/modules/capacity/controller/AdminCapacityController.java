@@ -21,7 +21,6 @@ public class AdminCapacityController {
 
     private final CapacityService capacityService;
 
-    // 1. Lấy danh sách phân trang (Admin thấy tất cả trừ thằng đã xóa)
     @GetMapping
     public ResponseEntity<Page<Capacity>> getAllCapacities(
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -50,7 +49,6 @@ public class AdminCapacityController {
         return ResponseEntity.ok(capacityService.update(id, capacityRequest));
     }
 
-    // 4. Xóa dung tích (Xóa mềm)
     @PreAuthorize("hasAuthority('OWNER')")
     @DeleteMapping("/{id}")
     public ResponseEntity<String> deleteCapacity(@PathVariable Integer id) {
