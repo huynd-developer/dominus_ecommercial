@@ -1,4 +1,5 @@
 package org.example.datn_sd69.modules.category.controller;
+
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.Category;
@@ -12,19 +13,18 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/admin/categories")
+@RequestMapping("/api/admin/categories") // ĐƯỜNG DẪN ADMIN
 @RequiredArgsConstructor
-@CrossOrigin("*")
-public class CategoryController {
+public class AdminCategoryController {
 
     private final CategoryService categoryService;
 
-    // 1. Lấy danh sách danh mục (Kết hợp Tìm kiếm & Phân trang)
+    // 1. Lấy danh sách danh mục (Kết hợp Tìm kiếm & Phân trang - Admin thấy tất cả)
     @GetMapping
     public ResponseEntity<Page<Category>> getAllCategories(
             @RequestParam(name = "keyword", required = false) String keyword,
-            @RequestParam(name = "page", defaultValue = "0") int page, // Spring Boot đếm trang từ 0
-            @RequestParam(name = "size", defaultValue = "5") int size) { // Mặc định 5 item/trang
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "5") int size) {
 
         Pageable pageable = PageRequest.of(page, size);
 
@@ -40,14 +40,14 @@ public class CategoryController {
         return ResponseEntity.ok(categoryService.getById(id));
     }
 
-    // 3. Thêm mới danh mục (Validate qua DTO)
+    // 3. Thêm mới danh mục
     @PreAuthorize("hasAnyAuthority('MANAGER', 'OWNER')")
     @PostMapping
     public ResponseEntity<Category> createCategory(@Valid @RequestBody CategoryRequest categoryRequest) {
         return ResponseEntity.ok(categoryService.create(categoryRequest));
     }
 
-    // 4. Cập nhật danh mục (Validate qua DTO)
+    // 4. Cập nhật danh mục
     @PreAuthorize("hasAnyAuthority('MANAGER', 'OWNER')")
     @PutMapping("/{id}")
     public ResponseEntity<Category> updateCategory(
