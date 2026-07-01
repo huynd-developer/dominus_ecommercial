@@ -1,4 +1,4 @@
-<template>
+<!-- <template>
   <div class="row g-0 align-items-center justify-content-between">
     
     <div class="col-md-6">
@@ -44,4 +44,4 @@ defineEmits(['update:modelValue', 'add']);
 .btn-primary:hover {
   background-color: #1f3b65;
 }
-</style>
+</style> -->
