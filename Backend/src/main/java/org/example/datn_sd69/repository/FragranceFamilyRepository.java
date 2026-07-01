@@ -11,12 +11,16 @@ import java.util.Optional;
 
 @Repository
 public interface FragranceFamilyRepository extends JpaRepository<FragranceFamily, Integer> {
-    List<FragranceFamily> findByStatusNot(Integer status);
 
-    Page<FragranceFamily> findByStatusNot(Integer status, Pageable pageable);
+    // Lấy tất cả bản ghi chưa bị xóa
+    List<FragranceFamily> findByIsDeletedFalse();
 
-    Page<FragranceFamily> findByStatus(Integer status, Pageable pageable);
+    // Lấy tất cả bản ghi chưa bị xóa (có phân trang)
+    Page<FragranceFamily> findByIsDeletedFalse(Pageable pageable);
+
+    // Lấy các bản ghi chưa bị xóa VÀ có trạng thái cụ thể (Dành cho Public API)
+    Page<FragranceFamily> findByStatusAndIsDeletedFalse(Integer status, Pageable pageable);
 
     // Dùng để quét trùng lặp tên nhóm hương không phân biệt chữ hoa chữ thường
-    Optional<FragranceFamily> findByNameIgnoreCase(String name);
+    Optional<FragranceFamily> findByName(String name);
 }
