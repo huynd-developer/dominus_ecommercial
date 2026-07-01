@@ -4,17 +4,10 @@ import { useAuthStore } from "@/modules/auth/stores/authStore";
 import { h } from "vue";
 
 // Import các trang của m
-<<<<<<< HEAD
-import ProductDetailView from "@/modules/shop/feature/product/views/ProductDetailView.vue";
-import CartView from "@/modules/shop/feature/cart/views/CartView.vue";
-import CheckoutView from "@/modules/shop/feature/checkout/views/CheckoutView.vue";
-import PaymentReturnView from '@/modules/shop/feature/checkout/views/PaymentReturnView.vue';
-=======
 import ProductDetailView from "@/modules/shop/feature/product/ProductDetailView.vue";
 import CartView from "@/modules/shop/feature/cart/CartViews.vue";
 import CheckoutView from "@/modules/shop/feature/checkout/CheckoutViews.vue";
 import PaymentReturnView from "@/modules/shop/feature/checkout/PaymentReturnView.vue";
->>>>>>> 21640fb8712fc704556f7b7e219c7f5d91761a9f
 
 // Layout quản trị của Admin & Shop
 import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
