@@ -68,12 +68,12 @@
 
         <div class="actions">
           <button class="btn-add-cart" @click="addToCart" :disabled="isAdding">
-            <svg v-if="!isAdding" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
             {{ isAdding ? 'ĐANG THÊM...' : 'THÊM VÀO GIỎ HÀNG' }}
           </button>
-          <button class="btn-buy-now" @click="$emit('buy-now')">
-            MUA NGAY <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon-right"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-          </button>
+            <button class="btn-buy-now" @click="buyNow" :disabled="isAdding">
+                MUA NGAY <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon-right"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </button>
         </div>
 
         <div class="policy-footer">
@@ -97,17 +97,20 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import axios from 'axios';
+import { useCartStore } from '@/store/cartStore';
 
+const cartStore = useCartStore();
 const props = defineProps<{ product: any }>();
 const emit = defineEmits(['back', 'buy-now']);
 
 const selectedVariant = ref<any>(null);
 const quantity = ref<number>(1);
 const showToast = ref(false);
-const isAdding = ref(false);
+const isAdding = ref(false); // Biến kiểm soát trạng thái đang call API
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
 
+// Tự động load variant mặc định khi mở xem
 watch(() => props.product, (newVal) => {
   if(newVal) {
     selectedVariant.value = newVal.variants[1] || newVal.variants[0] || null;
@@ -119,27 +122,68 @@ const selectVariant = (variant: any) => { selectedVariant.value = variant; quant
 const decreaseQty = () => { if (quantity.value > 1) quantity.value--; };
 const increaseQty = () => { if (selectedVariant.value && quantity.value < selectedVariant.value.stock) quantity.value++; };
 
-// Hàm gọi API thêm vào giỏ hàng
+// Hàm xử lý Thêm vào giỏ hàng thực tế gọi xuống Backend Spring Boot
 const addToCart = async () => {
-  if (!selectedVariant.value) return;
+  if (!selectedVariant.value) {
+    alert("Vui lòng chọn dung tích!");
+    return;
+  }
   
+  // IN RA CONSOLE ĐỂ TÌM XEM TÊN TRƯỜNG ID LÀ GÌ
+  console.log("Dữ liệu variant đang chọn:", selectedVariant.value);
+
   isAdding.value = true;
   
   try {
     const token = localStorage.getItem('token');
+    
     await axios.post('http://localhost:8080/api/v1/customer/cart/add', {
-      productId: selectedVariant.value.id,
+      // TẠM THỜI VẪN ĐỂ LÀ .id, TÍ NỮA M CHECK CONSOLE RỒI SỬA SAU
+      productVariantId: selectedVariant.value.id, 
       quantity: quantity.value
     }, {
       headers: { Authorization: `Bearer ${token}` }
     });
 
-    // Thêm thành công thì hiện toast
+    if (typeof cartStore.fetchRealCart === 'function') {
+      await cartStore.fetchRealCart();
+    }
+
     showToast.value = true;
     setTimeout(() => { showToast.value = false; }, 3000);
   } catch (error) {
-    console.error(error);
-    alert('Lỗi thêm vào giỏ hàng! Vui lòng kiểm tra lại Backend hoặc Token đăng nhập.');
+    console.error('Lỗi khi thêm vào giỏ hàng:', error);
+  } finally {
+    isAdding.value = false;
+  }
+};
+
+// Hàm xử lý MUA NGAY: Thêm vào giỏ hàng ngầm rồi chuyển hướng luôn
+const buyNow = async () => {
+  if (!selectedVariant.value || !selectedVariant.value.id) {
+    alert("Vui lòng chọn dung tích sản phẩm trước!");
+    return;
+  }
+  
+  isAdding.value = true;
+  
+  try {
+    const token = localStorage.getItem('token');
+    
+    // 1. Gọi API thêm sản phẩm này vào giỏ hàng dưới Database trước
+    await axios.post('http://localhost:8080/api/v1/customer/cart/add', {
+      productVariantId: selectedVariant.value.id,
+      quantity: quantity.value
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    // 2. Khi Backend báo thành công, mới emit để thằng cha (ProductDetailView) chuyển sang /checkout
+    emit('buy-now');
+    
+  } catch (error) {
+    console.error('Lỗi khi xử lý Mua ngay:', error);
+    alert('Không thể tiến hành Mua ngay, vui lòng kiểm tra lại kết nối hoặc tài khoản đăng nhập!');
   } finally {
     isAdding.value = false;
   }
@@ -147,7 +191,7 @@ const addToCart = async () => {
 </script>
 
 <style scoped>
-/* Toàn bộ style này giữ nguyên 100% như cũ m nhé, không ảnh hưởng gì */
+/* Toàn bộ style giữ nguyên */
 .detail-view-container { display: flex; flex-direction: column; width: 100%;}
 .breadcrumb { font-size: 13px; color: #718096; margin-bottom: 25px; display: flex; align-items: center; gap: 12px; }
 .back-link { font-weight: 600; color: #0a142f; cursor: pointer; transition: 0.2s; display: flex; align-items: center;}
@@ -192,7 +236,7 @@ const addToCart = async () => {
 .btn-add-cart, .btn-buy-now { flex: 1; padding: 16px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; transition: 0.2s; display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 14px;}
 .btn-add-cart { background: #0a142f; color: white; }
 .btn-add-cart:hover { background: #13275a; }
-.btn-add-cart:disabled { background: #a0aec0; cursor: not-allowed; }
+.btn-add-cart:disabled { background: #718096; cursor: not-allowed; }
 .btn-buy-now { background: #b78d52; color: white; }
 .btn-buy-now:hover { background: #c69c6d; }
 .btn-icon { width: 18px; height: 18px; }
@@ -202,7 +246,6 @@ const addToCart = async () => {
 .icon-policy { width: 24px; height: 24px; color: #b78d52; flex-shrink: 0;}
 .policy-item strong { color: #4a5568; font-size: 13px; font-weight: 600;}
 
-/* TOAST CSS */
 .luxury-toast { position: fixed; bottom: 40px; right: 40px; background: #0a142f; color: white; padding: 16px 24px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: space-between; gap: 30px; min-width: 380px; transform: translateY(100px); opacity: 0; visibility: hidden; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); z-index: 1000; border: 1px solid rgba(198, 156, 109, 0.3); }
 .luxury-toast.show { transform: translateY(0); opacity: 1; visibility: visible; }
 .toast-content { display: flex; align-items: center; gap: 15px; }

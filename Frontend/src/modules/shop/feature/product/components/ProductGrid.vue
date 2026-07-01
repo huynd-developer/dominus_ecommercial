@@ -108,9 +108,6 @@ const formatCurrency = (val: number) => new Intl.NumberFormat('vi-VN', { style: 
 .home-section { margin-bottom: 70px; }
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 2px solid #eaeaea; }
 .section-title { font-size: 20px; margin: 0; color: #0a142f; font-weight: 700; text-transform: uppercase; }
-.text-flash { color: #e53e3e; }
-.countdown-timer { font-size: 14px; color: #4a5568; font-weight: 500; }
-.countdown-timer span { background: #e53e3e; color: white; padding: 4px 10px; border-radius: 4px; margin-left: 8px; font-weight: bold; letter-spacing: 1px;}
 .sort-box { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #718096; }
 .sort-box select { padding: 8px 15px; border: 1px solid #e2e8f0; border-radius: 6px; outline: none; }
 .product-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; }

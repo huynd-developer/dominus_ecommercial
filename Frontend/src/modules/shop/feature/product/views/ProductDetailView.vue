@@ -3,7 +3,7 @@
     <ShopHeader />
 
     <div class="product-layout">
-      <SidebarFilter />
+      <SidebarFilter v-if="!isShowingDetail" />
 
       <main class="product-main">
         <ProductGrid v-if="!isShowingDetail" :product-list="productList" @open-detail="handleOpenDetail" />
@@ -53,7 +53,40 @@ const handleBuyNow = () => {
 </script>
 
 <style scoped>
-/* Giữ nguyên phần CSS Layout trang của m ở đây nếu có */
-.product-layout { display: flex; gap: 30px; max-width: 1400px; margin: 40px auto; padding: 0 20px; }
-.product-main { flex: 1; }
+.page-wrapper {
+  font-family: 'Inter', sans-serif;
+  background-color: #ffffff;
+  min-height: 100vh;
+}
+
+/* ĐÂY LÀ CSS CHIA 2 CỘT QUAN TRỌNG CỦA M (TUYỆT ĐỐI KHÔNG XÓA) */
+.product-layout {
+  display: flex;
+  flex-direction: row;
+  gap: 40px;
+  max-width: 1320px;
+  margin: 40px auto;
+  padding: 0 20px;
+}
+
+.product-main {
+  flex: 1;
+  min-width: 0; /* Tránh vỡ layout khi co màn hình */
+}
+
+/* Đảm bảo sidebar có kích thước chuẩn */
+:deep(.sidebar-filter) {
+  width: 280px;
+  flex-shrink: 0;
+}
+
+/* Responsive cho màn hình nhỏ */
+@media (max-width: 991px) {
+  .product-layout {
+    flex-direction: column;
+  }
+  :deep(.sidebar-filter) {
+    width: 100%;
+  }
+}
 </style>
