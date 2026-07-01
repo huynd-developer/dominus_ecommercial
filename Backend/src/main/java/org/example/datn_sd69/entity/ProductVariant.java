@@ -41,4 +41,7 @@ public class ProductVariant extends BaseEntity {
 
     @Column(name = "Status")
     private Integer status = 1;
+
+    @Column(name = "IsDeleted")
+    private Boolean isDeleted = false;
 }

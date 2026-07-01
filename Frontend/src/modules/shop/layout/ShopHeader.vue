@@ -44,7 +44,9 @@
         </div>
 
         <div class="col-8 col-lg-3 order-2 order-lg-3">
-          <div class="d-flex align-items-center justify-content-end gap-3 gap-lg-4">
+          <div
+            class="d-flex align-items-center justify-content-end gap-3 gap-lg-4"
+          >
             <div class="account-dropdown-wrapper">
               <button
                 type="button"
@@ -54,20 +56,34 @@
                   <i class="bi bi-person"></i>
                 </span>
 
-                <span class="d-none d-md-inline">Tài khoản</span>
+                <span class="d-none d-md-inline">
+                  {{
+                    isAuthenticated
+                      ? `${name || "Khách"}`
+                      : "Tài khoản"
+                  }}
+                </span>
 
-                <i class="bi bi-chevron-down account-chevron d-none d-md-inline"></i>
+                <i
+                  class="bi bi-chevron-down account-chevron d-none d-md-inline"
+                ></i>
               </button>
 
               <div class="account-dropdown">
                 <div v-if="!isAuthenticated" class="guest-dropdown">
                   <p class="dropdown-title mb-3">Tài khoản khách hàng</p>
 
-                  <RouterLink to="/login" class="btn dropdown-login-btn w-100 mb-2">
+                  <RouterLink
+                    to="/login"
+                    class="btn dropdown-login-btn w-100 mb-2"
+                  >
                     Đăng nhập
                   </RouterLink>
 
-                  <RouterLink to="/register" class="btn dropdown-register-btn w-100">
+                  <RouterLink
+                    to="/register"
+                    class="btn dropdown-register-btn w-100"
+                  >
                     Đăng ký
                   </RouterLink>
                 </div>
@@ -79,7 +95,7 @@
                     </div>
 
                     <div class="user-info">
-                      <div class="user-name">{{ name || 'Khách hàng' }}</div>
+                      <div class="user-name">{{ name || "Khách hàng" }}</div>
 
                       <div class="rank-badge mt-1">
                         <i class="bi bi-gem me-1"></i>
@@ -105,7 +121,11 @@
                     <span>Lịch sử đơn hàng</span>
                   </RouterLink>
 
-                  <button type="button" class="account-menu-item logout-item" @click="handleLogout">
+                  <button
+                    type="button"
+                    class="account-menu-item logout-item"
+                    @click="handleLogout"
+                  >
                     <i class="bi bi-box-arrow-right"></i>
                     <span>Đăng xuất</span>
                   </button>
@@ -133,13 +153,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, watch } from 'vue';
-import { RouterLink, useRouter } from 'vue-router';
-import { storeToRefs } from 'pinia';
-import { useAuthStore } from '@/modules/auth/stores/authStore'; 
-import api from '@/common/api'; 
-import logoAura from '@/assets/logo.png';
-import Swal from 'sweetalert2';
+import { computed, ref, onMounted, watch } from "vue";
+import { RouterLink, useRouter } from "vue-router";
+import { storeToRefs } from "pinia";
+import { useAuthStore } from "@/modules/auth/stores/authStore";
+import api from "@/common/api";
+import logoAura from "@/assets/logo.png";
+import Swal from "sweetalert2";
 const router = useRouter();
 const authStore = useAuthStore();
 
@@ -147,17 +167,17 @@ const authStore = useAuthStore();
 const { isAuthenticated, name } = storeToRefs(authStore);
 
 const logoLoadFailed = ref(false);
-const keyword = ref('');
+const keyword = ref("");
 
 // Trạng thái Rank và Điểm lấy từ API
-const userRank = ref('Bronze');
+const userRank = ref("Bronze");
 const userPoints = ref(0);
 
 // Tính toán Avatar từ tên thật
 const userInitial = computed(() => {
-  if (!name.value) return 'U';
-  const nameParts = name.value.trim().split(' ');
-  return nameParts[nameParts.length - 1]?.charAt(0).toUpperCase() || 'U';
+  if (!name.value) return "U";
+  const nameParts = name.value.trim().split(" ");
+  return nameParts[nameParts.length - 1]?.charAt(0).toUpperCase() || "U";
 });
 
 // Hàm lấy thông tin Rank và Điểm
@@ -165,11 +185,11 @@ const fetchCustomerProfile = async () => {
   // SỬA CHỖ NÀY: Chỉ gọi API nếu đã đăng nhập VÀ tài khoản KHÔNG PHẢI là Nhân viên
   if (isAuthenticated.value && !authStore.isAdminSection) {
     try {
-      const res = await api.get('/customer/profile');
-      userRank.value = res.data.customerRank || 'Bronze';
+      const res = await api.get("/customer/profile");
+      userRank.value = res.data.customerRank || "Bronze";
       userPoints.value = res.data.loyaltyPoints || 0;
     } catch (error) {
-      console.error('Lỗi lấy thông tin Rank/Điểm:', error);
+      console.error("Lỗi lấy thông tin Rank/Điểm:", error);
     }
   }
 };
@@ -192,49 +212,49 @@ const handleSearch = () => {
   const trimmedKeyword = keyword.value.trim();
 
   if (!trimmedKeyword) {
-    router.push('/products');
+    router.push("/products");
     return;
   }
 
   router.push({
-    path: '/products',
+    path: "/products",
     query: {
-      keyword: trimmedKeyword
-    }
+      keyword: trimmedKeyword,
+    },
   });
 };
 
 const handleLogout = () => {
   Swal.fire({
-    title: 'Xác nhận đăng xuất?',
-    text: 'Bạn có chắc chắn muốn rời khỏi phiên làm việc này không?',
-    icon: 'warning',
+    title: "Xác nhận đăng xuất?",
+    text: "Bạn có chắc chắn muốn rời khỏi phiên làm việc này không?",
+    icon: "warning",
     showCancelButton: true,
-    confirmButtonColor: '#bd9a5f', // Giữ màu Vàng Gold cho nút Đồng ý để làm điểm nhấn thương hiệu
-    cancelButtonColor: '#6c757d',  // Nút Hủy chuyển sang màu xám nhẹ hợp với nền trắng
-    confirmButtonText: 'Đồng ý',
-    cancelButtonText: 'Hủy',
-    background: '#ffffff',         // 👇 Đổi thành Nền Màu Trắng
-    color: '#000000',              // 👇 Đổi thành Chữ Màu Đen
-    iconColor: '#dc3545',          // Đổi icon cảnh báo sang màu đỏ (hoặc #bd9a5f tùy bạn) để nổi bật trên nền trắng
+    confirmButtonColor: "#bd9a5f", // Giữ màu Vàng Gold cho nút Đồng ý để làm điểm nhấn thương hiệu
+    cancelButtonColor: "#6c757d", // Nút Hủy chuyển sang màu xám nhẹ hợp với nền trắng
+    confirmButtonText: "Đồng ý",
+    cancelButtonText: "Hủy",
+    background: "#ffffff", // 👇 Đổi thành Nền Màu Trắng
+    color: "#000000", // 👇 Đổi thành Chữ Màu Đen
+    iconColor: "#dc3545", // Đổi icon cảnh báo sang màu đỏ (hoặc #bd9a5f tùy bạn) để nổi bật trên nền trắng
     customClass: {
-      popup: 'border-gold-sweetalert' // Vẫn giữ viền gold mỏng nếu bạn muốn, hoặc bỏ dòng customClass này đi nếu muốn trắng tinh khôi
-    }
+      popup: "border-gold-sweetalert", // Vẫn giữ viền gold mỏng nếu bạn muốn, hoặc bỏ dòng customClass này đi nếu muốn trắng tinh khôi
+    },
   }).then((result) => {
     // Nếu người dùng nhấn nút "Đồng ý"
     if (result.isConfirmed) {
       // Thực hiện các bước xóa session
       authStore.logout();
-      
-      userRank.value = 'Bronze';
+
+      userRank.value = "Bronze";
       userPoints.value = 0;
-      
+
       // Chuyển về trang chủ
-      router.push('/');
+      router.push("/");
     }
   });
 };
-</script> 
+</script>
 
 <style scoped>
 .shop-header {
@@ -242,8 +262,11 @@ const handleLogout = () => {
   z-index: 1050;
   min-height: 104px;
   overflow: visible;
-  background:
-    radial-gradient(circle at top left, rgba(189, 154, 95, 0.16), transparent 32%),
+  background: radial-gradient(
+      circle at top left,
+      rgba(189, 154, 95, 0.16),
+      transparent 32%
+    ),
     linear-gradient(135deg, #030d1a 0%, #07172f 54%, #051024 100%);
   border-bottom: 1px solid rgba(189, 154, 95, 0.22);
 }

@@ -68,10 +68,6 @@
     </div>
 
     <div class="p-3 border-top border-slate-100 bg-slate-50 mt-auto flex-shrink-0 position-relative">
-      <div class="text-slate-500 fw-medium d-flex align-items-center gap-2 bg-white px-3 py-2 rounded-3 shadow-sm border border-slate-100 mb-3 time-box justify-content-center">
-        <i class="bi bi-clock text-dark-peel"></i> {{ currentTime }}
-      </div>
-
       <div
         @click.stop="toggleProfile"
         class="d-flex align-items-center gap-2 p-2 rounded-3 cursor-pointer user-profile-box transition-all border border-transparent"
