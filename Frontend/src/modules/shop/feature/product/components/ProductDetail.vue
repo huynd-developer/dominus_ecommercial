@@ -132,11 +132,16 @@ const addToCart = async () => {
   // IN RA CONSOLE ĐỂ TÌM XEM TÊN TRƯỜNG ID LÀ GÌ
   console.log("Dữ liệu variant đang chọn:", selectedVariant.value);
 
+  // THÊM CÁI NÀY: Kiểm tra có token không, không có thì chặn luôn và báo lỗi
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert("Vui lòng đăng nhập trước khi thêm sản phẩm vào giỏ hàng!");
+    return;
+  }
+
   isAdding.value = true;
   
   try {
-    const token = localStorage.getItem('token');
-    
     await axios.post('http://localhost:8080/api/v1/customer/cart/add', {
       // TẠM THỜI VẪN ĐỂ LÀ .id, TÍ NỮA M CHECK CONSOLE RỒI SỬA SAU
       productVariantId: selectedVariant.value.id, 
@@ -153,6 +158,8 @@ const addToCart = async () => {
     setTimeout(() => { showToast.value = false; }, 3000);
   } catch (error) {
     console.error('Lỗi khi thêm vào giỏ hàng:', error);
+    // THÊM CÁI NÀY: Báo lỗi lên màn hình để không bị "im lìm" nữa
+    alert("Không thể thêm vào giỏ. Vui lòng bật F12 sang tab Console xem chi tiết lỗi!");
   } finally {
     isAdding.value = false;
   }

@@ -8,54 +8,85 @@
     <div class="filter-group">
       <div class="group-title">Giới tính <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg></div>
       <div class="checkbox-list row">
-        <label class="custom-checkbox"><input type="checkbox"><span class="checkmark"></span> Nam</label>
-        <label class="custom-checkbox"><input type="checkbox"><span class="checkmark"></span> Nữ</label>
-        <label class="custom-checkbox"><input type="checkbox"><span class="checkmark"></span> Unisex</label>
+        <label class="custom-checkbox"><input type="checkbox" value="Nam" v-model="filters.genders" @change="emitFilter"><span class="checkmark"></span> Nam</label>
+        <label class="custom-checkbox"><input type="checkbox" value="Nữ" v-model="filters.genders" @change="emitFilter"><span class="checkmark"></span> Nữ</label>
+        <label class="custom-checkbox"><input type="checkbox" value="Unisex" v-model="filters.genders" @change="emitFilter"><span class="checkmark"></span> Unisex</label>
       </div>
     </div>
 
     <div class="filter-group">
       <div class="group-title">Dung tích <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg></div>
       <div class="checkbox-list col">
-        <label class="custom-checkbox"><input type="checkbox"><span class="checkmark"></span> 10ml <span class="count">(18)</span></label>
-        <label class="custom-checkbox"><input type="checkbox" checked><span class="checkmark"></span> 50ml <span class="count">(42)</span></label>
-        <label class="custom-checkbox"><input type="checkbox"><span class="checkmark"></span> 100ml <span class="count">(27)</span></label>
+        <label class="custom-checkbox"><input type="checkbox" value="10ml" v-model="filters.volumes" @change="emitFilter"><span class="checkmark"></span> 10ml <span class="count">(18)</span></label>
+        <label class="custom-checkbox"><input type="checkbox" value="50ml" v-model="filters.volumes" @change="emitFilter"><span class="checkmark"></span> 50ml <span class="count">(42)</span></label>
+        <label class="custom-checkbox"><input type="checkbox" value="100ml" v-model="filters.volumes" @change="emitFilter"><span class="checkmark"></span> 100ml <span class="count">(27)</span></label>
       </div>
     </div>
 
     <div class="filter-group">
       <div class="group-title">Nồng độ <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg></div>
       <div class="checkbox-list col">
-        <label class="custom-checkbox"><input type="checkbox"><span class="checkmark"></span> EDP <span class="count">(35)</span></label>
-        <label class="custom-checkbox"><input type="checkbox"><span class="checkmark"></span> EDT <span class="count">(20)</span></label>
-        <label class="custom-checkbox"><input type="checkbox" checked><span class="checkmark"></span> Parfum <span class="count">(32)</span></label>
+        <label class="custom-checkbox"><input type="checkbox" value="EDP" v-model="filters.concentrations" @change="emitFilter"><span class="checkmark"></span> EDP <span class="count">(35)</span></label>
+        <label class="custom-checkbox"><input type="checkbox" value="EDT" v-model="filters.concentrations" @change="emitFilter"><span class="checkmark"></span> EDT <span class="count">(20)</span></label>
+        <label class="custom-checkbox"><input type="checkbox" value="Parfum" v-model="filters.concentrations" @change="emitFilter"><span class="checkmark"></span> Parfum <span class="count">(32)</span></label>
       </div>
     </div>
 
     <div class="filter-group">
       <div class="group-title">Mùi hương <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg></div>
       <div class="pill-list">
-        <button class="pill-btn">Gỗ</button>
-        <button class="pill-btn">Biển</button>
-        <button class="pill-btn">Citrus</button>
-        <button class="pill-btn">Aromatic</button>
-        <button class="pill-btn">Xạ hương</button>
-        <button class="pill-btn">Hương thơm sạch</button>
+        <button 
+          v-for="scent in ['Gỗ', 'Biển', 'Citrus', 'Aromatic', 'Xạ hương', 'Hương thơm sạch']" 
+          :key="scent"
+          class="pill-btn"
+          :class="{ 'active-pill': filters.scents.includes(scent) }"
+          @click="toggleScent(scent)"
+        >
+          {{ scent }}
+        </button>
       </div>
     </div>
 
     <div class="filter-group" style="border-bottom: none;">
       <div class="group-title">Thương hiệu <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg></div>
       <div class="checkbox-list col">
-        <label class="custom-checkbox"><input type="checkbox"><span class="checkmark"></span> Chanel <span class="count">(28)</span></label>
-        <label class="custom-checkbox"><input type="checkbox"><span class="checkmark"></span> Dior <span class="count">(34)</span></label>
-        <label class="custom-checkbox"><input type="checkbox"><span class="checkmark"></span> Tom Ford <span class="count">(22)</span></label>
-        <label class="custom-checkbox"><input type="checkbox"><span class="checkmark"></span> Creed <span class="count">(18)</span></label>
-        <label class="custom-checkbox"><input type="checkbox"><span class="checkmark"></span> Maison Francis Kurkdjian <span class="count">(14)</span></label>
+        <label class="custom-checkbox"><input type="checkbox" value="Chanel" v-model="filters.brands" @change="emitFilter"><span class="checkmark"></span> Chanel <span class="count">(28)</span></label>
+        <label class="custom-checkbox"><input type="checkbox" value="Dior" v-model="filters.brands" @change="emitFilter"><span class="checkmark"></span> Dior <span class="count">(34)</span></label>
+        <label class="custom-checkbox"><input type="checkbox" value="Tom Ford" v-model="filters.brands" @change="emitFilter"><span class="checkmark"></span> Tom Ford <span class="count">(22)</span></label>
+        <label class="custom-checkbox"><input type="checkbox" value="Creed" v-model="filters.brands" @change="emitFilter"><span class="checkmark"></span> Creed <span class="count">(18)</span></label>
+        <label class="custom-checkbox"><input type="checkbox" value="Maison Francis Kurkdjian" v-model="filters.brands" @change="emitFilter"><span class="checkmark"></span> Maison Francis Kurkdjian <span class="count">(14)</span></label>
       </div>
     </div>
   </aside>
 </template>
+
+<script setup lang="ts">
+import { ref } from 'vue';
+
+const emit = defineEmits(['filter-change']);
+
+const filters = ref({
+  genders: [] as string[],
+  volumes: [] as string[],
+  concentrations: [] as string[],
+  scents: [] as string[],
+  brands: [] as string[]
+});
+
+const toggleScent = (scent: string) => {
+  const index = filters.value.scents.indexOf(scent);
+  if (index === -1) {
+    filters.value.scents.push(scent);
+  } else {
+    filters.value.scents.splice(index, 1);
+  }
+  emitFilter();
+};
+
+const emitFilter = () => {
+  emit('filter-change', filters.value);
+};
+</script>
 
 <style scoped>
 .sidebar-filter { width: 280px; flex-shrink: 0; background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); }
@@ -79,4 +110,6 @@
 .pill-list { display: flex; flex-wrap: wrap; gap: 10px; }
 .pill-btn { background: white; border: 1px solid #cbd5e0; border-radius: 20px; padding: 6px 15px; font-size: 12px; color: #4a5568; cursor: pointer; transition: 0.2s; }
 .pill-btn:hover { border-color: #0a142f; color: #0a142f; }
+/* Thêm class này để khi user click vào viên thuốc nó chuyển màu đậm */
+.active-pill { background: #0a142f; color: white; border-color: #0a142f; }
 </style>

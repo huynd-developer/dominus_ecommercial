@@ -3,10 +3,10 @@
     <ShopHeader />
 
     <div class="product-layout">
-      <SidebarFilter v-if="!isShowingDetail" />
+      <SidebarFilter v-if="!isShowingDetail" @filter-change="handleFilterChange" />
 
       <main class="product-main">
-        <ProductGrid v-if="!isShowingDetail" :product-list="productList" @open-detail="handleOpenDetail" />
+        <ProductGrid v-if="!isShowingDetail" :product-list="filteredProductList" @open-detail="handleOpenDetail" />
         <ProductDetail v-else :product="activeProduct" @back="handleBackToList" @buy-now="handleBuyNow" />
       </main>
     </div>
@@ -16,7 +16,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 
 import ShopHeader from '@/modules/shop/layout/ShopHeader.vue';
@@ -29,27 +29,71 @@ import { type Product, mockProductList } from '../services/mockData';
 
 const router = useRouter();
 
-// Trạng thái hiển thị giao diện
 const isShowingDetail = ref(false);
 const activeProduct = ref<any>(null);
-
-// Mock data danh sách sản phẩm
 const productList = ref<Product[]>(mockProductList);
 
-// Các hàm xử lý đóng mở trang chi tiết
+// Nơi giữ các bộ lọc
+const activeFilters = ref({
+  genders: [] as string[],
+  volumes: [] as string[],
+  concentrations: [] as string[],
+  scents: [] as string[],
+  brands: [] as string[]
+});
+
+const handleFilterChange = (filters: any) => {
+  activeFilters.value = filters;
+};
+
+// Hàm tính toán danh sách
+const filteredProductList = computed(() => {
+  return productList.value.filter((product: any) => {
+    
+    // 1. Giới tính
+    if (activeFilters.value.genders.length > 0) {
+      if (!product.gender || !activeFilters.value.genders.includes(product.gender)) return false;
+    }
+
+    // 2. Thương hiệu
+    if (activeFilters.value.brands.length > 0) {
+      if (!product.brand || !activeFilters.value.brands.includes(product.brand)) return false;
+    }
+
+    // 3. Nồng độ
+    if (activeFilters.value.concentrations.length > 0) {
+      if (!product.concentration || !activeFilters.value.concentrations.includes(product.concentration)) return false;
+    }
+
+    // 4. Mùi hương (Kiểm tra xem product.scents có tồn tại không rồi mới lọc)
+    if (activeFilters.value.scents.length > 0) {
+      if (!product.scents || !Array.isArray(product.scents)) return false; // Tránh lỗi undefined sập web
+      const hasMatchingScent = activeFilters.value.scents.some((s: string) => product.scents.includes(s));
+      if (!hasMatchingScent) return false;
+    }
+
+    // 5. Dung tích (Kiểm tra xem product.variants có tồn tại không)
+    if (activeFilters.value.volumes.length > 0) {
+      if (!product.variants || !Array.isArray(product.variants)) return false; // Tránh lỗi undefined sập web
+      const hasMatchingVolume = product.variants.some((variant: any) => 
+        activeFilters.value.volumes.includes(variant.capacity)
+      );
+      if (!hasMatchingVolume) return false;
+    }
+
+    return true; 
+  });
+});
+
 const handleOpenDetail = (item: any) => {
   activeProduct.value = item;
   isShowingDetail.value = true;
 };
-
 const handleBackToList = () => {
   isShowingDetail.value = false;
   activeProduct.value = null;
 };
-
-const handleBuyNow = () => {
-  router.push('/checkout');
-};
+const handleBuyNow = () => router.push('/checkout');
 </script>
 
 <style scoped>
@@ -58,8 +102,6 @@ const handleBuyNow = () => {
   background-color: #ffffff;
   min-height: 100vh;
 }
-
-/* ĐÂY LÀ CSS CHIA 2 CỘT QUAN TRỌNG CỦA M (TUYỆT ĐỐI KHÔNG XÓA) */
 .product-layout {
   display: flex;
   flex-direction: row;
@@ -68,19 +110,14 @@ const handleBuyNow = () => {
   margin: 40px auto;
   padding: 0 20px;
 }
-
 .product-main {
   flex: 1;
-  min-width: 0; /* Tránh vỡ layout khi co màn hình */
+  min-width: 0;
 }
-
-/* Đảm bảo sidebar có kích thước chuẩn */
 :deep(.sidebar-filter) {
   width: 280px;
   flex-shrink: 0;
 }
-
-/* Responsive cho màn hình nhỏ */
 @media (max-width: 991px) {
   .product-layout {
     flex-direction: column;
