@@ -15,28 +15,25 @@ public interface ProductService {
             int size
     );
 
+    Page<ProductResponse> getActiveProducts(
+            String keyword,
+            int page,
+            int size
+    );
+
     ProductResponse getById(Integer id);
 
     ProductResponse create(
-
             ProductRequest request,
-
             MultipartFile primaryImage,
-
             List<MultipartFile> images
-
     );
 
     ProductResponse update(
-
             Integer id,
-
             ProductRequest request,
-
             MultipartFile primaryImage,
-
             List<MultipartFile> images
-
     );
 
     void delete(Integer id);

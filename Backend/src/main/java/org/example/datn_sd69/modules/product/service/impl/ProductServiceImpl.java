@@ -9,7 +9,7 @@ import org.example.datn_sd69.entity.ProductImage;
 import org.example.datn_sd69.modules.product.dto.ProductImageResponse;
 import org.example.datn_sd69.modules.product.dto.ProductRequest;
 import org.example.datn_sd69.modules.product.dto.ProductResponse;
-import org.example.datn_sd69.modules.product.service.CloudinaryService;
+import org.example.datn_sd69.modules.product.service.ProductCloudinaryServiceImpl;
 import org.example.datn_sd69.modules.product.service.ProductService;
 import org.example.datn_sd69.repository.BrandRepository;
 import org.example.datn_sd69.repository.CategoryRepository;
@@ -17,7 +17,6 @@ import org.example.datn_sd69.repository.ConcentrationRepository;
 import org.example.datn_sd69.repository.ProductImageRepository;
 import org.example.datn_sd69.repository.ProductRepository;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,7 +41,11 @@ public class ProductServiceImpl implements ProductService {
 
     private final ConcentrationRepository concentrationRepository;
 
-    private final CloudinaryService cloudinaryService;
+    private final ProductCloudinaryServiceImpl productCloudinaryServiceImpl;
+
+    // ===========================
+    // CREATE
+    // ===========================
 
     @Override
     public ProductResponse create(
@@ -59,10 +62,10 @@ public class ProductServiceImpl implements ProductService {
                 .orElseThrow(() ->
                         new RuntimeException("Category không tồn tại"));
 
-        Concentration concentration =
-                concentrationRepository.findById(request.getConcentrationId())
-                        .orElseThrow(() ->
-                                new RuntimeException("Concentration không tồn tại"));
+        Concentration concentration = concentrationRepository
+                .findById(request.getConcentrationId())
+                .orElseThrow(() ->
+                        new RuntimeException("Concentration không tồn tại"));
 
         Product product = new Product();
 
@@ -80,7 +83,13 @@ public class ProductServiceImpl implements ProductService {
 
         product.setIsNiche(request.getIsNiche());
 
-        product.setStatus(request.getStatus());
+        product.setStatus(
+                request.getStatus() == null
+                        ? 1
+                        : request.getStatus()
+        );
+
+        product.setIsDeleted(false);
 
         product.setCreatedAt(LocalDateTime.now());
 
@@ -89,44 +98,24 @@ public class ProductServiceImpl implements ProductService {
         List<ProductImageResponse> imageResponses =
                 saveImages(product, primaryImage, images);
 
-        ProductResponse response = new ProductResponse();
-
-        response.setId(product.getId());
-
-        response.setName(product.getName());
-
-        response.setBrandId(brand.getId());
-
-        response.setBrandName(brand.getName());
-
-        response.setCategoryId(category.getId());
-
-        response.setCategoryName(category.getName());
-
-        response.setConcentrationId(concentration.getId());
-
-        response.setConcentrationName(concentration.getName());
-
-        response.setDescription(product.getDescription());
-
-        response.setGender(product.getGender());
-
-        response.setIsNiche(product.getIsNiche());
-
-        response.setStatus(product.getStatus());
+        ProductResponse response = mapToResponse(product);
 
         response.setImages(imageResponses);
 
         return response;
-
     }
+
+    // ===========================
+    // UPDATE
+    // ===========================
 
     @Override
     public ProductResponse update(
             Integer id,
             ProductRequest request,
             MultipartFile primaryImage,
-            List<MultipartFile> images) {
+            List<MultipartFile> images
+    ) {
 
         Product product = productRepository.findById(id)
                 .orElseThrow(() ->
@@ -140,14 +129,10 @@ public class ProductServiceImpl implements ProductService {
                 .orElseThrow(() ->
                         new RuntimeException("Category không tồn tại"));
 
-        Concentration concentration =
-                concentrationRepository.findById(request.getConcentrationId())
-                        .orElseThrow(() ->
-                                new RuntimeException("Concentration không tồn tại"));
-
-    /*
-        Update thông tin sản phẩm
-     */
+        Concentration concentration = concentrationRepository
+                .findById(request.getConcentrationId())
+                .orElseThrow(() ->
+                        new RuntimeException("Concentration không tồn tại"));
 
         product.setName(request.getName());
 
@@ -167,54 +152,20 @@ public class ProductServiceImpl implements ProductService {
 
         product = productRepository.save(product);
 
-        deleteImages(product);
+        // Nếu có upload ảnh mới thì thay toàn bộ
+        if ((primaryImage != null && !primaryImage.isEmpty())
+                || (images != null && !images.isEmpty())) {
 
-        List<ProductImageResponse> imageResponses =
-                saveImages(product, primaryImage, images);
+            deleteImages(product);
 
-        ProductResponse response =
-                new ProductResponse();
+            saveImages(product, primaryImage, images);
+        }
 
-        response.setId(product.getId());
-
-        response.setName(product.getName());
-
-        response.setBrandId(
-                brand.getId());
-
-        response.setBrandName(
-                brand.getName());
-
-        response.setCategoryId(
-                category.getId());
-
-        response.setCategoryName(
-                category.getName());
-
-        response.setConcentrationId(
-                concentration.getId());
-
-        response.setConcentrationName(
-                concentration.getName());
-
-        response.setDescription(
-                product.getDescription());
-
-        response.setGender(
-                product.getGender());
-
-        response.setIsNiche(
-                product.getIsNiche());
-
-        response.setStatus(
-                product.getStatus());
-
-        response.setImages(
-                imageResponses);
-
-        return response;
-
+        return mapToResponse(product);
     }
+    // ===========================
+    // GET BY ID
+    // ===========================
 
     @Override
     @Transactional(readOnly = true)
@@ -224,47 +175,87 @@ public class ProductServiceImpl implements ProductService {
                 .orElseThrow(() ->
                         new RuntimeException("Sản phẩm không tồn tại"));
 
-        return mapToResponse(product);
+        if (Boolean.TRUE.equals(product.getIsDeleted())) {
+            throw new RuntimeException("Sản phẩm đã bị xóa");
+        }
 
+        return mapToResponse(product);
     }
+
+    // ===========================
+    // ADMIN - GET ALL
+    // ===========================
 
     @Override
     @Transactional(readOnly = true)
     public Page<ProductResponse> getAll(
             String keyword,
             int page,
-            int size) {
+            int size
+    ) {
 
         Page<Product> productPage;
 
         if (keyword == null || keyword.trim().isEmpty()) {
 
-            productPage = productRepository.findAll(
+            productPage = productRepository.findByIsDeletedFalse(
                     PageRequest.of(page, size)
             );
 
         } else {
 
             productPage = productRepository
-                    .findByNameContainingIgnoreCase(
+                    .findByNameContainingIgnoreCaseAndIsDeletedFalse(
                             keyword,
                             PageRequest.of(page, size)
                     );
+        }
+
+        return productPage.map(this::mapToResponse);
+
+    }
+
+    // ===========================
+    // PUBLIC - GET ACTIVE
+    // ===========================
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProductResponse> getActiveProducts(
+            String keyword,
+            int page,
+            int size
+    ) {
+
+        Page<Product> productPage;
+
+        if (keyword == null || keyword.trim().isEmpty()) {
+
+            productPage =
+                    productRepository.findByStatusAndIsDeletedFalse(
+                            1,
+                            PageRequest.of(page, size)
+                    );
+
+        } else {
+
+            productPage =
+                    productRepository
+                            .findByNameContainingIgnoreCaseAndStatusAndIsDeletedFalse(
+                                    keyword,
+                                    1,
+                                    PageRequest.of(page, size)
+                            );
 
         }
 
-        List<ProductResponse> responses = productPage
-                .stream()
-                .map(this::mapToResponse)
-                .toList();
-
-        return new PageImpl<>(
-                responses,
-                productPage.getPageable(),
-                productPage.getTotalElements()
-        );
+        return productPage.map(this::mapToResponse);
 
     }
+
+    // ===========================
+    // DELETE (SOFT DELETE)
+    // ===========================
 
     @Override
     public void delete(Integer id) {
@@ -275,9 +266,14 @@ public class ProductServiceImpl implements ProductService {
 
         deleteImages(product);
 
-        productRepository.delete(product);
+        product.setIsDeleted(true);
+
+        productRepository.save(product);
 
     }
+    // ===========================
+    // MAP ENTITY -> RESPONSE
+    // ===========================
 
     private ProductResponse mapToResponse(Product product) {
 
@@ -337,8 +333,11 @@ public class ProductServiceImpl implements ProductService {
         response.setImages(images);
 
         return response;
-
     }
+
+    // ===========================
+    // SAVE IMAGES
+    // ===========================
 
     private List<ProductImageResponse> saveImages(
 
@@ -353,6 +352,7 @@ public class ProductServiceImpl implements ProductService {
         List<ProductImageResponse> responses =
                 new ArrayList<>();
 
+        // ---------- Ảnh đại diện ----------
         if (primaryImage != null &&
                 !primaryImage.isEmpty()) {
 
@@ -361,7 +361,8 @@ public class ProductServiceImpl implements ProductService {
             image.setProduct(product);
 
             image.setImageUrl(
-                    cloudinaryService.uploadImage(primaryImage)
+                    productCloudinaryServiceImpl
+                            .uploadImage(primaryImage)
             );
 
             image.setIsPrimary(true);
@@ -384,6 +385,7 @@ public class ProductServiceImpl implements ProductService {
 
         }
 
+        // ---------- Ảnh phụ ----------
         if (images != null) {
 
             for (MultipartFile file : images) {
@@ -399,7 +401,8 @@ public class ProductServiceImpl implements ProductService {
                 image.setProduct(product);
 
                 image.setImageUrl(
-                        cloudinaryService.uploadImage(file)
+                        productCloudinaryServiceImpl
+                                .uploadImage(file)
                 );
 
                 image.setIsPrimary(false);
@@ -427,6 +430,9 @@ public class ProductServiceImpl implements ProductService {
         return responses;
 
     }
+    // ===========================
+    // DELETE IMAGES
+    // ===========================
 
     private void deleteImages(Product product) {
 
@@ -435,18 +441,34 @@ public class ProductServiceImpl implements ProductService {
                         product.getId()
                 );
 
+        if (images.isEmpty()) {
+            return;
+        }
+
         for (ProductImage image : images) {
 
-            cloudinaryService.deleteImage(
-                    image.getImageUrl()
-            );
+            try {
+
+                if (image.getImageUrl() != null &&
+                        !image.getImageUrl().isBlank()) {
+
+                    productCloudinaryServiceImpl.deleteImage(
+                            image.getImageUrl()
+                    );
+
+                }
+
+            } catch (Exception ex) {
+
+                // Không làm dừng transaction nếu Cloudinary lỗi
+                ex.printStackTrace();
+
+            }
 
         }
 
         productImageRepository.deleteAll(images);
 
     }
-
-
 
 }

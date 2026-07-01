@@ -3,7 +3,7 @@ package org.example.datn_sd69.modules.product.service.impl;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import lombok.RequiredArgsConstructor;
-import org.example.datn_sd69.modules.product.service.CloudinaryService;
+import org.example.datn_sd69.modules.product.service.ProductCloudinaryServiceImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -11,7 +11,7 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
-public class CloudinaryServiceImpl implements CloudinaryService {
+public class ProductCloudinaryServiceImplImpl implements ProductCloudinaryServiceImpl {
 
     private final Cloudinary cloudinary;
 
