@@ -12,15 +12,15 @@ import java.util.Optional;
 @Repository
 public interface CapacityRepository extends JpaRepository<Capacity, Integer> {
 
-    // 1. Dùng cho hàm getAll() không phân trang
-    List<Capacity> findByStatusNot(Integer status);
+    // Lấy tất cả bản ghi chưa bị xóa mềm
+    List<Capacity> findByIsDeletedFalse();
 
-    // 2. Dùng cho hàm getAll() có phân trang (Admin)
-    Page<Capacity> findByStatusNot(Integer status, Pageable pageable);
+    // Phân trang cho Admin: Chỉ lấy các bản ghi chưa bị xóa mềm
+    Page<Capacity> findByIsDeletedFalse(Pageable pageable);
 
-    // 3. Dùng cho hàm getActiveCapacities() có phân trang (Khách)
-    Page<Capacity> findByStatus(Integer status, Pageable pageable);
+    // Phân trang cho Khách: Phải đang hiện (status = 1) VÀ chưa bị xóa mềm (isDeleted = false)
+    Page<Capacity> findByStatusAndIsDeletedFalse(Integer status, Pageable pageable);
 
-    // 4. Dùng để check trùng lặp khi Thêm/Sửa dung tích
+    // Tìm kiếm chính xác theo giá trị (Quét toàn bộ DB để check trùng tuyệt đối)
     Optional<Capacity> findByValue(Double value);
 }

@@ -2,7 +2,7 @@ package org.example.datn_sd69.modules.capacity.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.Capacity;
-import org.example.datn_sd69.modules.capacity.dto.request.CapacityRequest;
+import org.example.datn_sd69.modules.capacity.dto.request.CapacityRequest; // Import chuẩn ở đây
 import org.example.datn_sd69.modules.capacity.service.CapacityService;
 import org.example.datn_sd69.repository.CapacityRepository;
 import org.springframework.data.domain.Page;
@@ -21,38 +21,40 @@ public class CapacityServiceImpl implements CapacityService {
 
     @Override
     public List<Capacity> getAll() {
-        return capacityRepository.findByStatusNot(0);
+        // Đã sửa từ findByStatusNot thành findByIsDeletedFalse
+        return capacityRepository.findByIsDeletedFalse();
     }
 
     @Override
     public Capacity getById(Integer id) {
-        return capacityRepository.findById(id)
+        Capacity capacity = capacityRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy dung tích có ID: " + id));
+        if (capacity.getIsDeleted()) {
+            throw new RuntimeException("Dung tích này đã bị xóa!");
+        }
+        return capacity;
     }
 
     @Override
     public Capacity create(CapacityRequest request) {
         Double value = request.getValue();
-
-        // 1. Kiểm tra xem dung tích này đã từng tồn tại dưới DB chưa (Bao gồm cả thằng đã bị xóa)
         Optional<Capacity> existingOpt = capacityRepository.findByValue(value);
 
         if (existingOpt.isPresent()) {
             Capacity existingCapacity = existingOpt.get();
-            if (existingCapacity.getStatus() == 0) {
-                // Nếu đã bị xóa mềm -> Khôi phục lại trạng thái hoạt động thay vì tạo mới
-                existingCapacity.setStatus(request.getStatus() != null ? request.getStatus() : 1);
+            if (existingCapacity.getIsDeleted()) {
+                existingCapacity.setIsDeleted(false);
+                existingCapacity.setStatus(request.getStatus());
                 return capacityRepository.save(existingCapacity);
             } else {
-                // Nếu đang hoạt động -> Chặn luôn vì trùng lặp
-                throw new RuntimeException("Dung tích '" + value + "' đã tồn tại!");
+                throw new RuntimeException("Dung tích '" + value + " ml' đã tồn tại và đang hoạt động!");
             }
         }
 
-        // 2. Nếu chưa từng tồn tại -> Tạo mới tinh
         Capacity capacity = new Capacity();
         capacity.setValue(value);
-        capacity.setStatus(request.getStatus() != null ? request.getStatus() : 1);
+        capacity.setStatus(request.getStatus());
+        capacity.setIsDeleted(false);
         return capacityRepository.save(capacity);
     }
 
@@ -61,36 +63,38 @@ public class CapacityServiceImpl implements CapacityService {
         Capacity existingCapacity = getById(id);
         Double newValue = request.getValue();
 
-        // Kiểm tra xem số mới cập nhật có bị trùng với một số khác đã có trong DB không
         Optional<Capacity> checkDuplicateOpt = capacityRepository.findByValue(newValue);
 
         if (checkDuplicateOpt.isPresent() && !checkDuplicateOpt.get().getId().equals(id)) {
-            throw new RuntimeException("Dung tích '" + newValue + "' đã được sử dụng ở một bản ghi khác!");
+            Capacity duplicateCapacity = checkDuplicateOpt.get();
+            if (duplicateCapacity.getIsDeleted()) {
+                throw new RuntimeException("Dung tích '" + newValue + " ml' đang nằm trong thùng rác!");
+            } else {
+                throw new RuntimeException("Dung tích '" + newValue + " ml' đã được sử dụng ở một bản ghi khác!");
+            }
         }
 
         existingCapacity.setValue(newValue);
-        if (request.getStatus() != null) {
-            existingCapacity.setStatus(request.getStatus());
-        }
-
+        existingCapacity.setStatus(request.getStatus());
         return capacityRepository.save(existingCapacity);
     }
 
     @Override
     public void delete(Integer id) {
         Capacity capacity = getById(id);
-        capacity.setStatus(0); // Xóa mềm
+        capacity.setIsDeleted(true);
+        capacity.setStatus(0);
         capacityRepository.save(capacity);
     }
 
     @Override
     public Page<Capacity> getAll(Pageable pageable) {
-        return capacityRepository.findByStatusNot(0, pageable);
+        return capacityRepository.findByIsDeletedFalse(pageable);
     }
 
     @Override
     public Page<Capacity> getActiveCapacities(int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        return capacityRepository.findByStatus(1, pageable);
+        return capacityRepository.findByStatusAndIsDeletedFalse(1, pageable);
     }
 }
