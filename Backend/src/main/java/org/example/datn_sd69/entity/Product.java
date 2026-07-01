@@ -54,6 +54,9 @@ public class Product extends BaseEntity {
     @Column(name = "CreatedAt")
     private LocalDateTime createdAt = LocalDateTime.now();
 
+    @Column(name = "IsDeleted")
+    private Boolean isDeleted = false;
+
     // Mapping bảng trung gian ProductFragrance không cần trường phụ
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
