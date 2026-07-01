@@ -47,4 +47,7 @@ public class User extends BaseEntity {
 
     @Column(name = "CreatedAt")
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "IsDeleted")
+    private Boolean isDeleted = false;
 }

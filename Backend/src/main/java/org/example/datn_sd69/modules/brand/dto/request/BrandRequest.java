@@ -19,6 +19,9 @@ public class BrandRequest {
     @Size(max = 1000, message = "Mô tả không được vượt quá 1000 ký tự!")
     private String description;
 
+    @Size(max = 500, message = "Đường dẫn ảnh không được vượt quá 500 ký tự!")
+    private String logoUrl; // Thêm trường này để nhận link ảnh
+
     @NotNull(message = "Trạng thái không được để trống!")
     @Min(value = 0, message = "Trạng thái không hợp lệ! Chỉ nhận giá trị 0 (Ẩn) hoặc 1 (Hiện).")
     @Max(value = 1, message = "Trạng thái không hợp lệ! Chỉ nhận giá trị 0 (Ẩn) hoặc 1 (Hiện).")

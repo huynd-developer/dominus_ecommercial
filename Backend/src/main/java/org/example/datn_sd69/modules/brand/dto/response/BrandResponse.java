@@ -11,16 +11,17 @@ import org.example.datn_sd69.entity.Brand;
 @NoArgsConstructor
 @AllArgsConstructor
 public class BrandResponse {
-    private Integer id; // Cột ID này sẽ được lấy từ BaseEntity
+    private Integer id;
     private String name;
     private String description;
+    private String logoUrl; // Thêm trường này để hiển thị ảnh
     private Integer status;
 
-    // Hàm khởi tạo giúp convert siêu nhanh từ Entity sang DTO trong Service
     public BrandResponse(Brand brand) {
         this.id = brand.getId();
         this.name = brand.getName();
         this.description = brand.getDescription();
+        this.logoUrl = brand.getLogoUrl(); // Map link ảnh từ Entity sang DTO
         this.status = brand.getStatus();
     }
 }

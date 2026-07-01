@@ -62,23 +62,45 @@
 import { onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 
+// Cập nhật lại Interface (Có thể thêm các trường khác nếu BE trả về như logo, description...)
 interface Brand {
   id: number;
   name: string;
 }
 
-const brands = ref<Brand[]>([
-  { id: 1, name: 'Chanel' },
-  { id: 2, name: 'Dior' },
-  { id: 3, name: 'Tom Ford' },
-  { id: 4, name: 'Creed' }
-]);
+// 1. Khởi tạo mảng rỗng thay vì fix cứng dữ liệu
+const brands = ref<Brand[]>([]);
+
+// 2. Hàm gọi API lấy dữ liệu
+const fetchBrands = async () => {
+  try {
+    // Gọi thẳng vào API Public của ông. Tui để size=10 để menu không bị dài quá nếu có hàng trăm brand.
+    const response = await fetch('http://localhost:8080/api/brands?size=10');
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    // 3. Móc đúng vào mảng 'content' vì BE trả về dữ liệu phân trang (Page<Brand>)
+    if (result.data && result.data.content) {
+      brands.value = result.data.content;
+    }
+  } catch (error) {
+    console.error('Lỗi khi tải danh sách thương hiệu từ BE:', error);
+  }
+};
 
 onMounted(() => {
-  // TODO: Call API GET /brands tại onMounted
+  // Thực thi hàm lấy dữ liệu khi component vừa render xong
+  fetchBrands();
 });
 
+// 4. Hàm cắt chữ cái đầu (Tui thêm check an toàn phòng trường hợp name bị rỗng)
 const getBrandMonogram = (brandName: string) => {
+  if (!brandName) return ''; 
+  
   return brandName
     .split(' ')
     .map((word) => word.charAt(0))
