@@ -1,6 +1,13 @@
 export interface Brand {
-  id?: number;
+  id: number;
   name: string;
   description: string;
-  status: number; // 0: Ẩn, 1: Hiện (Validate theo nghiệp vụ task)
+  status: number; 
+}
+
+// Interface dùng lúc gửi request Thêm/Sửa (không có ID)
+export interface BrandRequest {
+  name: string;
+  description: string;
+  status: number;
 }
