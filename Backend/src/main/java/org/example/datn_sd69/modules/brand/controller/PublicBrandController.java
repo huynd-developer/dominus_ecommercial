@@ -10,7 +10,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/brands") // ĐƯỜNG DẪN PUBLIC CHO KHÁCH
 @RequiredArgsConstructor
-@CrossOrigin("*")
 public class PublicBrandController {
 
     private final BrandService brandService;
