@@ -12,8 +12,14 @@ import java.util.List;
 public interface CategoryRepository extends JpaRepository<Category, Integer> {
     List<Category> findByNameContainingIgnoreCase(String keyword);
     Page<Category> findByNameContainingIgnoreCase(String keyword, Pageable pageable);
+
+    // Check trùng tên lúc thêm mới
     boolean existsByNameIgnoreCase(String name);
 
-    // 2. Dùng cho lúc Cập nhật (Kiểm tra xem tên này đã bị thằng KHÁC chiếm chưa)
+    // Check trùng tên lúc cập nhật (Kiểm tra xem tên này đã bị thằng KHÁC chiếm chưa)
     boolean existsByNameIgnoreCaseAndIdNot(String name, Integer id);
+
+    // --- THÊM VÀO LUỒNG PUBLIC CỦA KHÁCH (Chỉ lấy status = 1) ---
+    Page<Category> findByNameContainingIgnoreCaseAndStatus(String keyword, Integer status, Pageable pageable);
+    Page<Category> findByStatus(Integer status, Pageable pageable);
 }
