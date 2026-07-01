@@ -28,52 +28,56 @@ public class BrandServiceImpl implements BrandService {
 
     @Override
     public List<Brand> getAllBrands() {
-        return brandRepository.findAll();
+        // Dùng hàm tự tạo thay cho findAll()
+        return brandRepository.findByIsDeletedFalse();
     }
 
     @Override
     @Transactional
     public Brand createBrand(BrandRequest request) {
-        if (brandRepository.existsByNameIgnoreCaseAndStatusNot(request.getName().trim(), 0)) {
-            throw new RuntimeException("Thương hiệu '" + request.getName() + "' đã tồn tại và đang hoạt động!");
+        if (brandRepository.existsByNameIgnoreCaseAndIsDeletedFalse(request.getName().trim())) {
+            throw new RuntimeException("Thương hiệu '" + request.getName() + "' đã tồn tại trong hệ thống!");
         }
 
         Brand brand = new Brand();
         brand.setName(request.getName().trim());
         brand.setDescription(request.getDescription());
         brand.setStatus(request.getStatus() != null ? request.getStatus() : 1);
-
+        brand.setIsDeleted(false); // Set cứng luôn cho an tâm
+        brand.setLogoUrl(request.getLogoUrl());
         return brandRepository.save(brand);
     }
 
     @Override
     @Transactional
     public Brand updateBrand(Integer id, BrandRequest request) {
-        Brand brand = brandRepository.findById(id)
+        // Dùng hàm tự tạo thay cho findById()
+        Brand brand = brandRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy thương hiệu!"));
 
-        if (brandRepository.existsByNameIgnoreCaseAndIdNotAndStatusNot(request.getName().trim(), id, 0)) {
-            throw new RuntimeException("Tên thương hiệu đã bị trùng với một hãng khác đang hoạt động!");
+        if (brandRepository.existsByNameIgnoreCaseAndIdNotAndIsDeletedFalse(request.getName().trim(), id)) {
+            throw new RuntimeException("Tên thương hiệu đã bị trùng với một hãng khác!");
         }
 
         brand.setName(request.getName().trim());
         brand.setDescription(request.getDescription());
         brand.setStatus(request.getStatus());
-
+        brand.setLogoUrl(request.getLogoUrl());
         return brandRepository.save(brand);
     }
 
     @Override
     @Transactional
     public void deleteBrand(Integer id) {
-        Brand brand = brandRepository.findById(id)
+        Brand brand = brandRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy thương hiệu!"));
 
-        if (productRepository.existsByBrandIdAndStatusNot(id, 0)) {
-            throw new RuntimeException("Không thể khóa! Đang có sản phẩm hoạt động thuộc thương hiệu này.");
+        // GỌI ĐÚNG HÀM VỪA TẠO BÊN PRODUCT REPOSITORY
+        if (productRepository.existsByBrandIdAndIsDeletedFalse(id)) {
+            throw new RuntimeException("Không thể đưa vào thùng rác! Đang có sản phẩm thuộc thương hiệu này.");
         }
 
-        brand.setStatus(0);
+        brand.setIsDeleted(true);
         brandRepository.save(brand);
     }
 
@@ -84,29 +88,29 @@ public class BrandServiceImpl implements BrandService {
 
     @Override
     public Brand getBrandById(Integer id) {
-        return brandRepository.findById(id)
+        return brandRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy thương hiệu với ID: " + id));
     }
 
-    // 1. Hàm cho Admin: Kết hợp Tìm kiếm và Phân trang (Lấy tất cả trạng thái)
+    // --- PHÂN TRANG & TÌM KIẾM ---
+
     @Override
     public Page<Brand> getBrandsWithPagination(String keyword, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
 
         if (keyword != null && !keyword.trim().isEmpty()) {
-            return brandRepository.findByNameContainingIgnoreCase(keyword.trim(), pageable);
+            return brandRepository.findByNameContainingIgnoreCaseAndIsDeletedFalse(keyword.trim(), pageable);
         }
-        return brandRepository.findAll(pageable);
+        return brandRepository.findByIsDeletedFalse(pageable);
     }
 
-    // 2. Hàm cho Khách: Lấy danh sách đang hoạt động (Status = 1)
     @Override
     public Page<Brand> getActiveBrands(String keyword, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
 
         if (keyword != null && !keyword.trim().isEmpty()) {
-            return brandRepository.findByNameContainingIgnoreCaseAndStatus(keyword.trim(), 1, pageable);
+            return brandRepository.findByNameContainingIgnoreCaseAndStatusAndIsDeletedFalse(keyword.trim(), 1, pageable);
         }
-        return brandRepository.findByStatus(1, pageable);
+        return brandRepository.findByStatusAndIsDeletedFalse(1, pageable);
     }
 }
