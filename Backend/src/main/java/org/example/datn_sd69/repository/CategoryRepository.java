@@ -7,19 +7,25 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface CategoryRepository extends JpaRepository<Category, Integer> {
-    List<Category> findByNameContainingIgnoreCase(String keyword);
-    Page<Category> findByNameContainingIgnoreCase(String keyword, Pageable pageable);
 
-    // Check trùng tên lúc thêm mới
-    boolean existsByNameIgnoreCase(String name);
+    Optional<Category> findByIdAndIsDeletedFalse(Integer id);
 
-    // Check trùng tên lúc cập nhật (Kiểm tra xem tên này đã bị thằng KHÁC chiếm chưa)
-    boolean existsByNameIgnoreCaseAndIdNot(String name, Integer id);
+    List<Category> findByIsDeletedFalse();
 
-    // --- THÊM VÀO LUỒNG PUBLIC CỦA KHÁCH (Chỉ lấy status = 1) ---
-    Page<Category> findByNameContainingIgnoreCaseAndStatus(String keyword, Integer status, Pageable pageable);
-    Page<Category> findByStatus(Integer status, Pageable pageable);
+    boolean existsByNameIgnoreCaseAndIsDeletedFalse(String name);
+
+    boolean existsByNameIgnoreCaseAndIdNotAndIsDeletedFalse(String name, Integer id);
+
+    Page<Category> findByIsDeletedFalse(Pageable pageable);
+
+    Page<Category> findByNameContainingIgnoreCaseAndIsDeletedFalse(String name, Pageable pageable);
+
+    // Dành cho khách hàng (Status = 1 và chưa bị xóa)
+    Page<Category> findByNameContainingIgnoreCaseAndStatusAndIsDeletedFalse(String name, Integer status, Pageable pageable);
+
+    Page<Category> findByStatusAndIsDeletedFalse(Integer status, Pageable pageable);
 }

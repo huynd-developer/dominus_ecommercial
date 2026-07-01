@@ -214,8 +214,7 @@ router.beforeEach(async (to, from) => {
     // Giữ nguyên phần nhắc nhở logic đồng bộ của team
   }
 
-  const userRole = (authStore.role || "").toUpperCase().replace("ROLE_", "");
-
+  const userRole = (authStore.role || "").toUpperCase().trim();
   // ==========================================
   // LUỒNG 1: ĐÃ ĐĂNG NHẬP THÌ KHÔNG CHO RA LOGIN
   // ==========================================
