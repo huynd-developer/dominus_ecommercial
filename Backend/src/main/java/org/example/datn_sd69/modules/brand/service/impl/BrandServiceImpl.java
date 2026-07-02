@@ -5,7 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.Brand;
 import org.example.datn_sd69.modules.brand.dto.request.BrandRequest;
 import org.example.datn_sd69.modules.brand.service.BrandService;
-import org.example.datn_sd69.modules.brand.service.CloudinaryService;
+import org.example.datn_sd69.modules.brand.service.BrandCloudinaryServiceImpl;
 import org.example.datn_sd69.repository.BrandRepository;
 import org.example.datn_sd69.repository.ProductRepository;
 import org.springframework.data.domain.Page;
@@ -24,7 +24,7 @@ public class BrandServiceImpl implements BrandService {
 
     private final BrandRepository brandRepository;
     private final ProductRepository productRepository;
-    private final CloudinaryService cloudinaryService;
+    private final BrandCloudinaryServiceImpl brandCloudinaryServiceImpl;
 
     @Override
     public List<Brand> getAllBrands() {
@@ -83,7 +83,7 @@ public class BrandServiceImpl implements BrandService {
 
     @Override
     public String uploadLogo(MultipartFile file) throws IOException {
-        return cloudinaryService.uploadFile(file);
+        return brandCloudinaryServiceImpl.uploadFile(file);
     }
 
     @Override
