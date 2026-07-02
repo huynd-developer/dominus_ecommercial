@@ -1,13 +1,13 @@
 <template>
   <div class="payment-result-container">
-    <div id="invoice-print-area" class="invoice-card k80-print-area">
+    <div id="invoice-print-area" class="invoice-card k80-print-area" v-if="!isProcessing && isSuccess">
       <div class="header">
         <div class="logo">
           <img
-            src="src/assets/logo.png"
+            src="/src/assets/logo.png"
             alt="Logo Scent Haven"
-            width="45"
-            height="45"
+            width="65"
+            height="65"
             style="object-fit: contain"
           />
         </div>
@@ -23,15 +23,23 @@
           <span class="label">Số HD:</span>
           <span class="value font-bold">{{ orderId }}</span>
         </div>
+
         <div class="info-row">
           <span class="label">Thời gian:</span>
-          <span class="value">{{ new Date().toLocaleString("vi-VN") }}</span>
+          <span class="value">{{ formatDateTime(orderTime) }}</span>
         </div>
+
+        <div class="info-row">
+          <span class="label">Khách hàng:</span>
+          <span class="value">{{ customerName || "Khách vãng lai" }}</span>
+        </div>
+
         <div class="info-row">
           <span class="label">Phương thức:</span>
-          <span class="value">VNPay ({{ bankCode }} - ATM)</span>
+          <span class="value font-bold">{{ paymentMethodText }}</span>
         </div>
-        <div class="info-row">
+
+        <div class="info-row" v-if="transactionNo">
           <span class="label">Mã GD VNPay:</span>
           <span class="value">{{ transactionNo }}</span>
         </div>
@@ -45,12 +53,25 @@
             <th align="right" style="width: 100px">THÀNH TIỀN</th>
           </tr>
         </thead>
+
         <tbody>
-          <tr>
+          <tr v-for="(item, index) in orderItems" :key="item.sku || index">
             <td align="left">
-              <span class="product-name">DIOR SAUVAGE PARFUM</span>
-              <span class="product-sub">Mã đơn: #{{ orderInfo }}</span>
+              <span class="product-name">{{ item.productName }}</span>
+              <span class="product-sub" v-if="item.variantName">{{ item.variantName }}</span>
+              <span class="product-sub">{{ formatCurrency(item.price) }}</span>
             </td>
+
+            <td align="center">{{ item.quantity }}</td>
+            <td align="right">{{ formatCurrency(item.price * item.quantity) }}</td>
+          </tr>
+
+          <tr v-if="orderItems.length === 0">
+            <td align="left">
+              <span class="product-name">Đơn hàng sản phẩm tổng hợp</span>
+              <span class="product-sub" v-if="orderInfo">Nội dung: {{ orderInfo }}</span>
+            </td>
+
             <td align="center">1</td>
             <td align="right">{{ formatCurrency(amount) }}</td>
           </tr>
@@ -59,9 +80,33 @@
 
       <div class="divider"></div>
 
-      <div class="total-section">
-        <span>Tổng thanh toán:</span>
-        <span class="total-amount">{{ formatCurrency(amount) }}</span>
+      <div class="price-details">
+        <div class="info-row">
+          <span>Tổng cộng:</span>
+          <span>{{ formatCurrency(totalAmount) }}</span>
+        </div>
+
+        <div class="info-row" v-if="discountAmount > 0">
+          <span>Giảm giá:</span>
+          <span>-{{ formatCurrency(discountAmount) }}</span>
+        </div>
+
+        <div class="info-row font-bold">
+          <span>Khách thanh toán:</span>
+          <span>{{ formatCurrency(amount) }}</span>
+        </div>
+
+        <template v-if="paymentMethod === 'CASH'">
+          <div class="info-row">
+            <span>Tiền khách đưa:</span>
+            <span>{{ formatCurrency(cashGiven) }}</span>
+          </div>
+
+          <div class="info-row">
+            <span>Tiền thừa:</span>
+            <span>{{ formatCurrency(changeAmount) }}</span>
+          </div>
+        </template>
       </div>
 
       <div class="footer">
@@ -70,66 +115,232 @@
       </div>
     </div>
 
-    <div class="status-card no-print">
-      <div class="success-icon">
-        <svg
-          width="40"
-          height="40"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-        >
-          <path
-            d="M20 6L9 17L4 12"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
+    <div class="status-card no-print" v-if="!isProcessing">
+      <div v-if="isSuccess">
+        <div class="success-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M20 6L9 17L4 12" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+
+        <h3>Thanh Toán Thành Công!</h3>
+        <p>Hệ thống đã cập nhật đơn hàng thành công và đang xuất lệnh in...</p>
       </div>
-      <h3>Thanh Toán Thành Công!</h3>
-      <p>Hệ thống đang xuất lệnh in hóa đơn máy in K80...</p>
+
+      <div v-else>
+        <div class="error-icon">❌</div>
+        <h3 style="color: #ef4444">Thanh Toán Thất Bại</h3>
+        <p>Giao dịch lỗi hoặc chữ ký xác thực không hợp lệ.</p>
+      </div>
+
       <button @click="router.push('/admin/pos')" class="btn-back">
         Quay lại trang bán hàng POS
       </button>
+    </div>
+
+    <div class="status-card no-print" v-if="isProcessing">
+      <p>Đang xử lý xác thực đơn hàng với Backend...</p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import api from "@/common/api";
 
 const route = useRoute();
 const router = useRouter();
 
-const orderId = ref(route.query.vnp_TxnRef || "25132675");
-const bankCode = ref(route.query.vnp_BankCode || "NCB");
-const transactionNo = ref(route.query.vnp_BankTranNo || "VNP15607475");
-const orderInfo = ref(route.query.vnp_OrderInfo || "Thanh toan don hang 25");
-const amount = ref(
-  route.query.vnp_Amount ? parseInt(route.query.vnp_Amount) / 100 : 3500000
-);
+const orderId = ref(route.query.vnp_TxnRef || route.query.orderId || "");
+const paymentMethod = ref(route.query.paymentMethod || (route.query.vnp_SecureHash ? "VNPAY" : "CASH"));
+const bankCode = ref(route.query.vnp_BankCode || "");
+const transactionNo = ref(route.query.vnp_BankTranNo || route.query.vnp_TransactionNo || "");
+const orderInfo = ref(route.query.vnp_OrderInfo || "");
+
+const amount = ref(route.query.vnp_Amount ? Number(route.query.vnp_Amount) / 100 : 0);
+const totalAmount = ref(amount.value);
+const discountAmount = ref(0);
+const cashGiven = ref(0);
+const changeAmount = ref(0);
+
+const isProcessing = ref(true);
+const isSuccess = ref(false);
+
+const customerName = ref("");
+const orderTime = ref("");
+const orderItems = ref([]);
+
+const paymentMethodText = computed(() => {
+  if (paymentMethod.value === "CASH") return "Tiền mặt";
+  return bankCode.value ? `VNPay (${bankCode.value})` : "VNPay";
+});
 
 const formatCurrency = (value) => {
-  if (!value && value !== 0) return "0 đ";
+  const numberValue = Number(value || 0);
+
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
     currency: "VND",
   })
-    .format(value)
+    .format(numberValue)
     .replace("₫", "đ");
 };
 
-onMounted(() => {
+const formatDateTime = (dateString) => {
+  if (!dateString) return new Date().toLocaleString("vi-VN");
+
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return new Date().toLocaleString("vi-VN");
+
+  return date.toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const normalizeItems = (items = []) => {
+  return items.map((item) => ({
+    sku: item.sku || item.productSku || item.product?.sku || "",
+    productName: item.productName || item.name || item.product?.name || "Sản phẩm",
+    variantName: item.variantName || item.capacity || item.size || item.variant?.name || "",
+    price: Number(item.price || item.unitPrice || item.salePrice || item.product?.price || 0),
+    quantity: Number(item.quantity || item.qty || 1),
+  }));
+};
+
+const applyInvoiceData = (data = {}) => {
+  orderId.value = data.orderId || data.id || data.code || orderId.value || "HD" + Date.now();
+  paymentMethod.value = data.paymentMethod || paymentMethod.value;
+
+  customerName.value =
+    data.customerName ||
+    data.customer?.name ||
+    customerName.value ||
+    "Khách vãng lai";
+
+  orderTime.value =
+    data.orderTime ||
+    data.createdAt ||
+    data.createdDate ||
+    orderTime.value ||
+    new Date().toISOString();
+
+  const items = data.items || data.orderItems || data.details || data.orderDetails || [];
+  orderItems.value = normalizeItems(items);
+
+  const calculatedTotal = orderItems.value.reduce((sum, item) => {
+    return sum + item.price * item.quantity;
+  }, 0);
+
+  totalAmount.value = Number(
+    data.totalAmount ??
+      data.subTotal ??
+      data.total ??
+      calculatedTotal ??
+      totalAmount.value ??
+      0
+  );
+
+  amount.value = Number(
+    data.amount ??
+      data.finalAmount ??
+      data.payAmount ??
+      data.totalPay ??
+      amount.value ??
+      totalAmount.value ??
+      0
+  );
+
+  discountAmount.value = Number(
+    data.discountAmount ?? Math.max(totalAmount.value - amount.value, 0)
+  );
+
+  cashGiven.value = Number(data.cashGiven ?? cashGiven.value ?? 0);
+
+  changeAmount.value = Number(
+    data.changeAmount ?? Math.max(cashGiven.value - amount.value, 0)
+  );
+};
+
+const loadCashInvoice = async () => {
+  paymentMethod.value = "CASH";
+
+  const cachedInvoiceRaw = sessionStorage.getItem("pos_latest_invoice");
+
+  if (cachedInvoiceRaw) {
+    try {
+      const cachedInvoice = JSON.parse(cachedInvoiceRaw);
+      applyInvoiceData(cachedInvoice);
+      return;
+    } catch (error) {
+      console.warn("Không đọc được dữ liệu hóa đơn trong sessionStorage:", error);
+    }
+  }
+
+  // Fallback nếu refresh trang hoặc mất sessionStorage.
+  // Backend cần có API lấy chi tiết đơn.
+  if (orderId.value) {
+    const response = await api.get(`/orders/${orderId.value}`);
+    applyInvoiceData(response.data);
+  }
+};
+
+const loadVnpayInvoice = async () => {
+  paymentMethod.value = "VNPAY";
+
+  const response = await api.get("/vnpay/return", {
+    params: route.query,
+  });
+
+  if (response.status !== 200) {
+    isSuccess.value = false;
+    return;
+  }
+
+  const backendData =
+    response.data && typeof response.data === "object" ? response.data : {};
+
+  applyInvoiceData({
+    ...backendData,
+    orderId: backendData.orderId || backendData.id || route.query.vnp_TxnRef,
+    paymentMethod: "VNPAY",
+    amount: backendData.amount || backendData.finalAmount || amount.value,
+  });
+};
+
+const printInvoice = () => {
   setTimeout(() => {
     window.print();
-  }, 1000);
+  }, 500);
+};
+
+onMounted(async () => {
+  try {
+    const isVnpayReturn =
+      Object.keys(route.query).length > 0 && !!route.query.vnp_SecureHash;
+
+    if (isVnpayReturn) {
+      await loadVnpayInvoice();
+    } else {
+      await loadCashInvoice();
+    }
+
+    isSuccess.value = true;
+    printInvoice();
+  } catch (error) {
+    console.error("Lỗi xử lý hóa đơn:", error);
+    isSuccess.value = false;
+  } finally {
+    isProcessing.value = false;
+  }
 });
 </script>
 
 <style scoped>
-/* MÀN HÌNH KẾT QUẢ VNPAY TRÊN WEB (Giữ nguyên cấu trúc của bạn) */
 .payment-result-container {
   background-color: #0f172a;
   min-height: 100vh;
@@ -141,6 +352,7 @@ onMounted(() => {
   font-family: Arial, sans-serif;
   color: #333;
 }
+
 .invoice-card {
   background: #ffffff;
   padding: 30px;
@@ -150,92 +362,105 @@ onMounted(() => {
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
   box-sizing: border-box;
 }
+
+.header .logo img {
+  width: 150px !important;
+  height: 150px !important;
+  margin-bottom: 1px;
+}
+
 .header {
   text-align: center;
 }
-.header h1 {
-  font-size: 20px;
-  margin: 10px 0 5px 0;
-  letter-spacing: 1px;
-}
+
 .header p {
   font-size: 12px;
   color: #666;
   margin: 3px 0;
 }
+
 .divider {
   border-top: 1px dashed #ccc;
   margin: 15px 0;
 }
+
 .invoice-title {
   text-align: center;
   font-size: 16px;
   margin: 10px 0 20px 0;
   font-weight: bold;
 }
+
 .info-section {
   font-size: 13px;
   margin-bottom: 20px;
 }
+
 .info-row {
   display: flex;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 6px;
 }
+
 .label {
   color: #666;
 }
+
 .font-bold {
   font-weight: bold;
 }
+
 .invoice-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
 }
+
 .invoice-table th {
   border-bottom: 1px solid #333;
   padding-bottom: 8px;
   font-weight: bold;
 }
+
 .invoice-table td {
   padding: 10px 0;
   vertical-align: top;
 }
+
 .product-name {
   display: block;
   font-weight: bold;
 }
+
 .product-sub {
   display: block;
   font-size: 11px;
   color: #777;
   margin-top: 2px;
 }
-.total-section {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 15px;
-  font-weight: bold;
+
+.price-details {
+  font-size: 14px;
   margin-top: 10px;
 }
-.total-amount {
-  font-size: 18px;
-}
+
 .footer {
   text-align: center;
   margin-top: 30px;
   font-size: 12px;
   font-style: italic;
 }
+
 .footer p {
   margin: 4px 0;
 }
+
 .powered {
   font-size: 10px;
   color: #999;
 }
+
 .status-card {
   margin-top: 25px;
   text-align: center;
@@ -247,16 +472,20 @@ onMounted(() => {
   max-width: 450px;
   box-sizing: border-box;
 }
+
 .status-card h3 {
   color: #4ade80;
   margin: 10px 0;
 }
+
 .status-card p {
   color: #94a3b8;
   font-size: 13px;
   margin-bottom: 15px;
 }
-.success-icon {
+
+.success-icon,
+.error-icon {
   width: 50px;
   height: 50px;
   background: rgba(74, 222, 128, 0.1);
@@ -267,6 +496,12 @@ onMounted(() => {
   justify-content: center;
   margin: 0 auto;
 }
+
+.error-icon {
+  background: rgba(239, 68, 68, 0.1);
+  font-size: 24px;
+}
+
 .btn-back {
   background: #3b82f6;
   color: white;
@@ -277,7 +512,74 @@ onMounted(() => {
   font-weight: bold;
   font-size: 13px;
 }
+
 .btn-back:hover {
   background: #2563eb;
+}
+</style>
+
+<style>
+@media print {
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  body > div:not(#app),
+  #app > div:not(.payment-result-container),
+  header,
+  nav,
+  aside,
+  .sidebar,
+  [class*="sidebar"],
+  [class*="header"]:not(.header),
+  .v-navigation-drawer,
+  .no-print,
+  .status-card,
+  .btn-back,
+  .success-icon,
+  button,
+  div[class*="arrow"],
+  div[id*="arrow"],
+  i,
+  .v-btn,
+  .v-main__wrap > :not(.payment-result-container) {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .payment-result-container {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: auto !important;
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+
+  .invoice-card {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 4mm !important;
+    margin: 0 auto !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
+    background: #ffffff !important;
+  }
+
+  @page {
+    size: 80mm auto;
+    margin: 0mm;
+  }
 }
 </style>

@@ -57,7 +57,7 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         // Cho phép tất cả truy cập API đăng nhập, đăng ký
                         .requestMatchers("/api/auth/**").permitAll()
-
+                        .requestMatchers("/api/vnpay/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/brands/**", "/api/categories/**","/api/concentrations/**", "/api/fragrance-families/**","/api/capacities/**", "/api/products/**", "/api/bottle-types/**" ).permitAll()
                         // Nhóm Nhân sự: owner, manager, cashier mới được vào các API bắt đầu bằng /api/admin/
                         .requestMatchers("/api/admin/**").hasAnyAuthority("OWNER", "MANAGER", "CASHIER")

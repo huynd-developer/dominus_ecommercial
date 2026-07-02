@@ -14,8 +14,11 @@ public class PosCheckoutRequest {
     @NotBlank(message = "Phương thức thanh toán không được để trống")
     private String paymentMethod;
 
-    // SĐT khách — null nếu khách vãng lai
+    // SĐT khách — null nếu khách vãng lai hoàn toàn
     private String customerPhone;
+
+    // BỔ SUNG MỚI: Tên khách hàng (Thu ngân điền tên khách vãng lai hoặc điền để tạo mới thành viên)
+    private String customerName;
 
     // Mã voucher — null nếu không áp dụng
     private String voucherCode;
