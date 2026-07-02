@@ -1,7 +1,11 @@
 package org.example.datn_sd69.entity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -9,13 +13,16 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.example.datn_sd69.entity.base.BaseEntity;
-import org.hibernate.annotations.Nationalized;
 
 @Entity
 @Table(name = "ProductImage")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor
-public class ProductImage extends BaseEntity {
+public class ProductImage {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ProductId", nullable = false)
     private Product product;
@@ -25,4 +32,8 @@ public class ProductImage extends BaseEntity {
 
     @Column(name = "IsPrimary")
     private Boolean isPrimary = false;
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 2b1bc93a5cf80b45b3fb045a44a8f5532337e787
