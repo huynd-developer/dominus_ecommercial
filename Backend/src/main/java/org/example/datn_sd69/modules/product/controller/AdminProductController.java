@@ -6,6 +6,7 @@ import org.example.datn_sd69.modules.product.dto.ProductVariantRequest;
 import org.example.datn_sd69.modules.product.service.ProductService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -22,6 +23,7 @@ public class AdminProductController {
     /* ================= PRODUCT ================= */
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('CASHIER','MANAGER','OWNER')")
     public ResponseEntity<?> getAll(
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "0") int page,
@@ -33,6 +35,7 @@ public class AdminProductController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('CASHIER','MANAGER','OWNER')")
     public ResponseEntity<?> detail(@PathVariable Integer id) {
 
         return ResponseEntity.ok(
@@ -41,6 +44,7 @@ public class AdminProductController {
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyAuthority('MANAGER','OWNER')")
     public ResponseEntity<?> create(
 
             @ModelAttribute ProductRequest request,
@@ -59,6 +63,7 @@ public class AdminProductController {
     }
 
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyAuthority('MANAGER','OWNER')")
     public ResponseEntity<?> update(
 
             @PathVariable Integer id,
@@ -80,6 +85,7 @@ public class AdminProductController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('OWNER')")
     public ResponseEntity<?> delete(@PathVariable Integer id) {
 
         productService.delete(id);
@@ -95,6 +101,7 @@ public class AdminProductController {
     /* ================= VARIANT ================= */
 
     @GetMapping("/{productId}/variants")
+    @PreAuthorize("hasAnyAuthority('CASHIER','MANAGER','OWNER')")
     public ResponseEntity<?> getVariants(
             @PathVariable Integer productId) {
 
@@ -104,6 +111,7 @@ public class AdminProductController {
     }
 
     @GetMapping("/variants/{variantId}")
+    @PreAuthorize("hasAnyAuthority('CASHIER','MANAGER','OWNER')")
     public ResponseEntity<?> getVariant(
             @PathVariable Integer variantId) {
 
@@ -113,6 +121,7 @@ public class AdminProductController {
     }
 
     @PostMapping("/{productId}/variants")
+    @PreAuthorize("hasAnyAuthority('MANAGER','OWNER')")
     public ResponseEntity<?> createVariant(
 
             @PathVariable Integer productId,
@@ -128,6 +137,7 @@ public class AdminProductController {
     }
 
     @PutMapping("/variants/{variantId}")
+    @PreAuthorize("hasAnyAuthority('MANAGER','OWNER')")
     public ResponseEntity<?> updateVariant(
 
             @PathVariable Integer variantId,
@@ -143,6 +153,7 @@ public class AdminProductController {
     }
 
     @DeleteMapping("/variants/{variantId}")
+    @PreAuthorize("hasAuthority('OWNER')")
     public ResponseEntity<?> deleteVariant(
             @PathVariable Integer variantId) {
 
