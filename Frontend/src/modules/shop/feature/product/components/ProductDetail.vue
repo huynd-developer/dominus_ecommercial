@@ -97,23 +97,22 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import axios from 'axios';
-import { useCartStore } from '@/store/cartStore';
+import { useRouter } from 'vue-router';
 
-const cartStore = useCartStore();
+const router = useRouter();
 const props = defineProps<{ product: any }>();
 const emit = defineEmits(['back', 'buy-now']);
 
 const selectedVariant = ref<any>(null);
 const quantity = ref<number>(1);
 const showToast = ref(false);
-const isAdding = ref(false); // Biến kiểm soát trạng thái đang call API
+const isAdding = ref(false); 
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
 
-// Tự động load variant mặc định khi mở xem
 watch(() => props.product, (newVal) => {
-  if(newVal) {
-    selectedVariant.value = newVal.variants[1] || newVal.variants[0] || null;
+  if(newVal && newVal.variants && newVal.variants.length > 0) {
+    selectedVariant.value = newVal.variants[0]; // Mặc định chọn variant đầu tiên
     quantity.value = 1;
   }
 }, { immediate: true });
@@ -122,62 +121,61 @@ const selectVariant = (variant: any) => { selectedVariant.value = variant; quant
 const decreaseQty = () => { if (quantity.value > 1) quantity.value--; };
 const increaseQty = () => { if (selectedVariant.value && quantity.value < selectedVariant.value.stock) quantity.value++; };
 
-// Hàm xử lý Thêm vào giỏ hàng thực tế gọi xuống Backend Spring Boot
+// --- HÀM THÊM GIỎ HÀNG BẰNG API THẬT ---
 const addToCart = async () => {
   if (!selectedVariant.value) {
     alert("Vui lòng chọn dung tích!");
     return;
   }
   
-  // IN RA CONSOLE ĐỂ TÌM XEM TÊN TRƯỜNG ID LÀ GÌ
-  console.log("Dữ liệu variant đang chọn:", selectedVariant.value);
-
-  // THÊM CÁI NÀY: Kiểm tra có token không, không có thì chặn luôn và báo lỗi
   const token = localStorage.getItem('token');
   if (!token) {
     alert("Vui lòng đăng nhập trước khi thêm sản phẩm vào giỏ hàng!");
+    router.push('/login');
     return;
   }
 
   isAdding.value = true;
   
   try {
+    // Gọi API thật, gửi lên productVariantId (trích từ DB thật)
     await axios.post('http://localhost:8080/api/v1/customer/cart/add', {
-      // TẠM THỜI VẪN ĐỂ LÀ .id, TÍ NỮA M CHECK CONSOLE RỒI SỬA SAU
-      productVariantId: selectedVariant.value.id, 
+      productVariantId: selectedVariant.value.id, // Đảm bảo Backend mapping với trường này
       quantity: quantity.value
     }, {
       headers: { Authorization: `Bearer ${token}` }
     });
 
-    if (typeof cartStore.fetchRealCart === 'function') {
-      await cartStore.fetchRealCart();
-    }
-
+    // Hiện thông báo thành công
     showToast.value = true;
     setTimeout(() => { showToast.value = false; }, 3000);
-  } catch (error) {
+    
+  } catch (error: any) {
     console.error('Lỗi khi thêm vào giỏ hàng:', error);
-    // THÊM CÁI NÀY: Báo lỗi lên màn hình để không bị "im lìm" nữa
-    alert("Không thể thêm vào giỏ. Vui lòng bật F12 sang tab Console xem chi tiết lỗi!");
+    alert(error.response?.data?.message || "Không thể thêm vào giỏ. Vui lòng thử lại!");
   } finally {
     isAdding.value = false;
   }
 };
 
-// Hàm xử lý MUA NGAY: Thêm vào giỏ hàng ngầm rồi chuyển hướng luôn
+// --- HÀM MUA NGAY ---
 const buyNow = async () => {
-  if (!selectedVariant.value || !selectedVariant.value.id) {
+  if (!selectedVariant.value) {
     alert("Vui lòng chọn dung tích sản phẩm trước!");
     return;
   }
   
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert("Vui lòng đăng nhập để Mua ngay!");
+    router.push('/login');
+    return;
+  }
+
   isAdding.value = true;
   
   try {
-    const token = localStorage.getItem('token');
-    
-    // 1. Gọi API thêm sản phẩm này vào giỏ hàng dưới Database trước
+    // 1. Thêm vào giỏ trước
     await axios.post('http://localhost:8080/api/v1/customer/cart/add', {
       productVariantId: selectedVariant.value.id,
       quantity: quantity.value
@@ -185,12 +183,12 @@ const buyNow = async () => {
       headers: { Authorization: `Bearer ${token}` }
     });
 
-    // 2. Khi Backend báo thành công, mới emit để thằng cha (ProductDetailView) chuyển sang /checkout
+    // 2. Thành công thì bắn ra ngoài cho view chuyển hướng sang /checkout
     emit('buy-now');
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('Lỗi khi xử lý Mua ngay:', error);
-    alert('Không thể tiến hành Mua ngay, vui lòng kiểm tra lại kết nối hoặc tài khoản đăng nhập!');
+    alert('Không thể tiến hành Mua ngay. Vui lòng kiểm tra lại!');
   } finally {
     isAdding.value = false;
   }
