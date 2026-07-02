@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import axios from 'axios'
 
 // Định nghĩa kiểu dữ liệu cho sản phẩm
 export interface Product {
@@ -55,6 +56,21 @@ export const useCartStore = defineStore('cart', {
 
     removeItem(productId: number | string) {
       this.items = this.items.filter(item => item.product.id !== productId)
+    },
+
+    async fetchRealCart() {
+      const token = localStorage.getItem('token');
+      if (!token) return; // Chưa đăng nhập thì thôi
+      
+      try {
+        const res = await axios.get('http://localhost:8080/api/v1/customer/cart/my-cart', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        // Đập luôn data API trả về vào state.items để update giao diện
+        this.items = res.data; 
+      } catch (error) {
+        console.error("Lỗi đồng bộ giỏ hàng:", error);
+      }
     }
   }
 })

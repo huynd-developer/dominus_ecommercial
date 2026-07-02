@@ -1,23 +1,58 @@
 package org.example.datn_sd69.repository;
 
 import org.example.datn_sd69.entity.ProductVariant;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
-@Repository
 public interface ProductVariantRepository extends JpaRepository<ProductVariant, Integer> {
 
-    @Query("""
-            SELECT pv FROM ProductVariant pv
-            LEFT JOIN FETCH pv.product p
-            LEFT JOIN FETCH p.brand
-            LEFT JOIN FETCH pv.capacity
-            LEFT JOIN FETCH pv.bottleType
-            WHERE pv.sku = :sku AND pv.status = 1
-            """)
-    Optional<ProductVariant> findBySkuWithDetails(@Param("sku") String sku);
+    boolean existsBySkuIgnoreCase(String sku);
+
+    boolean existsBySkuIgnoreCaseAndIdNot(String sku, Integer id);
+
+    Page<ProductVariant> findByIsDeletedFalse(Pageable pageable);
+
+    Page<ProductVariant> findBySkuContainingIgnoreCaseAndIsDeletedFalse(
+            String keyword,
+            Pageable pageable
+    );
+
+    Page<ProductVariant> findByProductIdAndIsDeletedFalse(
+            Integer productId,
+            Pageable pageable
+    );
+
+    Page<ProductVariant> findByProductIdAndSkuContainingIgnoreCaseAndIsDeletedFalse(
+            Integer productId,
+            String keyword,
+            Pageable pageable
+    );
+
+    List<ProductVariant> findByProductIdAndStatusAndIsDeletedFalse(
+            Integer productId,
+            Integer status
+    );
+
+    @EntityGraph(attributePaths = {
+            "product",
+            "product.brand",
+            "capacity",
+            "bottleType"
+    })
+    Optional<ProductVariant> findByIdAndIsDeletedFalse(Integer id);
+
+    @EntityGraph(attributePaths = {
+            "product",
+            "product.brand",
+            "capacity",
+            "bottleType"
+    })
+    Optional<ProductVariant> findBySkuIgnoreCaseAndIsDeletedFalse(String sku);
+
+    List<ProductVariant> findByProductIdAndIsDeletedFalse(Integer productId);
 }

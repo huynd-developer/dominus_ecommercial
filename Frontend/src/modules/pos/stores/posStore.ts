@@ -1,342 +1,272 @@
-import { defineStore } from "pinia";
-import api from "../../../common/api";
-import {
-  MOCK_PRODUCTS,
-  MOCK_CATEGORIES,
-} from "../../../common/constants/mockData";
-import type {
-  PosProduct,
-  CartItem,
-  CustomerLookupResult,
-  CustomerPosResponse,
-  PosCheckoutRequest,
-  PosOrderResponse,
-  ApiErrorBody,
-} from "../../../common/types/pos";
+import { defineStore } from 'pinia'
+import api from '@/common/api' 
 
-// Helper lấy message lỗi từ response BE (format cố định: { message: string })
-// BE luôn trả ResponseEntity.badRequest().body(Map.of("message", e.getMessage()))
-// nên mọi lỗi nghiệp vụ (hết hàng, SKU sai, voucher hết hạn...) đều đi qua đây
-function extractErrorMessage(err: any, fallback: string): string {
-  const body = err?.response?.data as ApiErrorBody | undefined;
-  return body?.message || fallback;
+// Khai báo kiểu dữ liệu chuẩn
+export interface PosProduct {
+  id: number;
+  sku: string;
+  name: string;
+  subName?: string;
+  price: number;
+  stockQuantity: number;
+  image: string;
+  category: string;
 }
 
-export const usePosStore = defineStore("pos", {
-  state: () => ({
-    // ---- Danh sách sản phẩm hiển thị ở ProductGrid ----
-    // TODO: đang dùng MOCK_PRODUCTS. Khi BE có API list sản phẩm POS,
-    // gọi fetchProducts() trong onMounted của PosView và xoá MOCK_PRODUCTS ở đây
-    allProducts: [...MOCK_PRODUCTS] as PosProduct[],
-    categories: [...MOCK_CATEGORIES] as string[],
-    activeCategory: "Tất cả",
-    searchQuery: "",
-    isLoadingProducts: false,
+export interface CartItem {
+  product: PosProduct;
+  quantity: number;
+}
 
-    // ---- Giỏ hàng ----
-    cart: [] as CartItem[],
+export interface PosCustomer {
+  name: string;
+  phone: string;
+  loyaltyPoints: number;
+}
 
-    // ---- Khách hàng đang được áp cho đơn (null = khách vãng lai) ----
-    selectedCustomer: null as CustomerPosResponse | null,
-    customerPhoneInput: "",
-    isSearchingCustomer: false,
-    customerLookupMessage: "",
+export interface PosStoreState {
+  allProducts: PosProduct[];
+  categories: string[];
+  selectedCategory: string;
+  searchQuery: string;
+  cart: CartItem[];
+  customer: PosCustomer | null;
+  voucherCode: string;
+  discountAmount: number;
+  paymentMethod: 'CASH' | 'VNPAY';
+  vnpayUrl: string;
+  isLoading: boolean;
+  errorMsg: string;
+}
 
-    // ---- Voucher ----
-    voucherCode: "",
-    appliedVoucherCode: "", // mã đã thực sự gửi kèm lúc checkout thành công lần áp dụng gần nhất
-
-    // ---- Trạng thái thanh toán ----
-    isCheckingOut: false,
-    checkoutError: "",
-    lastOrder: null as PosOrderResponse | null,
+export const usePosStore = defineStore('posStore', {
+  state: (): PosStoreState => ({
+    allProducts: [],
+    categories: ['Tất cả'],
+    selectedCategory: 'Tất cả',
+    searchQuery: '',
+    cart: [],
+    customer: null,
+    voucherCode: '',
+    discountAmount: 0,
+    paymentMethod: 'CASH',
+    vnpayUrl: '',
+    isLoading: false,
+    errorMsg: ''
   }),
 
   getters: {
-    // Lọc theo category + searchQuery, dùng cho ProductGrid
-    filteredProducts(state): PosProduct[] {
-      let list = state.allProducts;
-
-      if (state.activeCategory && state.activeCategory !== "Tất cả") {
-        list = list.filter((p) => p.category === state.activeCategory);
-      }
-
-      const q = state.searchQuery.trim().toLowerCase();
-      if (q) {
-        list = list.filter(
-          (p) =>
-            p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
-        );
-      }
-      return list;
-    },
-
-    cartTotal(state): number {
-      return state.cart.reduce(
-        (sum, item) => sum + item.price * item.quantity,
-        0
-      );
-    },
-
-    cartItemCount(state): number {
-      return state.cart.reduce((sum, item) => sum + item.quantity, 0);
-    },
-  },
-
-  actions: {
-    // ============================================================
-    // SẢN PHẨM — MOCK TẠM, thay bằng API thật ở đây sau này
-    // ============================================================
-    async fetchProducts() {
-      // Placeholder cho lúc BE xong API. Ví dụ tương lai:
-      // this.isLoadingProducts = true
-      // try {
-      //   const { data } = await api.get('/admin/pos/products')
-      //   this.allProducts = data // map lại field nếu BE trả tên khác PosProduct
-      // } finally {
-      //   this.isLoadingProducts = false
-      // }
-      this.allProducts = [...MOCK_PRODUCTS];
-    },
-
-    // Thêm sản phẩm vào giỏ — dùng khi bấm card ở ProductGrid (mock data)
-    addToCart(product: PosProduct | CartItem) {
-      if (this.cart.length === 0 && this.lastOrder) {
-        this.startNewOrder();
-      }
-      const existing = this.cart.find((i) => i.id === product.id);
-      const stock = "stockQuantity" in product ? product.stockQuantity : 0;
-
-      if (existing) {
-        if (stock && existing.quantity >= stock) {
-          this.checkoutError = `Sản phẩm [${existing.name}] chỉ còn ${stock} trong kho hiển thị`;
-          return;
-        }
-        existing.quantity += 1;
-        return;
-      }
-
-      this.cart.push({
-        id: product.id,
-        sku: product.sku,
-        name: "name" in product ? product.name : "",
-        price: product.price,
-        quantity: 1,
-        stockQuantity: stock,
-        imageUrl: "image" in product ? product.image : null,
+    // Bộ lọc sản phẩm theo danh mục và ô tìm kiếm tên/SKU
+    filteredProducts(state) {
+      return state.allProducts.filter(product => {
+        const matchesCategory = state.selectedCategory === 'Tất cả' || product.category === state.selectedCategory;
+        const matchesSearch = product.name.toLowerCase().includes(state.searchQuery.toLowerCase()) || 
+                              product.sku.toLowerCase().includes(state.searchQuery.toLowerCase());
+        return matchesCategory && matchesSearch;
       });
     },
 
-    // ============================================================
-    // TÌM SẢN PHẨM THEO SKU/BARCODE — GỌI API THẬT
-    // GET /api/admin/pos/product?sku=...
-    // Dùng cho ô search ở PosHeader (F4) khi bắn mã vạch hoặc gõ SKU chính xác
-    // ============================================================
-    async addToCartBySku(
-      sku: string
-    ): Promise<{ success: boolean; message?: string }> {
-      const trimmed = sku.trim();
-      if (!trimmed)
-        return { success: false, message: "Vui lòng nhập mã sản phẩm" };
+    // Tổng tiền hàng gốc chưa giảm giá
+    totalAmount(state): number {
+      return state.cart.reduce((total, item) => total + (item.product.price * item.quantity), 0);
+    },
 
+    // Số tiền khách thực tế phải trả sau khi trừ voucher
+    finalAmount(): number {
+      const final = this.totalAmount - this.discountAmount;
+      return final > 0 ? final : 0;
+    }
+  },
+
+  actions: {
+    // 1. Tải danh sách sản phẩm và đập phẳng Biến thể ra
+    async fetchProducts() {
+      this.isLoading = true;
       try {
-        const { data } = await api.get("/admin/pos/product", {
-          params: { sku: trimmed },
+        const { data } = await api.get('/admin/products');
+        const rawProducts = data.data || data.content || data;
+        const flatProducts: PosProduct[] = [];
+
+        rawProducts.forEach((p: any) => {
+          let imgUrl = p.images && p.images.length > 0 ? p.images[0].imageUrl : '';
+          if (!imgUrl || !imgUrl.startsWith('http')) {
+            imgUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random&color=fff&size=200`;
+          }
+
+          if (p.variants && p.variants.length > 0) {
+            p.variants.forEach((v: any) => {
+              flatProducts.push({
+                id: p.id,
+                sku: v.sku, 
+                name: p.name,
+                subName: `${v.capacityValue}ml - ${v.bottleTypeName}`, 
+                price: v.price,               
+                stockQuantity: v.stockQuantity, 
+                image: imgUrl,
+                category: p.categoryName || 'Tất cả'
+              });
+            });
+          }
         });
 
-        const existing = this.cart.find((i) => i.id === data.variantId);
-        if (existing) {
-          if (existing.quantity >= data.stockQuantity) {
-            return {
-              success: false,
-              message: `Sản phẩm [${data.productName}] chỉ còn ${data.stockQuantity} trong kho`,
-            };
-          }
-          existing.quantity += 1;
-        } else {
-          this.cart.push({
-            id: data.variantId,
+        this.allProducts = flatProducts;
+        const dynamicCategories = ['Tất cả', ...new Set(flatProducts.map((p: any) => p.category).filter(Boolean))] as string[];
+        this.categories = dynamicCategories;
+
+      } catch (error) {
+        this.errorMsg = 'Không thể tải danh sách sản phẩm từ máy chủ!';
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    // 2. Thêm sản phẩm vào giỏ hàng
+    addToCart(product: PosProduct) {
+      this.errorMsg = '';
+      const existingItem = this.cart.find(item => item.product.sku === product.sku);
+
+      if (existingItem) {
+        if (existingItem.quantity >= product.stockQuantity) {
+          this.errorMsg = `Sản phẩm ${product.name} đã đạt giới hạn tồn kho tối đa (${product.stockQuantity})!`;
+          return;
+        }
+        existingItem.quantity++;
+      } else {
+        if (product.stockQuantity <= 0) {
+          this.errorMsg = `Sản phẩm ${product.name} đã hết hàng trong kho!`;
+          return;
+        }
+        this.cart.push({ product, quantity: 1 });
+      }
+    },
+
+    // 3. SỬA: Quét mã vạch (Gọi chuẩn endpoint PosController: /api/admin/pos/product?sku=...)
+    async handleBarcodeScan(sku: string) {
+      this.errorMsg = '';
+      const cleanSku = sku.trim();
+      if (!cleanSku) return;
+
+      // Check nhanh dưới local trước
+      const localProduct = this.allProducts.find(p => p.sku.toLowerCase() === cleanSku.toLowerCase());
+      if (localProduct) {
+        this.addToCart(localProduct);
+        return;
+      }
+
+      // Nếu không thấy thì gọi API check real-time qua PosController
+      try {
+        const { data } = await api.get('/admin/pos/product', { params: { sku: cleanSku } });
+        if (data) {
+          const mappedProduct: PosProduct = {
+            id: data.productId,
             sku: data.sku,
             name: data.productName,
+            subName: `${data.capacityValue}ml - ${data.bottleTypeName}`,
             price: data.price,
-            quantity: 1,
             stockQuantity: data.stockQuantity,
-            imageUrl: data.imageUrl,
-          });
+            image: data.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.productName)}&background=random&color=fff`,
+            category: data.categoryName || 'Tất cả'
+          };
+          this.addToCart(mappedProduct);
         }
-        return { success: true };
-      } catch (err: any) {
-        return {
-          success: false,
-          message: extractErrorMessage(
-            err,
-            "Không tìm thấy sản phẩm với mã này"
-          ),
-        };
+      } catch (error: any) {
+        this.errorMsg = error.response?.data?.message || `Mã vạch SKU "${cleanSku}" không tồn tại trên hệ thống!`;
       }
     },
 
-    increaseQuantity(itemId: number) {
-      const item = this.cart.find((i) => i.id === itemId);
+    // 4. Cập nhật số lượng thủ công bằng nút + / -
+    updateQuantity(sku: string, qty: number) {
+      const item = this.cart.find(i => i.product.sku === sku);
       if (!item) return;
-      if (item.stockQuantity && item.quantity >= item.stockQuantity) return;
-      item.quantity += 1;
-    },
 
-    decreaseQuantity(itemId: number) {
-      const item = this.cart.find((i) => i.id === itemId);
-      if (!item) return;
-      item.quantity -= 1;
-      if (item.quantity <= 0) {
-        this.removeItem(itemId);
-      }
-    },
-
-    removeItem(itemId: number) {
-      this.cart = this.cart.filter((i) => i.id !== itemId);
-    },
-
-    clearCart() {
-      this.cart = [];
-      this.selectedCustomer = null;
-      this.customerPhoneInput = "";
-      this.voucherCode = "";
-      this.checkoutError = "";
-      // KHÔNG reset lastOrder & appliedVoucherCode ở đây nữa —
-      // để CartSideBar còn hiển thị được dòng giảm giá của đơn CASH vừa thanh toán xong.
-      // 2 field này được dọn riêng ở startNewOrder() khi cashier thực sự bắt đầu đơn mới.
-    },
-    startNewOrder() {
-      this.lastOrder = null;
-      this.appliedVoucherCode = "";
-    },
-    // ============================================================
-    // TÌM KHÁCH THEO SĐT — GỌI API THẬT
-    // GET /api/admin/pos/customer?phone=...
-    // found=false vẫn là kết quả hợp lệ -> nghĩa là khách vãng lai,
-    // KHÔNG coi đó là lỗi (BE trả 200 OK cho cả 2 trường hợp)
-    // ============================================================
-    async searchCustomerByPhone(): Promise<CustomerLookupResult> {
-      const phone = this.customerPhoneInput.trim();
-      if (!phone) {
-        this.customerLookupMessage = "Vui lòng nhập số điện thoại khách";
-        return { found: false, message: this.customerLookupMessage };
+      if (qty <= 0) {
+        this.removeFromCart(sku);
+        return;
       }
 
-      this.isSearchingCustomer = true;
-      this.customerLookupMessage = "";
+      if (qty > item.product.stockQuantity) {
+        this.errorMsg = `Không thể chỉnh sửa. Kho chỉ còn tối đa ${item.product.stockQuantity} sản phẩm!`;
+        item.quantity = item.product.stockQuantity;
+        return;
+      }
+
+      item.quantity = qty;
+    },
+
+    removeFromCart(sku: string) {
+      this.cart = this.cart.filter(item => item.product.sku !== sku);
+    },
+
+    // 5. SỬA: Tìm kiếm khách hàng bằng SĐT (Gọi chuẩn PosController: /api/admin/pos/customer?phone=...)
+    async searchCustomer(phone: string) {
+      if (!phone.trim()) return;
+      this.errorMsg = '';
       try {
-        const { data } = await api.get<CustomerLookupResult>(
-          "/admin/pos/customer",
-          {
-            params: { phone },
-          }
-        );
-
-        if (data.found && data.customer) {
-          this.selectedCustomer = data.customer;
-          this.customerLookupMessage = `Đã chọn khách: ${data.customer.name}`;
+        const { data } = await api.get('/admin/pos/customer', { params: { phone } });
+        if (data && data.found) {
+          this.customer = data.customer;
         } else {
-          this.selectedCustomer = null;
-          this.customerLookupMessage = data.message || "Khách vãng lai";
+          this.customer = null;
+          this.errorMsg = data.message || 'Hóa đơn sẽ tính dưới dạng khách vãng lai.';
         }
-        return data;
-      } catch (err: any) {
-        this.selectedCustomer = null;
-        this.customerLookupMessage = extractErrorMessage(
-          err,
-          "Không tìm được thông tin khách hàng"
-        );
-        return { found: false, message: this.customerLookupMessage };
-      } finally {
-        this.isSearchingCustomer = false;
+      } catch (error) {
+        this.customer = null;
+        this.errorMsg = 'Lỗi kết nối khi tìm kiếm khách hàng!';
       }
     },
 
-    clearSelectedCustomer() {
-      this.selectedCustomer = null;
-      this.customerPhoneInput = "";
-      this.customerLookupMessage = "";
-    },
-
-    // ============================================================
-    // VOUCHER
-    // Theo nghiệp vụ thực tế của BE: voucher chỉ được validate thật
-    // (đúng hạn, đủ điều kiện đơn tối thiểu, tính đúng % / tiền giảm)
-    // ngay trong lúc gọi /checkout — KHÔNG có endpoint preview riêng.
-    // Vì vậy ở đây chỉ lưu mã người dùng nhập, còn việc giảm bao nhiêu
-    // sẽ chỉ biết chính xác sau khi BE trả PosOrderResponse.discountAmount.
-    // ============================================================
-    setVoucherCode(code: string) {
-      this.voucherCode = code;
-    },
-
-    clearVoucher() {
-      this.voucherCode = "";
-      this.appliedVoucherCode = "";
-    },
-
-    // ============================================================
-    // CHECKOUT — GỌI API THẬT
-    // POST /api/admin/pos/checkout
-    // CASH  -> status COMPLETED ngay, BE đã trừ kho + tích điểm + giữ voucher
-    // VNPAY -> status PENDING_PAYMENT, BE trả vnpayPaymentUrl để FE mở QR,
-    //          kho/voucher đã bị giữ ngay lúc này (rollback qua IPN nếu thất bại)
-    // ============================================================
-    async checkout(
-      paymentMethod: "CASH" | "VNPAY"
-    ): Promise<{
-      success: boolean;
-      order?: PosOrderResponse;
-      message?: string;
-    }> {
+    // 6. SỬA: Gọi lệnh Thanh toán (Gọi chuẩn PosController: /api/admin/pos/checkout)
+    async processCheckout() {
       if (this.cart.length === 0) {
-        this.checkoutError = "Giỏ hàng đang trống";
-        return { success: false, message: this.checkoutError };
+        this.errorMsg = 'Giỏ hàng đang trống, không thể thanh toán!';
+        return;
       }
 
-      this.isCheckingOut = true;
-      this.checkoutError = "";
+      this.isLoading = true;
+      this.errorMsg = '';
 
-      const payload: PosCheckoutRequest = {
-        items: this.cart.map((item) => ({
-          sku: item.sku,
-          quantity: item.quantity,
-        })),
-        paymentMethod,
-        customerPhone:
-          this.selectedCustomer?.phone ||
-          this.customerPhoneInput.trim() ||
-          null,
-        voucherCode: this.voucherCode.trim() || null,
+      const payload = {
+        customerPhone: this.customer?.phone || null,
+        voucherCode: this.voucherCode || null,
+        paymentMethod: this.paymentMethod,
+        items: this.cart.map(item => ({
+          sku: item.product.sku,
+          quantity: item.quantity
+        }))
       };
 
       try {
-        const { data } = await api.post<PosOrderResponse>(
-          "/admin/pos/checkout",
-          payload
-        );
+        // Đấm thẳng vào endpoint PosController xịn
+        const { data } = await api.post('/admin/pos/checkout', payload);
 
-        this.lastOrder = data;
-        this.appliedVoucherCode = payload.voucherCode || "";
-
-        // CASH hoàn tất ngay -> dọn giỏ hàng để bắt đầu đơn mới
-        // VNPAY phải đợi khách quét QR xong (qua /return hoặc IPN) mới nên dọn giỏ,
-        // nên giữ nguyên cart ở đây, để PosView tự quyết định khi nào clearCart()
-        if (paymentMethod === "CASH") {
-          this.clearCart();
+        if (this.paymentMethod === 'VNPAY') {
+          if (data.vnpayPaymentUrl) {
+            this.vnpayUrl = data.vnpayPaymentUrl;
+            window.open(data.vnpayPaymentUrl, '_blank'); // Bật tab mới quét mã QR VNPay
+          } else {
+            this.errorMsg = 'Không nhận được link thanh toán VNPay từ máy chủ!';
+          }
+        } else {
+          // Trả tiền mặt thành công -> In hóa đơn và dọn giỏ
+          alert('Thanh toán tiền mặt thành công! Hệ thống đang xử lý hóa đơn...');
+          this.startNewOrder();
         }
-
-        return { success: true, order: data };
-      } catch (err: any) {
-        this.checkoutError = extractErrorMessage(
-          err,
-          "Thanh toán thất bại, vui lòng thử lại"
-        );
-        return { success: false, message: this.checkoutError };
+      } catch (error: any) {
+        this.errorMsg = error.response?.data?.message || 'Thanh toán thất bại. Vui lòng kiểm tra lại!';
       } finally {
-        this.isCheckingOut = false;
+        this.isLoading = false;
       }
     },
-  },
-});
+
+    // 7. Reset toàn bộ giỏ hàng để đón khách tiếp theo
+    startNewOrder() {
+      this.cart = [];
+      this.customer = null;
+      this.voucherCode = '';
+      this.discountAmount = 0;
+      this.vnpayUrl = '';
+      this.errorMsg = '';
+      this.fetchProducts(); // Tải lại để cập nhật số lượng tồn kho mới nhất
+    }
+  }
+})

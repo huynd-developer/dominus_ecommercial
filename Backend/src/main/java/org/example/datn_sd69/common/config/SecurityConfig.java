@@ -58,7 +58,7 @@ public class SecurityConfig {
                         // Cho phép tất cả truy cập API đăng nhập, đăng ký
                         .requestMatchers("/api/auth/**").permitAll()
 
-                        .requestMatchers(HttpMethod.GET, "/api/brands/**", "/api/categories/**","/api/concentrations/**", "/api/fragrance-families/**","/api/capacities/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/brands/**", "/api/categories/**","/api/concentrations/**", "/api/fragrance-families/**","/api/capacities/**", "/api/products/**", "/api/bottle-types/**" ).permitAll()
                         // Nhóm Nhân sự: owner, manager, cashier mới được vào các API bắt đầu bằng /api/admin/
                         .requestMatchers("/api/admin/**").hasAnyAuthority("OWNER", "MANAGER", "CASHIER")
 
@@ -73,6 +73,7 @@ public class SecurityConfig {
 
         return http.build();
     }
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
