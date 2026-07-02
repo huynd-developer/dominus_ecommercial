@@ -100,6 +100,7 @@ public class CartService {
     }
 
     // Đã map sang DTO để trả chính xác Price và StockQuantity theo đúng yêu cầu Task UI
+    // Đã map sang DTO để trả chính xác Price và StockQuantity theo đúng yêu cầu Task UI
     public List<CartItemResponse> getCartByCustomerId(Integer customerId) {
         Cart cart = cartRepo.findByCustomerUserId(customerId).orElse(null);
         if (cart == null) return new ArrayList<>();
@@ -110,10 +111,15 @@ public class CartService {
             res.setProductVariantId(item.getProductVariant().getId());
             res.setSku(item.getProductVariant().getSku());
             res.setQuantity(item.getQuantity());
+            res.setProductName(item.getProductVariant().getProduct().getName());
 
             // Query trực tiếp giá và tồn kho realtime
             res.setPrice(item.getProductVariant().getPrice());
             res.setStockQuantity(item.getProductVariant().getStockQuantity());
+
+            // 👇 ĐÃ FIX: Lấy tên dung tích từ bảng Capacity truyền vào DTO 👇
+            // Chú ý: Nếu trong Entity Capacity của m dùng getCapacityName() thay vì getName() thì m đổi lại cho khớp nhé.
+            res.setCapacity(item.getProductVariant().getCapacity().getValue().intValue() + "ml");
 
             return res;
         }).collect(Collectors.toList());

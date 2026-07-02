@@ -5,7 +5,7 @@
       <div class="icon success">✓</div>
       <h2>Thanh toán thành công!</h2>
       <p>Cảm ơn bạn đã mua sắm tại Dominus. Đơn hàng của bạn đang được xử lý.</p>
-      <button @click="$router.push('/product')">Tiếp tục mua sắm ➔</button>
+      <button @click="$router.push('/')">Tiếp tục mua sắm ➔</button>
     </div>
 
     <!-- Màn hình Hủy / Thất bại -->
