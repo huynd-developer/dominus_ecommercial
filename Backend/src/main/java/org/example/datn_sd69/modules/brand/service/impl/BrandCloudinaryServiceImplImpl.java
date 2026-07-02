@@ -3,7 +3,7 @@ package org.example.datn_sd69.modules.brand.service.impl;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import lombok.RequiredArgsConstructor;
-import org.example.datn_sd69.modules.brand.service.CloudinaryService;
+import org.example.datn_sd69.modules.brand.service.BrandCloudinaryServiceImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -11,7 +11,7 @@ import java.io.IOException;
 import java.util.Map;
 @Service
 @RequiredArgsConstructor
-public class CloudinaryServiceImpl implements CloudinaryService {
+public class BrandCloudinaryServiceImplImpl implements BrandCloudinaryServiceImpl {
     private final Cloudinary cloudinary; // Hút cỗ máy cấu hình từ CloudinaryConfig
 
     @Override

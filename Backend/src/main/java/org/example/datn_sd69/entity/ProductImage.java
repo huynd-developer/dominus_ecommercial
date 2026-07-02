@@ -25,4 +25,7 @@ public class ProductImage extends BaseEntity {
 
     @Column(name = "IsPrimary")
     private Boolean isPrimary = false;
+
+    @Column(name = "IsDeleted")
+    private Boolean isDeleted = false;
 }
