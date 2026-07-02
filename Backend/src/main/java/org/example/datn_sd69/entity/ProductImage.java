@@ -32,8 +32,4 @@ public class ProductImage {
 
     @Column(name = "IsPrimary")
     private Boolean isPrimary = false;
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> 2b1bc93a5cf80b45b3fb045a44a8f5532337e787
