@@ -13,15 +13,12 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.example.datn_sd69.entity.base.BaseEntity;
 
 @Entity
 @Table(name = "ProductImage")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor
-public class ProductImage {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer id;
+public class ProductImage extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ProductId", nullable = false)

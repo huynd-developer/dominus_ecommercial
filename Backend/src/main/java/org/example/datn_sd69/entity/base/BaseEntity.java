@@ -13,7 +13,5 @@ public abstract class BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(name = "IsDeleted")
-    private Boolean isDeleted = false;
 
 }
