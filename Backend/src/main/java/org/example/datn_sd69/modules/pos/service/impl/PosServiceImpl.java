@@ -33,8 +33,10 @@ public class PosServiceImpl implements PosService {
     // ================================================================
     @Override
     public ProductVariantPosResponse findVariantBySku(String sku) {
-        ProductVariant variant = variantRepository.findBySkuWithDetails(sku)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với SKU: " + sku));
+        ProductVariant variant = variantRepository
+                .findBySkuIgnoreCaseAndIsDeletedFalse(sku)
+                .orElseThrow(() ->
+                        new RuntimeException("Không tìm thấy sản phẩm với SKU: " + sku));
 
         if (variant.getStatus() != 1) {
             throw new RuntimeException("Sản phẩm này hiện không được bán");
@@ -114,8 +116,10 @@ public class PosServiceImpl implements PosService {
         List<LineItem> lineItems = new ArrayList<>();
 
         for (PosItemRequest item : request.getItems()) {
-            ProductVariant variant = variantRepository.findBySkuWithDetails(item.getSku())
-                    .orElseThrow(() -> new RuntimeException("SKU không hợp lệ: " + item.getSku()));
+            ProductVariant variant = variantRepository
+                    .findBySkuIgnoreCaseAndIsDeletedFalse(item.getSku())
+                    .orElseThrow(() ->
+                            new RuntimeException("SKU không hợp lệ: " + item.getSku()));
 
             if (variant.getStatus() != 1) {
                 throw new RuntimeException("Sản phẩm [" + item.getSku() + "] hiện không được bán");

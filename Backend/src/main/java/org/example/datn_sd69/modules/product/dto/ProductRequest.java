@@ -21,8 +21,7 @@ public class ProductRequest {
     @NotNull(message = "Vui lòng chọn nồng độ")
     private Integer concentrationId;
 
-    @Size(max = 2000,
-            message = "Mô tả tối đa 2000 ký tự")
+    @Size(max = 2000, message = "Mô tả tối đa 2000 ký tự")
     private String description;
 
     @NotNull(message = "Vui lòng chọn giới tính")
@@ -32,8 +31,7 @@ public class ProductRequest {
     private Boolean isNiche;
 
     @NotNull(message = "Vui lòng chọn trạng thái")
-    @Min(value = 0)
-    @Max(value = 1)
+    @Min(value = 0, message = "Trạng thái không hợp lệ")
+    @Max(value = 1, message = "Trạng thái không hợp lệ")
     private Integer status;
-
 }

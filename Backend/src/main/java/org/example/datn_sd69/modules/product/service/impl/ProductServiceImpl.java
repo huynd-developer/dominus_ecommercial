@@ -1,30 +1,22 @@
 package org.example.datn_sd69.modules.product.service.impl;
 
 import lombok.RequiredArgsConstructor;
-import org.example.datn_sd69.entity.Brand;
-import org.example.datn_sd69.entity.Category;
-import org.example.datn_sd69.entity.Concentration;
-import org.example.datn_sd69.entity.Product;
-import org.example.datn_sd69.entity.ProductImage;
-import org.example.datn_sd69.modules.product.dto.ProductImageResponse;
-import org.example.datn_sd69.modules.product.dto.ProductRequest;
-import org.example.datn_sd69.modules.product.dto.ProductResponse;
+import org.example.datn_sd69.entity.*;
+import org.example.datn_sd69.modules.product.dto.*;
 import org.example.datn_sd69.modules.product.service.ProductCloudinaryServiceImpl;
 import org.example.datn_sd69.modules.product.service.ProductService;
-import org.example.datn_sd69.repository.BrandRepository;
-import org.example.datn_sd69.repository.CategoryRepository;
-import org.example.datn_sd69.repository.ConcentrationRepository;
-import org.example.datn_sd69.repository.ProductImageRepository;
-import org.example.datn_sd69.repository.ProductRepository;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.example.datn_sd69.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -32,20 +24,21 @@ import java.util.List;
 public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
-
+    private final ProductVariantRepository productVariantRepository;
     private final ProductImageRepository productImageRepository;
 
     private final BrandRepository brandRepository;
-
     private final CategoryRepository categoryRepository;
-
     private final ConcentrationRepository concentrationRepository;
 
-    private final ProductCloudinaryServiceImpl productCloudinaryServiceImpl;
+    private final CapacityRepository capacityRepository;
+    private final BottleTypeRepository bottleTypeRepository;
 
-    // ===========================
-    // CREATE
-    // ===========================
+    private final ProductCloudinaryServiceImpl cloudinary;
+
+    // =====================================================
+    // CREATE PRODUCT
+    // =====================================================
 
     @Override
     public ProductResponse create(
@@ -56,42 +49,29 @@ public class ProductServiceImpl implements ProductService {
 
         Brand brand = brandRepository.findById(request.getBrandId())
                 .orElseThrow(() ->
-                        new RuntimeException("Brand không tồn tại"));
+                        new RuntimeException("Không tìm thấy thương hiệu"));
 
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() ->
-                        new RuntimeException("Category không tồn tại"));
+                        new RuntimeException("Không tìm thấy danh mục"));
 
         Concentration concentration = concentrationRepository
                 .findById(request.getConcentrationId())
                 .orElseThrow(() ->
-                        new RuntimeException("Concentration không tồn tại"));
+                        new RuntimeException("Không tìm thấy nồng độ"));
 
         Product product = new Product();
 
         product.setName(request.getName());
-
         product.setBrand(brand);
-
         product.setCategory(category);
-
         product.setConcentration(concentration);
-
         product.setDescription(request.getDescription());
-
         product.setGender(request.getGender());
-
         product.setIsNiche(request.getIsNiche());
-
-        product.setStatus(
-                request.getStatus() == null
-                        ? 1
-                        : request.getStatus()
-        );
-
-        product.setIsDeleted(false);
-
+        product.setStatus(request.getStatus());
         product.setCreatedAt(LocalDateTime.now());
+        product.setIsDeleted(false);
 
         product = productRepository.save(product);
 
@@ -104,10 +84,9 @@ public class ProductServiceImpl implements ProductService {
 
         return response;
     }
-
-    // ===========================
-    // UPDATE
-    // ===========================
+    // =====================================================
+// UPDATE PRODUCT
+// =====================================================
 
     @Override
     public ProductResponse update(
@@ -117,74 +96,82 @@ public class ProductServiceImpl implements ProductService {
             List<MultipartFile> images
     ) {
 
-        Product product = productRepository.findById(id)
+        Product product = productRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() ->
-                        new RuntimeException("Sản phẩm không tồn tại"));
+                        new RuntimeException("Không tìm thấy sản phẩm"));
 
         Brand brand = brandRepository.findById(request.getBrandId())
                 .orElseThrow(() ->
-                        new RuntimeException("Brand không tồn tại"));
+                        new RuntimeException("Không tìm thấy thương hiệu"));
 
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() ->
-                        new RuntimeException("Category không tồn tại"));
+                        new RuntimeException("Không tìm thấy danh mục"));
 
         Concentration concentration = concentrationRepository
                 .findById(request.getConcentrationId())
                 .orElseThrow(() ->
-                        new RuntimeException("Concentration không tồn tại"));
+                        new RuntimeException("Không tìm thấy nồng độ"));
 
         product.setName(request.getName());
-
         product.setBrand(brand);
-
         product.setCategory(category);
-
         product.setConcentration(concentration);
-
         product.setDescription(request.getDescription());
-
         product.setGender(request.getGender());
-
         product.setIsNiche(request.getIsNiche());
-
         product.setStatus(request.getStatus());
 
         product = productRepository.save(product);
 
-        // Nếu có upload ảnh mới thì thay toàn bộ
-        if ((primaryImage != null && !primaryImage.isEmpty())
-                || (images != null && !images.isEmpty())) {
-
-            deleteImages(product);
-
+        /*
+         * Upload thêm ảnh nếu có.
+         * Nếu muốn chức năng thay thế toàn bộ ảnh cũ thì
+         * sẽ xử lý ở phần saveImages()/deleteImages().
+         */
+        if (primaryImage != null || (images != null && !images.isEmpty())) {
             saveImages(product, primaryImage, images);
         }
 
         return mapToResponse(product);
     }
-    // ===========================
-    // GET BY ID
-    // ===========================
+
+    // =====================================================
+// DELETE PRODUCT
+// =====================================================
 
     @Override
-    @Transactional(readOnly = true)
-    public ProductResponse getById(Integer id) {
+    public void delete(Integer id) {
 
-        Product product = productRepository.findById(id)
+        Product product = productRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() ->
-                        new RuntimeException("Sản phẩm không tồn tại"));
+                        new RuntimeException("Không tìm thấy sản phẩm"));
 
-        if (Boolean.TRUE.equals(product.getIsDeleted())) {
-            throw new RuntimeException("Sản phẩm đã bị xóa");
+        // Soft delete Product
+        product.setIsDeleted(true);
+        productRepository.save(product);
+
+        // Soft delete tất cả Variant
+        List<ProductVariant> variants =
+                productVariantRepository.findByProductIdAndIsDeletedFalse(id);
+
+        for (ProductVariant variant : variants) {
+            variant.setIsDeleted(true);
         }
 
-        return mapToResponse(product);
-    }
+        productVariantRepository.saveAll(variants);
 
-    // ===========================
-    // ADMIN - GET ALL
-    // ===========================
+        // Soft delete tất cả Image
+        List<ProductImage> images =
+                productImageRepository.findByProductIdAndIsDeletedFalse(id);
+
+        for (ProductImage image : images) {
+            image.setIsDeleted(true);
+        }
+
+        productImageRepository.saveAll(images);
+
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -194,30 +181,26 @@ public class ProductServiceImpl implements ProductService {
             int size
     ) {
 
-        Page<Product> productPage;
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, "id")
+        );
 
-        if (keyword == null || keyword.trim().isEmpty()) {
+        Page<Product> products;
 
-            productPage = productRepository.findByIsDeletedFalse(
-                    PageRequest.of(page, size)
-            );
-
+        if (keyword == null || keyword.isBlank()) {
+            products = productRepository.findByIsDeletedFalse(pageable);
         } else {
-
-            productPage = productRepository
+            products = productRepository
                     .findByNameContainingIgnoreCaseAndIsDeletedFalse(
                             keyword,
-                            PageRequest.of(page, size)
+                            pageable
                     );
         }
 
-        return productPage.map(this::mapToResponse);
-
+        return products.map(this::mapToResponse);
     }
-
-    // ===========================
-    // PUBLIC - GET ACTIVE
-    // ===========================
 
     @Override
     @Transactional(readOnly = true)
@@ -227,117 +210,402 @@ public class ProductServiceImpl implements ProductService {
             int size
     ) {
 
-        Page<Product> productPage;
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, "id")
+        );
 
-        if (keyword == null || keyword.trim().isEmpty()) {
+        Page<Product> products;
 
-            productPage =
-                    productRepository.findByStatusAndIsDeletedFalse(
+        if (keyword == null || keyword.isBlank()) {
+
+            products = productRepository
+                    .findByStatusAndIsDeletedFalse(
                             1,
-                            PageRequest.of(page, size)
+                            pageable
                     );
 
         } else {
 
-            productPage =
-                    productRepository
-                            .findByNameContainingIgnoreCaseAndStatusAndIsDeletedFalse(
-                                    keyword,
-                                    1,
-                                    PageRequest.of(page, size)
-                            );
+            products = productRepository
+                    .findByNameContainingIgnoreCaseAndStatusAndIsDeletedFalse(
+                            keyword,
+                            1,
+                            pageable
+                    );
 
         }
 
-        return productPage.map(this::mapToResponse);
+        return products.map(this::mapToResponse);
 
     }
-
-    // ===========================
-    // DELETE (SOFT DELETE)
-    // ===========================
 
     @Override
-    public void delete(Integer id) {
+    @Transactional(readOnly = true)
+    public ProductResponse getById(Integer id) {
 
-        Product product = productRepository.findById(id)
+        Product product = productRepository
+                .findDetailWithVariants(id)
                 .orElseThrow(() ->
-                        new RuntimeException("Sản phẩm không tồn tại"));
+                        new RuntimeException("Không tìm thấy sản phẩm"));
 
-        deleteImages(product);
-
-        product.setIsDeleted(true);
-
-        productRepository.save(product);
+        return mapToResponse(product);
 
     }
-    // ===========================
-    // MAP ENTITY -> RESPONSE
-    // ===========================
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductVariantResponse> getVariantsByProduct(
+            Integer productId
+    ) {
+
+        return productVariantRepository
+                .findByProductIdAndIsDeletedFalse(productId)
+                .stream()
+                .map(this::mapVariantToResponse)
+                .toList();
+
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductVariantResponse> getActiveVariantsByProduct(
+            Integer productId
+    ) {
+
+        return productVariantRepository
+                .findByProductIdAndStatusAndIsDeletedFalse(
+                        productId,
+                        1
+                )
+                .stream()
+                .map(this::mapVariantToResponse)
+                .toList();
+
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProductVariantResponse getVariantById(
+            Integer variantId
+    ) {
+
+        ProductVariant variant = productVariantRepository
+                .findByIdAndIsDeletedFalse(variantId)
+                .orElseThrow(() ->
+                        new RuntimeException("Không tìm thấy biến thể"));
+
+        return mapVariantToResponse(variant);
+
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProductVariantResponse getVariantBySku(
+            String sku
+    ) {
+
+        ProductVariant variant = productVariantRepository
+                .findBySkuIgnoreCaseAndIsDeletedFalse(sku)
+                .orElseThrow(() ->
+                        new RuntimeException("Không tìm thấy SKU"));
+
+        return mapVariantToResponse(variant);
+
+    }
+
+    @Override
+    public ProductVariantResponse createVariant(
+            Integer productId,
+            ProductVariantRequest request
+    ) {
+
+        Product product = productRepository
+                .findByIdAndIsDeletedFalse(productId)
+                .orElseThrow(() ->
+                        new RuntimeException("Không tìm thấy sản phẩm"));
+
+        Capacity capacity = capacityRepository
+                .findById(request.getCapacityId())
+                .orElseThrow(() ->
+                        new RuntimeException("Không tìm thấy dung tích"));
+
+        BottleType bottleType = bottleTypeRepository
+                .findById(request.getBottleTypeId())
+                .orElseThrow(() ->
+                        new RuntimeException("Không tìm thấy loại chai"));
+
+        // Không cho trùng Capacity + BottleType
+        List<ProductVariant> variants =
+                productVariantRepository.findByProductIdAndIsDeletedFalse(productId);
+
+        for (ProductVariant item : variants) {
+
+            if (item.getCapacity().getId().equals(capacity.getId())
+                    && item.getBottleType().getId().equals(bottleType.getId())) {
+
+                throw new RuntimeException(
+                        "Biến thể đã tồn tại"
+                );
+
+            }
+
+        }
+
+        ProductVariant variant = new ProductVariant();
+
+        variant.setProduct(product);
+        variant.setCapacity(capacity);
+        variant.setBottleType(bottleType);
+
+        variant.setPrice(request.getPrice());
+
+        variant.setStockQuantity(request.getStockQuantity());
+
+        variant.setStatus(request.getStatus());
+
+        variant.setIsDeleted(false);
+
+        String sku = generateSku(
+                product,
+                capacity,
+                bottleType
+        );
+
+        variant.setSku(sku);
+
+        variant = productVariantRepository.save(variant);
+
+        return mapVariantToResponse(variant);
+
+    }
+
+    @Override
+    public ProductVariantResponse updateVariant(
+            Integer variantId,
+            ProductVariantRequest request
+    ) {
+
+        ProductVariant variant =
+                productVariantRepository
+                        .findByIdAndIsDeletedFalse(variantId)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Không tìm thấy biến thể"));
+
+        Capacity capacity =
+                capacityRepository
+                        .findById(request.getCapacityId())
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Không tìm thấy dung tích"));
+
+        BottleType bottleType =
+                bottleTypeRepository
+                        .findById(request.getBottleTypeId())
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Không tìm thấy loại chai"));
+
+        List<ProductVariant> variants =
+                productVariantRepository
+                        .findByProductIdAndIsDeletedFalse(
+                                variant.getProduct().getId());
+
+        for (ProductVariant item : variants) {
+
+            if (!item.getId().equals(variantId)
+                    && item.getCapacity().getId().equals(capacity.getId())
+                    && item.getBottleType().getId().equals(bottleType.getId())) {
+
+                throw new RuntimeException(
+                        "Biến thể đã tồn tại"
+                );
+
+            }
+
+        }
+
+        variant.setCapacity(capacity);
+
+        variant.setBottleType(bottleType);
+
+        variant.setPrice(request.getPrice());
+
+        variant.setStockQuantity(request.getStockQuantity());
+
+        variant.setStatus(request.getStatus());
+
+        variant.setSku(generateSku(
+                variant.getProduct(),
+                capacity,
+                bottleType
+        ));
+
+        variant =
+                productVariantRepository.save(variant);
+
+        return mapVariantToResponse(variant);
+
+    }
+
+    @Override
+    public void deleteVariant(Integer variantId) {
+
+        ProductVariant variant =
+                productVariantRepository
+                        .findByIdAndIsDeletedFalse(variantId)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Không tìm thấy biến thể"));
+
+        variant.setIsDeleted(true);
+
+        productVariantRepository.save(variant);
+
+    }
+
+    private String generateSku(
+            Product product,
+            Capacity capacity,
+            BottleType bottleType
+    ) {
+
+        String productCode =
+                product.getId().toString();
+
+        String capacityCode =
+                capacity.getId().toString();
+
+        String bottleCode =
+                bottleType.getId().toString();
+
+        return "SP"
+                + productCode
+                + "-"
+                + capacityCode
+                + "-"
+                + bottleCode;
+
+    }
 
     private ProductResponse mapToResponse(Product product) {
 
-        ProductResponse response = new ProductResponse();
+        ProductResponse res = new ProductResponse();
 
-        response.setId(product.getId());
+        res.setId(product.getId());
 
-        response.setName(product.getName());
+        res.setName(product.getName());
 
-        response.setBrandId(product.getBrand().getId());
+        res.setBrandId(product.getBrand().getId());
+        res.setBrandName(product.getBrand().getName());
 
-        response.setBrandName(product.getBrand().getName());
+        res.setCategoryId(product.getCategory().getId());
+        res.setCategoryName(product.getCategory().getName());
 
-        response.setCategoryId(product.getCategory().getId());
+        res.setConcentrationId(product.getConcentration().getId());
+        res.setConcentrationName(product.getConcentration().getName());
 
-        response.setCategoryName(product.getCategory().getName());
+        res.setGender(product.getGender());
 
-        response.setConcentrationId(
-                product.getConcentration().getId()
-        );
+        res.setDescription(product.getDescription());
 
-        response.setConcentrationName(
-                product.getConcentration().getName()
-        );
+        res.setIsNiche(product.getIsNiche());
 
-        response.setDescription(
-                product.getDescription()
-        );
+        res.setStatus(product.getStatus());
 
-        response.setGender(
-                product.getGender()
-        );
+        // ================= IMAGES =================
 
-        response.setIsNiche(
-                product.getIsNiche()
-        );
-
-        response.setStatus(
-                product.getStatus()
-        );
-
-        List<ProductImageResponse> images =
+        List<ProductImageResponse> imageResponses =
                 productImageRepository
-                        .findByProductId(product.getId())
+                        .findByProductIdAndIsDeletedFalse(product.getId())
                         .stream()
-                        .map(image -> new ProductImageResponse(
+                        .map(image -> {
 
-                                image.getId(),
+                            ProductImageResponse dto =
+                                    new ProductImageResponse();
 
-                                image.getImageUrl(),
+                            dto.setId(image.getId());
 
-                                image.getIsPrimary()
+                            dto.setImageUrl(image.getImageUrl());
 
-                        ))
+                            dto.setPrimary(image.getIsPrimary());
+
+                            return dto;
+
+                        })
                         .toList();
 
-        response.setImages(images);
+        res.setImages(imageResponses);
 
-        return response;
+        // ================= VARIANTS =================
+
+        List<ProductVariantResponse> variants =
+                productVariantRepository
+                        .findByProductIdAndIsDeletedFalse(product.getId())
+                        .stream()
+                        .map(this::mapVariantToResponse)
+                        .toList();
+
+        res.setVariants(variants);
+
+        return res;
+
     }
 
-    // ===========================
-    // SAVE IMAGES
-    // ===========================
+    private ProductVariantResponse mapVariantToResponse(
+            ProductVariant variant
+    ) {
+
+        ProductVariantResponse dto =
+                new ProductVariantResponse();
+
+        dto.setId(variant.getId());
+
+        dto.setProductId(
+                variant.getProduct().getId()
+        );
+
+        dto.setProductName(
+                variant.getProduct().getName()
+        );
+
+        dto.setCapacityId(
+                variant.getCapacity().getId()
+        );
+
+        dto.setCapacityValue(
+                variant.getCapacity().getValue()
+        );
+
+        dto.setBottleTypeId(
+                variant.getBottleType().getId()
+        );
+
+        dto.setBottleTypeName(
+                variant.getBottleType().getName()
+        );
+
+        dto.setSku(
+                variant.getSku()
+        );
+
+        dto.setPrice(
+                variant.getPrice()
+        );
+
+        dto.setStockQuantity(
+                variant.getStockQuantity()
+        );
+
+        dto.setStatus(
+                variant.getStatus()
+        );
+
+        return dto;
+
+    }
 
     private List<ProductImageResponse> saveImages(
 
@@ -349,27 +617,31 @@ public class ProductServiceImpl implements ProductService {
 
     ) {
 
-        List<ProductImageResponse> responses =
+        List<ProductImageResponse> result =
                 new ArrayList<>();
 
-        // ---------- Ảnh đại diện ----------
-        if (primaryImage != null &&
-                !primaryImage.isEmpty()) {
+        // ================= PRIMARY =================
 
-            ProductImage image = new ProductImage();
+        if (primaryImage != null && !primaryImage.isEmpty()) {
+
+            String imageUrl =
+                    cloudinary.uploadImage(primaryImage);
+
+            ProductImage image =
+                    new ProductImage();
 
             image.setProduct(product);
 
-            image.setImageUrl(
-                    productCloudinaryServiceImpl
-                            .uploadImage(primaryImage)
-            );
+            image.setImageUrl(imageUrl);
 
             image.setIsPrimary(true);
 
-            image = productImageRepository.save(image);
+            image.setIsDeleted(false);
 
-            responses.add(
+            image =
+                    productImageRepository.save(image);
+
+            result.add(
 
                     new ProductImageResponse(
 
@@ -385,7 +657,8 @@ public class ProductServiceImpl implements ProductService {
 
         }
 
-        // ---------- Ảnh phụ ----------
+        // ================= SUB IMAGES =================
+
         if (images != null) {
 
             for (MultipartFile file : images) {
@@ -396,20 +669,24 @@ public class ProductServiceImpl implements ProductService {
 
                 }
 
-                ProductImage image = new ProductImage();
+                String imageUrl =
+                        cloudinary.uploadImage(file);
+
+                ProductImage image =
+                        new ProductImage();
 
                 image.setProduct(product);
 
-                image.setImageUrl(
-                        productCloudinaryServiceImpl
-                                .uploadImage(file)
-                );
+                image.setImageUrl(imageUrl);
 
                 image.setIsPrimary(false);
 
-                image = productImageRepository.save(image);
+                image.setIsDeleted(false);
 
-                responses.add(
+                image =
+                        productImageRepository.save(image);
+
+                result.add(
 
                         new ProductImageResponse(
 
@@ -427,48 +704,25 @@ public class ProductServiceImpl implements ProductService {
 
         }
 
-        return responses;
+        return result;
 
     }
-    // ===========================
-    // DELETE IMAGES
-    // ===========================
 
     private void deleteImages(Product product) {
 
         List<ProductImage> images =
-                productImageRepository.findByProductId(
-                        product.getId()
-                );
-
-        if (images.isEmpty()) {
-            return;
-        }
+                productImageRepository
+                        .findByProductIdAndIsDeletedFalse(
+                                product.getId()
+                        );
 
         for (ProductImage image : images) {
 
-            try {
-
-                if (image.getImageUrl() != null &&
-                        !image.getImageUrl().isBlank()) {
-
-                    productCloudinaryServiceImpl.deleteImage(
-                            image.getImageUrl()
-                    );
-
-                }
-
-            } catch (Exception ex) {
-
-                // Không làm dừng transaction nếu Cloudinary lỗi
-                ex.printStackTrace();
-
-            }
+            image.setIsDeleted(true);
 
         }
 
-        productImageRepository.deleteAll(images);
+        productImageRepository.saveAll(images);
 
     }
-
 }

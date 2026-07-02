@@ -33,4 +33,6 @@ public interface ProductImageRepository
             @Param("productId") Integer productId
     );
 
+    List<ProductImage> findByProductIdAndIsDeletedFalse(Integer productId);
+
 }
