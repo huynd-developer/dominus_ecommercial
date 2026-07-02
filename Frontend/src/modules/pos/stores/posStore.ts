@@ -18,8 +18,11 @@ export interface CartItem {
 }
 
 export interface PosCustomer {
+  customerId?: number;
   name: string;
   phone: string;
+  email?: string;
+  customerRank?: string;
   loyaltyPoints: number;
 }
 
@@ -36,10 +39,20 @@ export interface PosStoreState {
   vnpayUrl: string;
   isLoading: boolean;
   errorMsg: string;
-
-  // Thêm nhẹ để lưu mã đơn sau checkout, không ảnh hưởng logic cũ
   lastOrderId: string | number | null;
 }
+
+const normalizePhone = (phone?: string | null): string => {
+  return (phone || "").replace(/[\s.-]/g, "").trim();
+};
+
+const isValidVietnamPhone = (phone: string): boolean => {
+  return /^(03|05|07|08|09)\d{8}$/.test(phone);
+};
+
+const normalizeText = (value?: string | null): string => {
+  return (value || "").trim();
+};
 
 export const usePosStore = defineStore("posStore", {
   state: (): PosStoreState => ({
@@ -87,14 +100,13 @@ export const usePosStore = defineStore("posStore", {
   },
 
   actions: {
-    // 1. Tải danh sách sản phẩm
     async fetchProducts() {
       this.isLoading = true;
       this.errorMsg = "";
 
       try {
         const { data } = await api.get("/admin/products");
-        const rawProducts = data.data || data.content || data;
+        const rawProducts = data.data || data.content || data || [];
         const flatProducts: PosProduct[] = [];
 
         rawProducts.forEach((p: any) => {
@@ -107,26 +119,22 @@ export const usePosStore = defineStore("posStore", {
             )}&background=random&color=fff&size=200`;
           }
 
-          // Data có mảng variants
           if (p.variants && p.variants.length > 0) {
             p.variants.forEach((v: any) => {
               flatProducts.push({
-                id: p.id,
+                id: v.variantId || v.id || p.id,
                 sku: v.sku,
-                name: p.name,
-                subName: `${v.capacityValue || ""}ml - ${
-                  v.bottleTypeName || ""
-                }`,
+                name: p.name || p.productName,
+                subName:
+                  v.capacityLabel ||
+                  `${v.capacityValue || ""}ml - ${v.bottleTypeName || ""}`,
                 price: Number(v.price || 0),
                 stockQuantity: Number(v.stockQuantity || 0),
                 image: imgUrl,
-                category: p.categoryName || "Tất cả",
+                category: p.categoryName || p.brandName || "Tất cả",
               });
             });
-          }
-
-          // Data dạng biến thể phẳng
-          else if (p.sku) {
+          } else if (p.sku) {
             flatProducts.push({
               id: p.variantId || p.id || p.productId,
               sku: p.sku,
@@ -142,20 +150,19 @@ export const usePosStore = defineStore("posStore", {
 
         this.allProducts = flatProducts;
 
-        const dynamicCategories = [
+        this.categories = [
           "Tất cả",
           ...new Set(flatProducts.map((p) => p.category).filter(Boolean)),
         ] as string[];
-
-        this.categories = dynamicCategories;
-      } catch (error) {
-        this.errorMsg = "Không thể tải danh sách sản phẩm từ máy chủ!";
+      } catch (error: any) {
+        this.errorMsg =
+          error.response?.data?.message ||
+          "Không thể tải danh sách sản phẩm từ máy chủ!";
       } finally {
         this.isLoading = false;
       }
     },
 
-    // 2. Thêm sản phẩm vào giỏ
     addToCart(product: PosProduct) {
       this.errorMsg = "";
 
@@ -170,21 +177,21 @@ export const usePosStore = defineStore("posStore", {
         }
 
         existingItem.quantity++;
-      } else {
-        if (product.stockQuantity <= 0) {
-          this.errorMsg = `Sản phẩm ${product.name} đã hết hàng trong kho!`;
-          return;
-        }
-
-        this.cart.push({ product, quantity: 1 });
+        return;
       }
+
+      if (product.stockQuantity <= 0) {
+        this.errorMsg = `Sản phẩm ${product.name} đã hết hàng trong kho!`;
+        return;
+      }
+
+      this.cart.push({ product, quantity: 1 });
     },
 
-    // 3. Quét mã vạch
     async handleBarcodeScan(sku: string) {
       this.errorMsg = "";
 
-      const cleanSku = sku.trim();
+      const cleanSku = normalizeText(sku);
       if (!cleanSku) return;
 
       const localProduct = this.allProducts.find(
@@ -226,8 +233,9 @@ export const usePosStore = defineStore("posStore", {
       }
     },
 
-    // 4. Cập nhật số lượng
     updateQuantity(sku: string, qty: number) {
+      this.errorMsg = "";
+
       const item = this.cart.find((i) => i.product.sku === sku);
       if (!item) return;
 
@@ -249,45 +257,58 @@ export const usePosStore = defineStore("posStore", {
       this.cart = this.cart.filter((item) => item.product.sku !== sku);
     },
 
-    // 5. Tìm khách hàng
     async searchCustomer(phone: string) {
-      if (!phone.trim()) return;
+      const cleanPhone = normalizePhone(phone);
+
+      if (!cleanPhone) {
+        this.customer = null;
+        this.errorMsg = "";
+        return;
+      }
+
+      if (!isValidVietnamPhone(cleanPhone)) {
+        this.customer = null;
+        this.errorMsg =
+          "Số điện thoại không hợp lệ. Vui lòng nhập 10 số, bắt đầu bằng 03, 05, 07, 08 hoặc 09.";
+        return;
+      }
 
       this.errorMsg = "";
 
       try {
         const { data } = await api.get("/admin/pos/customer", {
-          params: { phone },
+          params: { phone: cleanPhone },
         });
 
         if (data && data.found) {
-          this.customer = data.customer;
-        } else {
           this.customer = {
-            name: "",
-            phone,
-            loyaltyPoints: 0,
+            customerId: data.customer.customerId,
+            name: data.customer.name || "",
+            phone: data.customer.phone || cleanPhone,
+            email: data.customer.email || "",
+            customerRank: data.customer.customerRank || "",
+            loyaltyPoints: data.customer.loyaltyPoints || 0,
           };
-
-          this.errorMsg =
-            data.message || "Khách hàng mới! Vui lòng nhập thêm tên để tích điểm.";
+          return;
         }
-      } catch (error) {
+
         this.customer = {
           name: "",
-          phone,
+          phone: cleanPhone,
           loyaltyPoints: 0,
         };
 
-        this.errorMsg = "Không thể kiểm tra SĐT, đơn sẽ tính là khách mới.";
+        this.errorMsg =
+          data.message ||
+          "Không tìm thấy khách hàng. Vui lòng nhập tên để tạo khách mới hoặc bỏ chọn để bán vãng lai.";
+      } catch (error: any) {
+        this.customer = null;
+        this.errorMsg =
+          error.response?.data?.message ||
+          "Không thể kiểm tra số điện thoại khách hàng.";
       }
     },
 
-    // 6. Checkout
-    // Sửa chính ở hàm này:
-    // - Vẫn giữ logic cũ.
-    // - Nhưng return { success, data } để file Cart lấy được orderId thật.
-    // - Không reset cart trong này để tránh mất dữ liệu in hóa đơn.
     async processCheckout(extra?: {
       paymentMethod?: "CASH" | "VNPAY";
       cashGiven?: number;
@@ -303,13 +324,35 @@ export const usePosStore = defineStore("posStore", {
 
       const selectedPaymentMethod = extra?.paymentMethod || this.paymentMethod;
 
+      const cleanCustomerPhone = this.customer?.phone
+        ? normalizePhone(this.customer.phone)
+        : null;
+
+      const customerName = normalizeText(this.customer?.name);
+
+      if (cleanCustomerPhone && !isValidVietnamPhone(cleanCustomerPhone)) {
+        this.errorMsg =
+          "Số điện thoại khách hàng không hợp lệ. Vui lòng kiểm tra lại trước khi thanh toán.";
+        this.isLoading = false;
+        return false;
+      }
+
+      const isNewCustomer = !!cleanCustomerPhone && !this.customer?.customerId;
+
+      if (isNewCustomer && !customerName) {
+        this.errorMsg =
+          "Khách hàng mới cần nhập tên. Nếu muốn bán vãng lai, hãy bấm nút X để bỏ chọn khách.";
+        this.isLoading = false;
+        return false;
+      }
+
       const payload = {
-        customerPhone: this.customer?.phone?.trim() || null,
-        customerName: this.customer?.name?.trim() || null,
-        voucherCode: this.voucherCode?.trim() || null,
+        customerPhone: cleanCustomerPhone,
+        customerName: customerName || null,
+        voucherCode: normalizeText(this.voucherCode) || null,
         paymentMethod: selectedPaymentMethod.toUpperCase(),
-        cashGiven: extra?.cashGiven || null,
-        changeAmount: extra?.changeAmount || null,
+        cashGiven: extra?.cashGiven ?? null,
+        changeAmount: extra?.changeAmount ?? null,
         items: this.cart.map((item) => ({
           sku: item.product.sku,
           quantity: Number(item.quantity),
@@ -358,7 +401,6 @@ export const usePosStore = defineStore("posStore", {
       }
     },
 
-    // 7. Reset đơn mới
     startNewOrder() {
       this.cart = [];
       this.customer = null;

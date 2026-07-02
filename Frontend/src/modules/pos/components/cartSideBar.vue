@@ -273,7 +273,7 @@
 <script setup>
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
-import { usePosStore } from "../stores/posStore";
+import { usePosStore } from "@/modules/pos/stores/posStore";
 
 const posStore = usePosStore();
 const router = useRouter();
@@ -284,16 +284,17 @@ const displayCash = ref("");
 
 const formatPrice = (val) => new Intl.NumberFormat("vi-VN").format(val || 0);
 
+const normalizePhone = (phone) => {
+  return (phone || "").replace(/[\s.-]/g, "").trim();
+};
+
+const isValidVietnamPhone = (phone) => {
+  return /^(03|05|07|08|09)\d{8}$/.test(phone);
+};
+
 const isNewCustomer = computed(() => {
   if (!posStore.customer) return false;
-
-  const name = posStore.customer.name;
-  return (
-    name === "" ||
-    name === null ||
-    name === undefined ||
-    name === "Khách vãng lai"
-  );
+  return !!posStore.customer.phone && !posStore.customer.customerId;
 });
 
 const rawCashGiven = computed(() => {
@@ -306,14 +307,30 @@ const changeAmount = computed(() => {
 });
 
 const handleSearchCustomer = () => {
-  if (customerPhoneInput.value) {
-    posStore.searchCustomer(customerPhoneInput.value);
+  const phone = normalizePhone(customerPhoneInput.value);
+
+  if (!phone) {
+    posStore.customer = null;
+    posStore.errorMsg = "";
+    customerPhoneInput.value = "";
+    return;
   }
+
+  if (!isValidVietnamPhone(phone)) {
+    posStore.customer = null;
+    posStore.errorMsg =
+      "Số điện thoại không hợp lệ. Vui lòng nhập 10 số, bắt đầu bằng 03, 05, 07, 08 hoặc 09.";
+    return;
+  }
+
+  customerPhoneInput.value = phone;
+  posStore.searchCustomer(phone);
 };
 
 const handleClearCustomer = () => {
   posStore.customer = null;
   customerPhoneInput.value = "";
+  posStore.errorMsg = "";
 };
 
 const handleInputCash = (e) => {
@@ -338,12 +355,32 @@ const addAmount = (amount) => {
   displayCash.value = new Intl.NumberFormat("vi-VN").format(current + amount);
 };
 
-const normalizeCustomerBeforeCheckout = () => {
-  if (posStore.customer && isNewCustomer.value) {
-    if (!posStore.customer.name || posStore.customer.name.trim() === "") {
-      posStore.customer.name = "Khách vãng lai";
+const validateCustomerBeforeCheckout = () => {
+  if (!posStore.customer) {
+    posStore.errorMsg = "";
+    return true;
+  }
+
+  const phone = normalizePhone(posStore.customer.phone);
+
+  if (phone && !isValidVietnamPhone(phone)) {
+    posStore.errorMsg =
+      "Số điện thoại khách hàng không hợp lệ. Vui lòng kiểm tra lại.";
+    return false;
+  }
+
+  if (isNewCustomer.value) {
+    const name = (posStore.customer.name || "").trim();
+
+    if (!name) {
+      posStore.errorMsg =
+        "Khách hàng mới cần nhập tên. Nếu muốn bán vãng lai, hãy bấm nút X để bỏ chọn khách.";
+      return false;
     }
   }
+
+  posStore.errorMsg = "";
+  return true;
 };
 
 const buildInvoiceSnapshot = () => {
@@ -352,7 +389,7 @@ const buildInvoiceSnapshot = () => {
     paymentMethod: "CASH",
 
     customerName: posStore.customer?.name || "Khách vãng lai",
-    customerPhone: posStore.customer?.phone || customerPhoneInput.value || "",
+    customerPhone: posStore.customer?.phone || "",
 
     orderTime: new Date().toISOString(),
 
@@ -405,7 +442,7 @@ const isCheckoutSuccess = (checkoutResult) => {
 };
 
 const handleCheckoutAction = () => {
-  normalizeCustomerBeforeCheckout();
+  if (!validateCustomerBeforeCheckout()) return;
 
   if (posStore.paymentMethod === "CASH") {
     displayCash.value = new Intl.NumberFormat("vi-VN").format(
@@ -415,17 +452,13 @@ const handleCheckoutAction = () => {
     return;
   }
 
-  // VNPay giữ nguyên logic cũ: store nhận link rồi redirect sang VNPay.
-  // Khi VNPay quay về /payment/result thì PaymentResult.vue sẽ xử lý in.
   posStore.processCheckout();
 };
 
 const processCashPayment = async () => {
   if (changeAmount.value < 0) return;
+  if (!validateCustomerBeforeCheckout()) return;
 
-  normalizeCustomerBeforeCheckout();
-
-  // Chụp dữ liệu hóa đơn trước khi checkout/reset giỏ.
   const invoiceSnapshot = buildInvoiceSnapshot();
 
   const checkoutResult = await posStore.processCheckout({
@@ -436,16 +469,15 @@ const processCashPayment = async () => {
 
   if (!isCheckoutSuccess(checkoutResult)) return;
 
-  invoiceSnapshot.orderId = extractOrderId(checkoutResult) || invoiceSnapshot.orderId;
+  invoiceSnapshot.orderId =
+    extractOrderId(checkoutResult) || invoiceSnapshot.orderId;
 
-  // PaymentResult.vue sẽ đọc cái này để in hóa đơn.
   sessionStorage.setItem("pos_latest_invoice", JSON.stringify(invoiceSnapshot));
 
   showCashModal.value = false;
   displayCash.value = "";
   customerPhoneInput.value = "";
 
-  // Reset giỏ sau khi đã lưu snapshot hóa đơn.
   posStore.startNewOrder();
 
   router.push({

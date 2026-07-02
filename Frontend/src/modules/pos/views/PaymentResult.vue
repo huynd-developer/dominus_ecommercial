@@ -1,6 +1,10 @@
 <template>
   <div class="payment-result-container">
-    <div id="invoice-print-area" class="invoice-card k80-print-area" v-if="!isProcessing && isSuccess">
+    <div
+      id="invoice-print-area"
+      class="invoice-card k80-print-area"
+      v-if="!isProcessing && isSuccess"
+    >
       <div class="header">
         <div class="logo">
           <img
@@ -16,6 +20,7 @@
       </div>
 
       <div class="divider"></div>
+
       <h2 class="invoice-title">HÓA ĐƠN THANH TOÁN</h2>
 
       <div class="info-section">
@@ -58,18 +63,25 @@
           <tr v-for="(item, index) in orderItems" :key="item.sku || index">
             <td align="left">
               <span class="product-name">{{ item.productName }}</span>
-              <span class="product-sub" v-if="item.variantName">{{ item.variantName }}</span>
+              <span class="product-sub" v-if="item.variantName">
+                {{ item.variantName }}
+              </span>
               <span class="product-sub">{{ formatCurrency(item.price) }}</span>
             </td>
 
             <td align="center">{{ item.quantity }}</td>
-            <td align="right">{{ formatCurrency(item.price * item.quantity) }}</td>
+
+            <td align="right">
+              {{ formatCurrency(item.lineTotal || item.price * item.quantity) }}
+            </td>
           </tr>
 
           <tr v-if="orderItems.length === 0">
             <td align="left">
               <span class="product-name">Đơn hàng sản phẩm tổng hợp</span>
-              <span class="product-sub" v-if="orderInfo">Nội dung: {{ orderInfo }}</span>
+              <span class="product-sub" v-if="orderInfo">
+                Nội dung: {{ orderInfo }}
+              </span>
             </td>
 
             <td align="center">1</td>
@@ -96,7 +108,7 @@
           <span>{{ formatCurrency(amount) }}</span>
         </div>
 
-        <template v-if="paymentMethod === 'CASH'">
+        <template v-if="isCashPayment">
           <div class="info-row">
             <span>Tiền khách đưa:</span>
             <span>{{ formatCurrency(cashGiven) }}</span>
@@ -118,8 +130,19 @@
     <div class="status-card no-print" v-if="!isProcessing">
       <div v-if="isSuccess">
         <div class="success-icon">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M20 6L9 17L4 12" stroke-linecap="round" stroke-linejoin="round" />
+          <svg
+            width="40"
+            height="40"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+          >
+            <path
+              d="M20 6L9 17L4 12"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
           </svg>
         </div>
 
@@ -152,13 +175,93 @@ import api from "@/common/api";
 const route = useRoute();
 const router = useRouter();
 
-const orderId = ref(route.query.vnp_TxnRef || route.query.orderId || "");
-const paymentMethod = ref(route.query.paymentMethod || (route.query.vnp_SecureHash ? "VNPAY" : "CASH"));
-const bankCode = ref(route.query.vnp_BankCode || "");
-const transactionNo = ref(route.query.vnp_BankTranNo || route.query.vnp_TransactionNo || "");
-const orderInfo = ref(route.query.vnp_OrderInfo || "");
+const getQueryValue = (value) => {
+  if (Array.isArray(value)) {
+    return value[0] || "";
+  }
 
-const amount = ref(route.query.vnp_Amount ? Number(route.query.vnp_Amount) / 100 : 0);
+  return value || "";
+};
+
+const toMoneyNumber = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return 0;
+  }
+
+  const numberValue = Number(value);
+
+  if (Number.isNaN(numberValue)) {
+    return 0;
+  }
+
+  return numberValue;
+};
+
+/**
+ * VNPay callback trả vnp_Amount = số tiền * 100.
+ * Ví dụ: 4.200.000đ => vnp_Amount = 420.000.000
+ */
+const parseVnpayQueryAmount = (value) => {
+  const numberValue = toMoneyNumber(value);
+
+  if (numberValue <= 0) {
+    return 0;
+  }
+
+  return numberValue / 100;
+};
+
+/**
+ * Chỉ dùng khi nghi ngờ field amount đang là raw VNPay amount.
+ * Không áp dụng cho finalAmount vì finalAmount từ BE thường đã là tiền thật.
+ */
+const normalizePossibleRawVnpayAmount = (value, compareTotal = 0) => {
+  const numberValue = toMoneyNumber(value);
+  const totalValue = toMoneyNumber(compareTotal);
+
+  if (numberValue <= 0) {
+    return 0;
+  }
+
+  // Nếu khớp với vnp_Amount trên URL thì chắc chắn chia 100.
+  const queryVnpAmount = toMoneyNumber(getQueryValue(route.query.vnp_Amount));
+
+  if (queryVnpAmount > 0 && numberValue === queryVnpAmount) {
+    return numberValue / 100;
+  }
+
+  // Nếu tổng hàng là 4.200.000 mà amount là 420.000.000 thì chia 100.
+  if (totalValue > 0 && numberValue === totalValue * 100) {
+    return numberValue / 100;
+  }
+
+  return numberValue;
+};
+
+const orderId = ref(
+  getQueryValue(route.query.vnp_TxnRef) ||
+    getQueryValue(route.query.orderId) ||
+    ""
+);
+
+const paymentMethod = ref(
+  getQueryValue(route.query.paymentMethod) ||
+    (route.query.vnp_SecureHash ? "VNPAY" : "CASH")
+);
+
+const bankCode = ref(getQueryValue(route.query.vnp_BankCode));
+const transactionNo = ref(
+  getQueryValue(route.query.vnp_BankTranNo) ||
+    getQueryValue(route.query.vnp_TransactionNo)
+);
+const orderInfo = ref(getQueryValue(route.query.vnp_OrderInfo));
+
+const amount = ref(
+  route.query.vnp_Amount
+    ? parseVnpayQueryAmount(getQueryValue(route.query.vnp_Amount))
+    : 0
+);
+
 const totalAmount = ref(amount.value);
 const discountAmount = ref(0);
 const cashGiven = ref(0);
@@ -171,13 +274,22 @@ const customerName = ref("");
 const orderTime = ref("");
 const orderItems = ref([]);
 
+const isCashPayment = computed(() => {
+  return String(paymentMethod.value || "").toUpperCase() === "CASH";
+});
+
 const paymentMethodText = computed(() => {
-  if (paymentMethod.value === "CASH") return "Tiền mặt";
+  const method = String(paymentMethod.value || "").toUpperCase();
+
+  if (method === "CASH") {
+    return "Tiền mặt";
+  }
+
   return bankCode.value ? `VNPay (${bankCode.value})` : "VNPay";
 });
 
 const formatCurrency = (value) => {
-  const numberValue = Number(value || 0);
+  const numberValue = toMoneyNumber(value);
 
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
@@ -188,10 +300,15 @@ const formatCurrency = (value) => {
 };
 
 const formatDateTime = (dateString) => {
-  if (!dateString) return new Date().toLocaleString("vi-VN");
+  if (!dateString) {
+    return new Date().toLocaleString("vi-VN");
+  }
 
   const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return new Date().toLocaleString("vi-VN");
+
+  if (Number.isNaN(date.getTime())) {
+    return new Date().toLocaleString("vi-VN");
+  }
 
   return date.toLocaleString("vi-VN", {
     day: "2-digit",
@@ -203,17 +320,47 @@ const formatDateTime = (dateString) => {
 };
 
 const normalizeItems = (items = []) => {
-  return items.map((item) => ({
-    sku: item.sku || item.productSku || item.product?.sku || "",
-    productName: item.productName || item.name || item.product?.name || "Sản phẩm",
-    variantName: item.variantName || item.capacity || item.size || item.variant?.name || "",
-    price: Number(item.price || item.unitPrice || item.salePrice || item.product?.price || 0),
-    quantity: Number(item.quantity || item.qty || 1),
-  }));
+  return items.map((item) => {
+    const quantity = Number(item.quantity || item.qty || 1);
+
+    const price = toMoneyNumber(
+      item.price ||
+        item.unitPrice ||
+        item.salePrice ||
+        item.product?.price ||
+        0
+    );
+
+    const lineTotal = toMoneyNumber(item.lineTotal || price * quantity);
+
+    return {
+      sku: item.sku || item.productSku || item.product?.sku || "",
+      productName:
+        item.productName || item.name || item.product?.name || "Sản phẩm",
+      variantName:
+        item.variantName ||
+        item.capacityLabel ||
+        item.capacity ||
+        item.size ||
+        item.variant?.name ||
+        "",
+      price,
+      quantity,
+      lineTotal,
+    };
+  });
 };
 
 const applyInvoiceData = (data = {}) => {
-  orderId.value = data.orderId || data.id || data.code || orderId.value || "HD" + Date.now();
+  orderId.value =
+    data.orderId ||
+    data.id ||
+    data.code ||
+    data.orderCode ||
+    data.invoiceCode ||
+    orderId.value ||
+    "HD" + Date.now();
+
   paymentMethod.value = data.paymentMethod || paymentMethod.value;
 
   customerName.value =
@@ -229,14 +376,16 @@ const applyInvoiceData = (data = {}) => {
     orderTime.value ||
     new Date().toISOString();
 
-  const items = data.items || data.orderItems || data.details || data.orderDetails || [];
+  const items =
+    data.items || data.orderItems || data.details || data.orderDetails || [];
+
   orderItems.value = normalizeItems(items);
 
   const calculatedTotal = orderItems.value.reduce((sum, item) => {
-    return sum + item.price * item.quantity;
+    return sum + (item.lineTotal || item.price * item.quantity);
   }, 0);
 
-  totalAmount.value = Number(
+  totalAmount.value = toMoneyNumber(
     data.totalAmount ??
       data.subTotal ??
       data.total ??
@@ -245,23 +394,32 @@ const applyInvoiceData = (data = {}) => {
       0
   );
 
-  amount.value = Number(
-    data.amount ??
-      data.finalAmount ??
-      data.payAmount ??
-      data.totalPay ??
-      amount.value ??
-      totalAmount.value ??
-      0
-  );
+  /**
+   * CHỖ SỬA QUAN TRỌNG:
+   * Ưu tiên finalAmount trước.
+   * Không lấy data.amount trước vì data.amount ở VNPay có thể là raw amount * 100.
+   */
+  const finalAmountFromBackend =
+    data.finalAmount ?? data.payAmount ?? data.totalPay ?? null;
 
-  discountAmount.value = Number(
+  if (finalAmountFromBackend !== null && finalAmountFromBackend !== undefined) {
+    amount.value = toMoneyNumber(finalAmountFromBackend);
+  } else {
+    const rawAmount = data.amount ?? amount.value ?? totalAmount.value ?? 0;
+
+    amount.value =
+      String(paymentMethod.value || "").toUpperCase() === "VNPAY"
+        ? normalizePossibleRawVnpayAmount(rawAmount, totalAmount.value)
+        : toMoneyNumber(rawAmount);
+  }
+
+  discountAmount.value = toMoneyNumber(
     data.discountAmount ?? Math.max(totalAmount.value - amount.value, 0)
   );
 
-  cashGiven.value = Number(data.cashGiven ?? cashGiven.value ?? 0);
+  cashGiven.value = toMoneyNumber(data.cashGiven ?? cashGiven.value ?? 0);
 
-  changeAmount.value = Number(
+  changeAmount.value = toMoneyNumber(
     data.changeAmount ?? Math.max(cashGiven.value - amount.value, 0)
   );
 };
@@ -308,7 +466,17 @@ const loadVnpayInvoice = async () => {
     ...backendData,
     orderId: backendData.orderId || backendData.id || route.query.vnp_TxnRef,
     paymentMethod: "VNPAY",
-    amount: backendData.amount || backendData.finalAmount || amount.value,
+
+    /**
+     * CHỖ SỬA QUAN TRỌNG:
+     * Không truyền amount: backendData.amount trước nữa.
+     * Vì amount của VNPay có thể đang là 420.000.000.
+     */
+    finalAmount:
+      backendData.finalAmount ??
+      backendData.payAmount ??
+      backendData.totalPay ??
+      amount.value,
   });
 };
 
