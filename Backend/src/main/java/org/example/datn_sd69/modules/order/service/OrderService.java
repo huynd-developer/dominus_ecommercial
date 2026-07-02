@@ -24,6 +24,9 @@ public class OrderService {
     @Autowired private ProductVariantRepository variantRepo;
     @Autowired private CartItemRepository cartItemRepository;
 
+    // Đã khai báo thêm CustomerRepository để xử lý tích điểm
+    @Autowired private CustomerRepository customerRepo;
+
     @Transactional
     public Map<String, Object> placeOrder(Integer customerId, OrderRequest request) {
         // 1. Lấy giỏ hàng
@@ -65,13 +68,32 @@ public class OrderService {
         order.setCustomerPhone(request.getCustomerPhone());
         order.setShippingAddress(request.getShippingAddress());
         order.setTotalAmount(totalAmount);
-
-        // Cần đảm bảo Entity Order của bạn có trường discountAmount nhé
-        // order.setDiscountAmount(discountAmount);
-
         order.setFinalAmount(finalAmount);
         order.setPaymentMethod(request.getPaymentMethod());
-        order.setStatus(0); // Chờ xác nhận
+
+        // =========================================================
+        // LOGIC MỚI: XỬ LÝ TRẠNG THÁI VÀ TÍCH ĐIỂM
+        // =========================================================
+        if ("COD".equalsIgnoreCase(request.getPaymentMethod()) || "CASH".equalsIgnoreCase(request.getPaymentMethod())) {
+            // Đơn hàng COD/CASH coi như thành công luôn -> Status 3
+            order.setStatus(3);
+
+            // Tính toán điểm thưởng (100.000 VNĐ = 1 điểm)
+            int earnedPoints = finalAmount.divide(new BigDecimal("100000")).intValue();
+
+            // Lấy Customer và cộng điểm
+            Customer customer = customerRepo.findById(customerId)
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy khách hàng"));
+
+            int currentPoints = customer.getLoyaltyPoints() != null ? customer.getLoyaltyPoints() : 0;
+            customer.setLoyaltyPoints(currentPoints + earnedPoints);
+            customerRepo.save(customer);
+        } else {
+            // Nếu là VNPAY thì để status = 0 (Chờ thanh toán).
+            // (Điểm của VNPAY sẽ được cộng ở API IPN/Return khi khách thực sự thanh toán xong)
+            order.setStatus(0);
+        }
+
         order = orderRepo.save(order);
 
         // 4. Tạo OrderItems
