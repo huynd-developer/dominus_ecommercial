@@ -73,3 +73,25 @@ export const deleteProduct = (
     );
 
 };
+
+export const updateStatus=(
+
+    id:number,
+
+    status:number
+
+)=>{
+
+    return request.patch(
+
+        `/api/admin/products/${id}/status`,
+
+        {
+
+            status
+
+        }
+
+    );
+
+}
