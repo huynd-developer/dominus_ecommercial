@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import api from '@/common/api' // Đảm bảo file api.ts của mày đã cấu hình baseURL có chứa '/api'
+import api from '@/common/api' 
 
 // Khai báo kiểu dữ liệu chuẩn
 export interface PosProduct {
@@ -79,20 +79,40 @@ export const usePosStore = defineStore('posStore', {
   },
 
   actions: {
-    // 1. Tải danh sách sản phẩm thật từ Backend (Đã sửa link chuẩn theo AdminProductController)
+    // 1. Tải danh sách sản phẩm và đập phẳng Biến thể ra
     async fetchProducts() {
       this.isLoading = true;
       try {
-        // Backend đang là: @RequestMapping("/api/admin/products")
         const { data } = await api.get('/admin/products');
-        
-        // Spring Boot có thể trả về Page (có .content) hoặc trả thẳng list, hoặc bọc trong .data
-        const productList = data.data || data.content || data;
-        this.allProducts = productList;
-        
-        // Tự động gom nhóm các Category từ sản phẩm thật về
-        const dynamicCategories = ['Tất cả', ...new Set(productList.map((p: any) => p.category).filter(Boolean))] as string[];
+        const rawProducts = data.data || data.content || data;
+        const flatProducts: PosProduct[] = [];
+
+        rawProducts.forEach((p: any) => {
+          let imgUrl = p.images && p.images.length > 0 ? p.images[0].imageUrl : '';
+          if (!imgUrl || !imgUrl.startsWith('http')) {
+            imgUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random&color=fff&size=200`;
+          }
+
+          if (p.variants && p.variants.length > 0) {
+            p.variants.forEach((v: any) => {
+              flatProducts.push({
+                id: p.id,
+                sku: v.sku, 
+                name: p.name,
+                subName: `${v.capacityValue}ml - ${v.bottleTypeName}`, 
+                price: v.price,               
+                stockQuantity: v.stockQuantity, 
+                image: imgUrl,
+                category: p.categoryName || 'Tất cả'
+              });
+            });
+          }
+        });
+
+        this.allProducts = flatProducts;
+        const dynamicCategories = ['Tất cả', ...new Set(flatProducts.map((p: any) => p.category).filter(Boolean))] as string[];
         this.categories = dynamicCategories;
+
       } catch (error) {
         this.errorMsg = 'Không thể tải danh sách sản phẩm từ máy chủ!';
       } finally {
@@ -120,28 +140,37 @@ export const usePosStore = defineStore('posStore', {
       }
     },
 
-    // 3. Nghiệp vụ súng bắn mã vạch quét SKU (Đã sửa link chuẩn theo PublicProductController)
+    // 3. SỬA: Quét mã vạch (Gọi chuẩn endpoint PosController: /api/admin/pos/product?sku=...)
     async handleBarcodeScan(sku: string) {
       this.errorMsg = '';
       const cleanSku = sku.trim();
       if (!cleanSku) return;
 
-      // Tìm nhanh trong danh sách sản phẩm đã tải về máy
+      // Check nhanh dưới local trước
       const localProduct = this.allProducts.find(p => p.sku.toLowerCase() === cleanSku.toLowerCase());
       if (localProduct) {
         this.addToCart(localProduct);
         return;
       }
 
-      // Nếu không thấy, gọi API check real-time: @GetMapping("/variants/sku/{sku}")
+      // Nếu không thấy thì gọi API check real-time qua PosController
       try {
-        const { data } = await api.get(`/products/variants/sku/${cleanSku}`);
-        // Response trả về có dạng Map.of("data", variant...)
-        if (data && data.data) {
-          this.addToCart(data.data);
+        const { data } = await api.get('/admin/pos/product', { params: { sku: cleanSku } });
+        if (data) {
+          const mappedProduct: PosProduct = {
+            id: data.productId,
+            sku: data.sku,
+            name: data.productName,
+            subName: `${data.capacityValue}ml - ${data.bottleTypeName}`,
+            price: data.price,
+            stockQuantity: data.stockQuantity,
+            image: data.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.productName)}&background=random&color=fff`,
+            category: data.categoryName || 'Tất cả'
+          };
+          this.addToCart(mappedProduct);
         }
       } catch (error: any) {
-        this.errorMsg = `Mã vạch SKU "${cleanSku}" không tồn tại trên hệ thống!`;
+        this.errorMsg = error.response?.data?.message || `Mã vạch SKU "${cleanSku}" không tồn tại trên hệ thống!`;
       }
     },
 
@@ -168,25 +197,25 @@ export const usePosStore = defineStore('posStore', {
       this.cart = this.cart.filter(item => item.product.sku !== sku);
     },
 
-    // 5. API Tìm kiếm khách hàng bằng số điện thoại
+    // 5. SỬA: Tìm kiếm khách hàng bằng SĐT (Gọi chuẩn PosController: /api/admin/pos/customer?phone=...)
     async searchCustomer(phone: string) {
       if (!phone.trim()) return;
+      this.errorMsg = '';
       try {
-        // LƯU Ý: BE chưa có API này, tao cấu hình chuẩn RESTful, mày bảo BE viết API này nhé!
-        const { data } = await api.get(`/admin/customers/phone/${phone}`);
-        if (data && data.data) {
-          this.customer = data.data;
+        const { data } = await api.get('/admin/pos/customer', { params: { phone } });
+        if (data && data.found) {
+          this.customer = data.customer;
         } else {
           this.customer = null;
-          this.errorMsg = 'Không tìm thấy thông tin thành viên, hóa đơn sẽ tính là khách vãng lai.';
+          this.errorMsg = data.message || 'Hóa đơn sẽ tính dưới dạng khách vãng lai.';
         }
       } catch (error) {
         this.customer = null;
-        this.errorMsg = 'Không tìm thấy khách hàng hoặc lỗi kết nối!';
+        this.errorMsg = 'Lỗi kết nối khi tìm kiếm khách hàng!';
       }
     },
 
-    // 6. API Gọi lệnh Thanh toán (Checkout) gửi lên Backend
+    // 6. SỬA: Gọi lệnh Thanh toán (Gọi chuẩn PosController: /api/admin/pos/checkout)
     async processCheckout() {
       if (this.cart.length === 0) {
         this.errorMsg = 'Giỏ hàng đang trống, không thể thanh toán!';
@@ -207,8 +236,8 @@ export const usePosStore = defineStore('posStore', {
       };
 
       try {
-        // LƯU Ý: BE cũng chưa có API tạo đơn này! Mày bảo BE viết thêm POST /api/admin/orders/checkout nhé!
-        const { data } = await api.post('/admin/orders/checkout', payload);
+        // Đấm thẳng vào endpoint PosController xịn
+        const { data } = await api.post('/admin/pos/checkout', payload);
 
         if (this.paymentMethod === 'VNPAY') {
           if (data.vnpayPaymentUrl) {
@@ -219,7 +248,7 @@ export const usePosStore = defineStore('posStore', {
           }
         } else {
           // Trả tiền mặt thành công -> In hóa đơn và dọn giỏ
-          alert('Thanh toán tiền mặt thành công! Hệ thống đang in hóa đơn...');
+          alert('Thanh toán tiền mặt thành công! Hệ thống đang xử lý hóa đơn...');
           this.startNewOrder();
         }
       } catch (error: any) {
