@@ -41,6 +41,23 @@ public class ProductServiceImpl implements ProductService {
     // =====================================================
 
     @Override
+    public void updateStatus(
+            Integer id,
+            Integer status
+    ) {
+
+        Product product = productRepository
+                .findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() ->
+                        new RuntimeException("Không tìm thấy sản phẩm"));
+
+        product.setStatus(status);
+
+        productRepository.save(product);
+
+    }
+
+    @Override
     public ProductResponse create(
             ProductRequest request,
             MultipartFile primaryImage,
