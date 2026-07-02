@@ -215,7 +215,7 @@ export const usePosStore = defineStore('posStore', {
       }
     },
 
-    // 6. SỬA: Gọi lệnh Thanh toán (Gọi chuẩn PosController: /api/admin/pos/checkout)
+    // 6. SỬA: Gọi lệnh Thanh toán (Mở trên cùng 1 tab duy nhất)
     async processCheckout() {
       if (this.cart.length === 0) {
         this.errorMsg = 'Giỏ hàng đang trống, không thể thanh toán!';
@@ -236,13 +236,14 @@ export const usePosStore = defineStore('posStore', {
       };
 
       try {
-        // Đấm thẳng vào endpoint PosController xịn
         const { data } = await api.post('/admin/pos/checkout', payload);
 
         if (this.paymentMethod === 'VNPAY') {
           if (data.vnpayPaymentUrl) {
             this.vnpayUrl = data.vnpayPaymentUrl;
-            window.open(data.vnpayPaymentUrl, '_blank'); // Bật tab mới quét mã QR VNPay
+            
+            // 🔥 SỬA TẠI ĐÂY: Điều hướng ngay trên tab hiện tại, đóng luồng POS cũ lại
+            window.location.href = data.vnpayPaymentUrl; 
           } else {
             this.errorMsg = 'Không nhận được link thanh toán VNPay từ máy chủ!';
           }

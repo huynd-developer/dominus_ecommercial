@@ -78,7 +78,15 @@ const routes: Array<RouteRecordRaw> = [
     name: "PaymentReturn",
     component: PaymentReturnView,
   },
-
+  {
+    path: "/payment/result",
+    name: "PosPaymentResult",
+    component: () => import("@/modules/pos/views/PaymentResult.vue"), 
+    meta: { 
+      requiresAuth: true, 
+      allowedRoles: ["OWNER", "MANAGER", "CASHIER"] 
+    },
+  },
   // Các trang Auth
   {
     path: "/login",
