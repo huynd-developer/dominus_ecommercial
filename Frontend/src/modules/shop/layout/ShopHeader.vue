@@ -3,17 +3,9 @@
     <div class="container-fluid px-4 px-lg-5 h-100">
       <div class="row align-items-center h-100">
         <div class="col-4 col-lg-3">
-          <RouterLink
-            to="/"
-            class="brand-logo-link text-decoration-none d-inline-flex align-items-center"
-          >
-            <img
-              v-if="!logoLoadFailed"
-              :src="logoAura"
-              alt="DOMINUS PERFUME"
-              class="brand-logo-img"
-              @error="logoLoadFailed = true"
-            />
+          <RouterLink to="/" class="brand-logo-link text-decoration-none d-inline-flex align-items-center">
+            <img v-if="!logoLoadFailed" :src="logoAura" alt="DOMINUS PERFUME" class="brand-logo-img"
+              @error="logoLoadFailed = true" />
 
             <div v-else class="brand-logo-text">
               <div class="brand-name">DOMINUS</div>
@@ -24,20 +16,10 @@
 
         <div class="col-12 col-lg-6 order-3 order-lg-2 mt-3 mt-lg-0">
           <div class="search-wrapper position-relative mx-auto">
-            <input
-              v-model="keyword"
-              type="text"
-              class="form-control rounded-pill search-input"
-              placeholder="Tìm kiếm nước hoa..."
-              @keyup.enter="handleSearch"
-            />
+            <input v-model="keyword" type="text" class="form-control rounded-pill search-input"
+              placeholder="Tìm kiếm nước hoa..." @keyup.enter="handleSearch" />
 
-            <button
-              type="button"
-              class="search-button"
-              aria-label="Tìm kiếm"
-              @click="handleSearch"
-            >
+            <button type="button" class="search-button" aria-label="Tìm kiếm" @click="handleSearch">
               <i class="bi bi-search"></i>
             </button>
           </div>
@@ -48,10 +30,7 @@
             class="d-flex align-items-center justify-content-end gap-3 gap-lg-4"
           >
             <div class="account-dropdown-wrapper">
-              <button
-                type="button"
-                class="header-action account-trigger d-flex align-items-center gap-2"
-              >
+              <button type="button" class="header-action account-trigger d-flex align-items-center gap-2">
                 <span class="action-icon-circle">
                   <i class="bi bi-person"></i>
                 </span>
@@ -133,10 +112,8 @@
               </div>
             </div>
 
-            <RouterLink
-              to="/cart"
-              class="header-action cart-action d-flex align-items-center gap-2 text-decoration-none position-relative"
-            >
+            <RouterLink to="/cart"
+              class="header-action cart-action d-flex align-items-center gap-2 text-decoration-none position-relative">
               <span class="action-icon-circle">
                 <i class="bi bi-bag"></i>
               </span>
@@ -475,11 +452,14 @@ const handleLogout = () => {
 .account-dropdown::after {
   content: "";
   position: absolute;
-  top: -24px; /* Phủ ngược lên trên 24px để dính liền vào nút bấm */
+  top: -24px;
+  /* Phủ ngược lên trên 24px để dính liền vào nút bấm */
   left: 0;
   width: 100%;
-  height: 24px; /* Tạo một cầu nối vô hình cao 24px */
-  background: transparent; /* Hoàn toàn trong suốt */
+  height: 24px;
+  /* Tạo một cầu nối vô hình cao 24px */
+  background: transparent;
+  /* Hoàn toàn trong suốt */
 }
 
 .account-dropdown-wrapper:hover .account-dropdown {

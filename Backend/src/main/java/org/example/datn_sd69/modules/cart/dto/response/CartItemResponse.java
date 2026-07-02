@@ -12,4 +12,6 @@ public class CartItemResponse {
     private BigDecimal price; // Đáp ứng task: Query chính xác Price
     private Integer stockQuantity; // Đáp ứng task: Query chính xác StockQuantity
     // Có thể thêm productName, imageUrl... tùy UI cần
+    private String capacity;
+    private String productName;
 }

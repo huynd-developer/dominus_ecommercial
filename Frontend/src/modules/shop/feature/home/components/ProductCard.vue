@@ -1,14 +1,11 @@
 <template>
-  <div class="product-card h-100 position-relative overflow-hidden">
+  <div class="product-card h-100 position-relative overflow-hidden" @click="goToDetail">
     <span v-if="product.discountPercent" class="discount-badge">
       -{{ product.discountPercent }}%
     </span>
 
     <div class="product-image-wrapper">
-      <div
-        class="product-bottle"
-        :style="getBottleStyle(product.color)"
-      >
+      <div class="product-bottle" :style="getBottleStyle(product.color)">
         <div class="product-bottle-cap"></div>
         <div class="product-bottle-neck"></div>
         <div class="product-bottle-body">
@@ -39,23 +36,42 @@
           {{ formatCurrency(product.salePrice) }}
         </span>
 
-        <span class="original-price text-decoration-line-through">
+        <span v-if="product.discountPercent > 0" class="original-price text-decoration-line-through">
           {{ formatCurrency(product.originalPrice) }}
         </span>
       </div>
 
-      <button type="button" class="btn add-cart-btn w-100">
+      <button type="button" class="btn add-cart-btn w-100" @click.stop="handleAddToCart">
         <i class="bi bi-bag-plus me-2"></i>
         Thêm vào giỏ
       </button>
     </div>
+
+    <Teleport to="body">
+      <Transition name="toast-slide">
+        <div v-if="showToast" class="custom-cart-toast">
+          <div class="toast-icon">
+            <i class="bi bi-check2"></i>
+          </div>
+          <div class="toast-info">
+            <h4>Thêm thành công</h4>
+            <p>Đã thêm 1 sản phẩm vào giỏ.</p>
+          </div>
+          <RouterLink to="/cart" class="toast-view-cart">
+            XEM GIỎ HÀNG <i class="bi bi-arrow-right ms-1"></i>
+          </RouterLink>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import axios from 'axios';
 
-export interface Product {
+interface Product {
   id: number;
   name: string;
   brand: string;
@@ -65,11 +81,15 @@ export interface Product {
   discountPercent: number;
   rating: number;
   reviewCount: number;
+  imageUrl?: string; 
 }
 
 const props = defineProps<{
   product: Product;
 }>();
+
+const router = useRouter();
+const showToast = ref(false);
 
 const brandMap: Record<string, string> = {
   Chanel: 'CHANEL',
@@ -98,6 +118,47 @@ const getBottleStyle = (color?: string): Record<string, string> => {
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('vi-VN').format(value) + ' đ';
 };
+
+// CHUYỂN HƯỚNG TĨNH ĐẾN TRANG PRODUCT
+const goToDetail = () => {
+  router.push('/product');
+};
+
+// THÊM VÀO GIỎ HÀNG THỰC TẾ (GỌI API BACKEND) & HIỂN THỊ TOAST
+// THÊM VÀO GIỎ HÀNG THỰC TẾ (GỌI API BACKEND) & HIỂN THỊ TOAST
+const handleAddToCart = async () => {
+  const token = localStorage.getItem('token');
+  
+  if (!token) {
+    alert('Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng!');
+    return;
+  }
+
+  try {
+    // Gọi API POST lên đúng đường dẫn của bạn
+    await axios.post(
+      'http://localhost:8080/api/v1/customer/cart/add', 
+      {
+        // ĐỔI THÀNH productVariantId cho khớp hoàn toàn với RequestBody của Java
+        productVariantId: props.product.id, 
+        quantity: 1
+      },
+      {
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    );
+
+    // Nếu Backend trả về thành công, hiển thị Toast thông báo đẹp mắt
+    showToast.value = true;
+    setTimeout(() => {
+      showToast.value = false;
+    }, 3000);
+
+  } catch (error) {
+    console.error('Lỗi khi gọi API thêm giỏ hàng:', error);
+    alert('Không thể thêm vào giỏ hàng! Hãy bật F12 kiểm tra tab Network xem Backend báo lỗi gì nhé.');
+  }
+};
 </script>
 
 <style scoped>
@@ -107,6 +168,7 @@ const formatCurrency = (value: number) => {
   border: 1px solid rgba(26, 26, 26, 0.055);
   box-shadow: 0 8px 28px rgba(5, 16, 36, 0.045);
   transition: all 0.28s ease;
+  cursor: pointer;
 }
 
 .product-card:hover {
@@ -266,22 +328,72 @@ const formatCurrency = (value: number) => {
   background: var(--aura-gold);
   color: #ffffff;
 }
+</style>
 
-@media (max-width: 767.98px) {
-  .product-image-wrapper {
-    height: 190px;
-  }
+<style>
+.custom-cart-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background-color: #0b1120;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  z-index: 99999;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
 
-  .product-content {
-    padding: 14px;
-  }
+.toast-icon {
+  width: 34px;
+  height: 34px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 18px;
+}
 
-  .product-name {
-    font-size: 16px;
-  }
+.toast-info h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+}
 
-  .sale-price {
-    font-size: 15px;
-  }
+.toast-info p {
+  margin: 4px 0 0 0;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.toast-view-cart {
+  margin-left: 12px;
+  color: #d2ad68;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  transition: color 0.25s ease;
+}
+
+.toast-view-cart:hover {
+  color: #f1d08a;
+}
+
+.toast-slide-enter-active,
+.toast-slide-leave-active {
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toast-slide-enter-from,
+.toast-slide-leave-to {
+  transform: translateX(120%);
+  opacity: 0;
 }
 </style>
