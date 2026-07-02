@@ -33,52 +33,66 @@ const isShowingDetail = ref(false);
 const activeProduct = ref<any>(null);
 const productList = ref<Product[]>(mockProductList);
 
-// Nơi giữ các bộ lọc
+// Nơi giữ các bộ lọc (ĐÃ ĐỔI TẤT CẢ SANG MẢNG STRING)
 const activeFilters = ref({
   genders: [] as string[],
-  volumes: [] as string[],
+  capacities: [] as string[],        
   concentrations: [] as string[],
-  scents: [] as string[],
+  fragranceFamilies: [] as string[], 
+  bottleTypes: [] as string[],       
   brands: [] as string[]
 });
 
 const handleFilterChange = (filters: any) => {
-  activeFilters.value = filters;
+  activeFilters.value = {
+    ...activeFilters.value,
+    ...filters
+  };
 };
 
-// Hàm tính toán danh sách
+// Hàm tính toán danh sách (SO SÁNH BẰNG CHỮ, KHÔNG PHẢI .id NỮA)
 const filteredProductList = computed(() => {
   return productList.value.filter((product: any) => {
     
     // 1. Giới tính
-    if (activeFilters.value.genders.length > 0) {
+    if (activeFilters.value.genders && activeFilters.value.genders.length > 0) {
       if (!product.gender || !activeFilters.value.genders.includes(product.gender)) return false;
     }
 
-    // 2. Thương hiệu
-    if (activeFilters.value.brands.length > 0) {
+    // 2. Thương hiệu 
+    if (activeFilters.value.brands && activeFilters.value.brands.length > 0) {
       if (!product.brand || !activeFilters.value.brands.includes(product.brand)) return false;
     }
 
     // 3. Nồng độ
-    if (activeFilters.value.concentrations.length > 0) {
+    if (activeFilters.value.concentrations && activeFilters.value.concentrations.length > 0) {
+      // product.concentration ở mockData là chữ (vd: 'EDP')
       if (!product.concentration || !activeFilters.value.concentrations.includes(product.concentration)) return false;
     }
 
-    // 4. Mùi hương (Kiểm tra xem product.scents có tồn tại không rồi mới lọc)
-    if (activeFilters.value.scents.length > 0) {
-      if (!product.scents || !Array.isArray(product.scents)) return false; // Tránh lỗi undefined sập web
-      const hasMatchingScent = activeFilters.value.scents.some((s: string) => product.scents.includes(s));
-      if (!hasMatchingScent) return false;
+    // 4. Nhóm hương
+    if (activeFilters.value.fragranceFamilies && activeFilters.value.fragranceFamilies.length > 0) {
+      // product.scents ở mockData là mảng chữ
+      if (!product.scents || !Array.isArray(product.scents)) return false; 
+      const hasMatchingFragrance = activeFilters.value.fragranceFamilies.some((f: string) => 
+        product.scents.includes(f)
+      );
+      if (!hasMatchingFragrance) return false;
     }
 
-    // 5. Dung tích (Kiểm tra xem product.variants có tồn tại không)
-    if (activeFilters.value.volumes.length > 0) {
-      if (!product.variants || !Array.isArray(product.variants)) return false; // Tránh lỗi undefined sập web
-      const hasMatchingVolume = product.variants.some((variant: any) => 
-        activeFilters.value.volumes.includes(variant.capacity)
+    // 5. Dung tích 
+    if (activeFilters.value.capacities && activeFilters.value.capacities.length > 0) {
+      if (!product.variants || !Array.isArray(product.variants)) return false; 
+      // Lọc theo variant.capacity (vd: '50ml')
+      const hasMatchingCapacity = product.variants.some((variant: any) => 
+        activeFilters.value.capacities.includes(variant.capacity)
       );
-      if (!hasMatchingVolume) return false;
+      if (!hasMatchingCapacity) return false;
+    }
+
+    // 6. Loại chai
+    if (activeFilters.value.bottleTypes && activeFilters.value.bottleTypes.length > 0) {
+      if (!product.bottleType || !activeFilters.value.bottleTypes.includes(product.bottleType)) return false;
     }
 
     return true; 

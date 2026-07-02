@@ -19,10 +19,11 @@ export interface Product {
   rating: number;
   description: string;
   variants: Variant[];
-  // Đã bổ sung 3 trường này để lọc siêu chuẩn
+  // Bổ sung 4 trường này để lọc
   gender: string; 
   concentration: string; 
   scents: string[];
+  bottleType: string;
 }
 
 export const mockProductList: Product[] = [
@@ -38,6 +39,7 @@ export const mockProductList: Product[] = [
     gender: 'Nam',
     concentration: 'EDP',
     scents: ['Citrus', 'Aromatic'],
+    bottleType: 'Chai thủy tinh',
     variants: [
       { id: 6, capacity: '10ml', price: 380000, stock: 100 },
       { id: 7, capacity: '50ml', price: 2400000, stock: 30 },
@@ -56,6 +58,7 @@ export const mockProductList: Product[] = [
     gender: 'Nữ',
     concentration: 'Parfum',
     scents: ['Hương thơm sạch'],
+    bottleType: 'Chai thủy tinh',
     variants: [
       { id: 8, capacity: '10ml', price: 450000, stock: 80 },
       { id: 2, capacity: '50ml', price: 4200000, stock: 20 }, 
@@ -74,6 +77,7 @@ export const mockProductList: Product[] = [
     gender: 'Unisex',
     concentration: 'EDP',
     scents: ['Gỗ'],
+    bottleType: 'Chai xịt',
     variants: [
       { id: 3, capacity: '10ml', price: 600000, stock: 100 }, 
       { id: 10, capacity: '50ml', price: 3500000, stock: 25 },
@@ -92,6 +96,7 @@ export const mockProductList: Product[] = [
     gender: 'Nam',
     concentration: 'EDP',
     scents: ['Gỗ', 'Citrus'],
+    bottleType: 'Chai thủy tinh',
     variants: [
       { id: 12, capacity: '10ml', price: 750000, stock: 50 },
       { id: 13, capacity: '50ml', price: 4200000, stock: 20 },
@@ -110,6 +115,7 @@ export const mockProductList: Product[] = [
     gender: 'Unisex',
     concentration: 'Parfum',
     scents: ['Gỗ', 'Biển'],
+    bottleType: 'Chai xịt',
     variants: [
       { id: 14, capacity: '10ml', price: 350000, stock: 70 },
       { id: 5, capacity: '30ml', price: 2100000, stock: 30 }, 
