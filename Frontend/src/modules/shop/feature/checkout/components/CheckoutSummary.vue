@@ -9,10 +9,7 @@
                     class="mini-img" />
                 <div class="mini-info">
                     <h4 class="item-name">{{ item.productName || item.sku }}</h4>
-                    <p class="item-variant">Dung tích: <strong>{{ item.capacity }}</strong></p>
-                    <p style="font-size: 14px; color: #718096; margin: 4px 0;">
-                        Dung tích: <strong style="color: #b78d52;">{{ item.capacity }}</strong>
-                    </p>
+                    <p class="item-variant">Dung tích: <strong style="color: #b78d52;">{{ item.capacity }}</strong></p>
                     <div class="mini-price">{{ formatCurrency(item.price * item.quantity) }}</div>
                 </div>
             </div>

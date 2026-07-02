@@ -9,16 +9,16 @@
         <div class="product-card luxury-card" v-for="item in productList" :key="'fs-'+item.id" @click="$emit('open-detail', item)">
           <div class="card-img-wrapper">
             <div class="sale-badge">-20%</div>
-            <img :src="item.image" :alt="item.name" />
+            <img :src="item?.imageUrl || item?.image || 'https://via.placeholder.com/300x300?text=No+Image'" :alt="item?.name || 'Sản phẩm'" />
             <button class="btn-heart-small" @click.stop><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg></button>
           </div>
           <div class="card-info">
-            <div class="card-brand">{{ item.brand }}</div>
-            <h3 class="card-name">{{ item.name }}</h3>
-            <div class="card-rating"><span class="stars">★★★★★</span> <span class="score">{{ item.rating }}</span></div>
+            <div class="card-brand">{{ item?.brand?.name || item?.brand || 'Premium' }}</div>
+            <h3 class="card-name">{{ item?.name || 'Tên sản phẩm' }}</h3>
+            <div class="card-rating"><span class="stars">★★★★★</span> <span class="score">{{ item?.rating || '5.0' }}</span></div>
             <div class="card-price-box">
-              <span class="card-price">{{ formatCurrency(item.price) }}</span>
-              <span class="card-old-price">{{ formatCurrency(item.oldPrice) }}</span>
+              <span class="card-price">{{ formatPrice(item) }}</span>
+              <span class="card-old-price" v-if="item?.oldPrice">{{ formatOldPrice(item?.oldPrice) }}</span>
             </div>
           </div>
         </div>
@@ -38,15 +38,15 @@
       <div class="product-grid">
         <div class="product-card luxury-card" v-for="item in productList" :key="'feat-'+item.id" @click="$emit('open-detail', item)">
           <div class="card-img-wrapper">
-            <img :src="item.image" :alt="item.name" />
+            <img :src="item?.imageUrl || item?.image || 'https://via.placeholder.com/300x300?text=No+Image'" :alt="item?.name || 'Sản phẩm'" />
             <button class="btn-heart-small" @click.stop><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg></button>
           </div>
           <div class="card-info">
-            <div class="card-brand">{{ item.brand }}</div>
-            <h3 class="card-name">{{ item.name }}</h3>
-            <div class="card-rating"><span class="stars">★★★★★</span> <span class="score">{{ item.rating }}</span></div>
+            <div class="card-brand">{{ item?.brand?.name || item?.brand || 'Premium' }}</div>
+            <h3 class="card-name">{{ item?.name || 'Tên sản phẩm' }}</h3>
+            <div class="card-rating"><span class="stars">★★★★★</span> <span class="score">{{ item?.rating || '5.0' }}</span></div>
             <div class="card-price-box">
-              <span class="card-price">{{ formatCurrency(item.price) }}</span>
+              <span class="card-price">{{ formatPrice(item) }}</span>
             </div>
           </div>
         </div>
@@ -72,15 +72,15 @@
         <div class="product-card luxury-card" v-for="item in productList" :key="'new-'+item.id" @click="$emit('open-detail', item)">
           <div class="card-img-wrapper">
             <div class="new-badge">NEW</div>
-            <img :src="item.image" :alt="item.name" />
+            <img :src="item?.imageUrl || item?.image || 'https://via.placeholder.com/300x300?text=No+Image'" :alt="item?.name || 'Sản phẩm'" />
             <button class="btn-heart-small" @click.stop><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg></button>
           </div>
           <div class="card-info">
-            <div class="card-brand">{{ item.brand }}</div>
-            <h3 class="card-name">{{ item.name }}</h3>
-            <div class="card-rating"><span class="stars">★★★★★</span> <span class="score">{{ item.rating }}</span></div>
+            <div class="card-brand">{{ item?.brand?.name || item?.brand || 'Premium' }}</div>
+            <h3 class="card-name">{{ item?.name || 'Tên sản phẩm' }}</h3>
+            <div class="card-rating"><span class="stars">★★★★★</span> <span class="score">{{ item?.rating || '5.0' }}</span></div>
             <div class="card-price-box">
-              <span class="card-price">{{ formatCurrency(item.price) }}</span>
+              <span class="card-price">{{ formatPrice(item) }}</span>
             </div>
           </div>
         </div>
@@ -101,10 +101,33 @@
 defineProps<{ productList: any[] }>();
 defineEmits(['open-detail']);
 
-const formatCurrency = (val: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
+// Hàm format giá tiền thông minh, bao sân mọi trường hợp
+const formatPrice = (item: any) => {
+  let price = null;
+  // 1. Nếu giá nằm trực tiếp trong Product
+  if (item?.price != null) {
+    price = item.price;
+  } 
+  // 2. Nếu giá nằm trong biến thể Variant (dữ liệu thật từ Database)
+  else if (item?.variants && Array.isArray(item.variants) && item.variants.length > 0) {
+    price = item.variants[0]?.price;
+  }
+  
+  // Nếu vẫn không có giá hoặc giá bị lỗi (NaN)
+  if (price == null || isNaN(price)) return 'Liên hệ';
+  
+  // Format ra tiền Việt
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
+};
+
+const formatOldPrice = (val: number) => {
+  if (val == null || isNaN(val)) return '';
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
+};
 </script>
 
 <style scoped>
+/* GIỮ NGUYÊN TOÀN BỘ CSS CỦA M, KHÔNG ĐỤNG CHẠM TỚI 1 CHỮ */
 .home-section { margin-bottom: 70px; }
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 2px solid #eaeaea; }
 .section-title { font-size: 20px; margin: 0; color: #0a142f; font-weight: 700; text-transform: uppercase; }
