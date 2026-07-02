@@ -13,6 +13,9 @@ import PaymentReturnView from "@/modules/shop/feature/checkout/PaymentReturnView
 // Layout quản trị của Admin & Shop
 import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
 import ShopLayout from "@/modules/shop/layout/ShopLayout.vue";
+import ProductListView from "@/modules/admin/feature/product/views/ProductListView.vue";
+import ProductCreateView from "@/modules/admin/feature/product/views/ProductCreateView.vue";
+import ProductUpdateView from "@/modules/admin/feature/product/views/ProductUpdateView.vue";
 
 // Hàm tạo trang tạm thời phục vụ giai đoạn phát triển
 const mockPage = (title: string, assignee: string) => ({
@@ -122,11 +125,29 @@ const routes: Array<RouteRecordRaw> = [
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER", "CASHIER"] },
       },
       {
-        path: "products",
-        name: "AdminProducts",
-        component: mockPage("Quản lý Sản phẩm", "Trung"),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
-      },
+  path: "products",
+  meta: {
+    requiresAuth: true,
+    allowedRoles: ["OWNER", "MANAGER"],
+  },
+  children: [
+    {
+      path: "",
+      name: "AdminProducts",
+      component: ProductListView,
+    },
+    {
+      path: "create",
+      name: "AdminProductCreate",
+      component: ProductCreateView,
+    },
+    {
+      path: ":id",
+      name: "AdminProductUpdate",
+      component: ProductUpdateView,
+    },
+  ],
+},
       {
         path: "categories",
         name: "AdminCategories",

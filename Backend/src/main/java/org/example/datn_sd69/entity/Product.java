@@ -17,6 +17,9 @@ import org.hibernate.annotations.Nationalized;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
+import jakarta.persistence.OneToMany;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "Product")
@@ -65,4 +68,7 @@ public class Product extends BaseEntity {
             inverseJoinColumns = @JoinColumn(name = "FragranceFamilyId")
     )
     private Set<FragranceFamily> fragranceFamilies = new HashSet<>();
+
+    @OneToMany(mappedBy = "product", fetch = FetchType.LAZY)
+    private List<ProductVariant> variants = new ArrayList<>();
 }

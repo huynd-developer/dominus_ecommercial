@@ -4,7 +4,7 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from "axios";
 
-const baseURL = "http://localhost:8080/api/v1";
+const baseURL = "http://localhost:8080";
 
 const request: AxiosInstance = axios.create({
   baseURL,
@@ -26,7 +26,7 @@ const processQueue = (error: any, token: string | null = null) => {
 // 1. Interceptor gửi đi của custom request (Giữ nguyên logic JWT)
 request.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem("accessToken");
+    const token = localStorage.getItem("token");
     if (!config.headers) {
       config.headers = new axios.AxiosHeaders();
     }
@@ -119,9 +119,9 @@ request.interceptors.response.use(
       throw new Error("Refresh token invalid");
     } catch (refreshError) {
       processQueue(refreshError, null);
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
-      localStorage.removeItem("currentUser");
+      localStorage.removeItem("token");
+localStorage.removeItem("role");
+localStorage.removeItem("name");
       
       if (window.location.pathname.startsWith("/admin")) {
         window.location.href = "/login"; 
