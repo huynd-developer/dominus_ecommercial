@@ -3,7 +3,6 @@ import type { RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
 import { h } from "vue";
 
-
 // Import các trang của m
 import ProductDetailView from "@/modules/shop/feature/product/views/ProductDetailView.vue";
 import CartView from "@/modules/shop/feature/cart/views/CartView.vue";
@@ -30,9 +29,9 @@ const mockPage = (title: string, assignee: string) => ({
         h("h1", `🚧 Trang ${title}`),
         h(
           "p",
-          `Giao diện đang được xây dựng bởi: ${assignee}. Sau khi code xong file Vue, hãy mở comment import trong router ra!`
+          `Giao diện đang được xây dựng bởi: ${assignee}. Sau khi code xong file Vue, hãy mở comment import trong router ra!`,
         ),
-      ]
+      ],
     ),
 });
 
@@ -55,11 +54,17 @@ const routes: Array<RouteRecordRaw> = [
     ],
   },
 
-  // Code của m (Chi tiết SP, Giỏ hàng, Thanh toán)
+ // Code của m (Chi tiết SP, Giỏ hàng, Thanh toán)
+  // Trong file router/index.ts
+{
+    path: "/products",
+    name: "ProductList", // Tên là ProductList
+    component: () => import("@/modules/shop/feature/product/views/ProductDetailView.vue"),
+  },
   {
-    path: "/product",
-    name: "ProductDetail",
-    component: ProductDetailView,
+    path: "/product/:id",
+    name: "ProductDetail", // Tên là ProductDetail
+    component: () => import("@/modules/shop/feature/product/views/SingleProductView.vue"),
   },
   {
     path: "/cart",
@@ -111,53 +116,57 @@ const routes: Array<RouteRecordRaw> = [
     redirect: "/admin/dashboard",
     meta: { requiresAuth: true },
     children: [
-     
       {
         path: "dashboard",
         name: "AdminDashboard",
         component: mockPage("Tổng quan (Báo cáo)", "Huy"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER"] },
       },
-{
+      {
         path: "pos",
         name: "AdminPOS",
         component: () => import("@/modules/pos/views/PosView.vue"),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER", "CASHIER"] },
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
       },
       {
-  path: "products",
-  meta: {
-    requiresAuth: true,
-    allowedRoles: ["OWNER", "MANAGER"],
-  },
-  children: [
-    {
-      path: "",
-      name: "AdminProducts",
-      component: ProductListView,
-    },
-    {
-      path: "create",
-      name: "AdminProductCreate",
-      component: ProductCreateView,
-    },
-    {
-      path: ":id",
-      name: "AdminProductUpdate",
-      component: ProductUpdateView,
-    },
-  ],
-},
+        path: "products",
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER"],
+        },
+        children: [
+          {
+            path: "",
+            name: "AdminProducts",
+            component: ProductListView,
+          },
+          {
+            path: "create",
+            name: "AdminProductCreate",
+            component: ProductCreateView,
+          },
+          {
+            path: ":id",
+            name: "AdminProductUpdate",
+            component: ProductUpdateView,
+          },
+        ],
+      },
       {
         path: "categories",
         name: "AdminCategories",
-        component: () => import("@/modules/admin/feature/category/views/CategoryView.vue"),
+        component: () =>
+          import("@/modules/admin/feature/category/views/CategoryView.vue"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "brands",
         name: "AdminBrands",
-        component: () => import("@/modules/admin/feature/brand/views/BrandView.vue"), 
+        component: () =>
+          import("@/modules/admin/feature/brand/views/BrandView.vue"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
@@ -224,7 +233,6 @@ const routes: Array<RouteRecordRaw> = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
-
 });
 
 // Logic Bảo Mật Định Tuyến Toàn Cục (Đã gộp code của m và team)
