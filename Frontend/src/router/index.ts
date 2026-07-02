@@ -3,9 +3,8 @@ import type { RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
 import { h } from "vue";
 
-
-// Import các trang của m
-import ProductDetailView from "@/modules/shop/feature/product/ProductDetailView.vue";
+import ProductListView from "@/modules/admin/feature/product/views/ProductList.vue";
+import ProductForm from "@/modules/admin/feature/product/views/ProductForm.vue";
 import CartView from "@/modules/shop/feature/cart/CartViews.vue";
 import CheckoutView from "@/modules/shop/feature/checkout/CheckoutViews.vue";
 import PaymentReturnView from "@/modules/shop/feature/checkout/PaymentReturnView.vue";
@@ -13,9 +12,9 @@ import PaymentReturnView from "@/modules/shop/feature/checkout/PaymentReturnView
 // Layout quản trị của Admin & Shop
 import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
 import ShopLayout from "@/modules/shop/layout/ShopLayout.vue";
-import ProductListView from "@/modules/admin/feature/product/views/ProductListView.vue";
-import ProductCreateView from "@/modules/admin/feature/product/views/ProductCreateView.vue";
-import ProductUpdateView from "@/modules/admin/feature/product/views/ProductUpdateView.vue";
+// import ProductListView from "@/modules/admin/feature/product/views/ProductListView.vue";
+// import ProductCreateView from "@/modules/admin/feature/product/views/ProductCreateView.vue";
+// import ProductUpdateView from "@/modules/admin/feature/product/views/ProductUpdateView.vue";
 
 // Hàm tạo trang tạm thời phục vụ giai đoạn phát triển
 const mockPage = (title: string, assignee: string) => ({
@@ -56,11 +55,11 @@ const routes: Array<RouteRecordRaw> = [
   },
 
   // Code của m (Chi tiết SP, Giỏ hàng, Thanh toán)
-  {
-    path: "/product",
-    name: "ProductDetail",
-    component: ProductDetailView,
-  },
+  // {
+  //   path: "/product",
+  //   name: "ProductDetail",
+  //   component: ProductDetailView,
+  // },
   {
     path: "/cart",
     name: "Cart",
@@ -139,12 +138,12 @@ const routes: Array<RouteRecordRaw> = [
     {
       path: "create",
       name: "AdminProductCreate",
-      component: ProductCreateView,
+      component: ProductForm,
     },
     {
-      path: ":id",
-      name: "AdminProductUpdate",
-      component: ProductUpdateView,
+      path: ":id/edit",
+      name: "AdminProductEdit",
+      component: ProductForm,
     },
   ],
 },
