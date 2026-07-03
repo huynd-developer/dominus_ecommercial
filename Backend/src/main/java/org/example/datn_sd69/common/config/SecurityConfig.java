@@ -71,11 +71,15 @@ public class SecurityConfig {
                         // Nhân viên: chỉ OWNER được CRUD
                         .requestMatchers("/api/admin/employees/**").hasAuthority("OWNER")
 
-                        // Khách hàng: Owner, Manager, Cashier chỉ được xem/tìm kiếm
+                        // Khách hàng: OWNER, MANAGER, CASHIER chỉ xem/tìm kiếm
                         .requestMatchers(HttpMethod.GET, "/api/admin/customers/**")
                         .hasAnyAuthority("OWNER", "MANAGER", "CASHIER")
 
-                        // Các method khác của customer admin tạm thời chặn
+                        // Khách hàng: khóa/mở tài khoản chỉ OWNER, MANAGER
+                        .requestMatchers(HttpMethod.PATCH, "/api/admin/customers/*/status")
+                        .hasAnyAuthority("OWNER", "MANAGER")
+
+                        // Không cho thêm/sửa/xóa customer ở admin
                         .requestMatchers("/api/admin/customers/**").denyAll()
 
                         // Các API admin khác

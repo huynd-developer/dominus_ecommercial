@@ -219,7 +219,8 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "customers",
         name: "AdminCustomers",
-        component: mockPage("Quản lý Khách hàng", "Huy"),
+        component: () =>
+          import("@/modules/admin/feature/customer/views/CustomerView.vue"),
         meta: {
           requiresAuth: true,
           allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
