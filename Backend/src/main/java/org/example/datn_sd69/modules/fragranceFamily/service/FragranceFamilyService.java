@@ -14,7 +14,7 @@ public interface FragranceFamilyService {
     FragranceFamily update(Integer id, FragranceFamilyRequest request);
     void delete(Integer id);
 
-    Page<FragranceFamily> getAll(Pageable pageable);
+    Page<FragranceFamily> getAll(String keyword,Pageable pageable);
 
     Page<FragranceFamily> getActiveFragranceFamilies(int page, int size);
 }

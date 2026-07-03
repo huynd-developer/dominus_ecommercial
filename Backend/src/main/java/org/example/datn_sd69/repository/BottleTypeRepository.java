@@ -19,4 +19,7 @@ public interface BottleTypeRepository extends JpaRepository<BottleType, Integer>
 
     // Tìm kiếm chính xác tên nhưng không phân biệt chữ hoa chữ thường
     Optional<BottleType> findByNameIgnoreCase(String name);
+    Page<BottleType> findByIsDeletedFalse(Pageable pageable);
+
+    Page<BottleType> findByNameContainingIgnoreCaseAndIsDeletedFalse(String name, Pageable pageable);
 }

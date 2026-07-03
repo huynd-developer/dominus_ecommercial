@@ -8,6 +8,7 @@ import org.example.datn_sd69.modules.capacity.service.CapacityService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -21,11 +22,15 @@ public class AdminCapacityController {
 
     @GetMapping
     public ResponseEntity<Page<Capacity>> getAllCapacities(
+            @RequestParam(name = "keyword", defaultValue = "") String keyword,
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "5") int size) {
 
-        Pageable pageable = PageRequest.of(page, size);
-        return ResponseEntity.ok(capacityService.getAll(pageable));
+        // CẤU HÌNH SORT: Sắp xếp giảm dần theo cột "id" để bản ghi mới thêm lên đầu trang 1
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+
+        // TRUYỀN PAGEABLE VÀO SERVICE (Chuẩn Spring Boot)
+        return ResponseEntity.ok(capacityService.getAllAdmin(keyword, pageable));
     }
 
     @PreAuthorize("hasAnyAuthority('MANAGER', 'OWNER')")

@@ -20,11 +20,12 @@ public class AdminFragranceFamilyController {
 
     @GetMapping
     public ResponseEntity<Page<FragranceFamily>> getAllFragranceFamilies(
+            @RequestParam(name = "keyword", required = false, defaultValue = "") String keyword,
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "5") int size) {
 
         Pageable pageable = PageRequest.of(page, size);
-        return ResponseEntity.ok(fragranceFamilyService.getAll(pageable));
+        return ResponseEntity.ok(fragranceFamilyService.getAll(keyword, pageable));
     }
 
     @PreAuthorize("hasAnyAuthority('MANAGER', 'OWNER')")

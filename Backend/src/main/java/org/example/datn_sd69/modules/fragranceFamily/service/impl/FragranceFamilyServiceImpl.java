@@ -98,7 +98,12 @@ public class FragranceFamilyServiceImpl implements FragranceFamilyService {
     }
 
     @Override
-    public Page<FragranceFamily> getAll(Pageable pageable) {
+    public Page<FragranceFamily> getAll(String keyword, Pageable pageable) {
+        // Kiểm tra nếu có nhập từ khóa tìm kiếm
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            return fragranceFamilyRepository.searchByName(keyword.trim(), pageable);
+        }
+        // Nếu để trống ô tìm kiếm thì lấy toàn bộ danh sách chưa xóa
         return fragranceFamilyRepository.findByIsDeletedFalse(pageable);
     }
 

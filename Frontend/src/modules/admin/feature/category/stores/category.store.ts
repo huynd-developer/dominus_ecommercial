@@ -18,14 +18,14 @@ export const useCategoryStore = defineStore('categoryStore', {
           params: { keyword, page, size: this.pageSize } 
         });
         
-        // Nhìn vào Ảnh 1: BE luôn bọc kết quả vào trong thuộc tính .data
-        // Ta kiểm tra nếu có response.data.data thì dùng, không thì fallback về response.data
+        // Kiểm tra nếu có response.data.data thì dùng, không thì fallback về response.data
         const backendResult = response.data?.data ? response.data.data : response.data;
         
         if (backendResult && backendResult.content) {
           this.categories = backendResult.content; 
-          this.totalPages = backendResult.totalPages || 1;
-          this.currentPage = backendResult.number || 0;
+          // 👇 ĐÃ CẬP NHẬT: Đọc đúng object "page" theo cấu trúc mới của Spring Boot
+          this.totalPages = backendResult.page?.totalPages ?? backendResult.totalPages ?? 1;
+          this.currentPage = backendResult.page?.number ?? backendResult.number ?? 0;
         } else if (Array.isArray(backendResult)) {
           this.categories = backendResult;
           this.totalPages = 1;
@@ -40,7 +40,6 @@ export const useCategoryStore = defineStore('categoryStore', {
         this.isLoading = false;
       }
     },
-
     async createCategory(data: CategoryRequest) {
       try {
         await categoryService.create(data);

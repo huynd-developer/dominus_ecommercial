@@ -38,7 +38,7 @@ public class BottleTypeServiceImpl implements BottleTypeService {
         if (existingOpt.isPresent()) {
             BottleType existingType = existingOpt.get();
             if (existingType.getStatus() == 0) {
-                // Khôi phục nếu đã xóa mềm
+                // Khôi phục nếu đã xóa mềm hoặc đang ẩn
                 existingType.setStatus(request.getStatus() != null ? request.getStatus() : 1);
                 existingType.setName(name);
                 return bottleTypeRepository.save(existingType);
@@ -75,13 +75,17 @@ public class BottleTypeServiceImpl implements BottleTypeService {
     @Override
     public void delete(Integer id) {
         BottleType bottleType = getById(id);
-        bottleType.setStatus(0); // Xóa mềm
+        bottleType.setIsDeleted(true); // Xóa mềm
         bottleTypeRepository.save(bottleType);
     }
 
+    // ĐÃ CHỈNH SỬA: Thêm keyword vào hàm lấy danh sách phân trang (Dùng cho Admin)
     @Override
-    public Page<BottleType> getAll(Pageable pageable) {
-        return bottleTypeRepository.findByStatusNot(0, pageable);
+    public Page<BottleType> getAll(String keyword, Pageable pageable) {
+        String searchKeyword = (keyword == null) ? "" : keyword.trim();
+        // Cần đảm bảo trong BottleTypeRepository đã có hàm này:
+        // Page<BottleType> findByNameContainingIgnoreCaseAndIsDeletedFalse(String name, Pageable pageable);
+        return bottleTypeRepository.findByNameContainingIgnoreCaseAndIsDeletedFalse(searchKeyword, pageable);
     }
 
     @Override
