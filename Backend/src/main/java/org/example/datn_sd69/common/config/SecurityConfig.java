@@ -36,39 +36,56 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
+    public AuthenticationManager authenticationManager(
+            AuthenticationConfiguration authConfig
+    ) throws Exception {
         return authConfig.getAuthenticationManager();
     }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // 1. Cú pháp mới cho CORS
                 .cors(Customizer.withDefaults())
-
-                // 2. Cú pháp mới để tắt CSRF
                 .csrf(AbstractHttpConfigurer::disable)
-
-                // 3. Cú pháp mới cấu hình Session (Không dùng session, chỉ dùng Token)
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-
-                // 4. Phân quyền API
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/error").permitAll()
-                        // Cho phép tất cả truy cập API đăng nhập, đăng ký
+
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/vnpay/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/brands/**", "/api/categories/**","/api/concentrations/**", "/api/fragrance-families/**","/api/capacities/**", "/api/products/**", "/api/bottle-types/**" ).permitAll()
-                        // Nhóm Nhân sự: owner, manager, cashier mới được vào các API bắt đầu bằng /api/admin/
-                        .requestMatchers("/api/admin/**").hasAnyAuthority("OWNER", "MANAGER", "CASHIER")
 
-                        // Nhóm Khách hàng: chỉ user mới được vào các API của khách
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/brands/**",
+                                "/api/categories/**",
+                                "/api/concentrations/**",
+                                "/api/fragrance-families/**",
+                                "/api/capacities/**",
+                                "/api/products/**",
+                                "/api/bottle-types/**"
+                        ).permitAll()
+
+                        // Nhân viên: chỉ OWNER được CRUD
+                        .requestMatchers("/api/admin/employees/**").hasAuthority("OWNER")
+
+                        // Khách hàng: Owner, Manager, Cashier chỉ được xem/tìm kiếm
+                        .requestMatchers(HttpMethod.GET, "/api/admin/customers/**")
+                        .hasAnyAuthority("OWNER", "MANAGER", "CASHIER")
+
+                        // Các method khác của customer admin tạm thời chặn
+                        .requestMatchers("/api/admin/customers/**").denyAll()
+
+                        // Các API admin khác
+                        .requestMatchers("/api/admin/**")
+                        .hasAnyAuthority("OWNER", "MANAGER", "CASHIER")
+
                         .requestMatchers("/api/customer/**").hasAuthority("USER")
 
-                        // Các API còn lại bắt buộc phải có token mới được gọi
                         .anyRequest().authenticated()
                 )
-                // 5. Thêm Filter kiểm tra JWT trước khi request đi vào Controller
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -77,12 +94,31 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173")); // URL của FE
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Cache-Control"));
+
+        configuration.setAllowedOrigins(List.of(
+                "http://localhost:3000",
+                "http://localhost:5173",
+                "http://localhost:5174",
+                "http://localhost:5175",
+                "http://localhost:5176",
+                "http://localhost:5180"
+        ));
+
+        configuration.setAllowedMethods(List.of(
+                "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"
+        ));
+
+        configuration.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "Cache-Control"
+        ));
+
         configuration.setAllowCredentials(true);
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
+
         return source;
     }
 }

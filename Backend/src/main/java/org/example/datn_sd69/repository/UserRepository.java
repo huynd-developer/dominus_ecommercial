@@ -3,19 +3,47 @@ package org.example.datn_sd69.repository;
 import org.example.datn_sd69.entity.User;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Integer> {
 
-    // Hàm cũ: Vẫn giữ nguyên để không ảnh hưởng đến các logic khác
     Optional<User> findByEmail(String email);
 
-    // HÀM MỚI CHUYÊN DỤNG CHO SECURITY:
-    // @EntityGraph sẽ bảo Hibernate "kéo" theo cái role lên cùng lúc chỉ trong hàm này
     @EntityGraph(attributePaths = {"role"})
-    Optional<User> findWithRoleByEmail(String email);
+    @Query("""
+            SELECT u
+            FROM User u
+            JOIN FETCH u.role r
+            WHERE LOWER(u.email) = LOWER(:email)
+            """)
+    Optional<User> findWithRoleByEmail(@Param("email") String email);
 
     boolean existsByEmail(String email);
+
     boolean existsByPhone(String phone);
+
+    @Query("""
+            SELECT COUNT(u) > 0
+            FROM User u
+            WHERE LOWER(u.email) = LOWER(:email)
+            AND (:ignoreId IS NULL OR u.id <> :ignoreId)
+            """)
+    boolean existsEmail(
+            @Param("email") String email,
+            @Param("ignoreId") Integer ignoreId
+    );
+
+    @Query("""
+            SELECT COUNT(u) > 0
+            FROM User u
+            WHERE u.phone = :phone
+            AND (:ignoreId IS NULL OR u.id <> :ignoreId)
+            """)
+    boolean existsPhone(
+            @Param("phone") String phone,
+            @Param("ignoreId") Integer ignoreId
+    );
 }
