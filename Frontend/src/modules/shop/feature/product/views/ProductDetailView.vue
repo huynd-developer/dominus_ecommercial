@@ -3,15 +3,47 @@
     <ShopHeader />
 
     <div class="product-layout">
-      <SidebarFilter v-if="!isShowingDetail" @filter-change="handleFilterChange" />
+      <SidebarFilter @filter-change="handleFilterChange" />
 
       <main class="product-main">
         <div v-if="isLoading" style="padding: 50px; text-align: center; color: #666;">
           Đang tải danh sách sản phẩm...
         </div>
-        <ProductGrid v-else-if="!isShowingDetail" :product-list="filteredProductList" @open-detail="handleOpenDetail" />
-        <!-- GỌI COMPONENT CHI TIẾT -->
-        <ProductDetail v-else :product="activeProduct" @back="handleBackToList" @buy-now="handleBuyNow" />
+
+        <div v-else>
+          <!-- ÉP VUE VẼ LẠI COMPONENT MỖI KHI ĐỔI TRANG BẰNG :key -->
+          <ProductGrid 
+            :key="`grid-${currentPage}`"
+            :product-list="paginatedProductList" 
+            @open-detail="handleOpenDetail" 
+          />
+
+          <!-- 2. GIAO DIỆN PHÂN TRANG (PAGINATION) -->
+          <div class="pagination-wrapper mt-5 mb-5 d-flex justify-content-center" v-if="totalPages > 1">
+            <ul class="aura-pagination d-flex gap-2 list-unstyled mb-0">
+              <!-- Nút Previous -->
+              <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                <button type="button" class="page-link" @click.prevent="changePage(currentPage - 1)" :disabled="currentPage === 1">
+                  <i class="bi bi-chevron-left" style="font-size: 12px;"></i>
+                </button>
+              </li>
+
+              <!-- Danh sách các trang (1, 2, 3...) -->
+              <li class="page-item" v-for="page in totalPages" :key="page" :class="{ active: currentPage === page }">
+                <button type="button" class="page-link" @click.prevent="changePage(page)">
+                  {{ page }}
+                </button>
+              </li>
+
+              <!-- Nút Next -->
+              <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                <button type="button" class="page-link" @click.prevent="changePage(currentPage + 1)" :disabled="currentPage === totalPages">
+                  <i class="bi bi-chevron-right" style="font-size: 12px;"></i>
+                </button>
+              </li>
+            </ul>
+          </div>
+        </div>
       </main>
     </div>
 
@@ -27,16 +59,17 @@ import axios from 'axios';
 import ShopHeader from '@/modules/shop/layout/ShopHeader.vue';
 import SidebarFilter from '@/modules/shop/feature/product/components/SidebarFilter.vue';
 import ProductGrid from '@/modules/shop/feature/product/components/ProductGrid.vue';
-import ProductDetail from '@/modules/shop/feature/product/components/ProductDetail.vue';
 import ShopFooter from '@/modules/shop/layout/ShopFooter.vue';
 
 const router = useRouter();
 const route = useRoute();
 
-const isShowingDetail = ref(false);
-const activeProduct = ref<any>(null);
 const productList = ref<any[]>([]);
 const isLoading = ref(false);
+
+// === STATE CHO PHÂN TRANG ===
+const currentPage = ref(1);
+const itemsPerPage = ref(6); // Số sản phẩm trên 1 trang (M có thể đổi thành 12, 16 tùy ý)
 
 const activeFilters = ref<any>({
   genders: [],
@@ -48,9 +81,9 @@ const activeFilters = ref<any>({
 
 const handleFilterChange = (filters: any) => {
   activeFilters.value = filters;
+  currentPage.value = 1; // RESET về trang 1 khi người dùng đổi bộ lọc
 };
 
-// HÀM "MÓC" DUNG TÍCH THÔNG MINH TỪ API
 const extractCapacity = (v: any) => {
   if (!v) return 'N/A';
   let val = null;
@@ -58,16 +91,21 @@ const extractCapacity = (v: any) => {
   else if (v.capacityValue) val = v.capacityValue;
   else if (v.volume) val = v.volume;
   else if (v.capacity != null && typeof v.capacity !== 'object') val = v.capacity;
-
   if (val != null) return `${parseFloat(val)}ml`;
   return v.capacity?.name || 'N/A';
 };
 
-// 1. FETCH DANH SÁCH SẢN PHẨM & MAP DỮ LIỆU
 const fetchProducts = async () => {
   try {
     isLoading.value = true;
-    const res = await axios.get('http://localhost:8080/api/products');
+    const keyword = route.query.keyword || ''; 
+    const res = await axios.get('http://localhost:8080/api/products', {
+      params: { 
+        keyword: keyword,
+        size: 100 // Ép Backend trả về nhiều để Front-end tự phân trang
+      } 
+    });
+    
     const rawData = res.data.data?.content || res.data.data || [];
     
     productList.value = rawData.map((item: any) => {
@@ -106,14 +144,19 @@ const fetchProducts = async () => {
     console.error("Lỗi fetch API List:", error);
   } finally {
     isLoading.value = false;
-    // Tải list xong thì check URL xem có bắt mở chi tiết không
-    checkUrlAndOpenDetail(route.query.id);
   }
 };
 
-onMounted(() => fetchProducts());
+onMounted(() => {
+  fetchProducts();
+});
 
-// 2. BỘ LỌC (GIỮ NGUYÊN HOẠT ĐỘNG TỐT)
+watch(() => route.query.keyword, () => {
+  currentPage.value = 1; 
+  fetchProducts();
+});
+
+// BỘ LỌC GỐC
 const filteredProductList = computed(() => {
   if (!productList.value) return [];
   return productList.value.filter((product: any) => {
@@ -155,58 +198,28 @@ const filteredProductList = computed(() => {
   });
 });
 
-// 3. LOGIC XỬ LÝ MỞ CHI TIẾT & BẤM NÚT BACK (THÔNG MINH)
-const checkUrlAndOpenDetail = async (newId: any) => {
-  if (newId) {
-    const targetId = Number(newId);
-    let productToOpen = productList.value.find((p: any) => p.id === targetId);
+// === LOGIC TÍNH TOÁN PHÂN TRANG ===
+const totalPages = computed(() => {
+  return Math.ceil(filteredProductList.value.length / itemsPerPage.value);
+});
 
-    if (productToOpen) {
-      activeProduct.value = productToOpen;
-      isShowingDetail.value = true;
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } else if (!isLoading.value) {
-      try {
-        const singleRes = await axios.get(`http://localhost:8080/api/products/${targetId}`);
-        const p = singleRes.data.data;
-        activeProduct.value = {
-          ...p,
-          id: p.id,
-          name: p.name,
-          brand: typeof p.brand === 'object' ? p.brand?.name : (p.brand || 'Premium'),
-          image: p.imageUrl || p.image || 'https://via.placeholder.com/300x300',
-          description: p.description,
-          rating: 5.0
-        };
-        isShowingDetail.value = true;
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      } catch (err) {
-        console.error("Lỗi lấy chi tiết:", err);
-      }
-    }
-  } else {
-    // Nếu URL mất tham số ID (nghĩa là user vừa bấm nút Back), ẩn trang chi tiết đi
-    isShowingDetail.value = false;
-    activeProduct.value = null;
+const paginatedProductList = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value;
+  const end = start + itemsPerPage.value;
+  return filteredProductList.value.slice(start, end);
+});
+
+// Hàm chuyển trang
+const changePage = (page: number) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 };
 
-// Theo dõi khi thanh URL thay đổi (dùng nút Back của trình duyệt)
-watch(() => route.query.id, (newId) => {
-  checkUrlAndOpenDetail(newId);
-});
-
-// Click vào 1 thẻ SP ở Danh Sách -> Push query tham số id lên URL
 const handleOpenDetail = (item: any) => {
-  router.push({ path: '/products', query: { id: item.id } }); 
+  router.push({ name: 'ProductDetail', params: { id: item.id } }); 
 };
-
-// Click nút Back trong giao diện
-const handleBackToList = () => {
-  router.back(); // Tự động ghi nhớ lịch sử: Về Home hoặc về trang List tùy xuất phát điểm
-};
-
-const handleBuyNow = () => router.push('/checkout');
 </script>
 
 <style scoped>
@@ -215,4 +228,41 @@ const handleBuyNow = () => router.push('/checkout');
 .product-main { flex: 1; min-width: 0; }
 :deep(.sidebar-filter) { width: 280px; flex-shrink: 0; }
 @media (max-width: 991px) { .product-layout { flex-direction: column; } :deep(.sidebar-filter) { width: 100%; } }
+
+/* === CSS CHO NÚT PHÂN TRANG === */
+.aura-pagination .page-link {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid #e0e0e0;
+  background-color: #ffffff;
+  color: #333333;
+  font-weight: 500;
+  font-size: 14px;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.aura-pagination .page-link:hover:not([disabled]) {
+  background-color: #f5f5f5;
+  border-color: #cccccc;
+}
+
+.aura-pagination .page-item.active .page-link {
+  background-color: #07172f;
+  color: #ffffff;
+  border-color: #07172f;
+  box-shadow: 0 4px 10px rgba(7, 23, 47, 0.2);
+}
+
+.aura-pagination .page-link[disabled] {
+  background-color: #f9f9f9;
+  color: #bbbbbb;
+  cursor: not-allowed;
+  border-color: #eeeeee;
+}
 </style>

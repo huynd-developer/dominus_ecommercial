@@ -48,7 +48,7 @@
         </div>
 
         <div class="price-box">
-          <span class="current-price">{{ selectedVariant?.price != null ? formatCurrency(selectedVariant.price) : 'Liên hệ' }}</span>
+          <span class="current-price">{{ selectedVariant?.price != null ? formatCurrency(selectedVariant.price) : 'Liênhệ' }}</span>
 
           <span class="old-price" v-if="product?.oldPrice && product.oldPrice > (selectedVariant?.price || 0)">
             {{ formatCurrency(product.oldPrice) }}
@@ -83,6 +83,18 @@
           <div v-else style="color: #e53e3e; font-size: 14px; margin-bottom: 20px;">
             (Sản phẩm hiện chưa có dung tích nào)
           </div>
+        </div>
+
+        <!-- Chèn đoạn này NGAY TRÊN phần chọn Số lượng (+ / -) -->
+        <div class="stock-status mb-3" v-if="selectedVariant">
+          <!-- Nếu còn hàng (số lượng > 0) -->
+          <span v-if="selectedVariant.stockQuantity > 0" style="color: #2e7d32; font-size: 14px; font-weight: 500;">
+            <i class="bi bi-box-seam me-1"></i> Kho còn: {{ selectedVariant.stockQuantity }} sản phẩm
+          </span>
+          <!-- Nếu hết hàng (số lượng <= 0) -->
+          <span v-else style="color: #d32f2f; font-size: 14px; font-weight: 500;">
+            <i class="bi bi-x-circle me-1"></i> Đã hết hàng
+          </span>
         </div>
 
         <div class="quantity-section" v-if="selectedVariant">
