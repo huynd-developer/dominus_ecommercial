@@ -1,6 +1,5 @@
 package org.example.datn_sd69.modules.auth.service;
 
-import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.common.config.JwtUtils;
 import org.example.datn_sd69.entity.Customer;
@@ -19,6 +18,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
@@ -35,24 +35,30 @@ public class AuthService {
 
     @Transactional(rollbackFor = Exception.class)
     public String registerCustomer(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
+        String email = normalizeEmail(request.getEmail());
+        String phone = normalize(request.getPhone());
+
+        if (userRepository.existsEmail(email, null)) {
             throw new IllegalArgumentException("Email này đã được sử dụng!");
         }
 
-        if (userRepository.existsByPhone(request.getPhone())) {
+        if (userRepository.existsPhone(phone, null)) {
             throw new IllegalArgumentException("Số điện thoại này đã được sử dụng!");
         }
 
-        Role customerRole = roleRepository.findByName("USER")
-                .orElseThrow(() -> new RuntimeException("Lỗi hệ thống: Chưa cấu hình quyền Khách hàng!"));
+        Role customerRole = roleRepository.findByNameIgnoreCase("USER")
+                .orElseThrow(() -> new RuntimeException(
+                        "Lỗi hệ thống: Chưa cấu hình quyền Khách hàng!"
+                ));
 
         User newUser = new User();
         newUser.setName(request.getName().trim());
-        newUser.setEmail(request.getEmail().trim());
-        newUser.setPhone(request.getPhone().trim());
-        newUser.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        newUser.setEmail(email);
+        newUser.setPhone(phone);
+        newUser.setPasswordHash(passwordEncoder.encode(request.getPassword().trim()));
         newUser.setRole(customerRole);
         newUser.setStatus(1);
+        newUser.setIsDeleted(false);
         newUser.setCreatedAt(LocalDateTime.now());
 
         User savedUser = userRepository.save(newUser);
@@ -67,59 +73,79 @@ public class AuthService {
         return "Đăng ký tài khoản thành công!";
     }
 
-    // LUỒNG 1: ĐĂNG NHẬP DÀNH CHO KHÁCH HÀNG
     public AuthResponse loginCustomer(LoginRequest request) {
         try {
+            String email = normalizeEmail(request.getEmail());
+
             Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.getEmail().trim(), request.getPassword())
+                    new UsernamePasswordAuthenticationToken(email, request.getPassword())
             );
 
-            User user = userRepository.findByEmail(request.getEmail().trim())
+            User user = userRepository.findWithRoleByEmail(email)
                     .orElseThrow(() -> new RuntimeException("Tài khoản không tồn tại!"));
 
-            // Đã xóa check status thủ công vì CustomUserDetailsService đã lo việc đó.
+            validateActiveAccount(user);
 
-            // Nghiệp vụ Backend: Chặn nếu lấy tài khoản Admin đăng nhập vào cổng Khách hàng
             if (!user.getRole().getName().equalsIgnoreCase("USER")) {
                 throw new RuntimeException("Tài khoản này không thể đăng nhập ở cổng Khách hàng!");
             }
 
-            String token = jwtUtils.generateToken(user.getEmail(), user.getRole().getName());
-            return new AuthResponse(token, user.getRole().getName(), user.getName());
+            String roleName = user.getRole().getName().trim().toUpperCase();
+            String token = jwtUtils.generateToken(user.getEmail(), roleName);
+
+            return new AuthResponse(token, roleName, user.getName());
 
         } catch (BadCredentialsException e) {
             throw new RuntimeException("Sai email hoặc mật khẩu!");
         } catch (DisabledException e) {
-            // Spring tự động ném ra lỗi này nếu enabled = false (tức là status != 1)
-            throw new RuntimeException("Tài khoản của bạn đã bị khóa!");
+            throw new RuntimeException("Tài khoản của bạn đã bị khóa hoặc đã bị xóa!");
         }
     }
 
-    // LUỒNG 2: ĐĂNG NHẬP DÀNH CHO NHÂN VIÊN
     public AuthResponse loginEmployee(LoginRequest request) {
         try {
+            String email = normalizeEmail(request.getEmail());
+
             Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.getEmail().trim(), request.getPassword())
+                    new UsernamePasswordAuthenticationToken(email, request.getPassword())
             );
 
-            User user = userRepository.findByEmail(request.getEmail().trim())
+            User user = userRepository.findWithRoleByEmail(email)
                     .orElseThrow(() -> new RuntimeException("Tài khoản không tồn tại!"));
 
-            // Đã xóa check status thủ công vì CustomUserDetailsService đã lo việc đó.
+            validateActiveAccount(user);
 
-            // Nghiệp vụ Backend: Chặn Khách hàng mò vào link đăng nhập ẩn của Nhân viên
             if (user.getRole().getName().equalsIgnoreCase("USER")) {
                 throw new RuntimeException("Cảnh báo: Bạn không có quyền truy cập hệ thống quản trị!");
             }
 
-            String token = jwtUtils.generateToken(user.getEmail(), user.getRole().getName());
-            return new AuthResponse(token, user.getRole().getName(), user.getName());
+            String roleName = user.getRole().getName().trim().toUpperCase();
+            String token = jwtUtils.generateToken(user.getEmail(), roleName);
+
+            return new AuthResponse(token, roleName, user.getName());
 
         } catch (BadCredentialsException e) {
             throw new RuntimeException("Sai email hoặc mật khẩu!");
         } catch (DisabledException e) {
-            // Spring tự động ném ra lỗi này nếu enabled = false (tức là status != 1)
+            throw new RuntimeException("Tài khoản của bạn đã bị khóa hoặc đã bị xóa!");
+        }
+    }
+
+    private void validateActiveAccount(User user) {
+        if (Boolean.TRUE.equals(user.getIsDeleted())) {
+            throw new RuntimeException("Tài khoản không tồn tại hoặc đã bị xóa!");
+        }
+
+        if (user.getStatus() == null || user.getStatus() != 1) {
             throw new RuntimeException("Tài khoản của bạn đã bị khóa!");
         }
+    }
+
+    private String normalizeEmail(String email) {
+        return email == null ? null : email.trim().toLowerCase();
+    }
+
+    private String normalize(String value) {
+        return value == null ? null : value.trim();
     }
 }

@@ -3,7 +3,6 @@ import type { RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
 import { h } from "vue";
 
-
 // Import các trang của m
 import ProductDetailView from "@/modules/shop/feature/product/views/ProductDetailView.vue";
 import CartView from "@/modules/shop/feature/cart/views/CartView.vue";
@@ -78,7 +77,15 @@ const routes: Array<RouteRecordRaw> = [
     name: "PaymentReturn",
     component: PaymentReturnView,
   },
-
+  {
+    path: "/payment/result",
+    name: "PosPaymentResult",
+    component: () => import("@/modules/pos/views/PaymentResult.vue"),
+    meta: {
+      requiresAuth: true,
+      allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+    },
+  },
   // Các trang Auth
   {
     path: "/login",
@@ -111,53 +118,57 @@ const routes: Array<RouteRecordRaw> = [
     redirect: "/admin/dashboard",
     meta: { requiresAuth: true },
     children: [
-     
       {
         path: "dashboard",
         name: "AdminDashboard",
         component: mockPage("Tổng quan (Báo cáo)", "Huy"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER"] },
       },
-{
+      {
         path: "pos",
         name: "AdminPOS",
         component: () => import("@/modules/pos/views/PosView.vue"),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER", "CASHIER"] },
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
       },
       {
-  path: "products",
-  meta: {
-    requiresAuth: true,
-    allowedRoles: ["OWNER", "MANAGER"],
-  },
-  children: [
-    {
-      path: "",
-      name: "AdminProducts",
-      component: ProductListView,
-    },
-    {
-      path: "create",
-      name: "AdminProductCreate",
-      component: ProductCreateView,
-    },
-    {
-      path: ":id",
-      name: "AdminProductUpdate",
-      component: ProductUpdateView,
-    },
-  ],
-},
+        path: "products",
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER"],
+        },
+        children: [
+          {
+            path: "",
+            name: "AdminProducts",
+            component: ProductListView,
+          },
+          {
+            path: "create",
+            name: "AdminProductCreate",
+            component: ProductCreateView,
+          },
+          {
+            path: ":id",
+            name: "AdminProductUpdate",
+            component: ProductUpdateView,
+          },
+        ],
+      },
       {
         path: "categories",
         name: "AdminCategories",
-        component: () => import("@/modules/admin/feature/category/views/CategoryView.vue"),
+        component: () =>
+          import("@/modules/admin/feature/category/views/CategoryView.vue"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "brands",
         name: "AdminBrands",
-        component: () => import("@/modules/admin/feature/brand/views/BrandView.vue"), 
+        component: () =>
+          import("@/modules/admin/feature/brand/views/BrandView.vue"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
@@ -208,13 +219,18 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "customers",
         name: "AdminCustomers",
-        component: mockPage("Quản lý Khách hàng", "Huy"),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
+        component: () =>
+          import("@/modules/admin/feature/customer/views/CustomerView.vue"),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
       },
       {
         path: "employees",
         name: "AdminEmployees",
-        component: mockPage("Quản lý Nhân viên", "Huy"),
+        component: () =>
+          import("@/modules/admin/feature/employee/views/EmployeeView.vue"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER"] },
       },
     ],
@@ -224,68 +240,68 @@ const routes: Array<RouteRecordRaw> = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
-
 });
 
-// Logic Bảo Mật Định Tuyến Toàn Cục (Đã gộp code của m và team)
 router.beforeEach(async (to, from) => {
   const authStore = useAuthStore();
 
-  // ĐẢM BẢO STATE ĐƯỢC ĐỒNG BỘ: Đọc trực tiếp từ LocalStorage nếu Pinia chưa kịp load lại
-  if (!authStore.isAuthenticated && localStorage.getItem("token")) {
-    // Giữ nguyên phần nhắc nhở logic đồng bộ của team
-  }
+  const token = localStorage.getItem("token");
+  const localRole = localStorage.getItem("role");
 
-  const userRole = (authStore.role || "").toUpperCase().trim();
-  // ==========================================
-  // LUỒNG 1: ĐÃ ĐĂNG NHẬP THÌ KHÔNG CHO RA LOGIN
-  // ==========================================
+  const isAuthenticated = authStore.isAuthenticated || !!token;
+
+  const userRole = (authStore.role || localRole || "")
+    .toUpperCase()
+    .replace("ROLE_", "")
+    .trim();
+
   if (
-    authStore.isAuthenticated &&
+    isAuthenticated &&
     ["Login", "AdminLogin", "Register"].includes(to.name as string)
   ) {
     if (userRole === "OWNER") {
       return { path: "/admin/dashboard", replace: true };
-    } else if (["MANAGER", "CASHIER"].includes(userRole)) {
+    }
+
+    if (["MANAGER", "CASHIER"].includes(userRole)) {
       return { path: "/admin/pos", replace: true };
     }
+
     return { path: "/", replace: true };
   }
 
-  // ==========================================
-  // LUỒNG 2: KIỂM TRA QUYỀN TRUY CẬP NỘI BỘ
-  // ==========================================
   if (to.meta.requiresAuth) {
-    if (!authStore.isAuthenticated) {
+    if (!isAuthenticated) {
       if (to.path.startsWith("/admin")) {
         return { name: "AdminLogin", replace: true };
       }
+
       return { name: "Login", replace: true };
     }
 
-    const allowedRoles = to.meta.allowedRoles as string[];
+    const allowedRoles = to.meta.allowedRoles as string[] | undefined;
 
     if (allowedRoles && !allowedRoles.includes(userRole)) {
-      // 1. Nếu vừa đăng nhập xong bị đá sang link cấm không đúng quyền hạn
       if (from.name === "AdminLogin" || from.name === "Login") {
         if (["CASHIER", "MANAGER"].includes(userRole)) {
           return { path: "/admin/pos", replace: true };
         }
+
         if (userRole === "OWNER") {
           return { path: "/admin/dashboard", replace: true };
         }
+
         return { path: "/", replace: true };
       }
 
-      // 2. Nếu đang thao tác nội bộ mà bấm nhầm link cấm
       if (from.matched.length > 0) {
         return from.fullPath;
       }
 
-      // 3. Nếu gõ link trực tiếp lên thanh URL nhưng sai Role
       if (["CASHIER", "MANAGER"].includes(userRole)) {
         return { path: "/admin/pos", replace: true };
       }
+
       if (userRole === "OWNER") {
         return { path: "/admin/dashboard", replace: true };
       }
