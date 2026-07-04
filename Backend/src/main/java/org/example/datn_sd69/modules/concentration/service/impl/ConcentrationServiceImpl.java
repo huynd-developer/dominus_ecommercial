@@ -104,10 +104,14 @@ public class ConcentrationServiceImpl implements ConcentrationService {
     }
 
     @Override
-    public Page<Concentration> getAll(Pageable pageable) {
+    public Page<Concentration> getAll(String keyword, Pageable pageable) {
+        // Nếu có nhập chữ vào ô tìm kiếm
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            return concentrationRepository.searchByName(keyword.trim(), pageable);
+        }
+        // Nếu ô tìm kiếm để trống thì trả về toàn bộ danh sách chưa xóa
         return concentrationRepository.findByIsDeletedFalse(pageable);
     }
-
     @Override
     public Page<Concentration> getActiveConcentrations(int page, int size) {
         // Giới hạn size tránh fetch quá nhiều dữ liệu

@@ -14,7 +14,7 @@ public interface ConcentrationService {
     Concentration update(Integer id, ConcentrationRequest request);
     void delete(Integer id);
 
-    Page<Concentration> getAll(Pageable pageable);
+    Page<Concentration> getAll(String keyword, Pageable pageable);
 
     Page<Concentration> getActiveConcentrations(int page, int size);
 }

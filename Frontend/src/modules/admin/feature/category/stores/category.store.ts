@@ -41,7 +41,6 @@ export const useCategoryStore = defineStore('categoryStore', {
         this.isLoading = false;
       }
     },
-
     async createCategory(data: CategoryRequest) {
       try {
         await categoryService.create(data);

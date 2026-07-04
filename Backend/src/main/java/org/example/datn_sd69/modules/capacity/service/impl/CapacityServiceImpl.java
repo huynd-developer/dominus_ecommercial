@@ -5,11 +5,10 @@ import org.example.datn_sd69.entity.Capacity;
 import org.example.datn_sd69.modules.capacity.dto.request.CapacityRequest; // Import chuẩn ở đây
 import org.example.datn_sd69.modules.capacity.service.CapacityService;
 import org.example.datn_sd69.repository.CapacityRepository;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -87,14 +86,32 @@ public class CapacityServiceImpl implements CapacityService {
         capacityRepository.save(capacity);
     }
 
-    @Override
-    public Page<Capacity> getAll(Pageable pageable) {
-        return capacityRepository.findByIsDeletedFalse(pageable);
-    }
+//    @Override
+//    public Page<Capacity> getAll(Pageable pageable) {
+//        return capacityRepository.findByIsDeletedFalse(pageable);
+//    }
 
     @Override
     public Page<Capacity> getActiveCapacities(int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         return capacityRepository.findByStatusAndIsDeletedFalse(1, pageable);
+    }
+
+    @Override
+    public Page<Capacity> getAllAdmin(String keyword, Pageable pageable) {
+
+        // Nếu không có từ khóa tìm kiếm -> lấy tất cả với pageable (đã có sẵn Sort từ Controller)
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return capacityRepository.findByIsDeletedFalse(pageable);
+        }
+
+        // Nếu có từ khóa, cố gắng ép kiểu sang Double để tìm kiếm
+        try {
+            Double searchVal = Double.parseDouble(keyword.trim());
+            return capacityRepository.findByValueAndIsDeletedFalse(searchVal, pageable);
+        } catch (NumberFormatException e) {
+            // Nếu người dùng nhập chữ (VD: "abc") -> Trả về danh sách rỗng
+            return new PageImpl<>(Collections.emptyList(), pageable, 0);
+        }
     }
 }
