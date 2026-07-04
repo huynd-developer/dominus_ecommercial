@@ -6,7 +6,7 @@
     </div>
 
     <div v-if="isLoading" class="loading">Đang tải dữ liệu...</div>
-    <div v-else-if="cartItems.length === 0" class="empty">Giỏ hàng trống. <router-link to="/product">Tiếp tục mua sắm ➔</router-link></div>
+    <div v-else-if="cartItems.length === 0" class="empty">Giỏ hàng trống. <router-link to="/products">Tiếp tục mua sắm ➔</router-link></div>
 
     <div v-else class="item-list">
       <div class="cart-item" v-for="item in cartItems" :key="item.cartItemId">

@@ -1,7 +1,6 @@
-import { defineStore } from 'pinia'
-import api from '@/common/api' 
+import { defineStore } from "pinia";
+import api from "@/common/api";
 
-// Khai báo kiểu dữ liệu chuẩn
 export interface PosProduct {
   id: number;
   sku: string;
@@ -19,8 +18,11 @@ export interface CartItem {
 }
 
 export interface PosCustomer {
+  customerId?: number;
   name: string;
   phone: string;
+  email?: string;
+  customerRank?: string;
   loyaltyPoints: number;
 }
 
@@ -33,150 +35,208 @@ export interface PosStoreState {
   customer: PosCustomer | null;
   voucherCode: string;
   discountAmount: number;
-  paymentMethod: 'CASH' | 'VNPAY';
+  paymentMethod: "CASH" | "VNPAY";
   vnpayUrl: string;
   isLoading: boolean;
   errorMsg: string;
+  lastOrderId: string | number | null;
 }
 
-export const usePosStore = defineStore('posStore', {
+const normalizePhone = (phone?: string | null): string => {
+  return (phone || "").replace(/[\s.-]/g, "").trim();
+};
+
+const isValidVietnamPhone = (phone: string): boolean => {
+  return /^(03|05|07|08|09)\d{8}$/.test(phone);
+};
+
+const normalizeText = (value?: string | null): string => {
+  return (value || "").trim();
+};
+
+export const usePosStore = defineStore("posStore", {
   state: (): PosStoreState => ({
     allProducts: [],
-    categories: ['Tất cả'],
-    selectedCategory: 'Tất cả',
-    searchQuery: '',
+    categories: ["Tất cả"],
+    selectedCategory: "Tất cả",
+    searchQuery: "",
     cart: [],
     customer: null,
-    voucherCode: '',
+    voucherCode: "",
     discountAmount: 0,
-    paymentMethod: 'CASH',
-    vnpayUrl: '',
+    paymentMethod: "CASH",
+    vnpayUrl: "",
     isLoading: false,
-    errorMsg: ''
+    errorMsg: "",
+    lastOrderId: null,
   }),
 
   getters: {
-    // Bộ lọc sản phẩm theo danh mục và ô tìm kiếm tên/SKU
     filteredProducts(state) {
-      return state.allProducts.filter(product => {
-        const matchesCategory = state.selectedCategory === 'Tất cả' || product.category === state.selectedCategory;
-        const matchesSearch = product.name.toLowerCase().includes(state.searchQuery.toLowerCase()) || 
-                              product.sku.toLowerCase().includes(state.searchQuery.toLowerCase());
+      return state.allProducts.filter((product) => {
+        const matchesCategory =
+          state.selectedCategory === "Tất cả" ||
+          product.category === state.selectedCategory;
+
+        const matchesSearch =
+          product.name.toLowerCase().includes(state.searchQuery.toLowerCase()) ||
+          product.sku.toLowerCase().includes(state.searchQuery.toLowerCase());
+
         return matchesCategory && matchesSearch;
       });
     },
 
-    // Tổng tiền hàng gốc chưa giảm giá
     totalAmount(state): number {
-      return state.cart.reduce((total, item) => total + (item.product.price * item.quantity), 0);
+      return state.cart.reduce(
+        (total, item) => total + item.product.price * item.quantity,
+        0
+      );
     },
 
-    // Số tiền khách thực tế phải trả sau khi trừ voucher
     finalAmount(): number {
       const final = this.totalAmount - this.discountAmount;
       return final > 0 ? final : 0;
-    }
+    },
   },
 
   actions: {
-    // 1. Tải danh sách sản phẩm và đập phẳng Biến thể ra
     async fetchProducts() {
       this.isLoading = true;
+      this.errorMsg = "";
+
       try {
-        const { data } = await api.get('/admin/products');
-        const rawProducts = data.data || data.content || data;
+        const { data } = await api.get("/admin/products");
+        const rawProducts = data.data || data.content || data || [];
         const flatProducts: PosProduct[] = [];
 
         rawProducts.forEach((p: any) => {
-          let imgUrl = p.images && p.images.length > 0 ? p.images[0].imageUrl : '';
-          if (!imgUrl || !imgUrl.startsWith('http')) {
-            imgUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random&color=fff&size=200`;
+          let imgUrl =
+            p.images && p.images.length > 0 ? p.images[0].imageUrl : "";
+
+          if (!imgUrl || !imgUrl.startsWith("http")) {
+            imgUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+              p.name || p.productName || "Product"
+            )}&background=random&color=fff&size=200`;
           }
 
           if (p.variants && p.variants.length > 0) {
             p.variants.forEach((v: any) => {
               flatProducts.push({
-                id: p.id,
-                sku: v.sku, 
-                name: p.name,
-                subName: `${v.capacityValue}ml - ${v.bottleTypeName}`, 
-                price: v.price,               
-                stockQuantity: v.stockQuantity, 
+                id: v.variantId || v.id || p.id,
+                sku: v.sku,
+                name: p.name || p.productName,
+                subName:
+                  v.capacityLabel ||
+                  `${v.capacityValue || ""}ml - ${v.bottleTypeName || ""}`,
+                price: Number(v.price || 0),
+                stockQuantity: Number(v.stockQuantity || 0),
                 image: imgUrl,
-                category: p.categoryName || 'Tất cả'
+                category: p.categoryName || p.brandName || "Tất cả",
               });
+            });
+          } else if (p.sku) {
+            flatProducts.push({
+              id: p.variantId || p.id || p.productId,
+              sku: p.sku,
+              name: p.productName || p.name,
+              subName: p.capacityLabel || `${p.capacityValue || ""}ml`,
+              price: Number(p.price || 0),
+              stockQuantity: Number(p.stockQuantity || 0),
+              image: p.imageUrl || imgUrl,
+              category: p.brandName || p.categoryName || "Tất cả",
             });
           }
         });
 
         this.allProducts = flatProducts;
-        const dynamicCategories = ['Tất cả', ...new Set(flatProducts.map((p: any) => p.category).filter(Boolean))] as string[];
-        this.categories = dynamicCategories;
 
-      } catch (error) {
-        this.errorMsg = 'Không thể tải danh sách sản phẩm từ máy chủ!';
+        this.categories = [
+          "Tất cả",
+          ...new Set(flatProducts.map((p) => p.category).filter(Boolean)),
+        ] as string[];
+      } catch (error: any) {
+        this.errorMsg =
+          error.response?.data?.message ||
+          "Không thể tải danh sách sản phẩm từ máy chủ!";
       } finally {
         this.isLoading = false;
       }
     },
 
-    // 2. Thêm sản phẩm vào giỏ hàng
     addToCart(product: PosProduct) {
-      this.errorMsg = '';
-      const existingItem = this.cart.find(item => item.product.sku === product.sku);
+      this.errorMsg = "";
+
+      const existingItem = this.cart.find(
+        (item) => item.product.sku === product.sku
+      );
 
       if (existingItem) {
         if (existingItem.quantity >= product.stockQuantity) {
           this.errorMsg = `Sản phẩm ${product.name} đã đạt giới hạn tồn kho tối đa (${product.stockQuantity})!`;
           return;
         }
+
         existingItem.quantity++;
-      } else {
-        if (product.stockQuantity <= 0) {
-          this.errorMsg = `Sản phẩm ${product.name} đã hết hàng trong kho!`;
-          return;
-        }
-        this.cart.push({ product, quantity: 1 });
+        return;
       }
+
+      if (product.stockQuantity <= 0) {
+        this.errorMsg = `Sản phẩm ${product.name} đã hết hàng trong kho!`;
+        return;
+      }
+
+      this.cart.push({ product, quantity: 1 });
     },
 
-    // 3. SỬA: Quét mã vạch (Gọi chuẩn endpoint PosController: /api/admin/pos/product?sku=...)
     async handleBarcodeScan(sku: string) {
-      this.errorMsg = '';
-      const cleanSku = sku.trim();
+      this.errorMsg = "";
+
+      const cleanSku = normalizeText(sku);
       if (!cleanSku) return;
 
-      // Check nhanh dưới local trước
-      const localProduct = this.allProducts.find(p => p.sku.toLowerCase() === cleanSku.toLowerCase());
+      const localProduct = this.allProducts.find(
+        (p) => p.sku.toLowerCase() === cleanSku.toLowerCase()
+      );
+
       if (localProduct) {
         this.addToCart(localProduct);
         return;
       }
 
-      // Nếu không thấy thì gọi API check real-time qua PosController
       try {
-        const { data } = await api.get('/admin/pos/product', { params: { sku: cleanSku } });
+        const { data } = await api.get("/admin/pos/product", {
+          params: { sku: cleanSku },
+        });
+
         if (data) {
           const mappedProduct: PosProduct = {
-            id: data.productId,
+            id: data.variantId || data.productId,
             sku: data.sku,
             name: data.productName,
-            subName: `${data.capacityValue}ml - ${data.bottleTypeName}`,
-            price: data.price,
-            stockQuantity: data.stockQuantity,
-            image: data.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.productName)}&background=random&color=fff`,
-            category: data.categoryName || 'Tất cả'
+            subName: data.capacityLabel || "",
+            price: Number(data.price || 0),
+            stockQuantity: Number(data.stockQuantity || 0),
+            image:
+              data.imageUrl ||
+              `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                data.productName || "Product"
+              )}&background=random&color=fff`,
+            category: data.brandName || "Tất cả",
           };
+
           this.addToCart(mappedProduct);
         }
       } catch (error: any) {
-        this.errorMsg = error.response?.data?.message || `Mã vạch SKU "${cleanSku}" không tồn tại trên hệ thống!`;
+        this.errorMsg =
+          error.response?.data?.message ||
+          `Mã vạch SKU "${cleanSku}" không tồn tại trên hệ thống!`;
       }
     },
 
-    // 4. Cập nhật số lượng thủ công bằng nút + / -
     updateQuantity(sku: string, qty: number) {
-      const item = this.cart.find(i => i.product.sku === sku);
+      this.errorMsg = "";
+
+      const item = this.cart.find((i) => i.product.sku === sku);
       if (!item) return;
 
       if (qty <= 0) {
@@ -194,79 +254,162 @@ export const usePosStore = defineStore('posStore', {
     },
 
     removeFromCart(sku: string) {
-      this.cart = this.cart.filter(item => item.product.sku !== sku);
+      this.cart = this.cart.filter((item) => item.product.sku !== sku);
     },
 
-    // 5. SỬA: Tìm kiếm khách hàng bằng SĐT (Gọi chuẩn PosController: /api/admin/pos/customer?phone=...)
     async searchCustomer(phone: string) {
-      if (!phone.trim()) return;
-      this.errorMsg = '';
-      try {
-        const { data } = await api.get('/admin/pos/customer', { params: { phone } });
-        if (data && data.found) {
-          this.customer = data.customer;
-        } else {
-          this.customer = null;
-          this.errorMsg = data.message || 'Hóa đơn sẽ tính dưới dạng khách vãng lai.';
-        }
-      } catch (error) {
-        this.customer = null;
-        this.errorMsg = 'Lỗi kết nối khi tìm kiếm khách hàng!';
-      }
-    },
+      const cleanPhone = normalizePhone(phone);
 
-    // 6. SỬA: Gọi lệnh Thanh toán (Gọi chuẩn PosController: /api/admin/pos/checkout)
-    async processCheckout() {
-      if (this.cart.length === 0) {
-        this.errorMsg = 'Giỏ hàng đang trống, không thể thanh toán!';
+      if (!cleanPhone) {
+        this.customer = null;
+        this.errorMsg = "";
         return;
       }
 
+      if (!isValidVietnamPhone(cleanPhone)) {
+        this.customer = null;
+        this.errorMsg =
+          "Số điện thoại không hợp lệ. Vui lòng nhập 10 số, bắt đầu bằng 03, 05, 07, 08 hoặc 09.";
+        return;
+      }
+
+      this.errorMsg = "";
+
+      try {
+        const { data } = await api.get("/admin/pos/customer", {
+          params: { phone: cleanPhone },
+        });
+
+        if (data && data.found) {
+          this.customer = {
+            customerId: data.customer.customerId,
+            name: data.customer.name || "",
+            phone: data.customer.phone || cleanPhone,
+            email: data.customer.email || "",
+            customerRank: data.customer.customerRank || "",
+            loyaltyPoints: data.customer.loyaltyPoints || 0,
+          };
+          return;
+        }
+
+        this.customer = {
+          name: "",
+          phone: cleanPhone,
+          loyaltyPoints: 0,
+        };
+
+        this.errorMsg =
+          data.message ||
+          "Không tìm thấy khách hàng. Vui lòng nhập tên để tạo khách mới hoặc bỏ chọn để bán vãng lai.";
+      } catch (error: any) {
+        this.customer = null;
+        this.errorMsg =
+          error.response?.data?.message ||
+          "Không thể kiểm tra số điện thoại khách hàng.";
+      }
+    },
+
+    async processCheckout(extra?: {
+      paymentMethod?: "CASH" | "VNPAY";
+      cashGiven?: number;
+      changeAmount?: number;
+    }) {
+      if (this.cart.length === 0) {
+        this.errorMsg = "Giỏ hàng đang trống, không thể thanh toán!";
+        return false;
+      }
+
       this.isLoading = true;
-      this.errorMsg = '';
+      this.errorMsg = "";
+
+      const selectedPaymentMethod = extra?.paymentMethod || this.paymentMethod;
+
+      const cleanCustomerPhone = this.customer?.phone
+        ? normalizePhone(this.customer.phone)
+        : null;
+
+      const customerName = normalizeText(this.customer?.name);
+
+      if (cleanCustomerPhone && !isValidVietnamPhone(cleanCustomerPhone)) {
+        this.errorMsg =
+          "Số điện thoại khách hàng không hợp lệ. Vui lòng kiểm tra lại trước khi thanh toán.";
+        this.isLoading = false;
+        return false;
+      }
+
+      const isNewCustomer = !!cleanCustomerPhone && !this.customer?.customerId;
+
+      if (isNewCustomer && !customerName) {
+        this.errorMsg =
+          "Khách hàng mới cần nhập tên. Nếu muốn bán vãng lai, hãy bấm nút X để bỏ chọn khách.";
+        this.isLoading = false;
+        return false;
+      }
 
       const payload = {
-        customerPhone: this.customer?.phone || null,
-        voucherCode: this.voucherCode || null,
-        paymentMethod: this.paymentMethod,
-        items: this.cart.map(item => ({
+        customerPhone: cleanCustomerPhone,
+        customerName: customerName || null,
+        voucherCode: normalizeText(this.voucherCode) || null,
+        paymentMethod: selectedPaymentMethod.toUpperCase(),
+        cashGiven: extra?.cashGiven ?? null,
+        changeAmount: extra?.changeAmount ?? null,
+        items: this.cart.map((item) => ({
           sku: item.product.sku,
-          quantity: item.quantity
-        }))
+          quantity: Number(item.quantity),
+        })),
       };
 
       try {
-        // Đấm thẳng vào endpoint PosController xịn
-        const { data } = await api.post('/admin/pos/checkout', payload);
+        const { data } = await api.post("/admin/pos/checkout", payload);
 
-        if (this.paymentMethod === 'VNPAY') {
+        const orderId =
+          data?.orderId ||
+          data?.id ||
+          data?.code ||
+          data?.orderCode ||
+          data?.invoiceCode ||
+          null;
+
+        this.lastOrderId = orderId;
+
+        if (selectedPaymentMethod === "VNPAY") {
           if (data.vnpayPaymentUrl) {
             this.vnpayUrl = data.vnpayPaymentUrl;
-            window.open(data.vnpayPaymentUrl, '_blank'); // Bật tab mới quét mã QR VNPay
-          } else {
-            this.errorMsg = 'Không nhận được link thanh toán VNPay từ máy chủ!';
+            window.location.href = data.vnpayPaymentUrl;
+
+            return {
+              success: true,
+              data,
+            };
           }
-        } else {
-          // Trả tiền mặt thành công -> In hóa đơn và dọn giỏ
-          alert('Thanh toán tiền mặt thành công! Hệ thống đang xử lý hóa đơn...');
-          this.startNewOrder();
+
+          this.errorMsg = "Không nhận được link thanh toán VNPay từ máy chủ!";
+          return false;
         }
+
+        return {
+          success: true,
+          data,
+        };
       } catch (error: any) {
-        this.errorMsg = error.response?.data?.message || 'Thanh toán thất bại. Vui lòng kiểm tra lại!';
+        this.errorMsg =
+          error.response?.data?.message ||
+          "Thanh toán thất bại. Vui lòng kiểm tra lại!";
+        return false;
       } finally {
         this.isLoading = false;
       }
     },
 
-    // 7. Reset toàn bộ giỏ hàng để đón khách tiếp theo
     startNewOrder() {
       this.cart = [];
       this.customer = null;
-      this.voucherCode = '';
+      this.voucherCode = "";
       this.discountAmount = 0;
-      this.vnpayUrl = '';
-      this.errorMsg = '';
-      this.fetchProducts(); // Tải lại để cập nhật số lượng tồn kho mới nhất
-    }
-  }
-})
+      this.vnpayUrl = "";
+      this.errorMsg = "";
+      this.lastOrderId = null;
+      this.fetchProducts();
+    },
+  },
+});

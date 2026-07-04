@@ -18,14 +18,15 @@ export const useCategoryStore = defineStore('categoryStore', {
           params: { keyword, page, size: this.pageSize } 
         });
         
-        // Kiểm tra nếu có response.data.data thì dùng, không thì fallback về response.data
         const backendResult = response.data?.data ? response.data.data : response.data;
         
         if (backendResult && backendResult.content) {
           this.categories = backendResult.content; 
-          // 👇 ĐÃ CẬP NHẬT: Đọc đúng object "page" theo cấu trúc mới của Spring Boot
-          this.totalPages = backendResult.page?.totalPages ?? backendResult.totalPages ?? 1;
-          this.currentPage = backendResult.page?.number ?? backendResult.number ?? 0;
+          
+          // 🎯 ĐIỂM MẤU CHỐT: Lấy thông tin từ object "page"
+          this.totalPages = backendResult.page?.totalPages || backendResult.totalPages || 1;
+          this.currentPage = backendResult.page?.number || backendResult.number || 0;
+          
         } else if (Array.isArray(backendResult)) {
           this.categories = backendResult;
           this.totalPages = 1;
@@ -43,11 +44,10 @@ export const useCategoryStore = defineStore('categoryStore', {
     async createCategory(data: CategoryRequest) {
       try {
         await categoryService.create(data);
-        await this.fetchCategories('', 0); 
+        // ĐÃ XÓA: dòng fetchCategories tự động để View tự quản lý luồng dữ liệu mượt hơn
       } catch (error: any) {
         if (error.response && error.response.status === 400) {
           const errorData = error.response.data;
-          // Hỗ trợ bóc tách lỗi nếu BE trả về object lỗi chứa thông điệp cụ thể
           const targetError = errorData?.message || errorData;
           if (typeof targetError === 'string') throw new Error(targetError);
           if (typeof targetError === 'object') {
@@ -62,7 +62,7 @@ export const useCategoryStore = defineStore('categoryStore', {
     async updateCategory(id: number, data: CategoryRequest) {
       try {
         await categoryService.update(id, data);
-        await this.fetchCategories('', this.currentPage); 
+        // ĐÃ XÓA: dòng fetchCategories tự động nhằm tránh ghi đè mất từ khóa tìm kiếm hiện tại
       } catch (error: any) {
         if (error.response && error.response.status === 400) {
           const errorData = error.response.data;
@@ -83,7 +83,6 @@ export const useCategoryStore = defineStore('categoryStore', {
       } catch (error: any) {
         console.error("Lỗi khi xóa danh mục:", error);
         if (error.response && error.response.data) {
-          // Bóc tách câu từ chối xóa dạng: "Danh mục đang có sản phẩm liên kết!"
           throw new Error(error.response.data.message || error.response.data);
         }
         throw new Error("Không thể xóa danh mục này!");

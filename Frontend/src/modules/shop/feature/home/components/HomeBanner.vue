@@ -16,7 +16,7 @@
           Khám Phá Ngay.
         </p>
 
-        <RouterLink to="/product" class="btn banner-btn">
+        <RouterLink to="/products" class="btn banner-btn">
           MUA NGAY
           <i class="bi bi-arrow-right-short ms-2"></i>
         </RouterLink>
