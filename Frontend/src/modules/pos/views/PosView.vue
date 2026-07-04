@@ -23,7 +23,6 @@ import CartSideBar from '../components/CartSideBar.vue'
 
 const posStore = usePosStore()
 
-// Tự động tải danh sách sản phẩm thật từ BE lên màn hình ngay khi mở app
 onMounted(() => {
   posStore.fetchProducts()
 })
@@ -31,10 +30,10 @@ onMounted(() => {
 
 <style scoped>
 .pos-view-wrapper {
-  background-color: #070c18; /* Màu nền tối sang trọng chuẩn gaming/hiện đại của mày */
+  background-color: #070c18; 
 }
 
-/* Tùy biến thanh cuộn cho mượt và đẹp hơn */
+/* Tùy biến thanh cuộn */
 ::-webkit-scrollbar {
   width: 6px;
 }

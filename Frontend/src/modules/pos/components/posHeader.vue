@@ -22,12 +22,6 @@
         </button>
       </div>
     </div>
-    
-    <div class="d-flex align-items-center gap-3">
-      <div class="dark-time px-3 py-1.5 rounded-3 fw-bold font-sm d-none d-md-block">
-        <i class="bi bi-clock-history me-1"></i> {{ time }}
-      </div>
-    </div>
   </header>
 </template>
 
