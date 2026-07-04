@@ -44,7 +44,8 @@
         <h1 class="title">{{ product?.name || 'Tên sản phẩm đang cập nhật' }}</h1>
 
         <div class="rating"><span class="stars">★★★★★</span> <span class="score">{{ product?.rating || '5.0' }}</span>
-          <span class="divider-line">|</span> <span class="reviews">128 đánh giá</span></div>
+          <span class="divider-line">|</span> <span class="reviews">128 đánh giá</span>
+        </div>
 
         <div class="price-box">
           <span class="current-price">{{ selectedVariant?.price != null ? formatCurrency(selectedVariant.price) : 'Liên hệ' }}</span>
@@ -64,16 +65,16 @@
 
         <div class="variant-selection">
           <h4>Chọn dung tích</h4>
-          
+
           <!-- ĐỔI size-options THÀNH capacity-options -->
           <div class="capacity-options" v-if="product?.variants && product.variants.length > 0">
-            
+
             <!-- ĐỔI size-btn THÀNH cap-btn -->
             <button v-for="v in product.variants" :key="v.id"
               :class="['cap-btn', { active: selectedVariant?.id === v.id }]" @click="selectedVariant = v">
 
               {{ v.capacity }}
-              
+
               <!-- Thêm lại cái dấu tích vàng V v-if cho sang chảnh -->
               <span v-if="selectedVariant?.id === v.id" class="check-icon">✓</span>
 
@@ -94,16 +95,28 @@
         </div>
 
         <div class="actions">
-          <button class="btn-add-cart" @click="addToCart" :disabled="isAdding || !selectedVariant">
+          <button class="btn-add-cart" @click="addToCart"
+            :disabled="isAdding || !selectedVariant || selectedVariant?.quantity === 0 || selectedVariant?.stock === 0 || !selectedVariant?.price">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
               <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
               <line x1="3" y1="6" x2="21" y2="6" />
               <path d="M16 10a4 4 0 01-8 0" />
             </svg>
-            {{ isAdding ? 'ĐANG THÊM...' : 'THÊM VÀO GIỎ HÀNG' }}
+            {{
+              (!selectedVariant?.price || selectedVariant?.price === 0) ? 'LIÊN HỆ ĐỂ MUA' :
+                ((selectedVariant?.quantity === 0 || selectedVariant?.stock === 0) ? 'TẠM HẾT HÀNG' :
+                  (isAdding ? 'ĐANG THÊM...' : 'THÊM VÀO GIỎ HÀNG'))
+            }}
           </button>
-          <button class="btn-buy-now" @click="buyNow" :disabled="isAdding || !selectedVariant">
-            MUA NGAY <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon-right">
+
+          <button class="btn-buy-now" @click="buyNow"
+            :disabled="isAdding || !selectedVariant || selectedVariant?.quantity === 0 || selectedVariant?.stock === 0 || !selectedVariant?.price">
+            {{
+              (!selectedVariant?.price || selectedVariant?.price === 0) ? 'LIÊN HỆ ĐỂ MUA' :
+                ((selectedVariant?.quantity === 0 || selectedVariant?.stock === 0) ? 'TẠM HẾT HÀNG' : 'MUA NGAY')
+            }}
+            <svg v-if="selectedVariant?.price > 0 && selectedVariant?.quantity !== 0 && selectedVariant?.stock !== 0"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon-right">
               <line x1="5" y1="12" x2="19" y2="12" />
               <polyline points="12 5 19 12 12 19" />
             </svg>
@@ -728,63 +741,67 @@ const buyNow = async () => {
 
 /* Dán thêm đoạn này vào cuối thẻ <style scoped> trong ProductDetail.vue */
 
-.variant-selection { margin-bottom: 30px; }
-.variant-selection h4 { 
-  font-size: 14px; 
-  font-weight: 600; 
-  color: #0a142f; 
-  margin: 0 0 15px 0; 
-  text-transform: uppercase; 
+.variant-selection {
+  margin-bottom: 30px;
+}
+
+.variant-selection h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0a142f;
+  margin: 0 0 15px 0;
+  text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-.capacity-options { 
-  display: flex; 
-  flex-wrap: wrap; 
-  gap: 12px; /* Tạo khoảng cách giữa các nút */
+.capacity-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  /* Tạo khoảng cách giữa các nút */
 }
 
-.cap-btn { 
-  flex: 0 0 auto; 
-  min-width: 80px; 
-  padding: 10px 15px; 
-  border: 1px solid #cbd5e0; 
-  background: white; 
-  border-radius: 6px; 
-  cursor: pointer; 
-  position: relative; 
-  font-size: 14px; 
-  font-weight: 600; 
-  color: #4a5568; 
-  transition: all 0.2s ease; 
-  text-align: center; 
+.cap-btn {
+  flex: 0 0 auto;
+  min-width: 80px;
+  padding: 10px 15px;
+  border: 1px solid #cbd5e0;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  position: relative;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4a5568;
+  transition: all 0.2s ease;
+  text-align: center;
 }
 
-.cap-btn:hover { 
-  border-color: #c69c6d; 
-  color: #c69c6d; 
+.cap-btn:hover {
+  border-color: #c69c6d;
+  color: #c69c6d;
 }
 
-.cap-btn.active { 
-  border-color: #0a142f; 
-  background: #0a142f; 
-  color: white; 
+.cap-btn.active {
+  border-color: #0a142f;
+  background: #0a142f;
+  color: white;
 }
 
-.check-icon { 
-  position: absolute; 
-  top: -6px; 
-  right: -6px; 
-  background: #c69c6d; 
-  color: white; 
-  width: 18px; 
-  height: 18px; 
-  border-radius: 50%; 
-  font-size: 10px; 
-  display: flex; 
-  align-items: center; 
-  justify-content: center; 
-  border: 2px solid white; 
+.check-icon {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #c69c6d;
+  color: white;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid white;
   font-weight: bold;
 }
 </style>

@@ -29,9 +29,9 @@ const mockPage = (title: string, assignee: string) => ({
         h("h1", `🚧 Trang ${title}`),
         h(
           "p",
-          `Giao diện đang được xây dựng bởi: ${assignee}. Sau khi code xong file Vue, hãy mở comment import trong router ra!`
+          `Giao diện đang được xây dựng bởi: ${assignee}. Sau khi code xong file Vue, hãy mở comment import trong router ra!`,
         ),
-      ]
+      ],
     ),
 });
 
@@ -54,11 +54,17 @@ const routes: Array<RouteRecordRaw> = [
     ],
   },
 
-  // Code của m (Chi tiết SP, Giỏ hàng, Thanh toán)
+ // Code của m (Chi tiết SP, Giỏ hàng, Thanh toán)
+  // Trong file router/index.ts
+{
+    path: "/products",
+    name: "ProductList", // Tên là ProductList
+    component: () => import("@/modules/shop/feature/product/views/ProductDetailView.vue"),
+  },
   {
-    path: "/product",
-    name: "ProductDetail",
-    component: ProductDetailView,
+    path: "/product/:id",
+    name: "ProductDetail", // Tên là ProductDetail
+    component: () => import("@/modules/shop/feature/product/views/SingleProductView.vue"),
   },
   {
     path: "/cart",

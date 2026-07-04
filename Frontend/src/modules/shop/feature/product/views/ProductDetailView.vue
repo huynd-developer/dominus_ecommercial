@@ -20,8 +20,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, computed, onMounted, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 
 import ShopHeader from '@/modules/shop/layout/ShopHeader.vue';
@@ -31,6 +31,7 @@ import ProductDetail from '@/modules/shop/feature/product/components/ProductDeta
 import ShopFooter from '@/modules/shop/layout/ShopFooter.vue';
 
 const router = useRouter();
+const route = useRoute();
 
 const isShowingDetail = ref(false);
 const activeProduct = ref<any>(null);
@@ -53,16 +54,12 @@ const handleFilterChange = (filters: any) => {
 const extractCapacity = (v: any) => {
   if (!v) return 'N/A';
   let val = null;
-  // Bắt mọi trường hợp BE có thể trả về (Object, field rời, số Float)
   if (v.capacity && v.capacity.value) val = v.capacity.value;
   else if (v.capacityValue) val = v.capacityValue;
   else if (v.volume) val = v.volume;
   else if (v.capacity != null && typeof v.capacity !== 'object') val = v.capacity;
 
-  if (val != null) {
-    // Ép kiểu parseFloat để nếu BE trả 50.0 thì nó biến thành 50ml
-    return `${parseFloat(val)}ml`;
-  }
+  if (val != null) return `${parseFloat(val)}ml`;
   return v.capacity?.name || 'N/A';
 };
 
@@ -74,7 +71,6 @@ const fetchProducts = async () => {
     const rawData = res.data.data?.content || res.data.data || [];
     
     productList.value = rawData.map((item: any) => {
-      // Dịch giới tính[cite: 15]
       let genderStr = '';
       if (item.gender === 1) genderStr = 'Nam';
       else if (item.gender === 2) genderStr = 'Nữ';
@@ -102,7 +98,6 @@ const fetchProducts = async () => {
         variants: mappedVariants,
         scents: mappedScents.filter(Boolean),
         gender: genderStr,
-        // Bổ sung map Nồng độ và Loại chai để bộ lọc có dữ liệu so sánh
         concentration: typeof item.concentration === 'object' ? item.concentration?.name : (item.concentrationName || item.concentration || ''),
         bottleType: typeof item.bottleType === 'object' ? item.bottleType?.name : (item.bottleTypeName || item.bottleType || '')
       };
@@ -111,42 +106,35 @@ const fetchProducts = async () => {
     console.error("Lỗi fetch API List:", error);
   } finally {
     isLoading.value = false;
+    // Tải list xong thì check URL xem có bắt mở chi tiết không
+    checkUrlAndOpenDetail(route.query.id);
   }
 };
 
 onMounted(() => fetchProducts());
 
-// 2. BỘ LỌC (ĐÃ BỔ SUNG FULL 5 LOẠI LỌC)
+// 2. BỘ LỌC (GIỮ NGUYÊN HOẠT ĐỘNG TỐT)
 const filteredProductList = computed(() => {
   if (!productList.value) return [];
   return productList.value.filter((product: any) => {
-    
-    // 1. Lọc Giới tính[cite: 15]
     if (activeFilters.value.genders?.length > 0) {
       const filters = activeFilters.value.genders.map((g:string)=>g.toLowerCase());
       const pGender = (product.gender || '').toLowerCase();
       if (!filters.includes(pGender)) return false;
     }
-
-    // 2. Lọc Nhóm hương[cite: 15]
     if (activeFilters.value.fragranceFamilies?.length > 0) {
       const filters = activeFilters.value.fragranceFamilies.map((f:string)=>f.toLowerCase());
       const pScents = product.scents.map((s:string)=>s.toLowerCase());
       if (!filters.some((f: string) => pScents.includes(f))) return false;
     }
-
-    // 3. Lọc Nồng độ (Bổ sung mới)
     if (activeFilters.value.concentrations?.length > 0) {
       const filters = activeFilters.value.concentrations.map((c:string)=>c.toLowerCase());
       const pConc = (product.concentration || '').toLowerCase();
       if (!filters.includes(pConc)) return false;
     }
-
-    // 4. Lọc Loại chai (Bổ sung mới)
     if (activeFilters.value.bottleTypes?.length > 0) {
       const filters = activeFilters.value.bottleTypes.map((b:string)=>b.toLowerCase());
       const pBottle = (product.bottleType || '').toLowerCase();
-      // Nếu sản phẩm không khớp loại chai, và các variants cũng không khớp thì loại
       let hasMatch = filters.includes(pBottle);
       if (!hasMatch && product.variants) {
          const vBottles = product.variants.map((v:any)=>(typeof v.bottleType === 'object' ? v.bottleType?.name : (v.bottleType || '')).toLowerCase());
@@ -154,11 +142,8 @@ const filteredProductList = computed(() => {
       }
       if (!hasMatch) return false;
     }
-
-    // 5. Lọc Dung tích[cite: 15]
     if (activeFilters.value.capacities?.length > 0) {
       if (product.variants && product.variants.length > 0) {
-        // Xóa chữ 'ml' khi so sánh để tránh lệch format
         const filters = activeFilters.value.capacities.map((c:string)=>c.toLowerCase().replace('ml','').trim());
         const pCaps = product.variants.map((v:any)=>(v.capacity || '').toLowerCase().replace('ml','').trim());
         if (!filters.some((c: string) => pCaps.includes(c))) return false;
@@ -166,49 +151,59 @@ const filteredProductList = computed(() => {
         return false; 
       }
     }
-
     return true; 
   });
 });
 
-// 3. MỞ CHI TIẾT & GỌI API VARIANTS
-const handleOpenDetail = async (item: any) => {
-  activeProduct.value = { ...item };
-  isShowingDetail.value = true;
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+// 3. LOGIC XỬ LÝ MỞ CHI TIẾT & BẤM NÚT BACK (THÔNG MINH)
+const checkUrlAndOpenDetail = async (newId: any) => {
+  if (newId) {
+    const targetId = Number(newId);
+    let productToOpen = productList.value.find((p: any) => p.id === targetId);
 
-  try {
-    const variantRes = await axios.get(`http://localhost:8080/api/products/${item.id}/variants`);
-    const rawVariants = variantRes.data.data || [];
-
-    if (rawVariants.length > 0) {
-      // 1. Map dữ liệu trước
-      let mappedVariants = rawVariants.map((v: any) => ({
-        ...v, 
-        capacity: extractCapacity(v),
-        price: v.price || 0 
-      }));
-
-      // 2. SẮP XẾP TỪ BÉ ĐẾN LỚN
-      mappedVariants.sort((a: any, b: any) => {
-        // Cắt chữ 'ml' đi, biến thành số để so sánh (VD: "30ml" -> 30)
-        const valA = parseFloat(a.capacity.replace('ml', '')) || 0;
-        const valB = parseFloat(b.capacity.replace('ml', '')) || 0;
-        return valA - valB; 
-      });
-
-      // 3. Gán lại vào activeProduct
-      activeProduct.value.variants = mappedVariants;
-      activeProduct.value.price = activeProduct.value.variants[0].price;
+    if (productToOpen) {
+      activeProduct.value = productToOpen;
+      isShowingDetail.value = true;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (!isLoading.value) {
+      try {
+        const singleRes = await axios.get(`http://localhost:8080/api/products/${targetId}`);
+        const p = singleRes.data.data;
+        activeProduct.value = {
+          ...p,
+          id: p.id,
+          name: p.name,
+          brand: typeof p.brand === 'object' ? p.brand?.name : (p.brand || 'Premium'),
+          image: p.imageUrl || p.image || 'https://via.placeholder.com/300x300',
+          description: p.description,
+          rating: 5.0
+        };
+        isShowingDetail.value = true;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (err) {
+        console.error("Lỗi lấy chi tiết:", err);
+      }
     }
-  } catch (error) {
-    console.error("Lỗi fetch API Variants:", error);
+  } else {
+    // Nếu URL mất tham số ID (nghĩa là user vừa bấm nút Back), ẩn trang chi tiết đi
+    isShowingDetail.value = false;
+    activeProduct.value = null;
   }
 };
 
+// Theo dõi khi thanh URL thay đổi (dùng nút Back của trình duyệt)
+watch(() => route.query.id, (newId) => {
+  checkUrlAndOpenDetail(newId);
+});
+
+// Click vào 1 thẻ SP ở Danh Sách -> Push query tham số id lên URL
+const handleOpenDetail = (item: any) => {
+  router.push({ path: '/products', query: { id: item.id } }); 
+};
+
+// Click nút Back trong giao diện
 const handleBackToList = () => {
-  isShowingDetail.value = false;
-  activeProduct.value = null;
+  router.back(); // Tự động ghi nhớ lịch sử: Về Home hoặc về trang List tùy xuất phát điểm
 };
 
 const handleBuyNow = () => router.push('/checkout');
