@@ -3,9 +3,17 @@
     <div class="container-fluid px-4 px-lg-5 h-100">
       <div class="row align-items-center h-100">
         <div class="col-4 col-lg-3">
-          <RouterLink to="/" class="brand-logo-link text-decoration-none d-inline-flex align-items-center">
-            <img v-if="!logoLoadFailed" :src="logoAura" alt="DOMINUS PERFUME" class="brand-logo-img"
-              @error="logoLoadFailed = true" />
+          <RouterLink
+            to="/"
+            class="brand-logo-link text-decoration-none d-inline-flex align-items-center"
+          >
+            <img
+              v-if="!logoLoadFailed"
+              :src="logoAura"
+              alt="DOMINUS PERFUME"
+              class="brand-logo-img"
+              @error="logoLoadFailed = true"
+            />
 
             <div v-else class="brand-logo-text">
               <div class="brand-name">DOMINUS</div>
@@ -16,53 +24,60 @@
 
         <div class="col-12 col-lg-6 order-3 order-lg-2 mt-3 mt-lg-0">
           <div class="search-wrapper position-relative mx-auto">
-            <input v-model="keyword" type="text" class="form-control rounded-pill search-input"
-              placeholder="Tìm kiếm nước hoa..." @keyup.enter="handleSearch" />
+            <input
+              v-model="keyword"
+              type="text"
+              class="form-control rounded-pill search-input"
+              placeholder="Tìm kiếm nước hoa..."
+              @keyup.enter="handleSearch"
+            />
 
-            <button type="button" class="search-button" aria-label="Tìm kiếm" @click="handleSearch">
+            <button
+              type="button"
+              class="search-button"
+              aria-label="Tìm kiếm"
+              @click="handleSearch"
+            >
               <i class="bi bi-search"></i>
             </button>
           </div>
         </div>
 
         <div class="col-8 col-lg-3 order-2 order-lg-3">
-          <div
-            class="d-flex align-items-center justify-content-end gap-3 gap-lg-4"
-          >
+          <div class="d-flex align-items-center justify-content-end gap-3 gap-lg-4">
             <div class="account-dropdown-wrapper">
-              <button type="button" class="header-action account-trigger d-flex align-items-center gap-2">
-                <span class="action-icon-circle">
-                  <i class="bi bi-person"></i>
+              <button
+                type="button"
+                class="header-action account-trigger d-flex align-items-center gap-2"
+              >
+                <span class="header-account-avatar">
+                  <img
+                    v-if="isAuthenticated && headerAvatarUrl"
+                    :src="headerAvatarUrl"
+                    class="header-account-avatar-img"
+                    alt="avatar"
+                    @error="headerAvatarUrl = ''"
+                  />
+
+                  <i v-else class="bi bi-person"></i>
                 </span>
 
                 <span class="d-none d-md-inline">
-                  {{
-                    isAuthenticated
-                      ? `${name || "Khách"}`
-                      : "Tài khoản"
-                  }}
+                  {{ isAuthenticated ? displayName : "Tài khoản" }}
                 </span>
 
-                <i
-                  class="bi bi-chevron-down account-chevron d-none d-md-inline"
-                ></i>
+                <i class="bi bi-chevron-down account-chevron d-none d-md-inline"></i>
               </button>
 
               <div class="account-dropdown">
                 <div v-if="!isAuthenticated" class="guest-dropdown">
                   <p class="dropdown-title mb-3">Tài khoản khách hàng</p>
 
-                  <RouterLink
-                    to="/login"
-                    class="btn dropdown-login-btn w-100 mb-2"
-                  >
+                  <RouterLink to="/login" class="btn dropdown-login-btn w-100 mb-2">
                     Đăng nhập
                   </RouterLink>
 
-                  <RouterLink
-                    to="/register"
-                    class="btn dropdown-register-btn w-100"
-                  >
+                  <RouterLink to="/register" class="btn dropdown-register-btn w-100">
                     Đăng ký
                   </RouterLink>
                 </div>
@@ -70,34 +85,88 @@
                 <div v-else class="logged-dropdown">
                   <div class="user-block d-flex align-items-center gap-3">
                     <div class="user-avatar">
-                      {{ userInitial }}
+                      <img
+                        v-if="headerAvatarUrl"
+                        :src="headerAvatarUrl"
+                        class="user-avatar-img"
+                        alt="avatar"
+                        @error="headerAvatarUrl = ''"
+                      />
+
+                      <span v-else>
+                        {{ userInitial }}
+                      </span>
                     </div>
 
                     <div class="user-info">
-                      <div class="user-name">{{ name || "Khách hàng" }}</div>
+                      <div class="user-name">{{ displayName }}</div>
 
-                      <div class="rank-badge mt-1">
+                      <div v-if="isUserRole" class="rank-badge mt-1">
                         <i class="bi bi-gem me-1"></i>
                         {{ userRank }} Rank - {{ userPoints }} Pts
+                      </div>
+
+                      <div v-else class="rank-badge mt-1">
+                        <i class="bi bi-shield-lock me-1"></i>
+                        {{ currentRole }}
                       </div>
                     </div>
                   </div>
 
                   <div class="dropdown-divider"></div>
 
-                  <RouterLink to="/profile" class="account-menu-item">
+                  <RouterLink
+                    v-if="isUserRole"
+                    :to="{ path: '/customer/profile', query: { tab: 'profile' } }"
+                    class="account-menu-item"
+                  >
                     <i class="bi bi-person-circle"></i>
                     <span>Thông tin cá nhân</span>
                   </RouterLink>
 
-                  <RouterLink to="/profile/favorites" class="account-menu-item">
+                  <RouterLink
+                    v-if="isUserRole"
+                    :to="{ path: '/customer/profile', query: { tab: 'password' } }"
+                    class="account-menu-item"
+                  >
+                    <i class="bi bi-lock"></i>
+                    <span>Đổi mật khẩu</span>
+                  </RouterLink>
+
+                  <RouterLink
+                    v-if="isUserRole"
+                    :to="{ path: '/customer/profile', query: { tab: 'favorites' } }"
+                    class="account-menu-item"
+                  >
                     <i class="bi bi-heart"></i>
                     <span>Sản phẩm yêu thích</span>
                   </RouterLink>
 
-                  <RouterLink to="/profile/orders" class="account-menu-item">
+                  <RouterLink
+                    v-if="isUserRole"
+                    :to="{ path: '/customer/profile', query: { tab: 'orders' } }"
+                    class="account-menu-item"
+                  >
                     <i class="bi bi-receipt"></i>
                     <span>Lịch sử đơn hàng</span>
+                  </RouterLink>
+
+                  <RouterLink
+                    v-if="isOwnerRole"
+                    to="/admin/dashboard"
+                    class="account-menu-item"
+                  >
+                    <i class="bi bi-speedometer2"></i>
+                    <span>Trang quản trị</span>
+                  </RouterLink>
+
+                  <RouterLink
+                    v-if="isStaffRole"
+                    to="/admin/pos"
+                    class="account-menu-item"
+                  >
+                    <i class="bi bi-shop"></i>
+                    <span>Bán hàng POS</span>
                   </RouterLink>
 
                   <button
@@ -112,8 +181,10 @@
               </div>
             </div>
 
-            <RouterLink to="/cart"
-              class="header-action cart-action d-flex align-items-center gap-2 text-decoration-none position-relative">
+            <RouterLink
+              to="/cart"
+              class="header-action cart-action d-flex align-items-center gap-2 text-decoration-none position-relative"
+            >
               <span class="action-icon-circle">
                 <i class="bi bi-bag"></i>
               </span>
@@ -130,60 +201,129 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
+import Swal from "sweetalert2";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
 import api from "@/common/api";
 import logoAura from "@/assets/logo.png";
-import Swal from "sweetalert2";
+
 const router = useRouter();
 const authStore = useAuthStore();
 
-// Lấy state từ store (đảm bảo reactive)
 const { isAuthenticated, name } = storeToRefs(authStore);
 
 const logoLoadFailed = ref(false);
 const keyword = ref("");
 
-// Trạng thái Rank và Điểm lấy từ API
 const userRank = ref("Bronze");
 const userPoints = ref(0);
 
-// Tính toán Avatar từ tên thật
-const userInitial = computed(() => {
-  if (!name.value) return "U";
-  const nameParts = name.value.trim().split(" ");
-  return nameParts[nameParts.length - 1]?.charAt(0).toUpperCase() || "U";
+const headerName = ref(localStorage.getItem("name") || "");
+const headerAvatarUrl = ref(localStorage.getItem("customerAvatarUrl") || "");
+
+const currentRole = computed(() => {
+  return String(authStore.role || localStorage.getItem("role") || "")
+    .toUpperCase()
+    .replace("ROLE_", "")
+    .trim();
 });
 
-// Hàm lấy thông tin Rank và Điểm
+const isUserRole = computed(() => currentRole.value === "USER");
+
+const isOwnerRole = computed(() => currentRole.value === "OWNER");
+
+const isStaffRole = computed(() =>
+  ["OWNER", "MANAGER", "CASHIER"].includes(currentRole.value)
+);
+
+const displayName = computed(() => {
+  return headerName.value || name.value || localStorage.getItem("name") || "Khách";
+});
+
+const userInitial = computed(() => {
+  const rawName = displayName.value.trim();
+
+  if (!rawName) {
+    return "U";
+  }
+
+  const nameParts = rawName.split(" ").filter(Boolean);
+  const lastName = nameParts[nameParts.length - 1];
+
+  return lastName?.charAt(0).toUpperCase() || "U";
+});
+
 const fetchCustomerProfile = async () => {
-  // SỬA CHỖ NÀY: Chỉ gọi API nếu đã đăng nhập VÀ tài khoản KHÔNG PHẢI là Nhân viên
-  if (isAuthenticated.value && !authStore.isAdminSection) {
-    try {
-      const res = await api.get("/customer/profile");
-      userRank.value = res.data.customerRank || "Bronze";
-      userPoints.value = res.data.loyaltyPoints || 0;
-    } catch (error) {
-      console.error("Lỗi lấy thông tin Rank/Điểm:", error);
-    }
+  if (!isAuthenticated.value || !isUserRole.value) {
+    userRank.value = "Bronze";
+    userPoints.value = 0;
+    headerAvatarUrl.value = "";
+    return;
+  }
+
+  try {
+    const res = await api.get("/customer/profile");
+
+    headerName.value =
+      res.data?.name || localStorage.getItem("name") || "Khách";
+
+    headerAvatarUrl.value = res.data?.avatarUrl || "";
+    userRank.value = res.data?.customerRank || "Bronze";
+    userPoints.value = Number(res.data?.loyaltyPoints || 0);
+
+    localStorage.setItem("name", headerName.value);
+    localStorage.setItem("customerAvatarUrl", headerAvatarUrl.value);
+  } catch (error) {
+    console.error("Lỗi lấy thông tin Rank/Điểm:", error);
   }
 };
 
-// Gọi API khi component vừa load lên
+const handleProfileUpdated = (event: Event) => {
+  const customEvent = event as CustomEvent<{
+    name?: string;
+    avatarUrl?: string | null;
+    customerRank?: string;
+    loyaltyPoints?: number;
+  }>;
+
+  const detail = customEvent.detail;
+
+  if (detail?.name) {
+    headerName.value = detail.name;
+    localStorage.setItem("name", detail.name);
+  }
+
+  if (detail?.avatarUrl !== undefined) {
+    headerAvatarUrl.value = detail.avatarUrl || "";
+    localStorage.setItem("customerAvatarUrl", headerAvatarUrl.value);
+  }
+
+  if (detail?.customerRank) {
+    userRank.value = detail.customerRank;
+  }
+
+  if (detail?.loyaltyPoints !== undefined) {
+    userPoints.value = Number(detail.loyaltyPoints || 0);
+  }
+};
+
 onMounted(() => {
+  window.addEventListener("customer-profile-updated", handleProfileUpdated);
   fetchCustomerProfile();
 });
 
-// Chờ và gọi API lại nếu người dùng vừa mới đăng nhập thành công
-watch(isAuthenticated, async (newVal) => {
-  if (newVal) {
-    // SỬA CHỖ NÀY: Xóa hoàn toàn khối setTimeout 200ms đi.
-    // Giờ đây gọi thẳng luôn vì authStore đã lưu Token xong xuôi rồi.
-    await fetchCustomerProfile();
-  }
+onBeforeUnmount(() => {
+  window.removeEventListener("customer-profile-updated", handleProfileUpdated);
 });
+
+watch(
+  () => [isAuthenticated.value, currentRole.value],
+  () => {
+    fetchCustomerProfile();
+  }
+);
 
 const handleSearch = () => {
   const trimmedKeyword = keyword.value.trim();
@@ -207,28 +347,31 @@ const handleLogout = () => {
     text: "Bạn có chắc chắn muốn rời khỏi phiên làm việc này không?",
     icon: "warning",
     showCancelButton: true,
-    confirmButtonColor: "#bd9a5f", // Giữ màu Vàng Gold cho nút Đồng ý để làm điểm nhấn thương hiệu
-    cancelButtonColor: "#6c757d", // Nút Hủy chuyển sang màu xám nhẹ hợp với nền trắng
+    confirmButtonColor: "#bd9a5f",
+    cancelButtonColor: "#6c757d",
     confirmButtonText: "Đồng ý",
     cancelButtonText: "Hủy",
-    background: "#ffffff", // 👇 Đổi thành Nền Màu Trắng
-    color: "#000000", // 👇 Đổi thành Chữ Màu Đen
-    iconColor: "#dc3545", // Đổi icon cảnh báo sang màu đỏ (hoặc #bd9a5f tùy bạn) để nổi bật trên nền trắng
+    background: "#ffffff",
+    color: "#000000",
+    iconColor: "#dc3545",
     customClass: {
-      popup: "border-gold-sweetalert", // Vẫn giữ viền gold mỏng nếu bạn muốn, hoặc bỏ dòng customClass này đi nếu muốn trắng tinh khôi
+      popup: "border-gold-sweetalert",
     },
   }).then((result) => {
-    // Nếu người dùng nhấn nút "Đồng ý"
-    if (result.isConfirmed) {
-      // Thực hiện các bước xóa session
-      authStore.logout();
-
-      userRank.value = "Bronze";
-      userPoints.value = 0;
-
-      // Chuyển về trang chủ
-      router.push("/");
+    if (!result.isConfirmed) {
+      return;
     }
+
+    authStore.logout();
+
+    userRank.value = "Bronze";
+    userPoints.value = 0;
+    headerName.value = "";
+    headerAvatarUrl.value = "";
+
+    localStorage.removeItem("customerAvatarUrl");
+
+    router.push("/");
   });
 };
 </script>
@@ -248,7 +391,6 @@ const handleLogout = () => {
   border-bottom: 1px solid rgba(189, 154, 95, 0.22);
 }
 
-/* LOGO */
 .brand-logo-link {
   min-height: 104px;
   width: 260px;
@@ -289,7 +431,6 @@ const handleLogout = () => {
   font-weight: 600;
 }
 
-/* SEARCH */
 .search-wrapper {
   max-width: 700px;
 }
@@ -340,7 +481,6 @@ const handleLogout = () => {
   font-size: 18px;
 }
 
-/* ACCOUNT / CART */
 .header-action {
   color: rgba(255, 255, 255, 0.92);
   font-weight: 600;
@@ -367,6 +507,36 @@ const handleLogout = () => {
 
 .account-dropdown-wrapper:hover .account-chevron {
   transform: rotate(180deg);
+}
+
+.header-account-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 2px solid #bd9a5f;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--aura-gold);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: all 0.22s ease;
+}
+
+.header-account-avatar i {
+  font-size: 19px;
+  line-height: 1;
+}
+
+.header-account-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.account-trigger:hover .header-account-avatar {
+  box-shadow: 0 0 0 4px rgba(189, 154, 95, 0.16);
 }
 
 .action-icon-circle {
@@ -409,7 +579,6 @@ const handleLogout = () => {
   justify-content: center;
 }
 
-/* ACCOUNT DROPDOWN */
 .account-dropdown-wrapper {
   position: relative;
   display: inline-flex;
@@ -434,7 +603,6 @@ const handleLogout = () => {
   pointer-events: none;
 }
 
-/* --- GIỮ NGUYÊN ĐOẠN CŨ NÀY CỦA BẠN --- */
 .account-dropdown::before {
   content: "";
   position: absolute;
@@ -448,18 +616,14 @@ const handleLogout = () => {
   transform: rotate(45deg);
 }
 
-/* --- THÊM CHÍNH XÁC ĐOẠN MỚI NÀY VÀO NGAY DƯỚI --- */
 .account-dropdown::after {
   content: "";
   position: absolute;
   top: -24px;
-  /* Phủ ngược lên trên 24px để dính liền vào nút bấm */
   left: 0;
   width: 100%;
   height: 24px;
-  /* Tạo một cầu nối vô hình cao 24px */
   background: transparent;
-  /* Hoàn toàn trong suốt */
 }
 
 .account-dropdown-wrapper:hover .account-dropdown {
@@ -517,6 +681,14 @@ const handleLogout = () => {
   align-items: center;
   justify-content: center;
   box-shadow: 0 10px 24px rgba(189, 154, 95, 0.24);
+  overflow: hidden;
+  border: 2px solid #bd9a5f;
+}
+
+.user-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .user-name {
@@ -584,7 +756,6 @@ const handleLogout = () => {
   color: #b31320;
 }
 
-/* TABLET */
 @media (max-width: 991.98px) {
   .shop-header {
     min-height: auto;
@@ -621,7 +792,6 @@ const handleLogout = () => {
   }
 }
 
-/* MOBILE */
 @media (max-width: 575.98px) {
   .brand-logo-link {
     width: 140px;
@@ -649,6 +819,11 @@ const handleLogout = () => {
 
   .account-dropdown::before {
     right: 132px;
+  }
+
+  .header-account-avatar {
+    width: 38px;
+    height: 38px;
   }
 }
 </style>

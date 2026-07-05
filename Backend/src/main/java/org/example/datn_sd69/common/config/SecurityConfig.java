@@ -68,6 +68,7 @@ public class SecurityConfig {
                                 "/api/bottle-types/**"
                         ).permitAll()
 
+                        .requestMatchers("/api/owner/reports/**").hasAuthority("OWNER")
                         // Nhân viên: chỉ OWNER được CRUD
                         .requestMatchers("/api/admin/employees/**").hasAuthority("OWNER")
 

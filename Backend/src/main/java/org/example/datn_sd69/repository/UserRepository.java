@@ -46,4 +46,9 @@ public interface UserRepository extends JpaRepository<User, Integer> {
             @Param("phone") String phone,
             @Param("ignoreId") Integer ignoreId
     );
+
+    boolean existsByEmailAndIdNot(String email, Integer id);
+
+    boolean existsByPhoneAndIdNot(String phone, Integer id);
+
 }
