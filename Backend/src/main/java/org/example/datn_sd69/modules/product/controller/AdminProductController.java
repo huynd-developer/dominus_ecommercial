@@ -166,4 +166,19 @@ public class AdminProductController {
                 )
         );
     }
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<?> updateStatus(
+            @PathVariable Integer id,
+            @RequestBody Map<String, Integer> body
+    ) {
+
+        productService.updateStatus(
+                id,
+                body.get("status")
+        );
+
+        return ResponseEntity.ok().build();
+
+    }
 }
