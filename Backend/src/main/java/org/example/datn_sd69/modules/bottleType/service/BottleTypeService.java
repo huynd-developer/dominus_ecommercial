@@ -14,7 +14,7 @@ public interface BottleTypeService {
     BottleType update(Integer id, BottleTypeRequest request);
     void delete(Integer id);
 
-    Page<BottleType> getAll(Pageable pageable);
+    Page<BottleType> getAll(String keyword,Pageable pageable);
 
     Page<BottleType> getActiveBottleTypes(int page, int size);
 }

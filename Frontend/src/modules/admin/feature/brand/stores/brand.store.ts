@@ -22,12 +22,18 @@ export const useBrandStore = defineStore('brandStore', {
         
         const resData = response.data; // Lấy dữ liệu axios trả về
 
-        // BÓC TÁCH DỮ LIỆU THÔNG MINH
+        // BÓC TÁCH DỮ LIỆU THÔNG MINH ĐÃ CẬP NHẬT OBJECT "page"
         if (resData && resData.content) {
           // Trường hợp 1: Trả về Page chuẩn Spring Boot
           this.brands = resData.content; 
-          this.totalPages = resData.totalPages || 1;
-          this.currentPage = resData.number || 0;
+          this.totalPages = resData.page?.totalPages ?? resData.totalPages ?? 1;
+          this.currentPage = resData.page?.number ?? resData.number ?? 0;
+        } 
+        else if (resData && resData.data && resData.data.content) {
+          // Trường hợp 4: Bọc Page bên trong { data: { content: [...] } }
+          this.brands = resData.data.content;
+          this.totalPages = resData.data.page?.totalPages ?? resData.data.totalPages ?? 1;
+          this.currentPage = resData.data.page?.number ?? resData.data.number ?? 0;
         } 
         else if (Array.isArray(resData)) {
           // Trường hợp 2: Trả về trực tiếp một Mảng (List)
@@ -40,12 +46,6 @@ export const useBrandStore = defineStore('brandStore', {
           this.brands = resData.data;
           this.totalPages = 1;
           this.currentPage = 0;
-        } 
-        else if (resData && resData.data && resData.data.content) {
-          // Trường hợp 4: Bọc Page bên trong { data: { content: [...] } }
-          this.brands = resData.data.content;
-          this.totalPages = resData.data.totalPages || 1;
-          this.currentPage = resData.data.number || 0;
         } 
         else {
           // Nếu vẫn không lọt vào trường hợp nào, in ra để kiểm tra

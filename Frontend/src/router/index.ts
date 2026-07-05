@@ -29,9 +29,9 @@ const mockPage = (title: string, assignee: string) => ({
         h("h1", `🚧 Trang ${title}`),
         h(
           "p",
-          `Giao diện đang được xây dựng bởi: ${assignee}. Sau khi code xong file Vue, hãy mở comment import trong router ra!`
+          `Giao diện đang được xây dựng bởi: ${assignee}. Sau khi code xong file Vue, hãy mở comment import trong router ra!`,
         ),
-      ]
+      ],
     ),
 });
 
@@ -62,10 +62,17 @@ const routes: Array<RouteRecordRaw> = [
     ],
   },
 
+ // Code của m (Chi tiết SP, Giỏ hàng, Thanh toán)
+  // Trong file router/index.ts
+{
+    path: "/products",
+    name: "ProductList", // Tên là ProductList
+    component: () => import("@/modules/shop/feature/product/views/ProductDetailView.vue"),
+  },
   {
-    path: "/product",
-    name: "ProductDetail",
-    component: ProductDetailView,
+    path: "/product/:id",
+    name: "ProductDetail", // Tên là ProductDetail
+    component: () => import("@/modules/shop/feature/product/views/SingleProductView.vue"),
   },
   {
     path: "/cart",
@@ -197,40 +204,30 @@ const routes: Array<RouteRecordRaw> = [
         },
       },
       {
-        path: "fragrance-families",
-        name: "AdminFragranceFamilies",
-        component: mockPage("Nhóm hương", "Đức"),
-        meta: {
-          requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER"],
-        },
+      path: "fragrance-families",
+      name: "AdminFragranceFamilies",
+      // Trỏ đúng đường dẫn tới file View của bạn
+      component: () => import('@/modules/admin/feature/fragranceFamily/views/FragranceFamilyView.vue'),
+      meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "capacities",
         name: "AdminCapacities",
-        component: mockPage("Dung tích (Capacity)", "Đức"),
-        meta: {
-          requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER"],
-        },
+        component: () => import("@/modules/admin/feature/capacity/views/CapacityView.vue"),
+        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "concentrations",
         name: "AdminConcentrations",
-        component: mockPage("Nồng độ (Concentration)", "Đức"),
-        meta: {
-          requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER"],
-        },
+        component: () => import("@/modules/admin/feature/concentration/views/ConcentrationView.vue"), 
+        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "bottle-types",
         name: "AdminBottleTypes",
-        component: mockPage("Loại vỏ chai", "Đức"),
-        meta: {
-          requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER"],
-        },
+        // Import trực tiếp đến file Vue giao diện mà bạn vừa tạo
+        component: () => import("@/modules/admin/feature/bottleType/views/BottleTypeView.vue"), 
+        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "orders",

@@ -14,6 +14,6 @@ public interface CapacityService {
     Capacity update(Integer id, CapacityRequest request);
     void delete(Integer id);
 
-    Page<Capacity> getAll(Pageable pageable);
+    Page<Capacity> getAllAdmin(String keyword, Pageable pageable);
     Page<Capacity> getActiveCapacities(int page, int size);
 }

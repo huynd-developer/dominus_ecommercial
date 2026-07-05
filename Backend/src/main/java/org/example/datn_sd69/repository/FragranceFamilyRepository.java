@@ -4,6 +4,8 @@ import org.example.datn_sd69.entity.FragranceFamily;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -23,4 +25,7 @@ public interface FragranceFamilyRepository extends JpaRepository<FragranceFamily
 
     // Dùng để quét trùng lặp tên nhóm hương không phân biệt chữ hoa chữ thường
     Optional<FragranceFamily> findByName(String name);
+
+    @Query("SELECT f FROM FragranceFamily f WHERE LOWER(f.name) LIKE LOWER(CONCAT('%', :keyword, '%'))")
+    Page<FragranceFamily> searchByName(@Param("keyword") String keyword, Pageable pageable);
 }

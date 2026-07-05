@@ -1,6 +1,7 @@
 <template>
   <div class="home-view">
     <div class="container-fluid px-3 px-lg-5 py-4">
+      <!-- Banner to trên cùng giữ nguyên -->
       <HomeBanner />
 
       <section class="product-section mt-5">
@@ -10,13 +11,14 @@
             <CountdownTimer />
           </div>
 
-          <RouterLink to="/flash-sale" class="view-all-link">
+          <RouterLink to="/products" class="view-all-link">
             Xem tất cả <i class="bi bi-chevron-right ms-1"></i>
           </RouterLink>
         </div>
 
         <div class="row row-cols-2 row-cols-md-4 row-cols-lg-4 g-4">
-          <div v-for="product in flashSaleProducts" :key="product.id" class="col">
+          <div v-for="product in flashSaleProducts" :key="product.id" class="col"
+            @click="$router.push({ path: '/products', query: { id: product.id } })" style="cursor: pointer;">
             <ProductCard :product="product" />
           </div>
         </div>
@@ -26,13 +28,15 @@
         <div class="section-header d-flex align-items-center justify-content-between mb-4">
           <h2 class="section-title mb-0">NƯỚC HOA MỚI NHẤT</h2>
 
-          <RouterLink to="/products/new" class="view-all-link">
+          <RouterLink to="/products" class="view-all-link">
             Xem tất cả <i class="bi bi-chevron-right ms-1"></i>
           </RouterLink>
         </div>
 
         <div class="row row-cols-2 row-cols-md-4 row-cols-lg-4 g-4">
-          <div v-for="product in newestProducts" :key="product.id" class="col">
+          <!-- Cập nhật đường dẫn chuẩn: /product/:id -->
+          <div v-for="product in flashSaleProducts" :key="product.id" class="col"
+            @click="$router.push({ path: '/products', query: { id: product.id } })" style="cursor: pointer;">
             <ProductCard :product="product" />
           </div>
         </div>
@@ -42,6 +46,7 @@
         <div class="row g-0 align-items-stretch special-collection-inner">
           <div class="col-12 col-lg-5">
             <div class="collection-image-card h-100">
+              <!-- Banner giữa giữ nguyên -->
               <img :src="collectionImage" alt="Bộ sưu tập đặc biệt" class="collection-main-image" />
             </div>
           </div>
@@ -54,6 +59,7 @@
                 Tuyển chọn những tuyệt tác hương thơm hiếm có, dành riêng cho những dấu ấn khác biệt.
               </p>
 
+              <!-- Nút Khám phá ngay giữ nguyên -->
               <RouterLink to="/collections/special" class="btn collection-btn">
                 KHÁM PHÁ NGAY
                 <i class="bi bi-arrow-right-short ms-1"></i>
@@ -61,10 +67,10 @@
             </div>
           </div>
 
-          <div v-for="product in specialProducts" :key="product.id" class="col-12 col-md-6 col-lg-2 special-product-col">
-            <div class="special-product-wrap h-100">
-              <ProductCard :product="product" />
-            </div>
+          <!-- Cập nhật đường dẫn chuẩn: /product/:id -->
+          <div v-for="product in flashSaleProducts" :key="product.id" class="col"
+            @click="$router.push({ path: '/products', query: { id: product.id } })" style="cursor: pointer;">
+            <ProductCard :product="product" />
           </div>
         </div>
       </section>
@@ -73,13 +79,15 @@
         <div class="section-header d-flex align-items-center justify-content-between mb-4">
           <h2 class="section-title mb-0">SẢN PHẨM NỔI BẬT</h2>
 
-          <RouterLink to="/products/featured" class="view-all-link">
+          <RouterLink to="/products" class="view-all-link">
             Xem tất cả <i class="bi bi-chevron-right ms-1"></i>
           </RouterLink>
         </div>
 
         <div class="row row-cols-2 row-cols-md-4 row-cols-lg-4 g-4">
-          <div v-for="product in featuredProducts" :key="product.id" class="col">
+          <!-- Cập nhật đường dẫn chuẩn: /product/:id -->
+          <div v-for="product in flashSaleProducts" :key="product.id" class="col"
+            @click="$router.push({ path: '/products', query: { id: product.id } })" style="cursor: pointer;">
             <ProductCard :product="product" />
           </div>
         </div>
@@ -96,7 +104,6 @@ import CountdownTimer from "../components/CountdownTimer.vue";
 import ProductCard from "../components/ProductCard.vue";
 import collectionImage from "@/assets/images/collection-aura.png";
 
-// Khai báo rõ ràng kiểu dữ liệu để tránh lỗi 'never' của TypeScript compiler
 const flashSaleProducts = ref<any[]>([]);
 const newestProducts = ref<any[]>([]);
 const featuredProducts = ref<any[]>([]);
@@ -106,7 +113,7 @@ const fetchAllProducts = async () => {
   try {
     const res = await axios.get('http://localhost:8080/api/products');
     const all = res.data.data?.content || res.data.data || [];
-    
+
     const formatted = all.map((p: any) => {
       const basePrice = p.price || (p.variants && p.variants.length > 0 ? p.variants[0].price : 0) || 0;
       const discount = p.discountPercent || 0;
@@ -117,11 +124,11 @@ const fetchAllProducts = async () => {
         name: p.name,
         brand: p.brand?.name || p.brand || 'Premium',
         imageUrl: p.imageUrl,
-        color: p.color || '#0a192f', 
+        color: p.color || '#0a192f',
         salePrice: salePrice,
         originalPrice: basePrice,
         discountPercent: discount,
-        rating: p.rating || 5, 
+        rating: p.rating || 5,
         reviewCount: p.reviewCount || 0
       };
     });
