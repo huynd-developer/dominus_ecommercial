@@ -55,5 +55,4 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     List<Order> findByCustomer_UserIdOrderByCreatedAtDesc(Integer customerId);
 
     Optional<Order> findByIdAndCustomer_UserId(Integer orderId, Integer customerId);
-
 }
