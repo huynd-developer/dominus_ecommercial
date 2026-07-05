@@ -23,4 +23,7 @@ public interface CapacityRepository extends JpaRepository<Capacity, Integer> {
 
     // Tìm kiếm chính xác theo giá trị (Quét toàn bộ DB để check trùng tuyệt đối)
     Optional<Capacity> findByValue(Double value);
+
+    // Thêm dòng này vào dưới các hàm đã có
+    Page<Capacity> findByValueAndIsDeletedFalse(Double value, Pageable pageable);
 }

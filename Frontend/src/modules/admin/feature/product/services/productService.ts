@@ -1,5 +1,9 @@
 import * as api from "../api/productApi";
-import type { Product, ProductPage } from "../types/Product";
+
+import type {
+    Product,
+    ProductPage
+} from "../types/Product";
 
 class ProductService {
 
@@ -9,7 +13,7 @@ class ProductService {
         size = 10
     ): Promise<ProductPage> {
 
-        return api.getProducts({
+        return await api.getProducts({
             keyword,
             page,
             size
@@ -17,21 +21,42 @@ class ProductService {
 
     }
 
-    async getById(id: number): Promise<Product> {
-        return api.getProductById(id);
+    async getById(
+        id: number
+    ): Promise<Product> {
+
+        return await api.getProductById(id);
+
     }
 
-    async create(formData: FormData) {
-        return api.createProduct(formData);
+    async create(
+        formData: FormData
+    ) {
+
+        return await api.createProduct(formData);
+
     }
 
-    async update(id: number, formData: FormData) {
-        return api.updateProduct(id, formData);
+    async update(
+        id: number,
+        formData: FormData
+    ) {
+
+        return await api.updateProduct(
+            id,
+            formData
+        );
+
     }
 
-    async delete(id: number) {
-        return api.deleteProduct(id);
+    async delete(
+        id: number
+    ) {
+
+        return await api.deleteProduct(id);
+
     }
+
 }
 
 export default new ProductService();

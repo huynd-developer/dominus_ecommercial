@@ -5,7 +5,6 @@
     
     <div class="card shadow-sm border-0 rounded-3">
       <div class="card-header bg-white d-flex justify-content-between align-items-center py-3 border-0">
-        
         <div class="input-group" style="max-width: 350px;">
           <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
           <input 
@@ -16,7 +15,6 @@
             placeholder="Tìm kiếm thương hiệu..."
           >
         </div>
-        
         <button @click="openAddModal" class="btn btn-primary px-4 shadow-sm" style="background-color: #0d6efd;">
           <i class="bi bi-plus-lg me-1"></i> Thêm thương hiệu
         </button>
@@ -34,8 +32,7 @@
           @delete="handleDelete"
           @toggle-status="handleToggleStatus"
         />
-
-        <div class="d-flex justify-content-between align-items-center p-3 border-top" v-if="brandStore.totalPages > 1">
+<div class="d-flex justify-content-between align-items-center p-3 border-top" v-if="brandStore.totalPages > 0">
           <span class="text-muted small">
             Đang hiển thị trang {{ brandStore.currentPage + 1 }} / {{ brandStore.totalPages }}
           </span>
@@ -44,11 +41,9 @@
               <li class="page-item" :class="{ disabled: brandStore.currentPage === 0 }">
                 <button class="page-link shadow-none" @click="changePage(brandStore.currentPage - 1)">Trước</button>
               </li>
-              
               <li class="page-item" v-for="p in brandStore.totalPages" :key="p" :class="{ active: brandStore.currentPage === (p - 1) }">
                 <button class="page-link shadow-none" @click="changePage(p - 1)">{{ p }}</button>
               </li>
-              
               <li class="page-item" :class="{ disabled: brandStore.currentPage === brandStore.totalPages - 1 }">
                 <button class="page-link shadow-none" @click="changePage(brandStore.currentPage + 1)">Sau</button>
               </li>
@@ -66,18 +61,40 @@
             <button @click="showModal = false" type="button" class="btn-close shadow-none"></button>
           </div>
           <div class="modal-body">
+            
+            <div class="mb-4">
+              <label class="form-label fw-medium">Logo thương hiệu</label>
+              <div class="d-flex align-items-center gap-3">
+                <img v-if="previewImageUrl" :src="previewImageUrl" class="rounded border" style="width: 80px; height: 80px; object-fit: cover;">
+                <div v-else class="rounded bg-light d-flex align-items-center justify-content-center text-muted border" style="width: 80px; height: 80px;">
+                  <i class="bi bi-image fs-3"></i>
+                </div>
+                
+                <div>
+                  <input type="file" @change="handleFileChange" class="form-control form-control-sm shadow-none w-auto" accept="image/jpeg, image/png, image/jpg, image/webp">
+                  <small class="text-muted d-block mt-1">Hỗ trợ JPG, PNG, WEBP. Tối đa 5MB.</small>
+                  <button v-if="previewImageUrl" @click="removeImage" type="button" class="btn btn-sm btn-outline-danger mt-2">
+                    <i class="bi bi-trash"></i> Xóa ảnh
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div class="mb-3">
               <label class="form-label fw-medium">Tên thương hiệu <span class="text-danger">*</span></label>
-              <input v-model="formData.name" type="text" class="form-control shadow-none" placeholder="Nhập tên thương hiệu (VD: Nike, Adidas...)">
+              <input v-model="formData.name" type="text" class="form-control shadow-none" placeholder="VD: Nike, Adidas...">
             </div>
             <div class="mb-3">
               <label class="form-label fw-medium">Mô tả chi tiết</label>
-              <textarea v-model="formData.description" class="form-control shadow-none" rows="4" placeholder="Nhập mô tả giới thiệu thương hiệu..."></textarea>
+              <textarea v-model="formData.description" class="form-control shadow-none" rows="3" placeholder="Giới thiệu thương hiệu..."></textarea>
             </div>
           </div>
           <div class="modal-footer border-0 bg-light">
-            <button @click="showModal = false" class="btn btn-light border px-4">Hủy</button>
-            <button @click="handleSubmit" class="btn btn-primary px-4">Lưu lại</button>
+            <button @click="showModal = false" class="btn btn-light border px-4" :disabled="isUploading">Hủy</button>
+            <button @click="handleSubmit" class="btn btn-primary px-4" :disabled="isUploading">
+              <span v-if="isUploading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              {{ isUploading ? 'Đang lưu...' : 'Lưu lại' }}
+            </button>
           </div>
         </div>
       </div>
@@ -89,6 +106,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useBrandStore } from '../stores/brand.store';
+import { brandService } from '../services/brand.service'; // Import service để gọi riêng hàm upload
 import BrandTable from '../components/BrandTable.vue';
 import type { Brand, BrandRequest } from '../types/brand.type';
 import Swal from 'sweetalert2'; 
@@ -100,8 +118,12 @@ const showModal = ref(false);
 const isEdit = ref(false);
 const currentId = ref<number | null>(null);
 
-// Cấu trúc Form chứa cả Name và Description của Brand
-const formData = ref<BrandRequest>({ name: '', description: '', status: 1 });
+// Trạng thái Upload ảnh
+const selectedFile = ref<File | null>(null);
+const previewImageUrl = ref<string | null>(null);
+const isUploading = ref(false);
+
+const formData = ref<BrandRequest>({ name: '', description: '', status: 1, logoUrl: null });
 
 const Toast = Swal.mixin({
   toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true
@@ -111,26 +133,54 @@ onMounted(() => {
   brandStore.fetchBrands();
 });
 
-const handleSearch = () => {
-  brandStore.fetchBrands(searchKeyword.value, 0); // Tìm kiếm reset về trang đầu
-};
+const handleSearch = () => { brandStore.fetchBrands(searchKeyword.value, 0); };
+const changePage = (page: number) => { if (page >= 0 && page < brandStore.totalPages) brandStore.fetchBrands(searchKeyword.value, page); };
 
-const changePage = (page: number) => {
-  if (page >= 0 && page < brandStore.totalPages) {
-    brandStore.fetchBrands(searchKeyword.value, page);
+// Xử lý chọn File Ảnh
+const handleFileChange = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  
+  // Dùng ?.[0] để lấy file an toàn. Nếu không có, nó sẽ trả về undefined
+  const file = target.files?.[0];
+
+  // THÊM DÒNG NÀY: Chặn đứng mọi trường hợp undefined/null
+  if (!file) return; 
+
+  // Check dung lượng (5MB) - Lúc này TS đã chắc chắn 100% 'file' tồn tại
+  if (file.size > 5 * 1024 * 1024) {
+    Toast.fire({ icon: 'error', title: 'Dung lượng ảnh quá lớn (> 5MB)' });
+    target.value = ''; // Reset input
+    return;
   }
+  
+  selectedFile.value = file;
+  previewImageUrl.value = URL.createObjectURL(file); // Tạo link preview tạm thời
 };
 
+// Xóa ảnh khỏi form
+const removeImage = () => {
+  selectedFile.value = null;
+  previewImageUrl.value = null;
+  formData.value.logoUrl = null; 
+};
+
+// Reset toàn bộ Form
 const openAddModal = () => {
   isEdit.value = false;
-  formData.value = { name: '', description: '', status: 1 };
+  formData.value = { name: '', description: '', status: 1, logoUrl: null };
+  selectedFile.value = null;
+  previewImageUrl.value = null;
   showModal.value = true;
 };
 
+// Đổ dữ liệu vào Form
 const openEditModal = (brand: Brand) => {
   isEdit.value = true;
   currentId.value = brand.id;
-  formData.value = { name: brand.name, description: brand.description, status: brand.status };
+  formData.value = { name: brand.name, description: brand.description, status: brand.status, logoUrl: brand.logoUrl };
+  
+  selectedFile.value = null; // Reset file mới
+  previewImageUrl.value = brand.logoUrl; // Hiển thị ảnh cũ từ DB
   showModal.value = true;
 };
 
@@ -141,6 +191,15 @@ const handleSubmit = async () => {
   }
 
   try {
+    isUploading.value = true;
+
+    // 1. Nếu có chọn file ảnh mới -> Upload lên Cloudinary trước
+    if (selectedFile.value) {
+      const uploadRes = await brandService.uploadLogo(selectedFile.value);
+      formData.value.logoUrl = uploadRes.data.url; // Lấy URL từ Cloudinary trả về
+    }
+
+    // 2. Gửi dữ liệu Brand (đã bao gồm URL ảnh mới nếu có)
     if (isEdit.value && currentId.value) {
       await brandStore.updateBrand(currentId.value, formData.value);
       Toast.fire({ icon: 'success', title: 'Cập nhật thành công!' });
@@ -150,18 +209,21 @@ const handleSubmit = async () => {
     }
     showModal.value = false; 
   } catch (error: any) {
-    // Hiển thị thông báo bóc tách chi tiết lỗi 400 truyền ra từ store
     Toast.fire({ icon: 'error', title: error.message || 'Có lỗi xảy ra!' });
+  } finally {
+    isUploading.value = false;
   }
 };
 
+// Đổi trạng thái Ẩn/Hiện
 const handleToggleStatus = async (brand: Brand) => {
   const newStatus = brand.status === 1 ? 0 : 1;
   try {
     await brandStore.updateBrand(brand.id, { 
       name: brand.name, 
       description: brand.description, 
-      status: newStatus 
+      status: newStatus,
+      logoUrl: brand.logoUrl // Nhớ mang theo link ảnh cũ để không bị mất
     });
     Toast.fire({ icon: 'success', title: 'Đã thay đổi trạng thái!' });
   } catch (error) {
@@ -170,16 +232,13 @@ const handleToggleStatus = async (brand: Brand) => {
   }
 };
 
+// Xóa mềm
 const handleDelete = (id: number) => {
   Swal.fire({
     title: 'Bạn có chắc chắn muốn xóa?',
     text: "Hành động này không thể hoàn tác!",
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#dc3545',
-    cancelButtonColor: '#6c757d',
-    confirmButtonText: 'Vâng, xóa nó!',
-    cancelButtonText: 'Hủy'
+    icon: 'warning', showCancelButton: true, confirmButtonColor: '#dc3545', cancelButtonColor: '#6c757d',
+    confirmButtonText: 'Vâng, xóa nó!', cancelButtonText: 'Hủy'
   }).then(async (result) => {
     if (result.isConfirmed) {
       try {

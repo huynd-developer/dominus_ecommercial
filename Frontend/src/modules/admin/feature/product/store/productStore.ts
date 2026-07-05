@@ -14,6 +14,8 @@ export const useProductStore = defineStore("product", {
 
         page: {} as ProductPage,
 
+        currentProduct: null as Product | null,
+
         loading: false,
 
         keyword: "",
@@ -24,7 +26,19 @@ export const useProductStore = defineStore("product", {
 
     }),
 
+    getters: {
+
+        totalPages: (state) => state.page.totalPages ?? 0,
+
+        totalElements: (state) => state.page.totalElements ?? 0
+
+    },
+
     actions: {
+
+        /* ==========================
+           Danh sách
+        ========================== */
 
         async fetchProducts() {
 
@@ -32,27 +46,23 @@ export const useProductStore = defineStore("product", {
 
             try {
 
-                const response = await productService.getAll(
+                const page = await productService.getAll(
+
                     this.keyword,
+
                     this.currentPage,
+
                     this.pageSize
+
                 );
 
-                console.log("Response Product:", response);
+                this.page = page;
 
-                // request.ts đã return response.data
-                this.page = response as ProductPage;
+                this.products = page.content ?? [];
 
-                this.products = response.content ?? [];
+            }
 
-            } catch (error) {
-
-                console.error("Lỗi lấy danh sách sản phẩm:", error);
-
-                this.page = {} as ProductPage;
-                this.products = [];
-
-            } finally {
+            finally {
 
                 this.loading = false;
 
@@ -60,13 +70,71 @@ export const useProductStore = defineStore("product", {
 
         },
 
-        async getById(id:number){
+        /* ==========================
+           Detail
+        ========================== */
 
-    const response = await productService.getById(id);
+        async getById(id: number) {
 
-    return response;
+            this.loading = true;
 
-},
+            try {
+
+                const product = await productService.getById(id);
+
+                this.currentProduct = product;
+
+                return product;
+
+            }
+
+            finally {
+
+                this.loading = false;
+
+            }
+
+        },
+
+        /* ==========================
+           Search
+        ========================== */
+
+        async search(keyword: string) {
+
+            this.keyword = keyword;
+
+            this.currentPage = 0;
+
+            await this.fetchProducts();
+
+        },
+
+        /* ==========================
+           Paging
+        ========================== */
+
+        async changePage(page: number) {
+
+            this.currentPage = page;
+
+            await this.fetchProducts();
+
+        },
+
+        async changePageSize(size: number) {
+
+            this.pageSize = size;
+
+            this.currentPage = 0;
+
+            await this.fetchProducts();
+
+        },
+
+        /* ==========================
+           Create
+        ========================== */
 
         async create(formData: FormData) {
 
@@ -78,11 +146,24 @@ export const useProductStore = defineStore("product", {
 
         },
 
-        async update(id: number, formData: FormData) {
+        /* ==========================
+           Update
+        ========================== */
+
+        async update(
+
+            id: number,
+
+            formData: FormData
+
+        ) {
 
             const response = await productService.update(
+
                 id,
+
                 formData
+
             );
 
             await this.fetchProducts();
@@ -90,6 +171,10 @@ export const useProductStore = defineStore("product", {
             return response;
 
         },
+
+        /* ==========================
+           Delete
+        ========================== */
 
         async delete(id: number) {
 

@@ -49,4 +49,5 @@ public interface CustomerRepository extends JpaRepository<Customer, Integer> {
             AND (c.user.isDeleted = false OR c.user.isDeleted IS NULL)
             """)
     Optional<Customer> findActiveByUserId(@Param("userId") Integer userId);
+    Optional<Customer> findByUserId(Integer userId);
 }

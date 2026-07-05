@@ -1,13 +1,16 @@
-export interface Brand {
-  id: number;
-  name: string;
-  description: string;
-  status: number; 
-}
+// src/types/brand.type.ts
 
-// Interface dùng lúc gửi request Thêm/Sửa (không có ID)
 export interface BrandRequest {
   name: string;
   description: string;
   status: number;
+  logoUrl: string | null; // Thêm trường ảnh
+}
+
+export interface Brand {
+  id: number;
+  name: string;
+  description: string;
+  status: number;
+  logoUrl: string | null; // Thêm trường ảnh
 }

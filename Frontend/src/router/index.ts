@@ -3,20 +3,20 @@ import type { RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
 import { h } from "vue";
 
-// Import các trang của m
-import ProductDetailView from "@/modules/shop/feature/product/views/ProductDetailView.vue";
-import CartView from "@/modules/shop/feature/cart/views/CartView.vue";
-import CheckoutView from "@/modules/shop/feature/checkout/views/CheckoutView.vue";
-import PaymentReturnView from "@/modules/shop/feature/checkout/views/PaymentReturnView.vue";
 
-// Layout quản trị của Admin & Shop
+// Import các trang của m
+import ProductDetailView from "@/modules/shop/feature/product/ProductDetailView.vue";
+import CartView from "@/modules/shop/feature/cart/CartViews.vue";
+import CheckoutView from "@/modules/shop/feature/checkout/CheckoutViews.vue";
+import PaymentReturnView from "@/modules/shop/feature/checkout/PaymentReturnView.vue";
+
+// Admin layout & pages
 import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
 import ShopLayout from "@/modules/shop/layout/ShopLayout.vue";
 import ProductListView from "@/modules/admin/feature/product/views/ProductListView.vue";
 import ProductCreateView from "@/modules/admin/feature/product/views/ProductCreateView.vue";
 import ProductUpdateView from "@/modules/admin/feature/product/views/ProductUpdateView.vue";
 
-// Hàm tạo trang tạm thời phục vụ giai đoạn phát triển
 const mockPage = (title: string, assignee: string) => ({
   render: () =>
     h(
@@ -37,10 +37,8 @@ const mockPage = (title: string, assignee: string) => ({
 
 const routes: Array<RouteRecordRaw> = [
   // ==========================================
-  // LUỒNG AUTH & STOREFRONT (GIAO DIỆN KHÁCH)
+  // STOREFRONT - USER
   // ==========================================
-
-  // Code của Team (Trang chủ)
   {
     path: "/",
     component: ShopLayout,
@@ -51,38 +49,52 @@ const routes: Array<RouteRecordRaw> = [
         component: () =>
           import("@/modules/shop/feature/home/views/HomeView.vue"),
       },
+      {
+        path: "customer/profile",
+        name: "CustomerProfile",
+        component: () =>
+          import("@/modules/shop/feature/profile/views/CustomerProfileView.vue"),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["USER"],
+        },
+      },
     ],
   },
 
- // Code của m (Chi tiết SP, Giỏ hàng, Thanh toán)
-  // Trong file router/index.ts
-{
-    path: "/products",
-    name: "ProductList", // Tên là ProductList
-    component: () => import("@/modules/shop/feature/product/views/ProductDetailView.vue"),
-  },
+  // Code của m (Chi tiết SP, Giỏ hàng, Thanh toán)
   {
-    path: "/product/:id",
-    name: "ProductDetail", // Tên là ProductDetail
-    component: () => import("@/modules/shop/feature/product/views/SingleProductView.vue"),
+    path: "/product",
+    name: "ProductDetail",
+    component: ProductDetailView,
   },
   {
     path: "/cart",
     name: "Cart",
     component: CartView,
-    meta: { requiresAuth: true, allowedRoles: ["USER"] },
+    meta: {
+      requiresAuth: true,
+      allowedRoles: ["USER"],
+    },
   },
   {
     path: "/checkout",
     name: "Checkout",
     component: CheckoutView,
-    meta: { requiresAuth: true, allowedRoles: ["USER"] },
+    meta: {
+      requiresAuth: true,
+      allowedRoles: ["USER"],
+    },
   },
   {
     path: "/payment-return",
     name: "PaymentReturn",
     component: PaymentReturnView,
   },
+
+  // ==========================================
+  // POS PAYMENT RETURN
+  // ==========================================
   {
     path: "/payment/result",
     name: "PosPaymentResult",
@@ -92,7 +104,10 @@ const routes: Array<RouteRecordRaw> = [
       allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
     },
   },
-  // Các trang Auth
+
+  // ==========================================
+  // AUTH
+  // ==========================================
   {
     path: "/login",
     name: "Login",
@@ -109,26 +124,25 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import("@/modules/auth/views/RegisterView.vue"),
   },
 
-  {
-    path: "/customer/profile",
-    name: "CustomerProfile",
-    component: () => import("@/modules/auth/views/CustomerLoginView.vue"),
-    meta: { requiresAuth: true, allowedRoles: ["USER"] },
-  },
   // ==========================================
-  // LUỒNG ADMIN QUẢN TRỊ
+  // ADMIN
   // ==========================================
   {
     path: "/admin",
     component: AdminLayout,
     redirect: "/admin/dashboard",
-    meta: { requiresAuth: true },
+    meta: {
+      requiresAuth: true,
+    },
     children: [
       {
         path: "dashboard",
         name: "AdminDashboard",
-        component: mockPage("Tổng quan (Báo cáo)", "Huy"),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER"] },
+        component: () => import("@/modules/admin/feature/dashboard/views/DashboardView.vue"),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER"],
+        },
       },
       {
         path: "pos",
@@ -140,65 +154,73 @@ const routes: Array<RouteRecordRaw> = [
         },
       },
       {
-        path: "products",
-        meta: {
-          requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER"],
-        },
-        children: [
-          {
-            path: "",
-            name: "AdminProducts",
-            component: ProductListView,
-          },
-          {
-            path: "create",
-            name: "AdminProductCreate",
-            component: ProductCreateView,
-          },
-          {
-            path: ":id",
-            name: "AdminProductUpdate",
-            component: ProductUpdateView,
-          },
-        ],
-      },
+  path: "products",
+  meta: {
+    requiresAuth: true,
+    allowedRoles: ["OWNER", "MANAGER"],
+  },
+  children: [
+    {
+      path: "",
+      name: "AdminProducts",
+      component: ProductListView,
+    },
+    {
+      path: "create",
+      name: "AdminProductCreate",
+      component: ProductCreateView,
+    },
+    {
+      path: ":id",
+      name: "AdminProductUpdate",
+      component: ProductUpdateView,
+    },
+  ],
+},
       {
         path: "categories",
         name: "AdminCategories",
         component: () =>
           import("@/modules/admin/feature/category/views/CategoryView.vue"),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER"],
+        },
       },
       {
         path: "brands",
         name: "AdminBrands",
         component: () =>
           import("@/modules/admin/feature/brand/views/BrandView.vue"),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER"],
+        },
       },
       {
-        path: "fragrance-families",
-        name: "AdminFragranceFamilies",
-        component: mockPage("Nhóm hương", "Đức"),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
+      path: "fragrance-families",
+      name: "AdminFragranceFamilies",
+      // Trỏ đúng đường dẫn tới file View của bạn
+      component: () => import('@/modules/admin/feature/fragranceFamily/views/FragranceFamilyView.vue'),
+      meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "capacities",
         name: "AdminCapacities",
-        component: mockPage("Dung tích (Capacity)", "Đức"),
+        component: () => import("@/modules/admin/feature/capacity/views/CapacityView.vue"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "concentrations",
         name: "AdminConcentrations",
-        component: mockPage("Nồng độ (Concentration)", "Đức"),
+        component: () => import("@/modules/admin/feature/concentration/views/ConcentrationView.vue"), 
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "bottle-types",
         name: "AdminBottleTypes",
-        component: mockPage("Loại vỏ chai", "Đức"),
+        // Import trực tiếp đến file Vue giao diện mà bạn vừa tạo
+        component: () => import("@/modules/admin/feature/bottleType/views/BottleTypeView.vue"), 
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
@@ -214,13 +236,19 @@ const routes: Array<RouteRecordRaw> = [
         path: "vouchers",
         name: "AdminVouchers",
         component: mockPage("Hệ thống Voucher", "Hiếu"),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER"],
+        },
       },
       {
         path: "flash-sale",
         name: "AdminFlashSale",
         component: mockPage("Quản lý Flash Sale", "Huy"),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER"],
+        },
       },
       {
         path: "customers",
@@ -237,7 +265,10 @@ const routes: Array<RouteRecordRaw> = [
         name: "AdminEmployees",
         component: () =>
           import("@/modules/admin/feature/employee/views/EmployeeView.vue"),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER"] },
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER"],
+        },
       },
     ],
   },
@@ -266,53 +297,68 @@ router.beforeEach(async (to, from) => {
     ["Login", "AdminLogin", "Register"].includes(to.name as string)
   ) {
     if (userRole === "OWNER") {
-      return { path: "/admin/dashboard", replace: true };
+      return {
+        path: "/admin/dashboard",
+        replace: true,
+      };
     }
 
     if (["MANAGER", "CASHIER"].includes(userRole)) {
-      return { path: "/admin/pos", replace: true };
+      return {
+        path: "/admin/pos",
+        replace: true,
+      };
     }
 
-    return { path: "/", replace: true };
+    return {
+      path: "/",
+      replace: true,
+    };
   }
 
   if (to.meta.requiresAuth) {
     if (!isAuthenticated) {
       if (to.path.startsWith("/admin")) {
-        return { name: "AdminLogin", replace: true };
+        return {
+          name: "AdminLogin",
+          replace: true,
+        };
       }
 
-      return { name: "Login", replace: true };
+      return {
+        name: "Login",
+        replace: true,
+      };
     }
 
     const allowedRoles = to.meta.allowedRoles as string[] | undefined;
 
     if (allowedRoles && !allowedRoles.includes(userRole)) {
-      if (from.name === "AdminLogin" || from.name === "Login") {
-        if (["CASHIER", "MANAGER"].includes(userRole)) {
-          return { path: "/admin/pos", replace: true };
-        }
-
-        if (userRole === "OWNER") {
-          return { path: "/admin/dashboard", replace: true };
-        }
-
-        return { path: "/", replace: true };
-      }
-
-      if (from.matched.length > 0) {
-        return from.fullPath;
-      }
-
       if (["CASHIER", "MANAGER"].includes(userRole)) {
-        return { path: "/admin/pos", replace: true };
+        return {
+          path: "/admin/pos",
+          replace: true,
+        };
       }
 
       if (userRole === "OWNER") {
-        return { path: "/admin/dashboard", replace: true };
+        return {
+          path: "/admin/dashboard",
+          replace: true,
+        };
       }
 
-      return { path: "/", replace: true };
+      if (userRole === "USER") {
+        return {
+          path: "/",
+          replace: true,
+        };
+      }
+
+      return {
+        name: "Login",
+        replace: true,
+      };
     }
   }
 
