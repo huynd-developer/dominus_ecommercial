@@ -120,8 +120,9 @@ const formatCurrency = (value: number) => {
 };
 
 // CHUYỂN HƯỚNG TĨNH ĐẾN TRANG PRODUCT
+// SỬA LẠI ĐOẠN NÀY ĐỂ NÓ TRUYỀN ĐÚNG ID SẢN PHẨM SANG TRANG CHI TIẾT
 const goToDetail = () => {
-  router.push('/product');
+  router.push({ name: 'ProductDetail', params: { id: props.product.id } });
 };
 
 // THÊM VÀO GIỎ HÀNG THỰC TẾ (GỌI API BACKEND) & HIỂN THỊ TOAST

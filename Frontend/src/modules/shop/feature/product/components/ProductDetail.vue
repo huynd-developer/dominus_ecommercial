@@ -62,22 +62,14 @@
         <p class="desc">{{ product?.description || 'Chưa có thông tin mô tả chi tiết cho sản phẩm này.' }}</p>
         <div class="desc-divider"></div>
 
-
         <div class="variant-selection">
           <h4>Chọn dung tích</h4>
-
-          <!-- ĐỔI size-options THÀNH capacity-options -->
           <div class="capacity-options" v-if="product?.variants && product.variants.length > 0">
-
-            <!-- ĐỔI size-btn THÀNH cap-btn -->
+            <!-- Đã sửa thành hàm selectVariant để tự động reset quantity về 1 khi chọn dung tích khác -->
             <button v-for="v in product.variants" :key="v.id"
-              :class="['cap-btn', { active: selectedVariant?.id === v.id }]" @click="selectedVariant = v">
-
+              :class="['cap-btn', { active: selectedVariant?.id === v.id }]" @click="selectVariant(v)">
               {{ v.capacity }}
-
-              <!-- Thêm lại cái dấu tích vàng V v-if cho sang chảnh -->
               <span v-if="selectedVariant?.id === v.id" class="check-icon">✓</span>
-
             </button>
           </div>
           <div v-else style="color: #e53e3e; font-size: 14px; margin-bottom: 20px;">
@@ -85,13 +77,10 @@
           </div>
         </div>
 
-        <!-- Chèn đoạn này NGAY TRÊN phần chọn Số lượng (+ / -) -->
         <div class="stock-status mb-3" v-if="selectedVariant">
-          <!-- Nếu còn hàng (số lượng > 0) -->
           <span v-if="selectedVariant.stockQuantity > 0" style="color: #2e7d32; font-size: 14px; font-weight: 500;">
             <i class="bi bi-box-seam me-1"></i> Kho còn: {{ selectedVariant.stockQuantity }} sản phẩm
           </span>
-          <!-- Nếu hết hàng (số lượng <= 0) -->
           <span v-else style="color: #d32f2f; font-size: 14px; font-weight: 500;">
             <i class="bi bi-x-circle me-1"></i> Đã hết hàng
           </span>
@@ -102,13 +91,15 @@
           <div class="qty-control">
             <button @click="decreaseQty" :disabled="quantity <= 1">-</button>
             <input type="number" v-model="quantity" readonly />
-            <button @click="increaseQty" :disabled="quantity >= (selectedVariant?.stock || 99)">+</button>
+            <!-- Khóa nút + nếu quantity chạm mức stockQuantity -->
+            <button @click="increaseQty" :disabled="quantity >= (selectedVariant?.stockQuantity || 0)">+</button>
           </div>
         </div>
 
         <div class="actions">
+          <!-- Đã cập nhật logic khóa nút cứng dùng stockQuantity -->
           <button class="btn-add-cart" @click="addToCart"
-            :disabled="isAdding || !selectedVariant || selectedVariant?.quantity === 0 || selectedVariant?.stock === 0 || !selectedVariant?.price">
+            :disabled="isAdding || !selectedVariant || selectedVariant?.stockQuantity <= 0 || !selectedVariant?.price">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
               <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
               <line x1="3" y1="6" x2="21" y2="6" />
@@ -116,18 +107,18 @@
             </svg>
             {{
               (!selectedVariant?.price || selectedVariant?.price === 0) ? 'LIÊN HỆ ĐỂ MUA' :
-                ((selectedVariant?.quantity === 0 || selectedVariant?.stock === 0) ? 'TẠM HẾT HÀNG' :
+                (selectedVariant?.stockQuantity <= 0 ? 'TẠM HẾT HÀNG' :
                   (isAdding ? 'ĐANG THÊM...' : 'THÊM VÀO GIỎ HÀNG'))
             }}
           </button>
 
           <button class="btn-buy-now" @click="buyNow"
-            :disabled="isAdding || !selectedVariant || selectedVariant?.quantity === 0 || selectedVariant?.stock === 0 || !selectedVariant?.price">
+            :disabled="isAdding || !selectedVariant || selectedVariant?.stockQuantity <= 0 || !selectedVariant?.price">
             {{
               (!selectedVariant?.price || selectedVariant?.price === 0) ? 'LIÊN HỆ ĐỂ MUA' :
-                ((selectedVariant?.quantity === 0 || selectedVariant?.stock === 0) ? 'TẠM HẾT HÀNG' : 'MUA NGAY')
+                (selectedVariant?.stockQuantity <= 0 ? 'TẠM HẾT HÀNG' : 'MUA NGAY')
             }}
-            <svg v-if="selectedVariant?.price > 0 && selectedVariant?.quantity !== 0 && selectedVariant?.stock !== 0"
+            <svg v-if="selectedVariant?.price > 0 && selectedVariant?.stockQuantity > 0"
               viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon-right">
               <line x1="5" y1="12" x2="19" y2="12" />
               <polyline points="12 5 19 12 12 19" />
@@ -191,27 +182,37 @@ const quantity = ref<number>(1);
 const showToast = ref(false);
 const isAdding = ref(false);
 
-// Format tiền an toàn
 const formatCurrency = (val: number) => {
   if (val == null || isNaN(val)) return '0 đ';
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
 };
 
 watch(() => props.product, (newVal) => {
-  // Check kĩ xem variants có phải là mảng và có phần tử không
   if (newVal && Array.isArray(newVal.variants) && newVal.variants.length > 0) {
-    selectedVariant.value = newVal.variants[0]; // Mặc định chọn variant đầu tiên
+    selectedVariant.value = newVal.variants[0]; 
     quantity.value = 1;
   } else {
     selectedVariant.value = null;
   }
 }, { immediate: true });
 
-const selectVariant = (variant: any) => { selectedVariant.value = variant; quantity.value = 1; };
-const decreaseQty = () => { if (quantity.value > 1) quantity.value--; };
-const increaseQty = () => { if (selectedVariant.value && quantity.value < (selectedVariant.value.stock || 99)) quantity.value++; };
+// Tách hàm riêng để reset số lượng an toàn khi đổi dung tích
+const selectVariant = (variant: any) => { 
+  selectedVariant.value = variant; 
+  quantity.value = 1; 
+};
 
-// --- HÀM THÊM GIỎ HÀNG BẰNG API THẬT ---
+const decreaseQty = () => { 
+  if (quantity.value > 1) quantity.value--; 
+};
+
+// Sửa lại thành stockQuantity để check max số lượng tồn kho
+const increaseQty = () => { 
+  if (selectedVariant.value && quantity.value < (selectedVariant.value.stockQuantity || 0)) {
+    quantity.value++; 
+  }
+};
+
 const addToCart = async () => {
   if (!selectedVariant.value) {
     alert("Vui lòng chọn dung tích trước khi thêm!");
@@ -230,7 +231,7 @@ const addToCart = async () => {
   try {
     await axios.post('http://localhost:8080/api/v1/customer/cart/add', {
       productVariantId: selectedVariant.value.id,
-      quantity: quantity.value
+      quantity: quantity.value // Đẩy đúng quantity người dùng bấm
     }, {
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -246,7 +247,6 @@ const addToCart = async () => {
   }
 };
 
-// --- HÀM MUA NGAY ---
 const buyNow = async () => {
   if (!selectedVariant.value) {
     alert("Vui lòng chọn dung tích sản phẩm trước!");
@@ -282,538 +282,68 @@ const buyNow = async () => {
 </script>
 
 <style scoped>
-/* Toàn bộ CSS gốc của m giữ nguyên ở đây */
-.detail-view-container {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}
-
-.breadcrumb {
-  font-size: 13px;
-  color: #718096;
-  margin-bottom: 25px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.back-link {
-  font-weight: 600;
-  color: #0a142f;
-  cursor: pointer;
-  transition: 0.2s;
-  display: flex;
-  align-items: center;
-}
-
-.back-link:hover {
-  color: #c69c6d;
-}
-
-.divider {
-  color: #cbd5e0;
-}
-
-.breadcrumb .active {
-  color: #c69c6d;
-  font-weight: 500;
-}
-
-.product-content {
-  display: flex;
-  gap: 50px;
-  background: #fff;
-  padding: 40px;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
-}
-
-.product-gallery {
-  flex: 1;
-  max-width: 480px;
-}
-
-.main-image-wrapper {
-  background: #f8f9fa;
-  border-radius: 12px;
-  padding: 40px;
-  text-align: center;
-  position: relative;
-  margin-bottom: 15px;
-}
-
-.main-image {
-  width: 100%;
-  mix-blend-mode: multiply;
-}
-
-.btn-heart {
-  position: absolute;
-  top: 15px;
-  right: 15px;
-  background: white;
-  border: 1px solid #eaeaea;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  font-size: 22px;
-  cursor: pointer;
-  color: #718096;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: 0.2s;
-}
-
-.btn-heart:hover {
-  color: #e53e3e;
-  border-color: #e53e3e;
-}
-
-.thumbnail-list {
-  display: flex;
-  gap: 15px;
-}
-
-.thumb {
-  width: calc(25% - 11.25px);
-  border-radius: 8px;
-  border: 1px solid #eaeaea;
-  cursor: pointer;
-  padding: 5px;
-  background: #f8f9fa;
-  transition: 0.2s;
-  aspect-ratio: 1/1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.thumb img {
-  max-width: 100%;
-  max-height: 100%;
-  mix-blend-mode: multiply;
-}
-
-.thumb.active {
-  border: 2px solid #0a142f;
-}
-
-.product-info {
-  flex: 1.2;
-}
-
-.header-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 5px;
-}
-
-.brand {
-  color: #c69c6d;
-  font-weight: 600;
-  font-size: 16px;
-}
-
-.share {
-  font-size: 13px;
-  color: #718096;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.icon-sm {
-  width: 16px;
-  height: 16px;
-}
-
-.title {
-  font-size: 32px;
-  font-weight: 700;
-  margin: 0 0 15px 0;
-  color: #0a142f;
-  letter-spacing: -0.5px;
-}
-
-.rating {
-  font-size: 14px;
-  color: #718096;
-  margin-bottom: 25px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.stars {
-  color: #ecc94b;
-  letter-spacing: 2px;
-}
-
-.score {
-  font-weight: bold;
-  color: #0a142f;
-}
-
-.divider-line {
-  color: #cbd5e0;
-}
-
-.price-box {
-  margin-bottom: 5px;
-  display: flex;
-  align-items: baseline;
-  gap: 15px;
-}
-
-.current-price {
-  font-size: 28px;
-  font-weight: bold;
-  color: #0a142f;
-}
-
-.old-price {
-  font-size: 16px;
-  color: #a0aec0;
-  text-decoration: line-through;
-  border-left: 1px solid #cbd5e0;
-  padding-left: 15px;
-}
-
-.save-badge {
-  color: #c69c6d;
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 25px;
-}
-
-.desc-divider {
-  height: 1px;
-  background: #eaeaea;
-  margin: 25px 0;
-}
-
-.desc {
-  color: #4a5568;
-  line-height: 1.6;
-  font-size: 14px;
-  white-space: pre-line;
-}
-
-.variant-selection h4,
-.quantity-section h4 {
-  font-size: 14px;
-  font-weight: 600;
-  color: #0a142f;
-  margin: 0 0 15px 0;
-}
-
-.capacity-options {
-  display: flex;
-  gap: 15px;
-  margin-bottom: 30px;
-}
-
-.cap-btn {
-  flex: 1;
-  padding: 12px 0;
-  border: 1px solid #cbd5e0;
-  background: white;
-  border-radius: 8px;
-  cursor: pointer;
-  position: relative;
-  font-size: 14px;
-  font-weight: 500;
-  color: #4a5568;
-  transition: 0.2s;
-}
-
-.cap-btn.active {
-  border-color: #0a142f;
-  background: #0a142f;
-  color: white;
-}
-
-.check-icon {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  background: #c69c6d;
-  color: white;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid white;
-}
-
-.qty-control {
-  display: inline-flex;
-  border: 1px solid #cbd5e0;
-  border-radius: 8px;
-  margin-bottom: 40px;
-  overflow: hidden;
-}
-
-.qty-control button {
-  width: 45px;
-  height: 45px;
-  border: none;
-  background: white;
-  cursor: pointer;
-  font-size: 18px;
-  color: #4a5568;
-}
-
-.qty-control input {
-  width: 60px;
-  text-align: center;
-  border: none;
-  outline: none;
-  font-weight: 600;
-  font-size: 15px;
-  border-left: 1px solid #cbd5e0;
-  border-right: 1px solid #cbd5e0;
-}
-
-.actions {
-  display: flex;
-  gap: 15px;
-  margin-bottom: 40px;
-}
-
-.btn-add-cart,
-.btn-buy-now {
-  flex: 1;
-  padding: 16px;
-  border-radius: 8px;
-  font-weight: bold;
-  cursor: pointer;
-  border: none;
-  transition: 0.2s;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-}
-
-.btn-add-cart {
-  background: #0a142f;
-  color: white;
-}
-
-.btn-add-cart:hover {
-  background: #13275a;
-}
-
-.btn-add-cart:disabled {
-  background: #718096;
-  cursor: not-allowed;
-}
-
-.btn-buy-now {
-  background: #b78d52;
-  color: white;
-}
-
-.btn-buy-now:hover {
-  background: #c69c6d;
-}
-
-.btn-icon {
-  width: 18px;
-  height: 18px;
-}
-
-.btn-icon-right {
-  width: 18px;
-  height: 18px;
-}
-
-.policy-footer {
-  display: flex;
-  justify-content: space-between;
-  border-top: 1px solid #eaeaea;
-  padding-top: 25px;
-}
-
-.policy-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  font-size: 12px;
-  color: #718096;
-  line-height: 1.5;
-}
-
-.icon-policy {
-  width: 24px;
-  height: 24px;
-  color: #b78d52;
-  flex-shrink: 0;
-}
-
-.policy-item strong {
-  color: #4a5568;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.luxury-toast {
-  position: fixed;
-  bottom: 40px;
-  right: 40px;
-  background: #0a142f;
-  color: white;
-  padding: 16px 24px;
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 30px;
-  min-width: 380px;
-  transform: translateY(100px);
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  z-index: 1000;
-  border: 1px solid rgba(198, 156, 109, 0.3);
-}
-
-.luxury-toast.show {
-  transform: translateY(0);
-  opacity: 1;
-  visibility: visible;
-}
-
-.toast-content {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-}
-
-.icon-circle-toast {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: rgba(198, 156, 109, 0.15);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #c69c6d;
-}
-
-.icon-circle-toast svg {
-  width: 20px;
-  height: 20px;
-}
-
-.toast-text {
-  display: flex;
-  flex-direction: column;
-}
-
-.toast-text strong {
-  font-size: 15px;
-  margin-bottom: 2px;
-  letter-spacing: 0.5px;
-}
-
-.toast-text span {
-  font-size: 13px;
-  color: #a0aec0;
-}
-
-.toast-action {
-  background: transparent;
-  border: none;
-  color: #c69c6d;
-  font-weight: bold;
-  font-size: 13px;
-  cursor: pointer;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  padding: 0;
-  transition: 0.2s;
-}
-
-.toast-action:hover {
-  color: #e8c499;
-  text-decoration: underline;
-}
-
-/* Dán thêm đoạn này vào cuối thẻ <style scoped> trong ProductDetail.vue */
-
-.variant-selection {
-  margin-bottom: 30px;
-}
-
-.variant-selection h4 {
-  font-size: 14px;
-  font-weight: 600;
-  color: #0a142f;
-  margin: 0 0 15px 0;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.capacity-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  /* Tạo khoảng cách giữa các nút */
-}
-
-.cap-btn {
-  flex: 0 0 auto;
-  min-width: 80px;
-  padding: 10px 15px;
-  border: 1px solid #cbd5e0;
-  background: white;
-  border-radius: 6px;
-  cursor: pointer;
-  position: relative;
-  font-size: 14px;
-  font-weight: 600;
-  color: #4a5568;
-  transition: all 0.2s ease;
-  text-align: center;
-}
-
-.cap-btn:hover {
-  border-color: #c69c6d;
-  color: #c69c6d;
-}
-
-.cap-btn.active {
-  border-color: #0a142f;
-  background: #0a142f;
-  color: white;
-}
-
-.check-icon {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  background: #c69c6d;
-  color: white;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  font-size: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid white;
-  font-weight: bold;
-}
+.detail-view-container { display: flex; flex-direction: column; width: 100%; }
+.breadcrumb { font-size: 13px; color: #718096; margin-bottom: 25px; display: flex; align-items: center; gap: 12px; }
+.back-link { font-weight: 600; color: #0a142f; cursor: pointer; transition: 0.2s; display: flex; align-items: center; }
+.back-link:hover { color: #c69c6d; }
+.divider { color: #cbd5e0; }
+.breadcrumb .active { color: #c69c6d; font-weight: 500; }
+.product-content { display: flex; gap: 50px; background: #fff; padding: 40px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); }
+.product-gallery { flex: 1; max-width: 480px; }
+.main-image-wrapper { background: #f8f9fa; border-radius: 12px; padding: 40px; text-align: center; position: relative; margin-bottom: 15px; }
+.main-image { width: 100%; mix-blend-mode: multiply; }
+.btn-heart { position: absolute; top: 15px; right: 15px; background: white; border: 1px solid #eaeaea; width: 44px; height: 44px; border-radius: 50%; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05); font-size: 22px; cursor: pointer; color: #718096; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+.btn-heart:hover { color: #e53e3e; border-color: #e53e3e; }
+.thumbnail-list { display: flex; gap: 15px; }
+.thumb { width: calc(25% - 11.25px); border-radius: 8px; border: 1px solid #eaeaea; cursor: pointer; padding: 5px; background: #f8f9fa; transition: 0.2s; aspect-ratio: 1/1; display: flex; align-items: center; justify-content: center; }
+.thumb img { max-width: 100%; max-height: 100%; mix-blend-mode: multiply; }
+.thumb.active { border: 2px solid #0a142f; }
+.product-info { flex: 1.2; }
+.header-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+.brand { color: #c69c6d; font-weight: 600; font-size: 16px; }
+.share { font-size: 13px; color: #718096; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.icon-sm { width: 16px; height: 16px; }
+.title { font-size: 32px; font-weight: 700; margin: 0 0 15px 0; color: #0a142f; letter-spacing: -0.5px; }
+.rating { font-size: 14px; color: #718096; margin-bottom: 25px; display: flex; align-items: center; gap: 10px; }
+.stars { color: #ecc94b; letter-spacing: 2px; }
+.score { font-weight: bold; color: #0a142f; }
+.divider-line { color: #cbd5e0; }
+.price-box { margin-bottom: 5px; display: flex; align-items: baseline; gap: 15px; }
+.current-price { font-size: 28px; font-weight: bold; color: #0a142f; }
+.old-price { font-size: 16px; color: #a0aec0; text-decoration: line-through; border-left: 1px solid #cbd5e0; padding-left: 15px; }
+.save-badge { color: #c69c6d; font-size: 13px; font-weight: 500; margin-bottom: 25px; }
+.desc-divider { height: 1px; background: #eaeaea; margin: 25px 0; }
+.desc { color: #4a5568; line-height: 1.6; font-size: 14px; white-space: pre-line; }
+.variant-selection h4, .quantity-section h4 { font-size: 14px; font-weight: 600; color: #0a142f; margin: 0 0 15px 0; }
+.capacity-options { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 30px; }
+.cap-btn { flex: 0 0 auto; min-width: 80px; padding: 10px 15px; border: 1px solid #cbd5e0; background: white; border-radius: 6px; cursor: pointer; position: relative; font-size: 14px; font-weight: 600; color: #4a5568; transition: all 0.2s ease; text-align: center; }
+.cap-btn:hover { border-color: #c69c6d; color: #c69c6d; }
+.cap-btn.active { border-color: #0a142f; background: #0a142f; color: white; }
+.check-icon { position: absolute; top: -6px; right: -6px; background: #c69c6d; color: white; width: 18px; height: 18px; border-radius: 50%; font-size: 10px; display: flex; align-items: center; justify-content: center; border: 2px solid white; font-weight: bold; }
+.qty-control { display: inline-flex; border: 1px solid #cbd5e0; border-radius: 8px; margin-bottom: 40px; overflow: hidden; }
+.qty-control button { width: 45px; height: 45px; border: none; background: white; cursor: pointer; font-size: 18px; color: #4a5568; }
+.qty-control input { width: 60px; text-align: center; border: none; outline: none; font-weight: 600; font-size: 15px; border-left: 1px solid #cbd5e0; border-right: 1px solid #cbd5e0; }
+.actions { display: flex; gap: 15px; margin-bottom: 40px; }
+.btn-add-cart, .btn-buy-now { flex: 1; padding: 16px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; transition: 0.2s; display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 14px; }
+.btn-add-cart { background: #0a142f; color: white; }
+.btn-add-cart:hover { background: #13275a; }
+.btn-add-cart:disabled { background: #718096; cursor: not-allowed; }
+.btn-buy-now { background: #b78d52; color: white; }
+.btn-buy-now:hover { background: #c69c6d; }
+.btn-icon { width: 18px; height: 18px; }
+.btn-icon-right { width: 18px; height: 18px; }
+.policy-footer { display: flex; justify-content: space-between; border-top: 1px solid #eaeaea; padding-top: 25px; }
+.policy-item { display: flex; align-items: flex-start; gap: 12px; font-size: 12px; color: #718096; line-height: 1.5; }
+.icon-policy { width: 24px; height: 24px; color: #b78d52; flex-shrink: 0; }
+.policy-item strong { color: #4a5568; font-size: 13px; font-weight: 600; }
+.luxury-toast { position: fixed; bottom: 40px; right: 40px; background: #0a142f; color: white; padding: 16px 24px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); display: flex; align-items: center; justify-content: space-between; gap: 30px; min-width: 380px; transform: translateY(100px); opacity: 0; visibility: hidden; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); z-index: 1000; border: 1px solid rgba(198, 156, 109, 0.3); }
+.luxury-toast.show { transform: translateY(0); opacity: 1; visibility: visible; }
+.toast-content { display: flex; align-items: center; gap: 15px; }
+.icon-circle-toast { width: 36px; height: 36px; border-radius: 50%; background: rgba(198, 156, 109, 0.15); display: flex; align-items: center; justify-content: center; color: #c69c6d; }
+.icon-circle-toast svg { width: 20px; height: 20px; }
+.toast-text { display: flex; flex-direction: column; }
+.toast-text strong { font-size: 15px; margin-bottom: 2px; letter-spacing: 0.5px; }
+.toast-text span { font-size: 13px; color: #a0aec0; }
+.toast-action { background: transparent; border: none; color: #c69c6d; font-weight: bold; font-size: 13px; cursor: pointer; letter-spacing: 0.5px; text-transform: uppercase; padding: 0; transition: 0.2s; }
+.toast-action:hover { color: #e8c499; text-decoration: underline; }
 </style>

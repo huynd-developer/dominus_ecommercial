@@ -18,7 +18,7 @@
 
         <div class="row row-cols-2 row-cols-md-4 row-cols-lg-4 g-4">
           <div v-for="product in flashSaleProducts" :key="product.id" class="col"
-            @click="$router.push({ path: '/products', query: { id: product.id } })" style="cursor: pointer;">
+            @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })" style="cursor: pointer;">
             <ProductCard :product="product" />
           </div>
         </div>
@@ -36,7 +36,7 @@
         <div class="row row-cols-2 row-cols-md-4 row-cols-lg-4 g-4">
           <!-- Cập nhật đường dẫn chuẩn: /product/:id -->
           <div v-for="product in flashSaleProducts" :key="product.id" class="col"
-            @click="$router.push({ path: '/products', query: { id: product.id } })" style="cursor: pointer;">
+            @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })" style="cursor: pointer;">
             <ProductCard :product="product" />
           </div>
         </div>
@@ -69,7 +69,7 @@
 
           <!-- Cập nhật đường dẫn chuẩn: /product/:id -->
           <div v-for="product in flashSaleProducts" :key="product.id" class="col"
-            @click="$router.push({ path: '/products', query: { id: product.id } })" style="cursor: pointer;">
+            @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })" style="cursor: pointer;">
             <ProductCard :product="product" />
           </div>
         </div>
@@ -87,7 +87,7 @@
         <div class="row row-cols-2 row-cols-md-4 row-cols-lg-4 g-4">
           <!-- Cập nhật đường dẫn chuẩn: /product/:id -->
           <div v-for="product in flashSaleProducts" :key="product.id" class="col"
-            @click="$router.push({ path: '/products', query: { id: product.id } })" style="cursor: pointer;">
+            @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })" style="cursor: pointer;">
             <ProductCard :product="product" />
           </div>
         </div>
