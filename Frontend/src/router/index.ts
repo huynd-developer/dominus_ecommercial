@@ -138,7 +138,7 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "dashboard",
         name: "AdminDashboard",
-        component: OwnerReportView,
+        component: () => import("@/modules/admin/feature/dashboard/views/DashboardView.vue"),
         meta: {
           requiresAuth: true,
           allowedRoles: ["OWNER"],
