@@ -57,4 +57,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
             @Param("toDate") LocalDateTime toDate
     );
     List<OrderItem> findByOrder_Id(Integer orderId);
+
+    List<OrderItem> findByOrder_IdOrderByIdAsc(Integer orderId);
+
 }
