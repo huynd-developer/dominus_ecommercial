@@ -20,11 +20,12 @@ public class AdminBottleTypeController {
 
     @GetMapping
     public ResponseEntity<Page<BottleType>> getAllBottleTypes(
+            @RequestParam(name = "keyword", defaultValue = "") String keyword,
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "5") int size) {
 
         Pageable pageable = PageRequest.of(page, size);
-        return ResponseEntity.ok(bottleTypeService.getAll(pageable));
+        return ResponseEntity.ok(bottleTypeService.getAll(keyword, pageable));
     }
 
     @PreAuthorize("hasAnyAuthority('MANAGER', 'OWNER')")

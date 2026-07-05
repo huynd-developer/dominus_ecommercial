@@ -46,9 +46,16 @@
               <li class="page-item" :class="{ disabled: categoryStore.currentPage === 0 }">
                 <button class="page-link shadow-none" @click="changePage(categoryStore.currentPage - 1)">Trước</button>
               </li>
-              <li class="page-item" v-for="p in categoryStore.totalPages" :key="p" :class="{ active: categoryStore.currentPage === (p - 1) }">
-                <button class="page-link shadow-none" @click="changePage(p - 1)">{{ p }}</button>
+              
+              <li 
+                class="page-item" 
+                v-for="pageIndex in displayedPages" 
+                :key="pageIndex" 
+                :class="{ active: categoryStore.currentPage === pageIndex }"
+              >
+                <button class="page-link shadow-none" @click="changePage(pageIndex)">{{ pageIndex + 1 }}</button>
               </li>
+              
               <li class="page-item" :class="{ disabled: categoryStore.currentPage === categoryStore.totalPages - 1 }">
                 <button class="page-link shadow-none" @click="changePage(categoryStore.currentPage + 1)">Sau</button>
               </li>
@@ -85,13 +92,13 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { useCategoryStore } from '../stores/category.store';
-import { useAuthStore } from '@/modules/auth/stores/authStore'; // Import Auth Store
+import { useAuthStore } from '@/modules/auth/stores/authStore'; 
 import CategoryTable from '../components/CategoryTable.vue';
 import type { Category, CategoryRequest } from '../types/category.type';
 import Swal from 'sweetalert2'; 
 
 const categoryStore = useCategoryStore();
-const authStore = useAuthStore(); // Khởi tạo Auth Store
+const authStore = useAuthStore(); 
 
 const searchKeyword = ref('');
 const showModal = ref(false);
@@ -103,26 +110,46 @@ const Toast = Swal.mixin({
   toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true
 });
 
-// --- 🔐 LOGIC PHÂN QUYỀN RÚT GỌN ĐỒNG BỘ ---
+// --- 🔐 LOGIC PHÂN QUYỀN ---
 const currentUserRole = computed(() => {
-  // Lấy từ Pinia Store, fallback xuống localStorage['role'] nếu cần
   const role = authStore.role || localStorage.getItem('role') || "";
   return role.toUpperCase().trim(); 
 });
 
-// Khớp chính xác với @PreAuthorize("hasAnyAuthority('MANAGER', 'OWNER')")
 const canEdit = computed(() => ['OWNER', 'MANAGER'].includes(currentUserRole.value));
-
-// Khớp chính xác với @PreAuthorize("hasAuthority('OWNER')")
 const canDelete = computed(() => currentUserRole.value === 'OWNER');
-// ------------------------------------------
+
+// --- 🛠️ ALGORITHM: THU GỌN SỐ TRANG TRÊN GIAO DIỆN (Hiển thị tối đa 5 nút trang kề cận) ---
+const displayedPages = computed(() => {
+  const total = categoryStore.totalPages;
+  const current = categoryStore.currentPage;
+  const maxVisible = 5; // Số lượng nút trang tối đa muốn hiển thị
+  
+  if (total <= maxVisible) {
+    return Array.from({ length: total }, (_, i) => i);
+  }
+  
+  let start = Math.max(0, current - Math.floor(maxVisible / 2));
+  let end = start + maxVisible - 1;
+  
+  if (end >= total) {
+    end = total - 1;
+    start = Math.max(0, end - maxVisible + 1);
+  }
+  
+  const pages = [];
+  for (let i = start; i <= end; i++) {
+    pages.push(i);
+  }
+  return pages; // Trả về mảng số trang dạng index: [0, 1, 2, 3, 4]
+});
 
 onMounted(() => {
   categoryStore.fetchCategories();
 });
 
 const handleSearch = () => {
-  categoryStore.fetchCategories(searchKeyword.value, 0);
+  categoryStore.fetchCategories(searchKeyword.value, 0); // Tìm kiếm mặc định nhảy về trang 0
 };
 
 const changePage = (page: number) => {
@@ -144,6 +171,7 @@ const openEditModal = (category: Category) => {
   showModal.value = true;
 };
 
+// --- 🔄 ĐỒNG BỘ LUỒNG DỮ LIỆU SAU KHI SUBMIT ---
 const handleSubmit = async () => {
   if (!formData.value.name.trim()) {
     Toast.fire({ icon: 'warning', title: 'Vui lòng nhập tên danh mục!' });
@@ -153,9 +181,14 @@ const handleSubmit = async () => {
   try {
     if (isEdit.value && currentId.value) {
       await categoryStore.updateCategory(currentId.value, formData.value);
+      // Khi Cập nhật thành công: Tải lại và giữ nguyên từ khóa tìm kiếm kèm trang hiện tại
+      await categoryStore.fetchCategories(searchKeyword.value, categoryStore.currentPage);
       Toast.fire({ icon: 'success', title: 'Cập nhật thành công!' });
     } else {
       await categoryStore.createCategory(formData.value);
+      // Khi Thêm mới thành công: Reset từ khóa tìm kiếm về rỗng và nhảy về trang đầu tiên (trang 0) để người dùng thấy ngay danh mục mới tạo
+      searchKeyword.value = '';
+      await categoryStore.fetchCategories('', 0);
       Toast.fire({ icon: 'success', title: 'Thêm mới thành công!' });
     }
     showModal.value = false; 
@@ -168,10 +201,11 @@ const handleToggleStatus = async (category: Category) => {
   const newStatus = category.status === 1 ? 0 : 1;
   try {
     await categoryStore.updateCategory(category.id, { name: category.name, status: newStatus });
+    // Đồng bộ: Giữ nguyên từ khóa tìm kiếm và trang hiện tại khi đổi trạng thái ẩn/hiện
+    await categoryStore.fetchCategories(searchKeyword.value, categoryStore.currentPage);
     Toast.fire({ icon: 'success', title: 'Đã thay đổi trạng thái!' });
   } catch (error: any) {
     Toast.fire({ icon: 'error', title: error.message || 'Không thể đổi trạng thái!' });
-    categoryStore.fetchCategories(searchKeyword.value, categoryStore.currentPage);
   }
 };
 
@@ -193,7 +227,7 @@ const handleDelete = (id: number) => {
 
         await categoryStore.deleteCategory(id);
         
-        // Thao tác chuyển trang thông minh khi bản ghi cuối trang bị xóa
+        // Thao tác chuyển trang thông minh khi bản ghi duy nhất/cuối cùng của trang bị xóa
         if (isLastItemOnPage && isNotFirstPage) {
           await categoryStore.fetchCategories(searchKeyword.value, categoryStore.currentPage - 1);
         } else {

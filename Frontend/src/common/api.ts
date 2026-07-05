@@ -1,52 +1,69 @@
-import axios from 'axios';
+import axios from "axios";
+import Swal from "sweetalert2";
 
 const api = axios.create({
-  baseURL: 'http://localhost:8080/api', // Điền đúng cổng BE của ông
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  baseURL: "http://localhost:8080/api",
+  timeout: 30000,
 });
 
-// BỔ SUNG CHỖ CẦN SỬA: Interceptor kẹp Token trước khi gửi request đi
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
+
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`; // Nhét token vào Header
+      config.headers.Authorization = `Bearer ${token}`;
     }
+
+    /**
+     * Quan trọng:
+     * - Request thường: JSON
+     * - Upload file FormData: KHÔNG tự set Content-Type
+     *   để browser tự sinh multipart/form-data; boundary=...
+     */
+    if (config.data instanceof FormData) {
+      delete (config.headers as any)["Content-Type"];
+    } else {
+      config.headers["Content-Type"] = "application/json";
+    }
+
     return config;
   },
   (error) => {
     return Promise.reject(error);
   }
 );
-// KẾT THÚC PHẦN BỔ SUNG
 
-// GIỮ NGUYÊN HOÀN TOÀN CODE CŨ PHÍA DƯỚI
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    // Lấy thông tin của request vừa gọi
+  async (error) => {
     const originalRequest = error.config;
+    const requestUrl = originalRequest?.url || "";
 
-    // Nếu Backend báo lỗi 401 (Token hết hạn hoặc sai) 
-    // VÀ request đó KHÔNG PHẢI là request gọi API đăng nhập
     if (
-      error.response && 
-      error.response.status === 401 && 
-      !originalRequest.url.includes('/login') // <-- Chìa khóa để fix lỗi ở đây
+      error.response &&
+      error.response.status === 401 &&
+      !requestUrl.includes("/auth/")
     ) {
-      // Xóa dữ liệu cũ
-      localStorage.removeItem('token');
-      localStorage.removeItem('role');
-      localStorage.removeItem('name');
-      
-      // Đá về trang đăng nhập
-      alert('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!');
-      window.location.href = '/login'; 
+      localStorage.removeItem("token");
+      localStorage.removeItem("role");
+      localStorage.removeItem("name");
+      localStorage.removeItem("customerAvatarUrl");
+
+      await Swal.fire({
+        icon: "warning",
+        title: "Phiên đăng nhập đã hết hạn",
+        text: "Vui lòng đăng nhập lại để tiếp tục.",
+        confirmButtonText: "Đăng nhập lại",
+        confirmButtonColor: "#bd9a5f",
+      });
+
+      if (window.location.pathname.startsWith("/admin")) {
+        window.location.href = "/admin/login";
+      } else {
+        window.location.href = "/login";
+      }
     }
-    
+
     return Promise.reject(error);
   }
 );

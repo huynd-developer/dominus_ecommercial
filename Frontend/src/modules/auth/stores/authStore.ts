@@ -1,91 +1,205 @@
 import { defineStore } from 'pinia';
 import api from '@/common/api';
 
+type UserRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'USER' | '';
+
 interface AuthState {
   token: string | null;
-  role: string | null;
+  role: UserRole | null;
   name: string | null;
 }
 
-// 1. BỔ SUNG GÓI TYPE CHO TYPESCRIPT
+interface BackendLoginResponse {
+  token: string;
+  role: string;
+  name: string;
+}
+
 export interface AuthResponse {
   success: boolean;
   message?: string;
   validationErrors?: Record<string, string>;
+  token?: string;
+  role?: UserRole;
+  name?: string;
 }
 
-// 2. ÉP KIỂU TRẢ VỀ CỦA HELPER LÀ AuthResponse
-const handleAuthError = (error: any, defaultMessage: string): AuthResponse => {
-  const errorData = error.response?.data;
-  if (typeof errorData === 'object' && !errorData.message) {
-    return { success: false, validationErrors: errorData };
+const normalizeRole = (role?: string | null): UserRole => {
+  const cleanRole = (role || '')
+    .toUpperCase()
+    .replace('ROLE_', '')
+    .trim();
+
+  if (['OWNER', 'MANAGER', 'CASHIER', 'USER'].includes(cleanRole)) {
+    return cleanRole as UserRole;
   }
-  return { success: false, message: errorData?.message || defaultMessage };
+
+  return '';
+};
+
+const handleAuthError = (error: any, defaultMessage: string): AuthResponse => {
+  const errorData = error?.response?.data;
+
+  // Backend mới: { message: "...", errors: { field: "..." } }
+  if (errorData?.errors) {
+    return {
+      success: false,
+      message: errorData.message || 'Dữ liệu không hợp lệ',
+      validationErrors: errorData.errors,
+    };
+  }
+
+  // Backend auth hiện tại: { message: "..." }
+  if (errorData?.message) {
+    return {
+      success: false,
+      message: errorData.message,
+    };
+  }
+
+  // Trường hợp validation cũ trả thẳng object field lỗi
+  if (typeof errorData === 'object' && errorData !== null) {
+    return {
+      success: false,
+      message: 'Dữ liệu không hợp lệ',
+      validationErrors: errorData,
+    };
+  }
+
+  return {
+    success: false,
+    message: defaultMessage,
+  };
 };
 
 export const useAuthStore = defineStore('auth', {
   state: (): AuthState => ({
     token: localStorage.getItem('token'),
-    role: localStorage.getItem('role'),
+    role: normalizeRole(localStorage.getItem('role')),
     name: localStorage.getItem('name'),
   }),
 
   getters: {
     isAuthenticated: (state) => !!state.token,
-    
-    // ĐÂY LÀ CHỖ QUAN TRỌNG NHẤT ĐỂ FIX LỖI 403:
+
+    cleanRole: (state): UserRole => {
+      return normalizeRole(state.role);
+    },
+
+    isOwner: (state) => normalizeRole(state.role) === 'OWNER',
+
+    isManager: (state) => normalizeRole(state.role) === 'MANAGER',
+
+    isCashier: (state) => normalizeRole(state.role) === 'CASHIER',
+
+    isUser: (state) => normalizeRole(state.role) === 'USER',
+
     isAdminSection: (state) => {
-      // Ép tất cả về chữ IN HOA và xóa tiền tố ROLE_ (nếu có)
-      const cleanRole = (state.role || '').toUpperCase().replace('ROLE_', '');
-      return ['OWNER', 'MANAGER', 'CASHIER'].includes(cleanRole);
+      const role = normalizeRole(state.role);
+      return ['OWNER', 'MANAGER', 'CASHIER'].includes(role);
     },
   },
 
   actions: {
-    // 3. ÉP KIỂU TRẢ VỀ CHO CÁC HÀM LÀ Promise<AuthResponse>
-    async loginCustomer(payload: any): Promise<AuthResponse> {
+    async loginCustomer(payload: {
+      email: string;
+      password: string;
+    }): Promise<AuthResponse> {
       try {
-        const response = await api.post('/auth/login/customer', payload);
+        const response = await api.post<BackendLoginResponse>(
+          '/auth/login/customer',
+          {
+            email: payload.email.trim(),
+            password: payload.password,
+          }
+        );
+
         this.setAuthData(response.data);
-        return { success: true }; 
+
+        return {
+          success: true,
+          token: this.token || undefined,
+          role: this.role || undefined,
+          name: this.name || undefined,
+        };
       } catch (error: any) {
         return handleAuthError(error, 'Đăng nhập thất bại!');
       }
     },
 
-    async loginEmployee(payload: any): Promise<AuthResponse> {
+    async loginEmployee(payload: {
+      email: string;
+      password: string;
+    }): Promise<AuthResponse> {
       try {
-        const response = await api.post('/auth/login/employee', payload);
+        const response = await api.post<BackendLoginResponse>(
+          '/auth/login/employee',
+          {
+            email: payload.email.trim(),
+            password: payload.password,
+          }
+        );
+
         this.setAuthData(response.data);
-        return { success: true };
+
+        return {
+          success: true,
+          token: this.token || undefined,
+          role: this.role || undefined,
+          name: this.name || undefined,
+        };
       } catch (error: any) {
         return handleAuthError(error, 'Đăng nhập quản trị thất bại!');
       }
     },
 
-    async registerCustomer(payload: any): Promise<AuthResponse> {
+    async registerCustomer(payload: {
+      name: string;
+      email: string;
+      phone: string;
+      password: string;
+    }): Promise<AuthResponse> {
       try {
-        const response = await api.post('/auth/register', payload);
-        return { success: true, message: response.data.message };
+        const response = await api.post<{ message: string }>(
+          '/auth/register',
+          {
+            name: payload.name.trim(),
+            email: payload.email.trim().toLowerCase(),
+            phone: payload.phone.trim(),
+            password: payload.password,
+          }
+        );
+
+        return {
+          success: true,
+          message: response.data.message || 'Đăng ký tài khoản thành công!',
+        };
       } catch (error: any) {
         return handleAuthError(error, 'Đăng ký thất bại!');
       }
     },
 
-    // Giữ nguyên 100% logic setAuthData
-    setAuthData(data: any) { 
-      console.log("📦 Cấu trúc JSON thực tế từ Backend:", data);
-      
-      if (data.token) localStorage.setItem('token', data.token);
-      if (data.role) localStorage.setItem('role', data.role);
-      if (data.name) localStorage.setItem('name', data.name);
+    setAuthData(data: BackendLoginResponse) {
+      console.log('📦 Cấu trúc JSON thực tế từ Backend:', data);
 
-      this.token = data.token || null;
-      this.role = data.role || null;
-      this.name = data.name || null;
+      const token = data.token || '';
+      const role = normalizeRole(data.role);
+      const name = data.name || '';
+
+      if (!token || !role) {
+        this.logout();
+        return;
+      }
+
+      localStorage.setItem('token', token);
+      localStorage.setItem('role', role);
+      localStorage.setItem('name', name);
+
+      this.token = token;
+      this.role = role;
+      this.name = name;
     },
 
-    // Giữ nguyên 100% logic logout
     logout() {
       localStorage.removeItem('token');
       localStorage.removeItem('role');
