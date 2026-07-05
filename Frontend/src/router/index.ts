@@ -3,11 +3,12 @@ import type { RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
 import { h } from "vue";
 
-// Shop pages
-import ProductDetailView from "@/modules/shop/feature/product/views/ProductDetailView.vue";
-import CartView from "@/modules/shop/feature/cart/views/CartView.vue";
-import CheckoutView from "@/modules/shop/feature/checkout/views/CheckoutView.vue";
-import PaymentReturnView from "@/modules/shop/feature/checkout/views/PaymentReturnView.vue";
+
+// Import các trang của m
+import ProductDetailView from "@/modules/shop/feature/product/ProductDetailView.vue";
+import CartView from "@/modules/shop/feature/cart/CartViews.vue";
+import CheckoutView from "@/modules/shop/feature/checkout/CheckoutViews.vue";
+import PaymentReturnView from "@/modules/shop/feature/checkout/PaymentReturnView.vue";
 
 // Admin layout & pages
 import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
@@ -15,7 +16,6 @@ import ShopLayout from "@/modules/shop/layout/ShopLayout.vue";
 import ProductListView from "@/modules/admin/feature/product/views/ProductListView.vue";
 import ProductCreateView from "@/modules/admin/feature/product/views/ProductCreateView.vue";
 import ProductUpdateView from "@/modules/admin/feature/product/views/ProductUpdateView.vue";
-import OwnerReportView from "@/modules/admin/feature/report/views/OwnerReportView.vue";
 
 const mockPage = (title: string, assignee: string) => ({
   render: () =>
@@ -62,17 +62,11 @@ const routes: Array<RouteRecordRaw> = [
     ],
   },
 
- // Code của m (Chi tiết SP, Giỏ hàng, Thanh toán)
-  // Trong file router/index.ts
-{
-    path: "/products",
-    name: "ProductList", // Tên là ProductList
-    component: () => import("@/modules/shop/feature/product/views/ProductDetailView.vue"),
-  },
+  // Code của m (Chi tiết SP, Giỏ hàng, Thanh toán)
   {
-    path: "/product/:id",
-    name: "ProductDetail", // Tên là ProductDetail
-    component: () => import("@/modules/shop/feature/product/views/SingleProductView.vue"),
+    path: "/product",
+    name: "ProductDetail",
+    component: ProductDetailView,
   },
   {
     path: "/cart",
@@ -160,29 +154,29 @@ const routes: Array<RouteRecordRaw> = [
         },
       },
       {
-        path: "products",
-        meta: {
-          requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER"],
-        },
-        children: [
-          {
-            path: "",
-            name: "AdminProducts",
-            component: ProductListView,
-          },
-          {
-            path: "create",
-            name: "AdminProductCreate",
-            component: ProductCreateView,
-          },
-          {
-            path: ":id",
-            name: "AdminProductUpdate",
-            component: ProductUpdateView,
-          },
-        ],
-      },
+  path: "products",
+  meta: {
+    requiresAuth: true,
+    allowedRoles: ["OWNER", "MANAGER"],
+  },
+  children: [
+    {
+      path: "",
+      name: "AdminProducts",
+      component: ProductListView,
+    },
+    {
+      path: "create",
+      name: "AdminProductCreate",
+      component: ProductCreateView,
+    },
+    {
+      path: ":id",
+      name: "AdminProductUpdate",
+      component: ProductUpdateView,
+    },
+  ],
+},
       {
         path: "categories",
         name: "AdminCategories",

@@ -1,30 +1,43 @@
 export interface ProductImage {
-
-    id: number;
-
+    id?: number;
     imageUrl: string;
-
     isPrimary: boolean;
+}
 
+export interface ProductVariant {
+    id?: number;
+
+    productId?: number;
+
+    capacityId: number;
+    capacityValue?: number;
+
+    bottleTypeId: number;
+    bottleTypeName?: string;
+
+    sku: string;
+
+    price: number;
+
+    stockQuantity: number;
+
+    status: number;
 }
 
 export interface Product {
 
-    id: number;
+    id?: number;
 
     name: string;
 
-    brandId: number;
+    brandId: number | null;
+    brandName?: string;
 
-    brandName: string;
+    categoryId: number | null;
+    categoryName?: string;
 
-    categoryId: number;
-
-    categoryName: string;
-
-    concentrationId: number;
-
-    concentrationName: string;
+    concentrationId: number | null;
+    concentrationName?: string;
 
     description: string;
 
@@ -36,6 +49,7 @@ export interface Product {
 
     images: ProductImage[];
 
+    variants: ProductVariant[];
 }
 
 export interface ProductPage {
@@ -50,14 +64,10 @@ export interface ProductPage {
 
     size: number;
 
-}
+    first: boolean;
 
-export interface ProductSearch {
+    last: boolean;
 
-    keyword: string;
-
-    page: number;
-
-    size: number;
+    empty: boolean;
 
 }
