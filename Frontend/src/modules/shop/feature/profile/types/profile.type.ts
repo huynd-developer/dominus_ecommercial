@@ -51,11 +51,11 @@ export interface FavoriteResponse {
 
 export interface CustomerOrderItemResponse {
   orderItemId: number;
-  productVariantId: number;
-  productId: number;
+  productVariantId: number | null;
+  productId: number | null;
   productName: string;
-  brandName: string;
-  sku: string;
+  brandName: string | null;
+  sku: string | null;
   quantity: number;
   originalPrice: number;
   discountAmount: number;

@@ -21,4 +21,6 @@ public interface ReviewRepository extends JpaRepository<Review, Integer> {
     List<Review> findByUser_IdAndIsDeletedFalseOrderByCreatedAtDesc(
             Integer userId
     );
+
+    List<Review> findByIsDeletedFalseOrderByCreatedAtDesc();
 }

@@ -158,7 +158,7 @@ onMounted(async () => {
     const data = await store.getById(id);
 
     Object.assign(form, data);
-    preview.value = data.avatar_url;
+    // preview.value = data.avatar_url;
   }
 });
 
