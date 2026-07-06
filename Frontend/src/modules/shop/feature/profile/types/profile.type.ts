@@ -80,3 +80,43 @@ export interface CustomerOrderResponse {
   createdAt: string;
   items: CustomerOrderItemResponse[];
 }
+
+export interface CreateReviewRequest {
+  orderItemId: number;
+  rating: number;
+  comment?: string | null;
+}
+
+export interface ReviewResponse {
+  reviewId: number;
+  orderItemId: number;
+  orderId: number;
+
+  productVariantId: number | null;
+  productId: number | null;
+  productName: string;
+  brandName: string | null;
+  sku: string | null;
+  image: string | null;
+
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+}
+
+export interface ReviewableOrderItemResponse {
+  orderItemId: number;
+  orderId: number;
+
+  productVariantId: number | null;
+  productId: number | null;
+  productName: string;
+  brandName: string | null;
+  sku: string | null;
+  image: string | null;
+
+  orderStatus: number;
+  reviewed: boolean;
+  canReview: boolean;
+  message: string;
+}
