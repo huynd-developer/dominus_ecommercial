@@ -59,7 +59,7 @@ public class SecurityConfig {
                          */
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/vnpay/**").permitAll()
-
+                        .requestMatchers(HttpMethod.GET, "/api/v1/orders/payment/vnpay-return").permitAll()
                         /*
                          * PUBLIC SHOP API:
                          * Khách chưa đăng nhập vẫn được xem danh mục, sản phẩm,

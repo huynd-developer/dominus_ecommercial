@@ -21,7 +21,9 @@
         />
 
         <div class="mini-info">
-          <h4 class="item-name">{{ item.productName || item.sku || "Sản phẩm" }}</h4>
+          <h4 class="item-name">
+            {{ item.productName || item.sku || "Sản phẩm" }}
+          </h4>
 
           <p class="item-variant">
             Dung tích:
@@ -44,10 +46,8 @@
       </div>
 
       <div class="summary-line">
-        <span>Phí vận chuyển</span>
-        <span :class="{ 'free-ship': shippingFee === 0 }">
-          {{ shippingFee === 0 ? "Miễn phí" : formatCurrency(shippingFee) }}
-        </span>
+        <span>Giảm giá</span>
+        <span>{{ formatCurrency(discountAmount) }}</span>
       </div>
 
       <div class="summary-line total-line">
@@ -76,7 +76,7 @@ defineProps<{
   cartItems: any[];
   totalItems: number;
   totalAmount: number;
-  shippingFee: number;
+  discountAmount: number;
   finalTotal: number;
   isSubmitting: boolean;
 }>();
@@ -110,9 +110,7 @@ const formatCurrency = (value: number) => {
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
     currency: "VND",
-  })
-    .format(Number(value || 0))
-    .replace("₫", "₫");
+  }).format(Number(value || 0));
 };
 </script>
 
@@ -219,11 +217,6 @@ const formatCurrency = (value: number) => {
   margin-bottom: 10px;
   font-size: 14px;
   color: #4a5568;
-}
-
-.free-ship {
-  color: #38a169;
-  font-weight: 500;
 }
 
 .total-line {

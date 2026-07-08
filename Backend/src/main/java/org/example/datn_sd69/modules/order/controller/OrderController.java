@@ -36,6 +36,20 @@ public class OrderController {
         return ResponseEntity.ok(result);
     }
 
+    /**
+     * VNPay redirect về FE /payment-return.
+     * Sau đó FE gọi API này để BE xác minh chữ ký VNPay.
+     *
+     * Không bắt đăng nhập ở API này vì VNPay redirect từ ngoài hệ thống về.
+     */
+    @GetMapping("/payment/vnpay-return")
+    public ResponseEntity<?> verifyVnPayReturn(
+            @RequestParam Map<String, String> params
+    ) {
+        Map<String, Object> result = orderService.verifyVnPayReturn(params);
+        return ResponseEntity.ok(result);
+    }
+
     private Integer getCustomerId(Principal principal) {
         if (principal == null || principal.getName() == null || principal.getName().trim().isEmpty()) {
             throw new ResponseStatusException(

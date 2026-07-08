@@ -2,8 +2,9 @@ package org.example.datn_sd69.modules.favorite.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.*;
-import org.example.datn_sd69.modules.favorite.dto.AddFavoriteRequest;
-import org.example.datn_sd69.modules.favorite.dto.FavoriteResponse;
+import org.example.datn_sd69.modules.favorite.dto.request.AddFavoriteRequest;
+import org.example.datn_sd69.modules.favorite.dto.response.FavoriteResponse;
+import org.example.datn_sd69.modules.favorite.dto.response.FavoriteToggleResponse;
 import org.example.datn_sd69.modules.favorite.service.CustomerFavoriteService;
 import org.example.datn_sd69.repository.CustomerRepository;
 import org.example.datn_sd69.repository.FavoriteRepository;
@@ -22,6 +23,8 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class CustomerFavoriteServiceImpl implements CustomerFavoriteService {
+
+    private static final int ACTIVE_STATUS = 1;
 
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
@@ -46,9 +49,7 @@ public class CustomerFavoriteServiceImpl implements CustomerFavoriteService {
 
         Integer productVariantId = request.productVariantId();
 
-        if (productVariantId == null || productVariantId <= 0) {
-            throw badRequest("productVariantId phải là số nguyên dương");
-        }
+        validateProductVariantId(productVariantId);
 
         ProductVariant productVariant = productVariantRepository.findById(productVariantId)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -56,9 +57,7 @@ public class CustomerFavoriteServiceImpl implements CustomerFavoriteService {
                         "Không tìm thấy biến thể sản phẩm"
                 ));
 
-        if (productVariant.getStatus() == null || productVariant.getStatus() != 1) {
-            throw badRequest("Biến thể sản phẩm đang ngừng bán, không thể yêu thích");
-        }
+        validateProductVariantCanFavorite(productVariant);
 
         boolean existed = favoriteRepository.existsByCustomer_UserIdAndProductVariant_Id(
                 customer.getUserId(),
@@ -77,6 +76,65 @@ public class CustomerFavoriteServiceImpl implements CustomerFavoriteService {
         Favorite saved = favoriteRepository.save(favorite);
 
         return mapToFavoriteResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public FavoriteToggleResponse toggleFavorite(AddFavoriteRequest request) {
+        Customer customer = getCurrentCustomer();
+
+        Integer productVariantId = request.productVariantId();
+
+        validateProductVariantId(productVariantId);
+
+        ProductVariant productVariant = productVariantRepository.findById(productVariantId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy biến thể sản phẩm"
+                ));
+
+        validateProductVariantCanFavorite(productVariant);
+
+        var existingFavorite = favoriteRepository.findByCustomer_UserIdAndProductVariant_Id(
+                customer.getUserId(),
+                productVariantId
+        );
+
+        if (existingFavorite.isPresent()) {
+            favoriteRepository.delete(existingFavorite.get());
+
+            return new FavoriteToggleResponse(
+                    productVariantId,
+                    false,
+                    "Đã bỏ yêu thích sản phẩm"
+            );
+        }
+
+        Favorite favorite = new Favorite();
+        favorite.setCustomer(customer);
+        favorite.setProductVariant(productVariant);
+        favorite.setCreatedAt(LocalDateTime.now());
+
+        favoriteRepository.save(favorite);
+
+        return new FavoriteToggleResponse(
+                productVariantId,
+                true,
+                "Đã thêm sản phẩm vào yêu thích"
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Boolean checkFavorite(Integer productVariantId) {
+        Customer customer = getCurrentCustomer();
+
+        validateProductVariantId(productVariantId);
+
+        return favoriteRepository.existsByCustomer_UserIdAndProductVariant_Id(
+                customer.getUserId(),
+                productVariantId
+        );
     }
 
     @Override
@@ -105,9 +163,7 @@ public class CustomerFavoriteServiceImpl implements CustomerFavoriteService {
     public void deleteFavoriteByVariant(Integer productVariantId) {
         Customer customer = getCurrentCustomer();
 
-        if (productVariantId == null || productVariantId <= 0) {
-            throw badRequest("productVariantId không hợp lệ");
-        }
+        validateProductVariantId(productVariantId);
 
         Favorite favorite = favoriteRepository.findByCustomer_UserIdAndProductVariant_Id(
                         customer.getUserId(),
@@ -147,6 +203,32 @@ public class CustomerFavoriteServiceImpl implements CustomerFavoriteService {
         );
     }
 
+    private void validateProductVariantCanFavorite(ProductVariant productVariant) {
+        if (productVariant == null) {
+            throw badRequest("Biến thể sản phẩm không tồn tại");
+        }
+
+        if (productVariant.getStatus() == null || productVariant.getStatus() != ACTIVE_STATUS) {
+            throw badRequest("Biến thể sản phẩm đang ngừng bán, không thể yêu thích");
+        }
+
+        Product product = productVariant.getProduct();
+
+        if (product == null) {
+            throw badRequest("Sản phẩm không tồn tại");
+        }
+
+        if (product.getStatus() == null || product.getStatus() != ACTIVE_STATUS) {
+            throw badRequest("Sản phẩm đang ngừng bán, không thể yêu thích");
+        }
+    }
+
+    private void validateProductVariantId(Integer productVariantId) {
+        if (productVariantId == null || productVariantId <= 0) {
+            throw badRequest("productVariantId phải là số nguyên dương");
+        }
+    }
+
     private Customer getCurrentCustomer() {
         User user = getCurrentUser();
 
@@ -161,13 +243,19 @@ public class CustomerFavoriteServiceImpl implements CustomerFavoriteService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication == null || !authentication.isAuthenticated()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Bạn chưa đăng nhập");
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Bạn chưa đăng nhập"
+            );
         }
 
         String email = authentication.getName();
 
         if (email == null || email.trim().isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token không hợp lệ");
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Token không hợp lệ"
+            );
         }
 
         return userRepository.findByEmail(email)

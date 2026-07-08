@@ -14,4 +14,6 @@ public interface CartItemRepository extends JpaRepository<CartItem, Integer> {
 
     // Hàm lấy ra danh sách tất cả CartItem nằm trong một Giỏ hàng cụ thể
     List<CartItem> findByCartId(Integer cartId);
+
+
 }

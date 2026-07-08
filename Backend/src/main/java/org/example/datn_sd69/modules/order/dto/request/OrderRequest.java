@@ -10,6 +10,10 @@ public class OrderRequest {
 
     @NotBlank(message = "Tên người nhận không được để trống")
     @Size(min = 2, max = 100, message = "Tên người nhận phải từ 2 đến 100 ký tự")
+    @Pattern(
+            regexp = "^[\\p{L}\\s]+$",
+            message = "Tên người nhận chỉ được chứa chữ và khoảng trắng"
+    )
     private String customerName;
 
     @NotBlank(message = "Số điện thoại không được để trống")
@@ -21,9 +25,17 @@ public class OrderRequest {
 
     @NotBlank(message = "Địa chỉ giao hàng không được để trống")
     @Size(min = 5, max = 500, message = "Địa chỉ giao hàng phải từ 5 đến 500 ký tự")
+    @Pattern(
+            regexp = "^[\\p{L}\\d\\s,./#()\\-]+$",
+            message = "Địa chỉ chỉ được chứa chữ, số, khoảng trắng và các ký tự , . / # ( ) -"
+    )
     private String shippingAddress;
 
     @NotBlank(message = "Phương thức thanh toán không được để trống")
+    @Pattern(
+            regexp = "(?i)^(COD|VNPAY)$",
+            message = "Phương thức thanh toán chỉ hỗ trợ COD hoặc VNPAY"
+    )
     private String paymentMethod;
 
     @Size(max = 255, message = "Ghi chú tối đa 255 ký tự")
