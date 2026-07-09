@@ -13,7 +13,7 @@ public class PosOrderResponse {
 
     private Integer orderId;
 
-    // "COMPLETED" (CASH) hoặc "PENDING_PAYMENT" (VNPAY)
+    // "COMPLETED" hoặc "PENDING_PAYMENT"
     private String status;
 
     private BigDecimal totalAmount;
@@ -21,16 +21,17 @@ public class PosOrderResponse {
     private BigDecimal finalAmount;
     private String paymentMethod;
 
-    // Chỉ có giá trị khi paymentMethod = "VNPAY"
-    // FE dùng URL này để render QR code hoặc redirect
     private String vnpayPaymentUrl;
 
     private LocalDateTime createdAt;
 
-    // Thông tin in hóa đơn
     private String customerName;
     private String customerPhone;
     private String cashierName;
+
+    private Integer loyaltyPointsEarned;
+    private Integer customerLoyaltyPointsAfter;
+
     private List<InvoiceItem> items;
 
     @Data

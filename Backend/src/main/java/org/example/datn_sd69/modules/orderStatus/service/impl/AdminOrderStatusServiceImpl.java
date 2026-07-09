@@ -2,14 +2,19 @@ package org.example.datn_sd69.modules.orderStatus.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.Order;
+import org.example.datn_sd69.entity.OrderItem;
+import org.example.datn_sd69.entity.ProductVariant;
 import org.example.datn_sd69.modules.loyalty.service.LoyaltyPointService;
 import org.example.datn_sd69.modules.orderStatus.service.AdminOrderStatusService;
+import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
+import org.example.datn_sd69.repository.ProductVariantRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.Objects;
 
 @Service
@@ -23,6 +28,8 @@ public class AdminOrderStatusServiceImpl implements AdminOrderStatusService {
     private static final int STATUS_CANCELLED = 4;
 
     private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final ProductVariantRepository productVariantRepository;
     private final LoyaltyPointService loyaltyPointService;
 
     @Override
@@ -44,13 +51,48 @@ public class AdminOrderStatusServiceImpl implements AdminOrderStatusService {
 
         order.setStatus(newStatus);
 
-        if (!Objects.equals(oldStatus, STATUS_COMPLETED)
-                && Objects.equals(newStatus, STATUS_COMPLETED)) {
+        if (Objects.equals(newStatus, STATUS_CANCELLED)) {
+            restoreStockWhenCancel(order);
+            return orderRepository.save(order);
+        }
+
+        if (Objects.equals(newStatus, STATUS_COMPLETED)) {
             loyaltyPointService.applyPointsWhenOrderCompleted(order);
             return order;
         }
 
         return orderRepository.save(order);
+    }
+
+    private void restoreStockWhenCancel(Order order) {
+        List<OrderItem> orderItems = orderItemRepository.findByOrder_Id(order.getId());
+
+        if (orderItems == null || orderItems.isEmpty()) {
+            return;
+        }
+
+        for (OrderItem item : orderItems) {
+            if (item == null || item.getProductVariant() == null) {
+                continue;
+            }
+
+            ProductVariant variant = item.getProductVariant();
+
+            int currentStock = variant.getStockQuantity() == null
+                    ? 0
+                    : variant.getStockQuantity();
+
+            int quantity = item.getQuantity() == null
+                    ? 0
+                    : item.getQuantity();
+
+            if (quantity <= 0) {
+                continue;
+            }
+
+            variant.setStockQuantity(currentStock + quantity);
+            productVariantRepository.save(variant);
+        }
     }
 
     private void validateOrderStatusTransition(Integer oldStatus, Integer newStatus) {

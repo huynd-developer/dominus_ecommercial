@@ -11,12 +11,20 @@ import java.util.List;
 
 public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
 
+    /**
+     * Dùng cho xử lý đơn và hoàn kho khi VNPay thất bại.
+     * FETCH productVariant để tránh lỗi lazy khi cộng lại tồn kho.
+     */
     @Query("""
             SELECT oi FROM OrderItem oi
             LEFT JOIN FETCH oi.productVariant pv
             WHERE oi.order.id = :orderId
             """)
     List<OrderItem> findByOrderId(@Param("orderId") Integer orderId);
+
+    List<OrderItem> findByOrder_Id(Integer orderId);
+
+    List<OrderItem> findByOrder_IdOrderByIdAsc(Integer orderId);
 
     @Query(value = """
             SELECT COALESCE(SUM(oi.Quantity), 0)
@@ -56,8 +64,4 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
             @Param("fromDate") LocalDateTime fromDate,
             @Param("toDate") LocalDateTime toDate
     );
-    List<OrderItem> findByOrder_Id(Integer orderId);
-
-    List<OrderItem> findByOrder_IdOrderByIdAsc(Integer orderId);
-
 }

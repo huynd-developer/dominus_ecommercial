@@ -54,9 +54,17 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/error").permitAll()
 
+                        /*
+                         * PUBLIC AUTH / PAYMENT
+                         */
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/vnpay/**").permitAll()
-
+                        .requestMatchers(HttpMethod.GET, "/api/v1/orders/payment/vnpay-return").permitAll()
+                        /*
+                         * PUBLIC SHOP API:
+                         * Khách chưa đăng nhập vẫn được xem danh mục, sản phẩm,
+                         * chi tiết sản phẩm và bình luận công khai của sản phẩm.
+                         */
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/brands/**",
@@ -65,30 +73,63 @@ public class SecurityConfig {
                                 "/api/fragrance-families/**",
                                 "/api/capacities/**",
                                 "/api/products/**",
+                                "/api/shop/products/**",
                                 "/api/bottle-types/**"
                         ).permitAll()
 
-                        .requestMatchers("/api/owner/reports/**").hasAuthority("OWNER")
-                        // Nhân viên: chỉ OWNER được CRUD
-                        .requestMatchers("/api/admin/employees/**").hasAuthority("OWNER")
+                        /*
+                         * OWNER REPORT
+                         */
+                        .requestMatchers("/api/owner/reports/**")
+                        .hasAuthority("OWNER")
 
-                        // Khách hàng: OWNER, MANAGER, CASHIER chỉ xem/tìm kiếm
+                        /*
+                         * EMPLOYEE ADMIN:
+                         * Chỉ OWNER được quản lý nhân viên.
+                         */
+                        .requestMatchers("/api/admin/employees/**")
+                        .hasAuthority("OWNER")
+
+                        /*
+                         * CUSTOMER ADMIN:
+                         * OWNER, MANAGER, CASHIER được xem/tìm kiếm khách hàng.
+                         */
                         .requestMatchers(HttpMethod.GET, "/api/admin/customers/**")
                         .hasAnyAuthority("OWNER", "MANAGER", "CASHIER")
 
-                        // Khách hàng: khóa/mở tài khoản chỉ OWNER, MANAGER
+                        /*
+                         * CUSTOMER STATUS:
+                         * OWNER, MANAGER được khóa/mở tài khoản khách hàng.
+                         */
                         .requestMatchers(HttpMethod.PATCH, "/api/admin/customers/*/status")
                         .hasAnyAuthority("OWNER", "MANAGER")
 
-                        // Không cho thêm/sửa/xóa customer ở admin
-                        .requestMatchers("/api/admin/customers/**").denyAll()
+                        /*
+                         * Không cho thêm/sửa/xóa customer trực tiếp ở admin.
+                         */
+                        .requestMatchers("/api/admin/customers/**")
+                        .denyAll()
 
-                        // Các API admin khác
+                        /*
+                         * ADMIN API KHÁC:
+                         */
                         .requestMatchers("/api/admin/**")
                         .hasAnyAuthority("OWNER", "MANAGER", "CASHIER")
 
-                        .requestMatchers("/api/customer/**").hasAuthority("USER")
+                        /*
+                         * CUSTOMER API:
+                         * Khách đăng nhập mới được dùng giỏ hàng, profile, order, review.
+                         */
+                        .requestMatchers("/api/customer/**")
+                        .hasAuthority("USER")
 
+                        .requestMatchers("/api/v1/customer/**")
+                        .hasAuthority("USER")
+
+                        /*
+                         * Các request còn lại chỉ cần đăng nhập.
+                         * Những API có @PreAuthorize vẫn sẽ check role ở controller/service.
+                         */
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
