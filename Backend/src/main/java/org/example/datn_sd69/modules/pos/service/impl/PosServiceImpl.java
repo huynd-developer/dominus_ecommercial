@@ -45,8 +45,14 @@ public class PosServiceImpl implements PosService {
 
         Product product = variant.getProduct();
         String imageUrl = productImageRepository
-                .findPrimaryByProductId(product.getId())
-                .or(() -> productImageRepository.findFirstByProductId(product.getId()))
+                .findFirstByProduct_IdAndIsPrimaryTrue(
+                        product.getId()
+                )
+                .or(() ->
+                        productImageRepository.findFirstByProduct_Id(
+                                product.getId()
+                        )
+                )
                 .map(ProductImage::getImageUrl)
                 .orElse(null);
 

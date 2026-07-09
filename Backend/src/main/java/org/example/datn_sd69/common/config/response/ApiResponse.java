@@ -1,4 +1,4 @@
-package org.example.datn_sd69.modules.product.dto.response;
+package org.example.datn_sd69.common.config.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

@@ -1,16 +1,18 @@
-package org.example.datn_sd69.modules.product.dto;
+package org.example.datn_sd69.modules.product.dto.response;
 
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 
 @Data
 public class ProductResponse {
-
     private Integer id;
 
     private String name;
+
+    private String description;
 
     private Integer brandId;
     private String brandName;
@@ -25,13 +27,41 @@ public class ProductResponse {
 
     private Boolean isNiche;
 
-    private String description;
-
     private Integer status;
 
-    private LocalDateTime createdAt;
+    private String primaryImageUrl;
 
-    private List<ProductImageResponse> images;
+    private Set<FragranceFamilyDTO> fragranceFamilies;
 
-    private List<ProductVariantResponse> variants;
+    private List<VariantDTO> variants;
+
+    @Data
+    public static class FragranceFamilyDTO {
+
+        private Integer id;
+
+        private String name;
+    }
+
+    @Data
+    public static class VariantDTO {
+
+        private Integer id;
+
+        private Integer capacityId;
+
+        private String capacityName;
+
+        private Integer bottleTypeId;
+
+        private String bottleTypeName;
+
+        private String sku;
+
+        private BigDecimal price;
+
+        private Integer stockQuantity;
+
+        private Integer status;
+    }
 }
