@@ -1,12 +1,25 @@
 package org.example.datn_sd69.modules.pos.service.impl;
 
 import lombok.RequiredArgsConstructor;
-import org.example.datn_sd69.entity.*;
-import org.example.datn_sd69.modules.pos.dto.CustomerPosResponse;
-import org.example.datn_sd69.modules.pos.dto.PosCheckoutRequest;
-import org.example.datn_sd69.modules.pos.dto.PosItemRequest;
-import org.example.datn_sd69.modules.pos.dto.PosOrderResponse;
-import org.example.datn_sd69.modules.pos.dto.ProductVariantPosResponse;
+import org.example.datn_sd69.entity.Customer;
+import org.example.datn_sd69.entity.Employee;
+import org.example.datn_sd69.entity.Order;
+import org.example.datn_sd69.entity.OrderItem;
+import org.example.datn_sd69.entity.Product;
+import org.example.datn_sd69.entity.ProductImage;
+import org.example.datn_sd69.entity.ProductVariant;
+import org.example.datn_sd69.entity.Role;
+import org.example.datn_sd69.entity.User;
+import org.example.datn_sd69.entity.Voucher;
+import org.example.datn_sd69.modules.pos.dto.response.PosTransferTargetResponse;
+import org.example.datn_sd69.modules.pos.dto.request.PosHeldOrderCheckoutRequest;
+import org.example.datn_sd69.modules.pos.dto.request.PosHoldRequest;
+import org.example.datn_sd69.modules.pos.dto.response.CustomerPosResponse;
+import org.example.datn_sd69.modules.pos.dto.request.PosCheckoutRequest;
+import org.example.datn_sd69.modules.pos.dto.request.PosItemRequest;
+import org.example.datn_sd69.modules.pos.dto.response.PosHeldOrderResponse;
+import org.example.datn_sd69.modules.pos.dto.response.PosOrderResponse;
+import org.example.datn_sd69.modules.pos.dto.response.ProductVariantPosResponse;
 import org.example.datn_sd69.modules.pos.service.PosService;
 import org.example.datn_sd69.modules.vnpay.service.VNPayService;
 import org.example.datn_sd69.repository.CustomerRepository;
@@ -18,8 +31,10 @@ import org.example.datn_sd69.repository.ProductVariantRepository;
 import org.example.datn_sd69.repository.RoleRepository;
 import org.example.datn_sd69.repository.UserRepository;
 import org.example.datn_sd69.repository.VoucherRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.example.datn_sd69.modules.pos.dto.request.PosTransferHeldOrderRequest;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -27,7 +42,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -40,7 +57,8 @@ public class PosServiceImpl implements PosService {
 
     private static final String PAYMENT_CASH = "CASH";
     private static final String PAYMENT_VNPAY = "VNPAY";
-
+    private static final String PAYMENT_MIXED = "MIXED";
+    private static final String PAYMENT_HOLD = "HOLD";
     private static final BigDecimal POINT_RATE_AMOUNT = BigDecimal.valueOf(10_000);
 
     private final ProductVariantRepository variantRepository;
@@ -53,8 +71,10 @@ public class PosServiceImpl implements PosService {
     private final EmployeeRepository employeeRepository;
     private final VoucherRepository voucherRepository;
     private final VNPayService vnPayService;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
+    @Transactional(readOnly = true)
     public ProductVariantPosResponse findVariantBySku(String sku) {
         String cleanSku = normalizeSku(sku);
 
@@ -77,9 +97,7 @@ public class PosServiceImpl implements PosService {
                 .sku(variant.getSku())
                 .productName(product != null ? product.getName() : null)
                 .brandName(product != null && product.getBrand() != null ? product.getBrand().getName() : null)
-                .capacityLabel(variant.getCapacity() != null && variant.getCapacity().getValue() != null
-                        ? variant.getCapacity().getValue() + " ml"
-                        : null)
+                .capacityLabel(buildCapacityLabel(variant))
                 .bottleTypeName(variant.getBottleType() != null ? variant.getBottleType().getName() : null)
                 .price(variant.getPrice())
                 .stockQuantity(variant.getStockQuantity())
@@ -88,22 +106,12 @@ public class PosServiceImpl implements PosService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public CustomerPosResponse findCustomerByPhone(String phone) {
-        String cleanPhone = normalizeOptionalPhone(phone);
+        String cleanPhone = normalizeRequiredPhone(phone);
 
-        if (cleanPhone == null) {
-            return null;
-        }
-
-        return customerRepository.findByPhone(cleanPhone)
-                .map(c -> CustomerPosResponse.builder()
-                        .customerId(c.getUserId())
-                        .name(c.getUser() != null ? c.getUser().getName() : null)
-                        .phone(c.getUser() != null ? c.getUser().getPhone() : null)
-                        .email(c.getUser() != null ? c.getUser().getEmail() : null)
-                        .customerRank(c.getCustomerRank())
-                        .loyaltyPoints(c.getLoyaltyPoints())
-                        .build())
+        return customerRepository.findByUserPhone(cleanPhone)
+                .map(this::toCustomerPosResponse)
                 .orElse(null);
     }
 
@@ -115,8 +123,6 @@ public class PosServiceImpl implements PosService {
             String clientIp
     ) {
         validateCheckoutRequest(request);
-
-        String paymentMethod = normalizePaymentMethod(request.getPaymentMethod());
 
         Employee cashier = resolveCashier(cashierEmail);
         Customer customer = resolveOrCreateCustomer(request);
@@ -144,6 +150,7 @@ public class PosServiceImpl implements PosService {
         }
 
         Voucher appliedVoucher = resolveVoucher(request.getVoucherCode(), totalAmount);
+
         BigDecimal discountAmount = calculateDiscountAmount(appliedVoucher, totalAmount);
         BigDecimal finalAmount = totalAmount.subtract(discountAmount);
 
@@ -151,46 +158,38 @@ public class PosServiceImpl implements PosService {
             finalAmount = BigDecimal.ZERO;
         }
 
-        validateCashInfoIfProvided(request, finalAmount);
+        PaymentSummary paymentSummary = validateAndBuildPaymentSummary(request, finalAmount);
 
-        boolean completedImmediately = PAYMENT_CASH.equals(paymentMethod);
+        User customerUser = customer.getUser();
+        boolean completedImmediately = paymentSummary.completedImmediately();
 
         Order order = new Order();
         order.setOrderType("IN_STORE");
+        order.setCustomer(customer);
+        order.setCashier(cashier);
         order.setVoucher(appliedVoucher);
-        order.setPaymentMethod(paymentMethod);
+        order.setPaymentMethod(paymentSummary.paymentMethod());
         order.setTotalAmount(totalAmount);
         order.setDiscountAmount(discountAmount);
         order.setFinalAmount(finalAmount);
         order.setStatus(completedImmediately ? ORDER_STATUS_COMPLETED : ORDER_STATUS_PENDING);
         order.setCreatedAt(LocalDateTime.now());
-        order.setCashier(cashier);
+        order.setCustomerName(customerUser != null ? customerUser.getName() : request.getCustomerName());
+        order.setCustomerPhone(customerUser != null ? customerUser.getPhone() : request.getCustomerPhone());
         order.setLoyaltyPointsApplied(false);
         order.setLoyaltyPointsEarned(0);
         order.setCompletedAt(null);
-
-        if (customer != null) {
-            order.setCustomer(customer);
-            order.setCustomerName(customer.getUser() != null ? customer.getUser().getName() : null);
-            order.setCustomerPhone(customer.getUser() != null ? customer.getUser().getPhone() : null);
-        } else {
-            order.setCustomer(null);
-            order.setCustomerPhone(null);
-            order.setCustomerName(
-                    request.getCustomerName() != null && !request.getCustomerName().isBlank()
-                            ? request.getCustomerName().trim()
-                            : "Khách vãng lai"
-            );
-        }
 
         Order savedOrder = orderRepository.save(order);
 
         List<PosOrderResponse.InvoiceItem> invoiceItems = new ArrayList<>();
 
         for (LineItem line : lineItems) {
+            ProductVariant variant = line.variant();
+
             OrderItem orderItem = new OrderItem();
             orderItem.setOrder(savedOrder);
-            orderItem.setProductVariant(line.variant());
+            orderItem.setProductVariant(variant);
             orderItem.setQuantity(line.quantity());
             orderItem.setOriginalPrice(line.unitPrice());
             orderItem.setDiscountAmount(BigDecimal.ZERO);
@@ -198,16 +197,18 @@ public class PosServiceImpl implements PosService {
 
             orderItemRepository.save(orderItem);
 
-            ProductVariant variant = line.variant();
+            /*
+             * Với VNPAY/MIXED, đây được hiểu là giữ hàng.
+             * Nếu thanh toán VNPay thất bại/hết hạn thì callback/hủy đơn phải hoàn kho.
+             */
             variant.setStockQuantity(variant.getStockQuantity() - line.quantity());
             variantRepository.save(variant);
 
             invoiceItems.add(PosOrderResponse.InvoiceItem.builder()
                     .productName(variant.getProduct() != null ? variant.getProduct().getName() : null)
                     .sku(variant.getSku())
-                    .capacityLabel(variant.getCapacity() != null && variant.getCapacity().getValue() != null
-                            ? variant.getCapacity().getValue() + " ml"
-                            : null)
+                    .capacityLabel(buildCapacityLabel(variant))
+                    .bottleTypeName(variant.getBottleType() != null ? variant.getBottleType().getName() : null)
                     .quantity(line.quantity())
                     .unitPrice(line.unitPrice())
                     .lineTotal(line.lineTotal())
@@ -215,11 +216,11 @@ public class PosServiceImpl implements PosService {
         }
 
         int loyaltyPointsEarned = 0;
-        Integer customerLoyaltyPointsAfter = null;
+        Integer customerLoyaltyPointsAfter = customer.getLoyaltyPoints();
 
         if (completedImmediately) {
             loyaltyPointsEarned = applyLoyaltyPointsIfNeeded(savedOrder, customer);
-            customerLoyaltyPointsAfter = customer != null ? customer.getLoyaltyPoints() : null;
+            customerLoyaltyPointsAfter = customer.getLoyaltyPoints();
 
             if (appliedVoucher != null) {
                 increaseVoucherUsedCount(appliedVoucher);
@@ -228,8 +229,12 @@ public class PosServiceImpl implements PosService {
 
         String vnpayUrl = null;
 
-        if (PAYMENT_VNPAY.equals(paymentMethod)) {
-            vnpayUrl = vnPayService.createPaymentUrl(savedOrder.getId(), finalAmount, clientIp);
+        if (paymentSummary.needVnpayPayment()) {
+            vnpayUrl = vnPayService.createPaymentUrl(
+                    savedOrder.getId(),
+                    paymentSummary.transferAmount(),
+                    clientIp
+            );
         }
 
         return PosOrderResponse.builder()
@@ -238,16 +243,217 @@ public class PosServiceImpl implements PosService {
                 .totalAmount(totalAmount)
                 .discountAmount(discountAmount)
                 .finalAmount(finalAmount)
-                .paymentMethod(paymentMethod)
+                .paymentMethod(paymentSummary.paymentMethod())
+                .paidAmount(paymentSummary.paidAmount())
+                .remainingAmount(paymentSummary.remainingAmount())
+                .cashGiven(paymentSummary.cashGiven())
+                .transferAmount(paymentSummary.transferAmount())
+                .changeAmount(paymentSummary.changeAmount())
                 .vnpayPaymentUrl(vnpayUrl)
                 .createdAt(savedOrder.getCreatedAt())
-                .cashierName(cashier != null && cashier.getUser() != null ? cashier.getUser().getName() : null)
+                .cashierName(cashier.getUser() != null ? cashier.getUser().getName() : null)
                 .customerName(savedOrder.getCustomerName())
                 .customerPhone(savedOrder.getCustomerPhone())
+                .customerEmail(customer.getUser() != null ? customer.getUser().getEmail() : request.getCustomerEmail())
                 .loyaltyPointsEarned(loyaltyPointsEarned)
                 .customerLoyaltyPointsAfter(customerLoyaltyPointsAfter)
                 .items(invoiceItems)
                 .build();
+    }
+
+    private CustomerPosResponse toCustomerPosResponse(Customer customer) {
+        User user = customer.getUser();
+
+        return CustomerPosResponse.builder()
+                .customerId(customer.getUserId())
+                .name(user != null ? user.getName() : null)
+                .phone(user != null ? user.getPhone() : null)
+                .email(user != null ? user.getEmail() : null)
+                .customerRank(customer.getCustomerRank())
+                .loyaltyPoints(customer.getLoyaltyPoints() != null ? customer.getLoyaltyPoints() : 0)
+                .build();
+    }
+
+    /**
+     * DB hiện tại Customer.UserId là PK/FK tới Users.Id.
+     * <p>
+     * Logic POS đúng:
+     * 1. Ưu tiên tìm Customer theo SĐT.
+     * 2. Nếu không thấy theo SĐT nhưng email đã thuộc Customer cũ:
+     * dùng lại Customer đó và cập nhật SĐT mới nếu SĐT chưa thuộc người khác.
+     * 3. Nếu Users tồn tại nhưng chưa có Customer:
+     * chỉ tạo Customer nếu user đó là role USER.
+     * 4. Không tạo email giả.
+     */
+    private Customer resolveOrCreateCustomer(PosCheckoutRequest request) {
+        String phone = normalizeRequiredPhone(request.getCustomerPhone());
+        String name = normalizeRequiredName(request.getCustomerName());
+        String email = normalizeRequiredEmail(request.getCustomerEmail());
+
+        Customer customerByPhone = customerRepository.findByUserPhone(phone)
+                .orElse(null);
+
+        if (customerByPhone != null) {
+            User user = requireCustomerUser(customerByPhone);
+
+            User userByEmail = userRepository.findByEmailIgnoreCase(email)
+                    .orElse(null);
+
+            if (userByEmail != null && !userByEmail.getId().equals(user.getId())) {
+                throw new RuntimeException("Email đã thuộc khách hàng khác.");
+            }
+
+            updateUserBasicInfo(user, name, phone, email);
+            normalizeCustomerDefaultInfo(customerByPhone);
+
+            return customerRepository.save(customerByPhone);
+        }
+
+        Customer customerByEmail = customerRepository.findByUserEmailIgnoreCase(email)
+                .orElse(null);
+
+        if (customerByEmail != null) {
+            User user = requireCustomerUser(customerByEmail);
+
+            User userByPhone = userRepository.findByPhone(phone)
+                    .orElse(null);
+
+            if (userByPhone != null && !userByPhone.getId().equals(user.getId())) {
+                throw new RuntimeException("Số điện thoại đã thuộc khách hàng khác.");
+            }
+
+            updateUserBasicInfo(user, name, phone, email);
+            normalizeCustomerDefaultInfo(customerByEmail);
+
+            return customerRepository.save(customerByEmail);
+        }
+
+        User userByPhone = userRepository.findByPhone(phone)
+                .orElse(null);
+
+        if (userByPhone != null) {
+            if (!isUserRole(userByPhone)) {
+                throw new RuntimeException("Số điện thoại đã tồn tại nhưng không thuộc tài khoản khách hàng.");
+            }
+
+            User userByEmail = userRepository.findByEmailIgnoreCase(email)
+                    .orElse(null);
+
+            if (userByEmail != null && !userByEmail.getId().equals(userByPhone.getId())) {
+                throw new RuntimeException("Email đã thuộc tài khoản khác.");
+            }
+
+            if (userByPhone.getStatus() == null || userByPhone.getStatus() != STATUS_ACTIVE) {
+                throw new RuntimeException("Tài khoản khách hàng đã bị khóa.");
+            }
+
+            updateUserBasicInfo(userByPhone, name, phone, email);
+
+            Customer newCustomer = new Customer();
+            newCustomer.setUser(userByPhone);
+            newCustomer.setCustomerRank("BRONZE");
+            newCustomer.setLoyaltyPoints(0);
+            newCustomer.setDateOfBirth(null);
+            newCustomer.setGender(null);
+
+            return customerRepository.save(newCustomer);
+        }
+
+        User userByEmail = userRepository.findByEmailIgnoreCase(email)
+                .orElse(null);
+
+        if (userByEmail != null) {
+            if (!isUserRole(userByEmail)) {
+                throw new RuntimeException("Email đã tồn tại nhưng không thuộc tài khoản khách hàng.");
+            }
+
+            if (userByEmail.getStatus() == null || userByEmail.getStatus() != STATUS_ACTIVE) {
+                throw new RuntimeException("Tài khoản khách hàng đã bị khóa.");
+            }
+
+            updateUserBasicInfo(userByEmail, name, phone, email);
+
+            Customer newCustomer = new Customer();
+            newCustomer.setUser(userByEmail);
+            newCustomer.setCustomerRank("BRONZE");
+            newCustomer.setLoyaltyPoints(0);
+            newCustomer.setDateOfBirth(null);
+            newCustomer.setGender(null);
+
+            return customerRepository.save(newCustomer);
+        }
+
+        Role userRole = roleRepository.findByNameIgnoreCase("USER")
+                .orElseThrow(() -> new RuntimeException("Hệ thống chưa có Role USER. Vui lòng kiểm tra bảng Roles."));
+
+        User newUser = new User();
+        newUser.setRole(userRole);
+        newUser.setName(name);
+        newUser.setEmail(email);
+        newUser.setPhone(phone);
+        newUser.setAddress(null);
+        newUser.setAvatarUrl(null);
+        newUser.setStatus(STATUS_ACTIVE);
+
+        String randomPassword = UUID.randomUUID().toString() + "@Pos1";
+        newUser.setPasswordHash(passwordEncoder.encode(randomPassword));
+
+        User savedUser = userRepository.save(newUser);
+
+        Customer newCustomer = new Customer();
+        newCustomer.setUser(savedUser);
+        newCustomer.setCustomerRank("BRONZE");
+        newCustomer.setLoyaltyPoints(0);
+        newCustomer.setDateOfBirth(null);
+        newCustomer.setGender(null);
+
+        return customerRepository.save(newCustomer);
+    }
+
+    private User requireCustomerUser(Customer customer) {
+        if (customer == null || customer.getUser() == null) {
+            throw new RuntimeException("Dữ liệu khách hàng bị lỗi: Customer không liên kết Users.");
+        }
+
+        User user = customer.getUser();
+
+        if (user.getStatus() == null || user.getStatus() != STATUS_ACTIVE) {
+            throw new RuntimeException("Tài khoản khách hàng đã bị khóa.");
+        }
+
+        return user;
+    }
+
+    private boolean isUserRole(User user) {
+        if (user == null || user.getRole() == null || user.getRole().getName() == null) {
+            return false;
+        }
+
+        String roleName = user.getRole().getName().trim().toUpperCase(Locale.ROOT);
+
+        return "USER".equals(roleName) || "ROLE_USER".equals(roleName);
+    }
+
+    private void updateUserBasicInfo(
+            User user,
+            String name,
+            String phone,
+            String email
+    ) {
+        user.setName(name);
+        user.setPhone(phone);
+        user.setEmail(email);
+        userRepository.save(user);
+    }
+
+    private void normalizeCustomerDefaultInfo(Customer customer) {
+        if (customer.getCustomerRank() == null || customer.getCustomerRank().isBlank()) {
+            customer.setCustomerRank("BRONZE");
+        }
+
+        if (customer.getLoyaltyPoints() == null) {
+            customer.setLoyaltyPoints(0);
+        }
     }
 
     private void validateCheckoutRequest(PosCheckoutRequest request) {
@@ -256,10 +462,159 @@ public class PosServiceImpl implements PosService {
         }
 
         normalizePaymentMethod(request.getPaymentMethod());
+        normalizeRequiredPhone(request.getCustomerPhone());
+        normalizeRequiredName(request.getCustomerName());
+        normalizeRequiredEmail(request.getCustomerEmail());
 
         if (request.getItems() == null || request.getItems().isEmpty()) {
             throw new RuntimeException("Hóa đơn phải có ít nhất 1 sản phẩm");
         }
+    }
+
+    private PaymentSummary validateAndBuildPaymentSummary(
+            PosCheckoutRequest request,
+            BigDecimal finalAmount
+    ) {
+        String method = normalizePaymentMethod(request.getPaymentMethod());
+
+        BigDecimal cashGiven = request.getCashGiven() != null
+                ? request.getCashGiven()
+                : BigDecimal.ZERO;
+
+        BigDecimal transferAmount = request.getTransferAmount() != null
+                ? request.getTransferAmount()
+                : BigDecimal.ZERO;
+
+        if (cashGiven.compareTo(BigDecimal.ZERO) < 0) {
+            throw new RuntimeException("Tiền mặt không được âm");
+        }
+
+        if (transferAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new RuntimeException("Tiền chuyển khoản không được âm");
+        }
+
+        if (finalAmount == null || finalAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new RuntimeException("Tổng tiền thanh toán không hợp lệ");
+        }
+
+        if (finalAmount.compareTo(BigDecimal.ZERO) == 0) {
+            return new PaymentSummary(
+                    PAYMENT_CASH,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    false,
+                    true
+            );
+        }
+
+        if (PAYMENT_CASH.equals(method)) {
+            if (cashGiven.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new RuntimeException("Vui lòng nhập số tiền khách đưa");
+            }
+
+            if (transferAmount.compareTo(BigDecimal.ZERO) > 0) {
+                throw new RuntimeException("Thanh toán CASH không được gửi tiền chuyển khoản");
+            }
+
+            if (cashGiven.compareTo(finalAmount) < 0) {
+                BigDecimal missingAmount = finalAmount.subtract(cashGiven);
+
+                throw new RuntimeException(
+                        "Tiền khách đưa còn thiếu "
+                                + missingAmount.toPlainString()
+                                + " đồng. Vui lòng chọn thêm phương thức thanh toán."
+                );
+            }
+
+            BigDecimal changeAmount = cashGiven.subtract(finalAmount);
+
+            return new PaymentSummary(
+                    PAYMENT_CASH,
+                    cashGiven,
+                    BigDecimal.ZERO,
+                    finalAmount,
+                    BigDecimal.ZERO,
+                    changeAmount,
+                    false,
+                    true
+            );
+        }
+
+        if (PAYMENT_VNPAY.equals(method)) {
+            if (cashGiven.compareTo(BigDecimal.ZERO) > 0) {
+                throw new RuntimeException("Thanh toán VNPAY không được gửi tiền mặt");
+            }
+
+            if (transferAmount.compareTo(BigDecimal.ZERO) == 0) {
+                transferAmount = finalAmount;
+            }
+
+            if (transferAmount.compareTo(finalAmount) != 0) {
+                throw new RuntimeException("Số tiền VNPay phải bằng đúng số tiền cần thanh toán");
+            }
+
+            return new PaymentSummary(
+                    PAYMENT_VNPAY,
+                    BigDecimal.ZERO,
+                    transferAmount,
+                    BigDecimal.ZERO,
+                    transferAmount,
+                    BigDecimal.ZERO,
+                    true,
+                    false
+            );
+        }
+
+        if (PAYMENT_MIXED.equals(method)) {
+            if (cashGiven.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new RuntimeException("Thanh toán MIXED phải có số tiền mặt đã nhận");
+            }
+
+            if (cashGiven.compareTo(finalAmount) >= 0) {
+                throw new RuntimeException("Tiền mặt đã đủ thanh toán, vui lòng chọn phương thức CASH");
+            }
+
+            BigDecimal expectedTransferAmount = finalAmount.subtract(cashGiven);
+
+            if (transferAmount.compareTo(BigDecimal.ZERO) == 0) {
+                transferAmount = expectedTransferAmount;
+            }
+
+            BigDecimal totalPaid = cashGiven.add(transferAmount);
+
+            if (totalPaid.compareTo(finalAmount) < 0) {
+                BigDecimal missingAmount = finalAmount.subtract(totalPaid);
+
+                throw new RuntimeException(
+                        "Khách còn thiếu "
+                                + missingAmount.toPlainString()
+                                + " đồng. Vui lòng chọn thêm phương thức thanh toán."
+                );
+            }
+
+            if (totalPaid.compareTo(finalAmount) > 0) {
+                throw new RuntimeException(
+                        "Tổng tiền mặt và chuyển khoản đang vượt quá số tiền cần thanh toán. "
+                                + "Nếu khách đưa dư tiền mặt, hãy trả lại tiền thừa ngay và chỉ nhập số tiền thực dùng để thanh toán."
+                );
+            }
+
+            return new PaymentSummary(
+                    PAYMENT_MIXED,
+                    cashGiven,
+                    transferAmount,
+                    cashGiven,
+                    transferAmount,
+                    BigDecimal.ZERO,
+                    true,
+                    false
+            );
+        }
+
+        throw new RuntimeException("Phương thức thanh toán không hợp lệ");
     }
 
     private String normalizePaymentMethod(String paymentMethod) {
@@ -267,10 +622,12 @@ public class PosServiceImpl implements PosService {
             throw new RuntimeException("Phương thức thanh toán không được để trống");
         }
 
-        String value = paymentMethod.trim().toUpperCase();
+        String value = paymentMethod.trim().toUpperCase(Locale.ROOT);
 
-        if (!PAYMENT_CASH.equals(value) && !PAYMENT_VNPAY.equals(value)) {
-            throw new RuntimeException("Phương thức thanh toán chỉ được là CASH hoặc VNPAY");
+        if (!PAYMENT_CASH.equals(value)
+                && !PAYMENT_VNPAY.equals(value)
+                && !PAYMENT_MIXED.equals(value)) {
+            throw new RuntimeException("Phương thức thanh toán chỉ được là CASH, VNPAY hoặc MIXED");
         }
 
         return value;
@@ -284,9 +641,9 @@ public class PosServiceImpl implements PosService {
         return sku.trim();
     }
 
-    private String normalizeOptionalPhone(String phone) {
+    private String normalizeRequiredPhone(String phone) {
         if (phone == null || phone.trim().isBlank()) {
-            return null;
+            throw new RuntimeException("Số điện thoại khách hàng không được để trống");
         }
 
         String value = phone.replaceAll("[\\s.-]", "").trim();
@@ -298,55 +655,55 @@ public class PosServiceImpl implements PosService {
         return value;
     }
 
+    private String normalizeRequiredName(String name) {
+        if (name == null || name.trim().isBlank()) {
+            throw new RuntimeException("Họ tên khách hàng không được để trống");
+        }
+
+        String value = name.trim().replaceAll("\\s+", " ");
+
+        if (value.length() < 2 || value.length() > 100) {
+            throw new RuntimeException("Họ tên khách hàng phải từ 2 đến 100 ký tự");
+        }
+
+        return value;
+    }
+
+    private String normalizeRequiredEmail(String email) {
+        if (email == null || email.trim().isBlank()) {
+            throw new RuntimeException("Email khách hàng không được để trống");
+        }
+
+        String value = email.trim().toLowerCase(Locale.ROOT);
+
+        if (value.length() > 255) {
+            throw new RuntimeException("Email khách hàng không được vượt quá 255 ký tự");
+        }
+
+        if (!value.matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")) {
+            throw new RuntimeException("Email khách hàng không đúng định dạng");
+        }
+
+        return value;
+    }
+
     private Employee resolveCashier(String cashierEmail) {
-        if (cashierEmail == null || cashierEmail.isBlank()) {
-            return null;
+        if (cashierEmail == null || cashierEmail.trim().isBlank()) {
+            throw new RuntimeException("Không xác định được nhân viên đang thanh toán.");
         }
 
-        return employeeRepository.findByUserEmail(cashierEmail)
-                .orElse(null);
-    }
+        Employee employee = employeeRepository.findByUserEmail(cashierEmail.trim())
+                .orElseThrow(() -> new RuntimeException("Tài khoản hiện tại không thuộc nhân viên."));
 
-    private Customer resolveOrCreateCustomer(PosCheckoutRequest request) {
-        String cleanPhone = normalizeOptionalPhone(request.getCustomerPhone());
-
-        if (cleanPhone == null) {
-            return null;
+        if (employee.getUser() == null) {
+            throw new RuntimeException("Nhân viên chưa được liên kết với tài khoản.");
         }
 
-        return customerRepository.findByPhone(cleanPhone)
-                .orElseGet(() -> createPosCustomer(cleanPhone, request.getCustomerName()));
-    }
+        if (employee.getUser().getStatus() == null || employee.getUser().getStatus() != STATUS_ACTIVE) {
+            throw new RuntimeException("Tài khoản nhân viên đã bị khóa.");
+        }
 
-    private Customer createPosCustomer(String phone, String customerName) {
-        String name = customerName != null && !customerName.trim().isBlank()
-                ? customerName.trim()
-                : "Khách hàng mới";
-
-        User newUser = new User();
-        newUser.setPhone(phone);
-        newUser.setName(name);
-        newUser.setEmail(phone + "@pos-store.com");
-
-        /*
-         * Tài khoản tạo từ POS chỉ để gắn điểm/thành viên.
-         * Nếu khách muốn đăng nhập thật thì nên cho họ đổi email/mật khẩu sau.
-         */
-        newUser.setPasswordHash("$2a$10$OixMv6FshZExa7R.D0v6p.VlWkWZ6HwOuxKz5QZf6v3kXv3Xv3Xv.");
-
-        Role customerRole = roleRepository.findByName("USER")
-                .orElseThrow(() -> new RuntimeException("Hệ thống chưa có Role USER, vui lòng cấu hình DB."));
-
-        newUser.setRole(customerRole);
-
-        User savedUser = userRepository.save(newUser);
-
-        Customer newCustomer = new Customer();
-        newCustomer.setUser(savedUser);
-        newCustomer.setLoyaltyPoints(0);
-        newCustomer.setCustomerRank("BRONZE");
-
-        return customerRepository.save(newCustomer);
+        return employee;
     }
 
     private Map<String, Integer> mergeItemsBySku(List<PosItemRequest> items) {
@@ -399,9 +756,7 @@ public class PosServiceImpl implements PosService {
         }
 
         if (variant.getStockQuantity() < quantity) {
-            throw new RuntimeException(
-                    "Sản phẩm [" + variant.getProduct().getName() + "] chỉ còn " + variant.getStockQuantity()
-            );
+            throw new RuntimeException("Sản phẩm [" + variant.getProduct().getName() + "] chỉ còn " + variant.getStockQuantity());
         }
     }
 
@@ -412,11 +767,16 @@ public class PosServiceImpl implements PosService {
 
         Voucher voucher = voucherRepository
                 .findValidByCode(voucherCode.trim(), LocalDateTime.now())
-                .orElseThrow(() -> new RuntimeException("Voucher không hợp lệ"));
+                .orElseThrow(() -> new RuntimeException("Voucher không hợp lệ hoặc đã hết hạn"));
 
-        if (voucher.getMinOrderValue() != null
-                && totalAmount.compareTo(voucher.getMinOrderValue()) < 0) {
+        if (voucher.getMinOrderValue() != null && totalAmount.compareTo(voucher.getMinOrderValue()) < 0) {
             throw new RuntimeException("Đơn hàng chưa đạt tối thiểu để dùng voucher");
+        }
+
+        int usedCount = voucher.getUsedCount() != null ? voucher.getUsedCount() : 0;
+
+        if (voucher.getUsageLimit() != null && usedCount >= voucher.getUsageLimit()) {
+            throw new RuntimeException("Voucher đã hết lượt sử dụng");
         }
 
         return voucher;
@@ -434,12 +794,13 @@ public class PosServiceImpl implements PosService {
                     .multiply(voucher.getDiscountValue())
                     .divide(BigDecimal.valueOf(100), 0, RoundingMode.DOWN);
 
-            if (voucher.getMaxDiscount() != null
-                    && discountAmount.compareTo(voucher.getMaxDiscount()) > 0) {
+            if (voucher.getMaxDiscount() != null && discountAmount.compareTo(voucher.getMaxDiscount()) > 0) {
                 discountAmount = voucher.getMaxDiscount();
             }
-        } else {
+        } else if ("FIXED".equalsIgnoreCase(voucher.getDiscountType())) {
             discountAmount = voucher.getDiscountValue();
+        } else {
+            throw new RuntimeException("Loại giảm giá của voucher không hợp lệ");
         }
 
         if (discountAmount == null || discountAmount.compareTo(BigDecimal.ZERO) < 0) {
@@ -451,27 +812,6 @@ public class PosServiceImpl implements PosService {
         }
 
         return discountAmount;
-    }
-
-    private void validateCashInfoIfProvided(PosCheckoutRequest request, BigDecimal finalAmount) {
-        if (!PAYMENT_CASH.equals(normalizePaymentMethod(request.getPaymentMethod()))) {
-            return;
-        }
-
-        if (request.getCashGiven() == null) {
-            return;
-        }
-
-        if (request.getCashGiven().compareTo(finalAmount) < 0) {
-            throw new RuntimeException("Tiền khách đưa không đủ để thanh toán");
-        }
-
-        BigDecimal expectedChange = request.getCashGiven().subtract(finalAmount);
-
-        if (request.getChangeAmount() != null
-                && request.getChangeAmount().compareTo(expectedChange) != 0) {
-            throw new RuntimeException("Tiền thừa không khớp với số tiền phải trả");
-        }
     }
 
     private int applyLoyaltyPointsIfNeeded(Order order, Customer customer) {
@@ -495,29 +835,20 @@ public class PosServiceImpl implements PosService {
                 .divide(POINT_RATE_AMOUNT, 0, RoundingMode.DOWN)
                 .intValue();
 
-        if (pointsEarned <= 0) {
-            order.setLoyaltyPointsApplied(true);
-            order.setLoyaltyPointsEarned(0);
-            order.setCompletedAt(LocalDateTime.now());
-            orderRepository.save(order);
-            return 0;
-        }
-
         int currentPoints = customer.getLoyaltyPoints() != null
                 ? customer.getLoyaltyPoints()
                 : 0;
 
-        customer.setLoyaltyPoints(currentPoints + pointsEarned);
+        customer.setLoyaltyPoints(currentPoints + Math.max(pointsEarned, 0));
         updateCustomerRank(customer);
-
         customerRepository.save(customer);
 
         order.setLoyaltyPointsApplied(true);
-        order.setLoyaltyPointsEarned(pointsEarned);
+        order.setLoyaltyPointsEarned(Math.max(pointsEarned, 0));
         order.setCompletedAt(LocalDateTime.now());
         orderRepository.save(order);
 
-        return pointsEarned;
+        return Math.max(pointsEarned, 0);
     }
 
     private void updateCustomerRank(Customer customer) {
@@ -541,8 +872,32 @@ public class PosServiceImpl implements PosService {
                 ? voucher.getUsedCount()
                 : 0;
 
+        if (voucher.getUsageLimit() != null && usedCount >= voucher.getUsageLimit()) {
+            throw new RuntimeException("Voucher đã hết lượt sử dụng");
+        }
+
         voucher.setUsedCount(usedCount + 1);
         voucherRepository.save(voucher);
+    }
+
+    private String buildCapacityLabel(ProductVariant variant) {
+        if (variant.getCapacity() == null || variant.getCapacity().getValue() == null) {
+            return null;
+        }
+
+        return variant.getCapacity().getValue() + " ml";
+    }
+
+    private record PaymentSummary(
+            String paymentMethod,
+            BigDecimal cashGiven,
+            BigDecimal transferAmount,
+            BigDecimal paidAmount,
+            BigDecimal remainingAmount,
+            BigDecimal changeAmount,
+            boolean needVnpayPayment,
+            boolean completedImmediately
+    ) {
     }
 
     private record LineItem(
@@ -551,5 +906,605 @@ public class PosServiceImpl implements PosService {
             BigDecimal unitPrice,
             BigDecimal lineTotal
     ) {
+    }
+
+    @Override
+    @Transactional
+    public PosOrderResponse holdOrder(
+            PosHoldRequest request,
+            String cashierEmail
+    ) {
+        validateHoldRequest(request);
+
+        Employee cashier = resolveCashier(cashierEmail);
+        Customer customer = resolveOrCreateCustomerFromHold(request);
+
+        Map<String, Integer> skuQuantityMap = mergeItemsBySku(request.getItems());
+
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        List<LineItem> lineItems = new ArrayList<>();
+
+        for (Map.Entry<String, Integer> entry : skuQuantityMap.entrySet()) {
+            String sku = entry.getKey();
+            Integer quantity = entry.getValue();
+
+            ProductVariant variant = variantRepository
+                    .findBySkuIgnoreCaseAndIsDeletedFalse(sku)
+                    .orElseThrow(() -> new RuntimeException("SKU không hợp lệ: " + sku));
+
+            validateVariantCanSell(variant, quantity);
+
+            BigDecimal unitPrice = variant.getPrice();
+            BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(quantity));
+
+            totalAmount = totalAmount.add(lineTotal);
+            lineItems.add(new LineItem(variant, quantity, unitPrice, lineTotal));
+        }
+
+        Voucher appliedVoucher = resolveVoucher(request.getVoucherCode(), totalAmount);
+
+        BigDecimal discountAmount = calculateDiscountAmount(appliedVoucher, totalAmount);
+        BigDecimal finalAmount = totalAmount.subtract(discountAmount);
+
+        if (finalAmount.compareTo(BigDecimal.ZERO) < 0) {
+            finalAmount = BigDecimal.ZERO;
+        }
+
+        User customerUser = customer.getUser();
+
+        Order order = new Order();
+        order.setOrderType("IN_STORE");
+        order.setCustomer(customer);
+        order.setCashier(cashier);
+        order.setVoucher(appliedVoucher);
+        order.setPaymentMethod(PAYMENT_HOLD);
+        order.setTotalAmount(totalAmount);
+        order.setDiscountAmount(discountAmount);
+        order.setFinalAmount(finalAmount);
+        order.setStatus(ORDER_STATUS_PENDING);
+        order.setCreatedAt(LocalDateTime.now());
+        order.setCompletedAt(null);
+        order.setCustomerName(customerUser != null ? customerUser.getName() : request.getCustomerName());
+        order.setCustomerPhone(customerUser != null ? customerUser.getPhone() : request.getCustomerPhone());
+        order.setLoyaltyPointsApplied(false);
+        order.setLoyaltyPointsEarned(0);
+
+        Order savedOrder = orderRepository.save(order);
+
+        List<PosOrderResponse.InvoiceItem> invoiceItems = new ArrayList<>();
+
+        for (LineItem line : lineItems) {
+            ProductVariant variant = line.variant();
+
+            OrderItem orderItem = new OrderItem();
+            orderItem.setOrder(savedOrder);
+            orderItem.setProductVariant(variant);
+            orderItem.setQuantity(line.quantity());
+            orderItem.setOriginalPrice(line.unitPrice());
+            orderItem.setDiscountAmount(BigDecimal.ZERO);
+            orderItem.setFinalPrice(line.lineTotal());
+
+            orderItemRepository.save(orderItem);
+
+            /*
+             * Phiếu treo không trừ kho ngay.
+             * Khi thanh toán phiếu treo mới re-check tồn kho và trừ kho.
+             */
+            invoiceItems.add(PosOrderResponse.InvoiceItem.builder()
+                    .productName(variant.getProduct() != null ? variant.getProduct().getName() : null)
+                    .sku(variant.getSku())
+                    .capacityLabel(buildCapacityLabel(variant))
+                    .bottleTypeName(variant.getBottleType() != null ? variant.getBottleType().getName() : null)
+                    .quantity(line.quantity())
+                    .unitPrice(line.unitPrice())
+                    .lineTotal(line.lineTotal())
+                    .build());
+        }
+
+        return PosOrderResponse.builder()
+                .orderId(savedOrder.getId())
+                .status("HELD")
+                .totalAmount(totalAmount)
+                .discountAmount(discountAmount)
+                .finalAmount(finalAmount)
+                .paymentMethod(PAYMENT_HOLD)
+                .paidAmount(BigDecimal.ZERO)
+                .remainingAmount(finalAmount)
+                .cashGiven(BigDecimal.ZERO)
+                .transferAmount(BigDecimal.ZERO)
+                .changeAmount(BigDecimal.ZERO)
+                .vnpayPaymentUrl(null)
+                .createdAt(savedOrder.getCreatedAt())
+                .cashierName(cashier.getUser() != null ? cashier.getUser().getName() : null)
+                .customerName(savedOrder.getCustomerName())
+                .customerPhone(savedOrder.getCustomerPhone())
+                .customerEmail(customer.getUser() != null ? customer.getUser().getEmail() : request.getCustomerEmail())
+                .loyaltyPointsEarned(0)
+                .customerLoyaltyPointsAfter(customer.getLoyaltyPoints() != null ? customer.getLoyaltyPoints() : 0)
+                .items(invoiceItems)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PosHeldOrderResponse> getHeldOrders(String cashierEmail) {
+        Employee currentEmployee = resolveCashier(cashierEmail);
+
+        Integer cashierIdFilter = isManagerOrOwner(currentEmployee)
+                ? null
+                : currentEmployee.getUserId();
+
+        return orderRepository.findHeldOrders(cashierIdFilter)
+                .stream()
+                .map(this::toHeldOrderResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PosOrderResponse getHeldOrderDetail(Integer orderId, String cashierEmail) {
+        Employee currentEmployee = resolveCashier(cashierEmail);
+
+        Order order = getHeldOrderOrThrow(orderId);
+
+        validateCanViewHeldOrder(order, currentEmployee);
+
+        List<OrderItem> items = orderItemRepository.findByOrderIdWithVariant(order.getId());
+
+        return buildResponseFromOrder(
+                order,
+                items,
+                "HELD",
+                BigDecimal.ZERO,
+                order.getFinalAmount() != null ? order.getFinalAmount() : BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                null,
+                0
+        );
+    }
+
+    @Override
+    @Transactional
+    public PosOrderResponse checkoutHeldOrder(
+            Integer orderId,
+            PosHeldOrderCheckoutRequest request,
+            String cashierEmail,
+            String clientIp
+    ) {
+        if (request == null) {
+            throw new RuntimeException("Dữ liệu thanh toán phiếu treo không được để trống.");
+        }
+
+        Employee currentEmployee = resolveCashier(cashierEmail);
+
+        Order order = getHeldOrderOrThrow(orderId);
+
+        /*
+         * Yêu cầu nghiệp vụ:
+         * Một nhân viên chỉ được thanh toán phiếu/hóa đơn của chính mình.
+         * Nếu nhân viên khác muốn thanh toán thì phải chuyển phiếu trước.
+         */
+        validateCashierCanCheckoutHeldOrder(order, currentEmployee);
+
+        List<OrderItem> orderItems = orderItemRepository.findByOrderIdWithVariant(order.getId());
+
+        if (orderItems.isEmpty()) {
+            throw new RuntimeException("Phiếu treo không có sản phẩm.");
+        }
+
+        BigDecimal finalAmount = order.getFinalAmount() != null
+                ? order.getFinalAmount()
+                : BigDecimal.ZERO;
+
+        PosCheckoutRequest paymentRequest = new PosCheckoutRequest();
+        paymentRequest.setPaymentMethod(request.getPaymentMethod());
+        paymentRequest.setCashGiven(request.getCashGiven());
+        paymentRequest.setTransferAmount(request.getTransferAmount());
+        paymentRequest.setCustomerPhone(order.getCustomerPhone());
+        paymentRequest.setCustomerName(order.getCustomerName());
+        paymentRequest.setCustomerEmail(
+                order.getCustomer() != null && order.getCustomer().getUser() != null
+                        ? order.getCustomer().getUser().getEmail()
+                        : null
+        );
+        paymentRequest.setItems(List.of(new PosItemRequest()));
+
+        PaymentSummary paymentSummary = validateAndBuildPaymentSummary(paymentRequest, finalAmount);
+
+        /*
+         * Phiếu treo chưa trừ kho.
+         * Khi thanh toán mới re-check tồn kho và trừ kho.
+         */
+        for (OrderItem item : orderItems) {
+            ProductVariant variant = item.getProductVariant();
+
+            validateVariantCanSell(variant, item.getQuantity());
+        }
+
+        for (OrderItem item : orderItems) {
+            ProductVariant variant = item.getProductVariant();
+
+            variant.setStockQuantity(variant.getStockQuantity() - item.getQuantity());
+            variantRepository.save(variant);
+        }
+
+        boolean completedImmediately = paymentSummary.completedImmediately();
+
+        order.setPaymentMethod(paymentSummary.paymentMethod());
+        order.setStatus(completedImmediately ? ORDER_STATUS_COMPLETED : ORDER_STATUS_PENDING);
+
+        if (completedImmediately) {
+            order.setCompletedAt(LocalDateTime.now());
+        }
+
+        Order savedOrder = orderRepository.save(order);
+
+        int loyaltyPointsEarned = 0;
+
+        if (completedImmediately && savedOrder.getCustomer() != null) {
+            loyaltyPointsEarned = applyLoyaltyPointsIfNeeded(savedOrder, savedOrder.getCustomer());
+
+            if (savedOrder.getVoucher() != null) {
+                increaseVoucherUsedCount(savedOrder.getVoucher());
+            }
+        }
+
+        String vnpayUrl = null;
+
+        if (paymentSummary.needVnpayPayment()) {
+            vnpayUrl = vnPayService.createPaymentUrl(
+                    savedOrder.getId(),
+                    paymentSummary.transferAmount(),
+                    clientIp
+            );
+        }
+
+        Integer customerPointAfter = savedOrder.getCustomer() != null
+                ? savedOrder.getCustomer().getLoyaltyPoints()
+                : 0;
+
+        return buildResponseFromOrder(
+                savedOrder,
+                orderItems,
+                completedImmediately ? "COMPLETED" : "PENDING_PAYMENT",
+                paymentSummary.paidAmount(),
+                paymentSummary.remainingAmount(),
+                paymentSummary.cashGiven(),
+                paymentSummary.transferAmount(),
+                paymentSummary.changeAmount(),
+                vnpayUrl,
+                loyaltyPointsEarned,
+                customerPointAfter
+        );
+    }
+    @Override
+    @Transactional
+    public PosHeldOrderResponse transferHeldOrder(
+            Integer orderId,
+            PosTransferHeldOrderRequest request,
+            String cashierEmail
+    ) {
+        if (request == null || request.getTargetEmployeeId() == null) {
+            throw new RuntimeException("Nhân viên nhận phiếu không được để trống.");
+        }
+
+        Employee currentEmployee = resolveCashier(cashierEmail);
+
+        Order order = getHeldOrderOrThrow(orderId);
+
+        /*
+         * Chỉ người đang giữ phiếu hoặc MANAGER/OWNER mới được chuyển phiếu.
+         * Cashier khác không được tự lấy phiếu.
+         */
+        validateCanTransferHeldOrder(order, currentEmployee);
+
+        Employee targetEmployee = employeeRepository.findById(request.getTargetEmployeeId())
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy nhân viên nhận phiếu."));
+
+        validateTargetEmployeeCanReceiveHeldOrder(targetEmployee);
+
+        if (order.getCashier() != null
+                && order.getCashier().getUserId() != null
+                && order.getCashier().getUserId().equals(targetEmployee.getUserId())) {
+            throw new RuntimeException("Phiếu này đã thuộc nhân viên được chọn.");
+        }
+
+        order.setCashier(targetEmployee);
+
+        Order savedOrder = orderRepository.save(order);
+
+        return toHeldOrderResponse(savedOrder);
+    }
+
+    private void validateHoldRequest(PosHoldRequest request) {
+        if (request == null) {
+            throw new RuntimeException("Dữ liệu phiếu treo không được để trống.");
+        }
+
+        normalizeRequiredPhone(request.getCustomerPhone());
+        normalizeRequiredName(request.getCustomerName());
+        normalizeRequiredEmail(request.getCustomerEmail());
+
+        if (request.getItems() == null || request.getItems().isEmpty()) {
+            throw new RuntimeException("Phiếu treo phải có ít nhất 1 sản phẩm.");
+        }
+    }
+
+    private Customer resolveOrCreateCustomerFromHold(PosHoldRequest request) {
+        PosCheckoutRequest checkoutRequest = new PosCheckoutRequest();
+        checkoutRequest.setCustomerPhone(request.getCustomerPhone());
+        checkoutRequest.setCustomerName(request.getCustomerName());
+        checkoutRequest.setCustomerEmail(request.getCustomerEmail());
+        checkoutRequest.setPaymentMethod(PAYMENT_CASH);
+        checkoutRequest.setItems(request.getItems());
+
+        return resolveOrCreateCustomer(checkoutRequest);
+    }
+
+    private Order getHeldOrderOrThrow(Integer orderId) {
+        if (orderId == null) {
+            throw new RuntimeException("Mã phiếu treo không được để trống.");
+        }
+
+        Order order = orderRepository.findDetailById(orderId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy phiếu treo."));
+
+        if (order.getStatus() == null || order.getStatus() != ORDER_STATUS_PENDING) {
+            throw new RuntimeException("Chỉ phiếu đang treo mới được xử lý.");
+        }
+
+        if (order.getPaymentMethod() == null
+                || !PAYMENT_HOLD.equalsIgnoreCase(order.getPaymentMethod())) {
+            throw new RuntimeException("Đây không phải phiếu treo tại quầy.");
+        }
+
+        return order;
+    }
+
+    private void validateCanViewHeldOrder(Order order, Employee currentEmployee) {
+        if (isManagerOrOwner(currentEmployee)) {
+            return;
+        }
+
+        if (isSameCashier(order, currentEmployee)) {
+            return;
+        }
+
+        throw new RuntimeException("Bạn không có quyền xem phiếu treo của nhân viên khác.");
+    }
+
+    private void validateCanTransferHeldOrder(Order order, Employee currentEmployee) {
+        if (isManagerOrOwner(currentEmployee)) {
+            return;
+        }
+
+        if (isSameCashier(order, currentEmployee)) {
+            return;
+        }
+
+        throw new RuntimeException("Bạn không có quyền chuyển phiếu treo của nhân viên khác.");
+    }
+
+    private void validateCashierCanCheckoutHeldOrder(Order order, Employee currentEmployee) {
+        if (!isSameCashier(order, currentEmployee)) {
+            throw new RuntimeException("Phiếu này đang thuộc nhân viên khác. Vui lòng chuyển phiếu trước khi thanh toán.");
+        }
+    }
+
+    private boolean isSameCashier(Order order, Employee employee) {
+        if (order == null || order.getCashier() == null || employee == null) {
+            return false;
+        }
+
+        Integer orderCashierId = order.getCashier().getUserId();
+        Integer currentEmployeeId = employee.getUserId();
+
+        return orderCashierId != null && orderCashierId.equals(currentEmployeeId);
+    }
+
+    private boolean isManagerOrOwner(Employee employee) {
+        if (employee == null
+                || employee.getUser() == null
+                || employee.getUser().getRole() == null
+                || employee.getUser().getRole().getName() == null) {
+            return false;
+        }
+
+        String roleName = employee.getUser().getRole().getName()
+                .trim()
+                .toUpperCase(Locale.ROOT);
+
+        return "MANAGER".equals(roleName)
+                || "ROLE_MANAGER".equals(roleName)
+                || "OWNER".equals(roleName)
+                || "ROLE_OWNER".equals(roleName);
+    }
+
+    private void validateTargetEmployeeCanReceiveHeldOrder(Employee targetEmployee) {
+        if (targetEmployee == null || targetEmployee.getUser() == null) {
+            throw new RuntimeException("Nhân viên nhận phiếu không hợp lệ.");
+        }
+
+        if (targetEmployee.getUser().getStatus() == null
+                || targetEmployee.getUser().getStatus() != STATUS_ACTIVE) {
+            throw new RuntimeException("Nhân viên nhận phiếu đang bị khóa.");
+        }
+    }
+
+    private PosHeldOrderResponse toHeldOrderResponse(Order order) {
+        Customer customer = order.getCustomer();
+        User customerUser = customer != null ? customer.getUser() : null;
+
+        Employee cashier = order.getCashier();
+        User cashierUser = cashier != null ? cashier.getUser() : null;
+
+        return PosHeldOrderResponse.builder()
+                .orderId(order.getId())
+                .status("HELD")
+                .paymentMethod(order.getPaymentMethod())
+                .totalAmount(order.getTotalAmount())
+                .discountAmount(order.getDiscountAmount())
+                .finalAmount(order.getFinalAmount())
+                .createdAt(order.getCreatedAt())
+                .cashierId(cashier != null ? cashier.getUserId() : null)
+                .cashierName(cashierUser != null ? cashierUser.getName() : null)
+                .customerId(customer != null ? customer.getUserId() : null)
+                .customerName(order.getCustomerName())
+                .customerPhone(order.getCustomerPhone())
+                .customerEmail(customerUser != null ? customerUser.getEmail() : null)
+                .build();
+    }
+
+    private PosOrderResponse buildResponseFromOrder(
+            Order order,
+            List<OrderItem> orderItems,
+            String status,
+            BigDecimal paidAmount,
+            BigDecimal remainingAmount,
+            BigDecimal cashGiven,
+            BigDecimal transferAmount,
+            BigDecimal changeAmount,
+            String vnpayUrl,
+            int loyaltyPointsEarned
+    ) {
+        Integer customerPointAfter = order.getCustomer() != null
+                ? order.getCustomer().getLoyaltyPoints()
+                : 0;
+
+        return buildResponseFromOrder(
+                order,
+                orderItems,
+                status,
+                paidAmount,
+                remainingAmount,
+                cashGiven,
+                transferAmount,
+                changeAmount,
+                vnpayUrl,
+                loyaltyPointsEarned,
+                customerPointAfter
+        );
+    }
+
+    private PosOrderResponse buildResponseFromOrder(
+            Order order,
+            List<OrderItem> orderItems,
+            String status,
+            BigDecimal paidAmount,
+            BigDecimal remainingAmount,
+            BigDecimal cashGiven,
+            BigDecimal transferAmount,
+            BigDecimal changeAmount,
+            String vnpayUrl,
+            int loyaltyPointsEarned,
+            Integer customerPointAfter
+    ) {
+        Customer customer = order.getCustomer();
+        User customerUser = customer != null ? customer.getUser() : null;
+
+        Employee cashier = order.getCashier();
+        User cashierUser = cashier != null ? cashier.getUser() : null;
+
+        List<PosOrderResponse.InvoiceItem> invoiceItems = orderItems.stream()
+                .map(item -> {
+                    ProductVariant variant = item.getProductVariant();
+
+                    BigDecimal unitPrice = item.getOriginalPrice() != null
+                            ? item.getOriginalPrice()
+                            : BigDecimal.ZERO;
+
+                    BigDecimal lineTotal = item.getFinalPrice() != null
+                            ? item.getFinalPrice()
+                            : unitPrice.multiply(BigDecimal.valueOf(item.getQuantity()));
+
+                    return PosOrderResponse.InvoiceItem.builder()
+                            .productName(variant != null && variant.getProduct() != null ? variant.getProduct().getName() : null)
+                            .sku(variant != null ? variant.getSku() : null)
+                            .capacityLabel(variant != null ? buildCapacityLabel(variant) : null)
+                            .bottleTypeName(variant != null && variant.getBottleType() != null ? variant.getBottleType().getName() : null)
+                            .quantity(item.getQuantity())
+                            .unitPrice(unitPrice)
+                            .lineTotal(lineTotal)
+                            .build();
+                })
+                .toList();
+
+        return PosOrderResponse.builder()
+                .orderId(order.getId())
+                .status(status)
+                .totalAmount(order.getTotalAmount())
+                .discountAmount(order.getDiscountAmount())
+                .finalAmount(order.getFinalAmount())
+                .paymentMethod(order.getPaymentMethod())
+                .paidAmount(paidAmount != null ? paidAmount : BigDecimal.ZERO)
+                .remainingAmount(remainingAmount != null ? remainingAmount : BigDecimal.ZERO)
+                .cashGiven(cashGiven != null ? cashGiven : BigDecimal.ZERO)
+                .transferAmount(transferAmount != null ? transferAmount : BigDecimal.ZERO)
+                .changeAmount(changeAmount != null ? changeAmount : BigDecimal.ZERO)
+                .vnpayPaymentUrl(vnpayUrl)
+                .createdAt(order.getCreatedAt())
+                .customerName(order.getCustomerName())
+                .customerPhone(order.getCustomerPhone())
+                .customerEmail(customerUser != null ? customerUser.getEmail() : null)
+                .cashierName(cashierUser != null ? cashierUser.getName() : null)
+                .loyaltyPointsEarned(loyaltyPointsEarned)
+                .customerLoyaltyPointsAfter(customerPointAfter != null ? customerPointAfter : 0)
+                .items(invoiceItems)
+                .build();
+    }
+    @Override
+    @Transactional(readOnly = true)
+    public List<PosTransferTargetResponse> getTransferTargets(String cashierEmail) {
+        Employee currentEmployee = resolveCashier(cashierEmail);
+
+        return employeeRepository.findAll()
+                .stream()
+                .filter(this::canReceivePosTransfer)
+                .filter(employee -> !employee.getUserId().equals(currentEmployee.getUserId()))
+                .map(employee -> {
+                    User user = employee.getUser();
+
+                    return PosTransferTargetResponse.builder()
+                            .employeeId(employee.getUserId())
+                            .employeeCode(employee.getEmployeeCode())
+                            .name(user != null ? user.getName() : null)
+                            .email(user != null ? user.getEmail() : null)
+                            .phone(user != null ? user.getPhone() : null)
+                            .roleName(
+                                    user != null && user.getRole() != null
+                                            ? user.getRole().getName()
+                                            : null
+                            )
+                            .jobTitle(employee.getJobTitle())
+                            .build();
+                })
+                .toList();
+    }
+
+    private boolean canReceivePosTransfer(Employee employee) {
+        if (employee == null || employee.getUser() == null) {
+            return false;
+        }
+
+        User user = employee.getUser();
+
+        if (user.getStatus() == null || user.getStatus() != STATUS_ACTIVE) {
+            return false;
+        }
+
+        if (user.getRole() == null || user.getRole().getName() == null) {
+            return false;
+        }
+
+        String roleName = user.getRole().getName().trim().toUpperCase(Locale.ROOT);
+
+        return "CASHIER".equals(roleName)
+                || "ROLE_CASHIER".equals(roleName)
+                || "MANAGER".equals(roleName)
+                || "ROLE_MANAGER".equals(roleName)
+                || "OWNER".equals(roleName)
+                || "ROLE_OWNER".equals(roleName);
     }
 }

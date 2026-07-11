@@ -1,4 +1,4 @@
-package org.example.datn_sd69.modules.pos.dto;
+package org.example.datn_sd69.modules.pos.dto.response;
 
 import lombok.Builder;
 import lombok.Data;
@@ -13,13 +13,32 @@ public class PosOrderResponse {
 
     private Integer orderId;
 
-    // "COMPLETED" hoặc "PENDING_PAYMENT"
+    /**
+     * COMPLETED hoặc PENDING_PAYMENT
+     */
     private String status;
 
     private BigDecimal totalAmount;
     private BigDecimal discountAmount;
     private BigDecimal finalAmount;
+
+    /**
+     * CASH, VNPAY hoặc MIXED
+     */
     private String paymentMethod;
+
+    /**
+     * Tổng tiền đã ghi nhận ngay.
+     * Với MIXED + VNPay pending:
+     * - paidAmount = cashGiven
+     * - remainingAmount = transferAmount
+     */
+    private BigDecimal paidAmount;
+    private BigDecimal remainingAmount;
+
+    private BigDecimal cashGiven;
+    private BigDecimal transferAmount;
+    private BigDecimal changeAmount;
 
     private String vnpayPaymentUrl;
 
@@ -27,6 +46,8 @@ public class PosOrderResponse {
 
     private String customerName;
     private String customerPhone;
+    private String customerEmail;
+
     private String cashierName;
 
     private Integer loyaltyPointsEarned;
@@ -37,9 +58,12 @@ public class PosOrderResponse {
     @Data
     @Builder
     public static class InvoiceItem {
+
         private String productName;
         private String sku;
         private String capacityLabel;
+        private String bottleTypeName;
+
         private Integer quantity;
         private BigDecimal unitPrice;
         private BigDecimal lineTotal;
