@@ -50,8 +50,9 @@
           <tr
             v-for="product in posStore.filteredProducts"
             :key="product.sku"
-            :class="{ 'row-disabled': product.stockQuantity <= 0 }"
-            @dblclick="handleAddToCart(product)"
+            :class="{
+              'row-disabled': product.stockQuantity <= 0 || posStore.isOrderLocked
+            }"
           >
             <td>
               <div class="d-flex align-items-center gap-2 min-w-0">
@@ -117,7 +118,7 @@
               <button
                 type="button"
                 class="btn-add-product"
-                :disabled="product.stockQuantity <= 0 || posStore.hasPartialCashPayment"
+                :disabled="product.stockQuantity <= 0 || posStore.isOrderLocked"
                 @click.stop="handleAddToCart(product)"
               >
                 <i class="bi bi-plus-lg"></i>
@@ -131,7 +132,7 @@
 
     <div class="table-hint mt-2 font-xs text-muted-custom">
       <i class="bi bi-info-circle me-1"></i>
-      Double click vào dòng sản phẩm để thêm nhanh vào giỏ.
+      Chỉ bấm nút <strong>Chọn</strong> để thêm sản phẩm vào giỏ.
     </div>
   </div>
 </template>
@@ -162,7 +163,10 @@ const getProductTitle = (product: any) => {
 };
 
 const handleAddToCart = (product: any) => {
-  if (!product || product.stockQuantity <= 0) return;
+  if (!product) return;
+  if (product.stockQuantity <= 0) return;
+  if (posStore.isOrderLocked) return;
+
   posStore.addToCart(product);
 };
 </script>
@@ -255,7 +259,7 @@ const handleAddToCart = (product: any) => {
 }
 
 .table-dark-custom tbody tr {
-  cursor: pointer;
+  cursor: default;
   transition: all 0.12s ease;
 }
 
@@ -265,7 +269,6 @@ const handleAddToCart = (product: any) => {
 
 .row-disabled {
   opacity: 0.52;
-  cursor: not-allowed !important;
 }
 
 .product-thumb {
@@ -338,6 +341,7 @@ const handleAddToCart = (product: any) => {
   font-weight: 900;
   white-space: nowrap;
   transition: all 0.15s ease;
+  cursor: pointer;
 }
 
 .btn-add-product:hover:not(:disabled) {

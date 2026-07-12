@@ -10,15 +10,17 @@
       <div
         class="mini-item"
         v-for="item in cartItems"
-        :key="item.cartItemId || item.id || item.productVariantId"
+        :key="getItemKey(item)"
       >
-        <div class="mini-qty">{{ item.quantity }}</div>
+        <div class="mini-img-wrapper">
+          <div class="mini-qty">{{ item.quantity }}</div>
 
-        <img
-          :src="getItemImage(item)"
-          class="mini-img"
-          :alt="item.productName || item.sku || 'Sản phẩm'"
-        />
+          <img
+            :src="getItemImage(item)"
+            class="mini-img"
+            :alt="item.productName || item.sku || 'Sản phẩm'"
+          />
+        </div>
 
         <div class="mini-info">
           <h4 class="item-name">
@@ -28,13 +30,55 @@
           <p class="item-variant">
             Dung tích:
             <strong style="color: #b78d52;">
-              {{ item.capacity || item.capacityValue || "-" }}
+              {{ formatCapacity(item) }}
             </strong>
           </p>
 
-          <div class="mini-price">
-            {{ formatCurrency(getItemPrice(item) * Number(item.quantity || 0)) }}
+          <div class="item-meta">
+            <span>Đơn giá:</span>
+            <strong>{{ formatCurrency(getItemPrice(item)) }}</strong>
           </div>
+
+          <div class="quantity-control">
+            <button
+              type="button"
+              class="qty-btn"
+              :disabled="isSubmitting || isUpdating(item) || Number(item.quantity || 0) <= 1"
+              @click="emitUpdateQuantity(item, Number(item.quantity || 0) - 1)"
+            >
+              -
+            </button>
+
+            <input
+              type="number"
+              :value="Number(item.quantity || 0)"
+              readonly
+            />
+
+            <button
+              type="button"
+              class="qty-btn"
+              :disabled="isSubmitting || isUpdating(item) || !canIncrease(item)"
+              @click="emitUpdateQuantity(item, Number(item.quantity || 0) + 1)"
+            >
+              +
+            </button>
+
+            <span v-if="isUpdating(item)" class="qty-loading">
+              Đang cập nhật...
+            </span>
+          </div>
+
+          <div
+            v-if="getStock(item) > 0"
+            class="stock-hint"
+          >
+            Còn {{ getStock(item) }} sản phẩm
+          </div>
+        </div>
+
+        <div class="mini-total">
+          {{ formatCurrency(getItemPrice(item) * Number(item.quantity || 0)) }}
         </div>
       </div>
     </div>
@@ -60,9 +104,15 @@
       class="btn-submit"
       type="button"
       @click="$emit('submit-order')"
-      :disabled="isSubmitting || cartItems.length === 0"
+      :disabled="isSubmitting || cartItems.length === 0 || Boolean(updatingItemKey)"
     >
-      {{ isSubmitting ? "ĐANG XỬ LÝ..." : "XÁC NHẬN ĐẶT HÀNG" }}
+      {{
+        isSubmitting
+          ? "ĐANG XỬ LÝ..."
+          : updatingItemKey
+            ? "ĐANG CẬP NHẬT GIỎ..."
+            : "XÁC NHẬN ĐẶT HÀNG"
+      }}
     </button>
 
     <button class="btn-back" type="button" @click="$emit('back')">
@@ -72,18 +122,20 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
   cartItems: any[];
   totalItems: number;
   totalAmount: number;
   discountAmount: number;
   finalTotal: number;
   isSubmitting: boolean;
+  updatingItemKey?: string | number | null;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: "submit-order"): void;
   (e: "back"): void;
+  (e: "update-quantity", item: any, quantity: number): void;
 }>();
 
 const FALLBACK_IMAGE =
@@ -98,12 +150,67 @@ const FALLBACK_IMAGE =
     </svg>
   `);
 
+const getItemKey = (item: any) => {
+  return (
+    item?.cartItemId ||
+    item?.id ||
+    item?.productVariantId ||
+    item?.variantId ||
+    item?.sku
+  );
+};
+
 const getItemImage = (item: any) => {
   return item?.image || item?.imageUrl || item?.thumbnailUrl || FALLBACK_IMAGE;
 };
 
 const getItemPrice = (item: any) => {
   return Number(item?.price ?? item?.finalPrice ?? item?.originalPrice ?? 0);
+};
+
+const getStock = (item: any) => {
+  return Number(
+    item?.stockQuantity ??
+      item?.stock ??
+      item?.availableQuantity ??
+      item?.maxQuantity ??
+      0
+  );
+};
+
+const formatCapacity = (item: any) => {
+  const value = item?.capacity || item?.capacityValue || item?.volume || "";
+
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+
+  const text = String(value);
+
+  return text.toLowerCase().includes("ml") ? text : `${text}ml`;
+};
+
+const canIncrease = (item: any) => {
+  const stock = getStock(item);
+  const quantity = Number(item?.quantity || 0);
+
+  if (stock <= 0) {
+    return true;
+  }
+
+  return quantity < stock;
+};
+
+const isUpdating = (item: any) => {
+  return String(props.updatingItemKey || "") === String(getItemKey(item));
+};
+
+const emitUpdateQuantity = (item: any, quantity: number) => {
+  if (quantity < 1) {
+    return;
+  }
+
+  emit("update-quantity", item, quantity);
 };
 
 const formatCurrency = (value: number) => {
@@ -143,66 +250,164 @@ const formatCurrency = (value: number) => {
 }
 
 .mini-cart-items {
-  max-height: 250px;
+  max-height: 320px;
   overflow-y: auto;
   margin-bottom: 20px;
   padding-right: 5px;
 }
 
 .mini-item {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 58px 1fr auto;
+  align-items: flex-start;
   gap: 12px;
-  margin-bottom: 15px;
+  margin-bottom: 18px;
   position: relative;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.mini-item:last-child {
+  margin-bottom: 0;
+  border-bottom: none;
+}
+
+.mini-img-wrapper {
+  position: relative;
+  width: 58px;
+  height: 58px;
 }
 
 .mini-qty {
   position: absolute;
-  top: -5px;
-  left: -5px;
-  background: #666;
+  top: -6px;
+  left: -6px;
+  background: #06132b;
   color: white;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 5px;
+  border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 11px;
+  font-weight: 800;
   z-index: 2;
 }
 
 .mini-img {
-  width: 50px;
-  height: 50px;
-  border-radius: 6px;
+  width: 58px;
+  height: 58px;
+  border-radius: 8px;
   border: 1px solid #eaeaea;
   object-fit: cover;
+  background: #f8fafc;
 }
 
 .mini-info {
-  flex: 1;
   min-width: 0;
 }
 
 .item-name {
   font-size: 13px;
-  font-weight: 600;
-  color: #333;
+  font-weight: 700;
+  color: #06132b;
   margin: 0 0 4px;
   line-height: 1.4;
 }
 
 .item-variant {
-  margin: 0 0 4px;
+  margin: 0 0 5px;
   font-size: 12px;
   color: #718096;
 }
 
-.mini-price {
+.item-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.item-meta strong {
+  color: #06132b;
+}
+
+.quantity-control {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-top: 6px;
+}
+
+.qty-btn {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #d7dde8;
+  background: #ffffff;
+  color: #06132b;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.qty-btn:first-child {
+  border-radius: 7px 0 0 7px;
+}
+
+.qty-btn:nth-child(3) {
+  border-radius: 0 7px 7px 0;
+}
+
+.qty-btn:hover:not(:disabled) {
+  background: #06132b;
+  border-color: #06132b;
+  color: #ffffff;
+}
+
+.qty-btn:disabled {
+  color: #cbd5e0;
+  cursor: not-allowed;
+  background: #f8fafc;
+}
+
+.quantity-control input {
+  width: 42px;
+  height: 30px;
+  border: 1px solid #d7dde8;
+  border-left: none;
+  border-right: none;
+  text-align: center;
+  outline: none;
   font-size: 13px;
-  color: #666;
+  font-weight: 800;
+  color: #06132b;
+  background: #ffffff;
+}
+
+.qty-loading {
+  margin-left: 8px;
+  font-size: 11px;
+  color: #b78d52;
+  font-weight: 700;
+}
+
+.stock-hint {
+  margin-top: 5px;
+  color: #718096;
+  font-size: 11px;
+}
+
+.mini-total {
+  color: #06132b;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  padding-top: 2px;
 }
 
 .summary-preview {
@@ -270,5 +475,20 @@ const formatCurrency = (value: number) => {
 
 .btn-back:hover {
   color: #06132b;
+}
+
+@media (max-width: 768px) {
+  .checkout-right {
+    position: static;
+    width: 100%;
+  }
+
+  .mini-item {
+    grid-template-columns: 58px 1fr;
+  }
+
+  .mini-total {
+    grid-column: 2;
+  }
 }
 </style>

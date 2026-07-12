@@ -6,6 +6,15 @@
         <h2>Thông tin nhận hàng</h2>
       </div>
 
+      <div v-if="form.profileLoaded" class="profile-filled-box">
+        <div>
+          <strong>Thông tin tài khoản đã được tự động điền</strong>
+          <span>
+            Bạn có thể thay đổi số điện thoại hoặc địa chỉ nhận hàng cho riêng đơn này.
+          </span>
+        </div>
+      </div>
+
       <div class="form-row">
         <div class="form-group half">
           <label>Họ và tên *</label>
@@ -73,102 +82,153 @@
         <div class="address-title">
           <strong>Địa chỉ nhận hàng *</strong>
           <span>
-            Dữ liệu địa chỉ mới: Tỉnh/Thành phố → Phường/Xã/Đặc khu → Địa chỉ cụ thể
+            Có thể dùng địa chỉ tài khoản hoặc đổi địa chỉ nhận hàng riêng cho đơn này.
           </span>
         </div>
 
-        <div class="form-row">
-          <div class="form-group half">
-            <label>Tỉnh / Thành phố *</label>
-
-            <div class="select-box">
-              <select
-                v-model="selectedProvinceCode"
-                @change="handleProvinceChange"
-                :disabled="loadingProvinces"
-              >
-                <option value="">
-                  {{ loadingProvinces ? "Đang tải tỉnh/thành..." : "Chọn tỉnh/thành phố" }}
-                </option>
-
-                <option
-                  v-for="province in provinces"
-                  :key="province.code"
-                  :value="province.code"
-                >
-                  {{ province.name }}
-                </option>
-              </select>
-            </div>
+        <div v-if="showSavedAddressCard" class="saved-address-card">
+          <div class="saved-address-content">
+            <span>Địa chỉ đang dùng cho đơn hàng</span>
+            <strong>{{ form.shippingAddress }}</strong>
           </div>
 
-          <div class="form-group half">
-            <label>Phường / Xã / Đặc khu *</label>
+          <button
+            type="button"
+            class="btn-change-address"
+            @click="startEditAddress"
+          >
+            Thay đổi địa chỉ
+          </button>
+        </div>
 
-            <div class="select-box">
-              <select
-                v-model="selectedWardCode"
-                @change="syncFullAddress"
-                :disabled="!selectedProvinceCode || loadingWards"
-              >
-                <option value="">
-                  {{
-                    !selectedProvinceCode
-                      ? "Chọn tỉnh/thành trước"
-                      : loadingWards
-                        ? "Đang tải phường/xã..."
-                        : "Chọn phường/xã/đặc khu"
-                  }}
-                </option>
-
-                <option
-                  v-for="ward in wards"
-                  :key="ward.code"
-                  :value="ward.code"
-                >
-                  {{ ward.name }}
-                </option>
-              </select>
+        <div v-if="showAddressEditor" class="address-editor">
+          <div v-if="hasAccountAddress" class="account-address-box">
+            <div>
+              <span>Địa chỉ trong tài khoản</span>
+              <strong>{{ form.profileAddress }}</strong>
             </div>
-          </div>
-        </div>
 
-        <div v-if="addressLoadError" class="address-error">
-          {{ addressLoadError }}
-        </div>
-
-        <div class="form-group">
-          <label>Địa chỉ cụ thể *</label>
-
-          <div class="input-box textarea-box">
-            <svg
-              class="input-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
+            <button
+              type="button"
+              class="btn-use-profile-address"
+              @click="useProfileAddress"
             >
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
-              <circle cx="12" cy="10" r="3" />
-            </svg>
-
-            <textarea
-              v-model="specificAddress"
-              @input="validateSpecificAddress"
-              maxlength="255"
-              placeholder="Ví dụ: Số 12/5, ngõ 36-A, đường Trần Phú"
-              autocomplete="street-address"
-            ></textarea>
+              Dùng địa chỉ này
+            </button>
           </div>
 
-          <small class="field-hint">
-            Nhập số nhà, ngõ, đường, tòa nhà. Không cần nhập lại phường/xã và tỉnh/thành.
-          </small>
-        </div>
+          <div class="form-row">
+            <div class="form-group half">
+              <label>Tỉnh / Thành phố *</label>
 
-        <div class="full-address-preview" v-if="form.shippingAddress">
-          <span>Địa chỉ đầy đủ sẽ lưu vào đơn hàng:</span>
-          <strong>{{ form.shippingAddress }}</strong>
+              <div class="select-box">
+                <select
+                  v-model="selectedProvinceCode"
+                  @change="handleProvinceChange"
+                  :disabled="loadingProvinces"
+                >
+                  <option value="">
+                    {{ loadingProvinces ? "Đang tải tỉnh/thành..." : "Chọn tỉnh/thành phố" }}
+                  </option>
+
+                  <option
+                    v-for="province in provinces"
+                    :key="province.code"
+                    :value="province.code"
+                  >
+                    {{ province.name }}
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group half">
+              <label>Phường / Xã / Đặc khu *</label>
+
+              <div class="select-box">
+                <select
+                  v-model="selectedWardCode"
+                  @change="syncFullAddress"
+                  :disabled="!selectedProvinceCode || loadingWards"
+                >
+                  <option value="">
+                    {{
+                      !selectedProvinceCode
+                        ? "Chọn tỉnh/thành trước"
+                        : loadingWards
+                          ? "Đang tải phường/xã..."
+                          : "Chọn phường/xã/đặc khu"
+                    }}
+                  </option>
+
+                  <option
+                    v-for="ward in wards"
+                    :key="ward.code"
+                    :value="ward.code"
+                  >
+                    {{ ward.name }}
+                  </option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="addressLoadError" class="address-error">
+            {{ addressLoadError }}
+          </div>
+
+          <div class="form-group">
+            <label>Địa chỉ cụ thể *</label>
+
+            <div class="input-box textarea-box">
+              <svg
+                class="input-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+
+              <textarea
+                v-model="specificAddress"
+                @input="validateSpecificAddress"
+                maxlength="255"
+                placeholder="Ví dụ: Số 12/5, ngõ 36-A, đường Trần Phú"
+                autocomplete="street-address"
+              ></textarea>
+            </div>
+
+            <small class="field-hint">
+              Nhập số nhà, ngõ, đường, tòa nhà. Không cần nhập lại phường/xã và tỉnh/thành.
+            </small>
+          </div>
+
+          <div class="address-editor-actions">
+            <button
+              v-if="hasSavedAddress"
+              type="button"
+              class="btn-cancel-address"
+              @click="cancelEditAddress"
+            >
+              Hủy thay đổi
+            </button>
+
+            <button
+              type="button"
+              class="btn-save-address"
+              @click="finishEditAddress"
+            >
+              Dùng địa chỉ mới
+            </button>
+          </div>
+
+          <div class="full-address-preview" v-if="form.shippingAddress">
+            <span>Địa chỉ đầy đủ sẽ lưu vào đơn hàng:</span>
+            <strong>{{ form.shippingAddress }}</strong>
+          </div>
         </div>
       </div>
 
@@ -367,7 +427,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 
 interface Ward {
   code: number | string;
@@ -399,6 +459,9 @@ const props = defineProps<{
     wardName?: string;
     specificAddress?: string;
 
+    profileLoaded?: boolean;
+    profileAddress?: string;
+
     requireVat?: boolean;
     vatTaxCode?: string;
     vatEmail?: string;
@@ -413,6 +476,8 @@ const wards = ref<Ward[]>([]);
 const selectedProvinceCode = ref<string>("");
 const selectedWardCode = ref<string>("");
 const specificAddress = ref("");
+const isEditingAddress = ref(false);
+const addressBeforeEdit = ref("");
 
 const loadingProvinces = ref(false);
 const loadingWards = ref(false);
@@ -428,6 +493,22 @@ const selectedWard = computed(() => {
   return wards.value.find(
     (item) => String(item.code) === String(selectedWardCode.value)
   );
+});
+
+const hasSavedAddress = computed(() => {
+  return String(props.form.shippingAddress || "").trim().length >= 5;
+});
+
+const hasAccountAddress = computed(() => {
+  return String(props.form.profileAddress || "").trim().length >= 5;
+});
+
+const showAddressEditor = computed(() => {
+  return isEditingAddress.value || !hasSavedAddress.value;
+});
+
+const showSavedAddressCard = computed(() => {
+  return hasSavedAddress.value && !showAddressEditor.value;
 });
 
 const extractArray = (data: any) => {
@@ -543,6 +624,60 @@ const handleProvinceChange = async () => {
   await loadWardsByProvince(selectedProvinceCode.value);
 };
 
+const startEditAddress = () => {
+  addressBeforeEdit.value = props.form.shippingAddress || "";
+  isEditingAddress.value = true;
+
+  selectedProvinceCode.value = "";
+  selectedWardCode.value = "";
+  wards.value = [];
+
+  specificAddress.value =
+    props.form.provinceName || props.form.wardName
+      ? props.form.specificAddress || ""
+      : "";
+};
+
+const cancelEditAddress = () => {
+  if (addressBeforeEdit.value) {
+    props.form.shippingAddress = addressBeforeEdit.value;
+  }
+
+  selectedProvinceCode.value = "";
+  selectedWardCode.value = "";
+  wards.value = [];
+  specificAddress.value = "";
+  props.form.provinceName = "";
+  props.form.wardName = "";
+  props.form.specificAddress = "";
+  isEditingAddress.value = false;
+};
+
+const useProfileAddress = () => {
+  if (!hasAccountAddress.value) {
+    return;
+  }
+
+  props.form.shippingAddress = String(props.form.profileAddress || "").trim();
+  props.form.provinceName = "";
+  props.form.wardName = "";
+  props.form.specificAddress = "";
+
+  selectedProvinceCode.value = "";
+  selectedWardCode.value = "";
+  wards.value = [];
+  specificAddress.value = "";
+  isEditingAddress.value = false;
+};
+
+const finishEditAddress = () => {
+  syncFullAddress();
+
+  if (props.form.shippingAddress && props.form.shippingAddress.trim().length >= 5) {
+    isEditingAddress.value = false;
+  }
+};
+
 const handleVatToggle = () => {
   if (!props.form.requireVat) {
     props.form.vatTaxCode = "";
@@ -634,12 +769,25 @@ const loadWardsByProvince = async (provinceCode: string) => {
   }
 };
 
+watch(
+  () => props.form.shippingAddress,
+  (newValue, oldValue) => {
+    if (!oldValue && newValue && String(newValue).trim().length >= 5) {
+      isEditingAddress.value = false;
+    }
+  }
+);
+
 onMounted(async () => {
   props.form.requireVat = Boolean(props.form.requireVat);
   specificAddress.value = props.form.specificAddress || "";
+  isEditingAddress.value = !hasSavedAddress.value;
 
   await loadProvinces();
-  syncFullAddress();
+
+  if (!hasSavedAddress.value) {
+    syncFullAddress();
+  }
 });
 </script>
 
@@ -692,6 +840,27 @@ onMounted(async () => {
   width: 30px;
   height: 2px;
   background: #b78d52;
+}
+
+.profile-filled-box {
+  display: flex;
+  padding: 14px 16px;
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  border-radius: 10px;
+  margin-bottom: 22px;
+}
+
+.profile-filled-box strong {
+  display: block;
+  color: #166534;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.profile-filled-box span {
+  color: #15803d;
+  font-size: 13px;
 }
 
 .form-row {
@@ -816,6 +985,93 @@ onMounted(async () => {
 .address-title span {
   color: #718096;
   font-size: 13px;
+}
+
+.saved-address-card,
+.account-address-box {
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.saved-address-content,
+.account-address-box div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.saved-address-content span,
+.account-address-box span {
+  color: #718096;
+  font-size: 12px;
+}
+
+.saved-address-content strong,
+.account-address-box strong {
+  color: #06132b;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.btn-change-address,
+.btn-use-profile-address,
+.btn-save-address,
+.btn-cancel-address {
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s;
+  white-space: nowrap;
+}
+
+.btn-change-address,
+.btn-save-address {
+  border: none;
+  background: #06132b;
+  color: #ffffff;
+}
+
+.btn-change-address:hover,
+.btn-save-address:hover {
+  background: #b78d52;
+}
+
+.btn-use-profile-address {
+  border: 1px solid #b78d52;
+  background: #ffffff;
+  color: #b78d52;
+}
+
+.btn-use-profile-address:hover {
+  background: #b78d52;
+  color: #ffffff;
+}
+
+.btn-cancel-address {
+  border: 1px solid #cbd5e0;
+  background: #ffffff;
+  color: #4a5568;
+}
+
+.btn-cancel-address:hover {
+  background: #f8fafc;
+}
+
+.address-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: -4px;
+  margin-bottom: 12px;
 }
 
 .address-error {
@@ -1087,9 +1343,15 @@ input:checked + .slider:before {
     gap: 0;
   }
 
-  .vat-toggle-box {
-    align-items: flex-start;
-    gap: 16px;
+  .vat-toggle-box,
+  .saved-address-card,
+  .account-address-box {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .address-editor-actions {
+    flex-direction: column;
   }
 }
 </style>

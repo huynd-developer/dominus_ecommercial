@@ -3,18 +3,27 @@
     <ShopHeader />
 
     <main class="main-content full-width">
-      <CheckoutForm :form="orderForm" />
+      <div v-if="isPageLoading" class="checkout-loading">
+        <div class="spinner-border"></div>
+        <p>Đang tải thông tin thanh toán...</p>
+      </div>
 
-      <CheckoutSummary
-        :cartItems="cartItems"
-        :totalItems="totalItems"
-        :totalAmount="totalAmount"
-        :discountAmount="discountAmount"
-        :finalTotal="finalTotal"
-        :isSubmitting="isSubmitting"
-        @submit-order="handlePlaceOrder"
-        @back="goToCart"
-      />
+      <template v-else>
+        <CheckoutForm :form="orderForm" />
+
+        <CheckoutSummary
+          :cartItems="cartItems"
+          :totalItems="totalItems"
+          :totalAmount="totalAmount"
+          :discountAmount="discountAmount"
+          :finalTotal="finalTotal"
+          :isSubmitting="isSubmitting"
+          :updatingItemKey="updatingItemKey"
+          @update-quantity="handleUpdateQuantity"
+          @submit-order="handlePlaceOrder"
+          @back="goToCart"
+        />
+      </template>
     </main>
 
     <ShopFooter />
@@ -55,15 +64,101 @@ const router = useRouter();
 
 const cartItems = ref<any[]>([]);
 const isSubmitting = ref(false);
+const isPageLoading = ref(true);
 const showSuccessModal = ref(false);
-
+const updatingItemKey = ref<string | number | null>(null);
 const successDetails = ref<
   {
     label: string;
     value: string | number;
   }[]
 >([]);
+const getCartItemKey = (item: any) => {
+  return (
+    item?.cartItemId ||
+    item?.id ||
+    item?.productVariantId ||
+    item?.variantId ||
+    item?.sku
+  );
+};
 
+const getProductVariantId = (item: any) => {
+  return Number(
+    item?.productVariantId ||
+      item?.variantId ||
+      item?.productVariant?.id ||
+      item?.id ||
+      0
+  );
+};
+
+const getCartItemId = (item: any) => {
+  return Number(item?.cartItemId || item?.id || 0);
+};
+
+const getStock = (item: any) => {
+  return Number(
+    item?.stockQuantity ??
+      item?.stock ??
+      item?.availableQuantity ??
+      item?.maxQuantity ??
+      0
+  );
+};
+
+const updateCartQuantityApi = async (item: any, quantity: number) => {
+  await api.put("/v1/customer/cart/update", {
+    cartItemId: getCartItemId(item),
+    productVariantId: getProductVariantId(item),
+    quantity,
+  });
+};
+
+const handleUpdateQuantity = async (item: any, quantity: number) => {
+  if (isSubmitting.value || updatingItemKey.value) {
+    return;
+  }
+
+  if (quantity < 1) {
+    await showWarning(
+      "Số lượng không hợp lệ",
+      "Số lượng sản phẩm phải lớn hơn hoặc bằng 1."
+    );
+    return;
+  }
+
+  const stock = getStock(item);
+
+  if (stock > 0 && quantity > stock) {
+    await showWarning(
+      "Vượt quá tồn kho",
+      `Sản phẩm này chỉ còn ${stock} sản phẩm.`
+    );
+    return;
+  }
+
+  try {
+    updatingItemKey.value = getCartItemKey(item);
+
+    await updateCartQuantityApi(item, quantity);
+
+    window.dispatchEvent(new Event("cart-updated"));
+
+    await loadCartSummary();
+  } catch (error: any) {
+    console.error("Lỗi cập nhật số lượng:", error);
+
+    await showError(
+      "Không thể cập nhật số lượng",
+      error?.response?.data?.message ||
+        error?.response?.data ||
+        "Vui lòng thử lại sau."
+    );
+  } finally {
+    updatingItemKey.value = null;
+  }
+};
 const orderForm = ref({
   customerName: "",
   customerPhone: "",
@@ -74,6 +169,9 @@ const orderForm = ref({
   provinceName: "",
   wardName: "",
   specificAddress: "",
+
+  profileLoaded: false,
+  profileAddress: "",
 
   requireVat: false,
   vatTaxCode: "",
@@ -107,7 +205,28 @@ const totalItems = computed(() => {
 });
 
 const normalizeSpaces = (value: string) => {
-  return String(value || "").trim().replace(/\s{2,}/g, " ");
+  return String(value || "")
+    .trim()
+    .replace(/\s{2,}/g, " ");
+};
+
+const normalizePhone = (value: string) => {
+  return String(value || "")
+    .replace(/[^\d]/g, "")
+    .slice(0, 10);
+};
+
+const extractObjectData = (data: any) => {
+  return data?.data || data?.result || data || {};
+};
+
+const escapeHtml = (value: string) => {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 };
 
 const showWarning = async (title: string, text: string) => {
@@ -130,16 +249,72 @@ const showError = async (title: string, text: string) => {
   });
 };
 
+const loadCustomerProfile = async () => {
+  try {
+    const res = await api.get("/customer/profile");
+    const profile = extractObjectData(res.data);
+
+    const name = normalizeSpaces(
+      profile.name || profile.fullName || profile.customerName || ""
+    );
+
+    const phone = normalizePhone(profile.phone || profile.customerPhone || "");
+
+    const address = normalizeSpaces(
+      profile.address || profile.shippingAddress || ""
+    );
+
+    orderForm.value.profileLoaded = true;
+    orderForm.value.customerName = name;
+    orderForm.value.customerPhone = phone;
+    orderForm.value.profileAddress = address;
+
+    if (address) {
+      orderForm.value.shippingAddress = address;
+      orderForm.value.provinceName = "";
+      orderForm.value.wardName = "";
+      orderForm.value.specificAddress = "";
+    }
+  } catch (error: any) {
+    console.error("Lỗi tải thông tin tài khoản:", error);
+
+    await showError(
+      "Vui lòng đăng nhập",
+      error?.response?.data?.message ||
+        error?.response?.data ||
+        "Bạn cần đăng nhập tài khoản khách hàng để thanh toán."
+    );
+
+    router.replace({
+      name: "Login",
+      query: {
+        redirect: "/checkout",
+      },
+    });
+
+    return false;
+  }
+
+  return true;
+};
+
 const validateCheckoutForm = async () => {
   const customerName = normalizeSpaces(orderForm.value.customerName);
-  const customerPhone = String(orderForm.value.customerPhone || "").replace(/[^\d]/g, "");
+  const customerPhone = normalizePhone(orderForm.value.customerPhone);
   const shippingAddress = normalizeSpaces(orderForm.value.shippingAddress);
   const note = normalizeSpaces(orderForm.value.note);
-  const paymentMethod = String(orderForm.value.paymentMethod || "").toUpperCase();
+  const paymentMethod = String(
+    orderForm.value.paymentMethod || ""
+  ).toUpperCase();
 
   const provinceName = normalizeSpaces(orderForm.value.provinceName || "");
   const wardName = normalizeSpaces(orderForm.value.wardName || "");
-  const specificAddress = normalizeSpaces(orderForm.value.specificAddress || "");
+  const specificAddress = normalizeSpaces(
+    orderForm.value.specificAddress || ""
+  );
+
+  const isEditingStructuredAddress =
+    Boolean(provinceName) || Boolean(wardName) || Boolean(specificAddress);
 
   if (cartItems.value.length === 0) {
     await showWarning(
@@ -174,28 +349,36 @@ const validateCheckoutForm = async () => {
     return null;
   }
 
-  if (!provinceName) {
-    await showWarning("Thiếu tỉnh/thành phố", "Vui lòng chọn tỉnh/thành phố nhận hàng.");
-    return null;
-  }
+  if (isEditingStructuredAddress) {
+    if (!provinceName) {
+      await showWarning(
+        "Thiếu tỉnh/thành phố",
+        "Vui lòng chọn tỉnh/thành phố nhận hàng."
+      );
+      return null;
+    }
 
-  if (!wardName) {
-    await showWarning("Thiếu phường/xã", "Vui lòng chọn phường/xã/đặc khu nhận hàng.");
-    return null;
-  }
+    if (!wardName) {
+      await showWarning(
+        "Thiếu phường/xã",
+        "Vui lòng chọn phường/xã/đặc khu nhận hàng."
+      );
+      return null;
+    }
 
-  if (specificAddress.length < 3 || specificAddress.length > 255) {
-    await showWarning(
-      "Địa chỉ cụ thể không hợp lệ",
-      "Vui lòng nhập số nhà, ngõ, đường hoặc tòa nhà từ 3 đến 255 ký tự."
-    );
-    return null;
+    if (specificAddress.length < 3 || specificAddress.length > 255) {
+      await showWarning(
+        "Địa chỉ cụ thể không hợp lệ",
+        "Vui lòng nhập số nhà, ngõ, đường hoặc tòa nhà từ 3 đến 255 ký tự."
+      );
+      return null;
+    }
   }
 
   if (shippingAddress.length < 5 || shippingAddress.length > 500) {
     await showWarning(
       "Địa chỉ không hợp lệ",
-      "Địa chỉ giao hàng phải từ 5 đến 500 ký tự."
+      "Vui lòng chọn hoặc nhập địa chỉ giao hàng từ 5 đến 500 ký tự."
     );
     return null;
   }
@@ -280,9 +463,10 @@ const handlePlaceOrder = async () => {
     title: "Xác nhận đặt hàng?",
     html: `
       <div style="text-align:left">
-        <p><b>Người nhận:</b> ${submitData.customerName}</p>
-        <p><b>Số điện thoại:</b> ${submitData.customerPhone}</p>
-        <p><b>Thanh toán:</b> ${submitData.paymentMethod}</p>
+        <p><b>Người nhận:</b> ${escapeHtml(submitData.customerName)}</p>
+        <p><b>Số điện thoại:</b> ${escapeHtml(submitData.customerPhone)}</p>
+        <p><b>Địa chỉ:</b> ${escapeHtml(submitData.shippingAddress)}</p>
+        <p><b>Thanh toán:</b> ${escapeHtml(submitData.paymentMethod)}</p>
         <p><b>Tổng thanh toán:</b> ${formatCurrency(finalTotal.value)}</p>
       </div>
     `,
@@ -316,7 +500,9 @@ const handlePlaceOrder = async () => {
       },
       {
         label: "Tổng thanh toán",
-        value: formatCurrency(Number(res.data?.finalAmount ?? finalTotal.value)),
+        value: formatCurrency(
+          Number(res.data?.finalAmount ?? finalTotal.value)
+        ),
       },
     ];
 
@@ -361,8 +547,24 @@ const goToOrders = () => {
   });
 };
 
+const loadInitialData = async () => {
+  try {
+    isPageLoading.value = true;
+
+    const profileOk = await loadCustomerProfile();
+
+    if (!profileOk) {
+      return;
+    }
+
+    await loadCartSummary();
+  } finally {
+    isPageLoading.value = false;
+  }
+};
+
 onMounted(() => {
-  loadCartSummary();
+  loadInitialData();
 });
 </script>
 
@@ -382,6 +584,20 @@ onMounted(() => {
   display: flex;
   gap: 30px;
   align-items: flex-start;
+}
+
+.checkout-loading {
+  width: 100%;
+  min-height: 380px;
+  background: #ffffff;
+  border: 1px solid #eaeaea;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .premium-modal-overlay {
