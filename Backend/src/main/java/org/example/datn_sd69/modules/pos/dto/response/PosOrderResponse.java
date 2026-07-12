@@ -1,4 +1,4 @@
-package org.example.datn_sd69.modules.pos.dto;
+package org.example.datn_sd69.modules.pos.dto.response;
 
 import lombok.Builder;
 import lombok.Data;
@@ -13,32 +13,57 @@ public class PosOrderResponse {
 
     private Integer orderId;
 
-    // "COMPLETED" (CASH) hoặc "PENDING_PAYMENT" (VNPAY)
+    /**
+     * COMPLETED hoặc PENDING_PAYMENT
+     */
     private String status;
 
     private BigDecimal totalAmount;
     private BigDecimal discountAmount;
     private BigDecimal finalAmount;
+
+    /**
+     * CASH, VNPAY hoặc MIXED
+     */
     private String paymentMethod;
 
-    // Chỉ có giá trị khi paymentMethod = "VNPAY"
-    // FE dùng URL này để render QR code hoặc redirect
+    /**
+     * Tổng tiền đã ghi nhận ngay.
+     * Với MIXED + VNPay pending:
+     * - paidAmount = cashGiven
+     * - remainingAmount = transferAmount
+     */
+    private BigDecimal paidAmount;
+    private BigDecimal remainingAmount;
+
+    private BigDecimal cashGiven;
+    private BigDecimal transferAmount;
+    private BigDecimal changeAmount;
+
     private String vnpayPaymentUrl;
 
     private LocalDateTime createdAt;
 
-    // Thông tin in hóa đơn
     private String customerName;
     private String customerPhone;
+    private String customerEmail;
+
     private String cashierName;
+
+    private Integer loyaltyPointsEarned;
+    private Integer customerLoyaltyPointsAfter;
+
     private List<InvoiceItem> items;
 
     @Data
     @Builder
     public static class InvoiceItem {
+
         private String productName;
         private String sku;
         private String capacityLabel;
+        private String bottleTypeName;
+
         private Integer quantity;
         private BigDecimal unitPrice;
         private BigDecimal lineTotal;

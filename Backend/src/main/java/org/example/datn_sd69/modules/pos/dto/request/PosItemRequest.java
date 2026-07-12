@@ -1,4 +1,4 @@
-package org.example.datn_sd69.modules.pos.dto;
+package org.example.datn_sd69.modules.pos.dto.request;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;

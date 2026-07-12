@@ -1,4 +1,4 @@
-package org.example.datn_sd69.modules.favorite.dto;
+package org.example.datn_sd69.modules.favorite.dto.response;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;

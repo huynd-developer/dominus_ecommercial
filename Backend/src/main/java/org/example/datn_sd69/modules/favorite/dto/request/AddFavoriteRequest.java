@@ -1,4 +1,4 @@
-package org.example.datn_sd69.modules.favorite.dto;
+package org.example.datn_sd69.modules.favorite.dto.request;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;

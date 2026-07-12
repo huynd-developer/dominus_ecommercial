@@ -1,6 +1,7 @@
 package org.example.datn_sd69.repository;
 
 import org.example.datn_sd69.entity.Order;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -55,4 +56,35 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     List<Order> findByCustomer_UserIdOrderByCreatedAtDesc(Integer customerId);
 
     Optional<Order> findByIdAndCustomer_UserId(Integer orderId, Integer customerId);
+
+    @EntityGraph(attributePaths = {
+            "customer",
+            "customer.user",
+            "cashier",
+            "cashier.user",
+            "voucher"
+    })
+    @Query("""
+        SELECT o
+        FROM Order o
+        WHERE o.status = 0
+        AND UPPER(o.paymentMethod) = 'HOLD'
+        AND (:cashierId IS NULL OR o.cashier.userId = :cashierId)
+        ORDER BY o.createdAt DESC
+        """)
+    List<Order> findHeldOrders(@Param("cashierId") Integer cashierId);
+
+    @EntityGraph(attributePaths = {
+            "customer",
+            "customer.user",
+            "cashier",
+            "cashier.user",
+            "voucher"
+    })
+    @Query("""
+        SELECT o
+        FROM Order o
+        WHERE o.id = :orderId
+        """)
+    Optional<Order> findDetailById(@Param("orderId") Integer orderId);
 }

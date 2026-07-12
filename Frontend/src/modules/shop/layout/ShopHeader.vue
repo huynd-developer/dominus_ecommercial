@@ -191,7 +191,9 @@
 
               <span class="d-none d-md-inline">Giỏ hàng</span>
 
-              <span class="cart-badge">0</span>
+           <span class="cart-badge">
+  {{ cartBadgeText }}
+</span>
             </RouterLink>
           </div>
         </div>
@@ -205,14 +207,18 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import Swal from "sweetalert2";
+
 import { useAuthStore } from "@/modules/auth/stores/authStore";
+import { useCartStore } from "@/store/cartStore";
 import api from "@/common/api";
 import logoAura from "@/assets/logo.png";
 
 const router = useRouter();
 const authStore = useAuthStore();
+const cartStore = useCartStore();
 
 const { isAuthenticated, name } = storeToRefs(authStore);
+const { cartCount } = storeToRefs(cartStore);
 
 const logoLoadFailed = ref(false);
 const keyword = ref("");
@@ -226,7 +232,6 @@ const headerAvatarUrl = ref(localStorage.getItem("customerAvatarUrl") || "");
 const currentRole = computed(() => {
   return String(authStore.role || localStorage.getItem("role") || "")
     .toUpperCase()
-    .replace("ROLE_", "")
     .trim();
 });
 
@@ -237,6 +242,18 @@ const isOwnerRole = computed(() => currentRole.value === "OWNER");
 const isStaffRole = computed(() =>
   ["OWNER", "MANAGER", "CASHIER"].includes(currentRole.value)
 );
+
+const visibleCartCount = computed(() => {
+  if (!isAuthenticated.value || !isUserRole.value) {
+    return 0;
+  }
+
+  return Number(cartCount.value || 0);
+});
+
+const cartBadgeText = computed(() => {
+  return visibleCartCount.value > 99 ? "99+" : String(visibleCartCount.value);
+});
 
 const displayName = computed(() => {
   return headerName.value || name.value || localStorage.getItem("name") || "Khách";
@@ -254,6 +271,19 @@ const userInitial = computed(() => {
 
   return lastName?.charAt(0).toUpperCase() || "U";
 });
+
+const refreshCartCount = async () => {
+  if (!isAuthenticated.value || !isUserRole.value) {
+    cartStore.clearCartLocal();
+    return;
+  }
+
+  await cartStore.loadCart();
+};
+
+const handleCartUpdated = () => {
+  refreshCartCount();
+};
 
 const fetchCustomerProfile = async () => {
   if (!isAuthenticated.value || !isUserRole.value) {
@@ -309,23 +339,6 @@ const handleProfileUpdated = (event: Event) => {
   }
 };
 
-onMounted(() => {
-  window.addEventListener("customer-profile-updated", handleProfileUpdated);
-  fetchCustomerProfile();
-});
-
-onBeforeUnmount(() => {
-  window.removeEventListener("customer-profile-updated", handleProfileUpdated);
-});
-
-watch(
-  () => [isAuthenticated.value, currentRole.value],
-  () => {
-    fetchCustomerProfile();
-  }
-);
-
-// LOGIC XỬ LÝ TÌM KIẾM
 const handleSearch = () => {
   const trimmedKeyword = keyword.value.trim();
 
@@ -365,6 +378,7 @@ const handleLogout = () => {
     }
 
     authStore.logout();
+    cartStore.clearCartLocal();
 
     userRank.value = "Bronze";
     userPoints.value = 0;
@@ -376,6 +390,27 @@ const handleLogout = () => {
     router.push("/");
   });
 };
+
+onMounted(() => {
+  window.addEventListener("customer-profile-updated", handleProfileUpdated);
+  window.addEventListener("cart-updated", handleCartUpdated);
+
+  fetchCustomerProfile();
+  refreshCartCount();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("customer-profile-updated", handleProfileUpdated);
+  window.removeEventListener("cart-updated", handleCartUpdated);
+});
+
+watch(
+  () => [isAuthenticated.value, currentRole.value],
+  () => {
+    fetchCustomerProfile();
+    refreshCartCount();
+  }
+);
 </script>
 
 <style scoped>

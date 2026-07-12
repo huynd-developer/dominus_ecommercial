@@ -2,9 +2,12 @@ import api from "@/common/api";
 import type {
   AddFavoriteRequest,
   ChangePasswordRequest,
+  CreateReviewRequest,
   CustomerOrderResponse,
   CustomerProfileResponse,
   FavoriteResponse,
+  ReviewResponse,
+  ReviewableOrderItemResponse,
   UpdateCustomerProfileRequest,
 } from "../types/profile.type";
 
@@ -66,5 +69,19 @@ export const customerProfileService = {
     return api.patch<{ message: string }>(
       `/customer/orders/${orderId}/cancel`
     );
+  },
+
+  getReviewableItemsByOrder(orderId: number) {
+    return api.get<ReviewableOrderItemResponse[]>(
+      `/customer/reviews/orders/${orderId}/items`
+    );
+  },
+
+  createReview(data: CreateReviewRequest) {
+    return api.post<ReviewResponse>("/customer/reviews", data);
+  },
+
+  getMyReviews() {
+    return api.get<ReviewResponse[]>("/customer/reviews/my");
   },
 };

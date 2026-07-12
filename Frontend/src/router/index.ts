@@ -3,7 +3,6 @@ import type { RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
 import { h } from "vue";
 
-
 // Import các trang của m
 import ProductDetailView from "@/modules/shop/feature/product/views/ProductDetailView.vue";
 import CartView from "@/modules/shop/feature/cart/views/CartView.vue";
@@ -13,9 +12,6 @@ import PaymentReturnView from "@/modules/shop/feature/checkout/views/PaymentRetu
 // Admin layout & pages
 import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
 import ShopLayout from "@/modules/shop/layout/ShopLayout.vue";
-import ProductListView from "@/modules/admin/feature/product/views/ProductListView.vue";
-import ProductCreateView from "@/modules/admin/feature/product/views/ProductCreateView.vue";
-import ProductUpdateView from "@/modules/admin/feature/product/views/ProductUpdateView.vue";
 
 const mockPage = (title: string, assignee: string) => ({
   render: () =>
@@ -29,9 +25,9 @@ const mockPage = (title: string, assignee: string) => ({
         h("h1", `🚧 Trang ${title}`),
         h(
           "p",
-          `Giao diện đang được xây dựng bởi: ${assignee}. Sau khi code xong file Vue, hãy mở comment import trong router ra!`,
+          `Giao diện đang được xây dựng bởi: ${assignee}. Sau khi code xong file Vue, hãy mở comment import trong router ra!`
         ),
-      ],
+      ]
     ),
 });
 
@@ -53,7 +49,9 @@ const routes: Array<RouteRecordRaw> = [
         path: "customer/profile",
         name: "CustomerProfile",
         component: () =>
-          import("@/modules/shop/feature/profile/views/CustomerProfileView.vue"),
+          import(
+            "@/modules/shop/feature/profile/views/CustomerProfileView.vue"
+          ),
         meta: {
           requiresAuth: true,
           allowedRoles: ["USER"],
@@ -64,9 +62,20 @@ const routes: Array<RouteRecordRaw> = [
 
   // Code của m (Chi tiết SP, Giỏ hàng, Thanh toán)
   {
+    path: "/products",
+    name: "ProductList",
+    component: () =>
+      import("@/modules/shop/feature/product/views/ProductDetailView.vue"),
+  },
+  {
+    path: "/product/:id",
+    name: "SingleProduct",
+    component: () =>
+      import("@/modules/shop/feature/product/views/SingleProductView.vue"),
+  },
+  {
     path: "/product",
-    name: "ProductDetail",
-    component: ProductDetailView,
+    redirect: "/products",
   },
   {
     path: "/cart",
@@ -138,7 +147,8 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "dashboard",
         name: "AdminDashboard",
-        component: () => import("@/modules/admin/feature/dashboard/views/DashboardView.vue"),
+        component: () =>
+          import("@/modules/admin/feature/report/views/OwnerReportView.vue"),
         meta: {
           requiresAuth: true,
           allowedRoles: ["OWNER"],
@@ -153,30 +163,30 @@ const routes: Array<RouteRecordRaw> = [
           allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
         },
       },
-      {
-  path: "products",
-  meta: {
-    requiresAuth: true,
-    allowedRoles: ["OWNER", "MANAGER"],
-  },
-  children: [
-    {
-      path: "",
-      name: "AdminProducts",
-      component: ProductListView,
-    },
-    {
-      path: "create",
-      name: "AdminProductCreate",
-      component: ProductCreateView,
-    },
-    {
-      path: ":id",
-      name: "AdminProductUpdate",
-      component: ProductUpdateView,
-    },
-  ],
-},
+      //       {
+      //   path: "products",
+      //   meta: {
+      //     requiresAuth: true,
+      //     allowedRoles: ["OWNER", "MANAGER"],
+      //   },
+      //   children: [
+      //     {
+      //       path: "",
+      //       name: "AdminProducts",
+      //       component: ProductListView,
+      //     },
+      //     {
+      //       path: "create",
+      //       name: "AdminProductCreate",
+      //       component: ProductCreateView,
+      //     },
+      //     {
+      //       path: ":id",
+      //       name: "AdminProductUpdate",
+      //       component: ProductUpdateView,
+      //     },
+      //   ],
+      // },
       {
         path: "categories",
         name: "AdminCategories",
@@ -198,29 +208,37 @@ const routes: Array<RouteRecordRaw> = [
         },
       },
       {
-      path: "fragrance-families",
-      name: "AdminFragranceFamilies",
-      // Trỏ đúng đường dẫn tới file View của bạn
-      component: () => import('@/modules/admin/feature/fragranceFamily/views/FragranceFamilyView.vue'),
-      meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
+        path: "fragrance-families",
+        name: "AdminFragranceFamilies",
+        // Trỏ đúng đường dẫn tới file View của bạn
+        component: () =>
+          import(
+            "@/modules/admin/feature/fragranceFamily/views/FragranceFamilyView.vue"
+          ),
+        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "capacities",
         name: "AdminCapacities",
-        component: () => import("@/modules/admin/feature/capacity/views/CapacityView.vue"),
+        component: () =>
+          import("@/modules/admin/feature/capacity/views/CapacityView.vue"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "concentrations",
         name: "AdminConcentrations",
-        component: () => import("@/modules/admin/feature/concentration/views/ConcentrationView.vue"), 
+        component: () =>
+          import(
+            "@/modules/admin/feature/concentration/views/ConcentrationView.vue"
+          ),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "bottle-types",
         name: "AdminBottleTypes",
         // Import trực tiếp đến file Vue giao diện mà bạn vừa tạo
-        component: () => import("@/modules/admin/feature/bottleType/views/BottleTypeView.vue"), 
+        component: () =>
+          import("@/modules/admin/feature/bottleType/views/BottleTypeView.vue"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
