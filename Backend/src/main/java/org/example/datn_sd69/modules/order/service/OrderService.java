@@ -8,6 +8,7 @@ import org.example.datn_sd69.entity.Customer;
 import org.example.datn_sd69.entity.Order;
 import org.example.datn_sd69.entity.OrderItem;
 import org.example.datn_sd69.entity.ProductVariant;
+import org.example.datn_sd69.entity.Voucher; // IMPORT THÊM VOUCHER
 import org.example.datn_sd69.modules.order.dto.request.OrderRequest;
 import org.example.datn_sd69.repository.CartItemRepository;
 import org.example.datn_sd69.repository.CartRepository;
@@ -15,6 +16,7 @@ import org.example.datn_sd69.repository.CustomerRepository;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
 import org.example.datn_sd69.repository.ProductVariantRepository;
+import org.example.datn_sd69.repository.VoucherRepository; // IMPORT THÊM VOUCHER REPO
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -38,21 +40,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class OrderService {
 
-    /**
-     * DB hiện tại chỉ có Status.
-     *
-     * 0 = Chờ xác nhận / Chờ xử lý
-     * 1 = Đã xác nhận
-     * 2 = Đang giao hàng
-     * 3 = Hoàn thành
-     * 4 = Đã hủy
-     *
-     * Vì không sửa DB thêm PaymentStatus, VNPay thành công tạm set Status = 1.
-     */
     private static final int ORDER_STATUS_PENDING = 0;
     private static final int ORDER_STATUS_CONFIRMED = 1;
     private static final int ORDER_STATUS_CANCELLED = 4;
-
     private static final int PRODUCT_VARIANT_ACTIVE = 1;
     private static final int ORDER_STATUS_COMPLETED = 3;
     private static final BigDecimal POINT_RATE_AMOUNT = BigDecimal.valueOf(10_000);
@@ -65,6 +55,7 @@ public class OrderService {
     private final ProductVariantRepository variantRepo;
     private final CartItemRepository cartItemRepository;
     private final CustomerRepository customerRepo;
+    private final VoucherRepository voucherRepo; // INJECT THÊM THẰNG NÀY
 
     @Value("${vnpay.tmnCode}")
     private String vnpTmnCode;
@@ -107,13 +98,11 @@ public class OrderService {
         String paymentMethod = normalizePaymentMethod(request.getPaymentMethod());
 
         BigDecimal totalAmount = BigDecimal.ZERO;
-        BigDecimal discountAmount = BigDecimal.ZERO;
-
         List<CartItem> cartItems = new ArrayList<>(cart.getCartItems());
 
+        // 1. TÍNH TỔNG TIỀN GỐC TRƯỚC
         for (CartItem item : cartItems) {
             validateCartItem(item);
-
             ProductVariant variant = item.getProductVariant();
 
             if (variant.getStockQuantity() < item.getQuantity()) {
@@ -122,15 +111,47 @@ public class OrderService {
                         "Sản phẩm " + variant.getSku() + " chỉ còn " + variant.getStockQuantity() + " trong kho"
                 );
             }
-
-            BigDecimal lineTotal = variant.getPrice()
-                    .multiply(BigDecimal.valueOf(item.getQuantity()));
-
+            BigDecimal lineTotal = variant.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
             totalAmount = totalAmount.add(lineTotal);
         }
 
-        BigDecimal finalAmount = totalAmount.subtract(discountAmount);
+        // 2. XỬ LÝ VOUCHER (NẾU CÓ)
+        BigDecimal discountAmount = BigDecimal.ZERO;
+        Voucher appliedVoucher = null;
 
+        if (request.getVoucherCode() != null && !request.getVoucherCode().trim().isEmpty()) {
+            appliedVoucher = voucherRepo.findByCode(request.getVoucherCode().trim())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã giảm giá không tồn tại!"));
+
+            // Validate lại lần cuối xem mã còn hợp lệ không
+            if (appliedVoucher.getStatus() != 1
+                    || appliedVoucher.getUsedCount() >= appliedVoucher.getUsageLimit()
+                    || totalAmount.compareTo(appliedVoucher.getMinOrderValue()) < 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã giảm giá không đủ điều kiện áp dụng!");
+            }
+
+            // Tính tiền giảm
+            if ("PERCENT".equalsIgnoreCase(appliedVoucher.getDiscountType())) {
+                BigDecimal percent = appliedVoucher.getDiscountValue().divide(BigDecimal.valueOf(100));
+                discountAmount = totalAmount.multiply(percent);
+            } else {
+                discountAmount = appliedVoucher.getDiscountValue();
+            }
+
+            // Ép giới hạn giảm tối đa
+            if (appliedVoucher.getMaxDiscount() != null && appliedVoucher.getMaxDiscount().compareTo(BigDecimal.ZERO) > 0) {
+                if (discountAmount.compareTo(appliedVoucher.getMaxDiscount()) > 0) {
+                    discountAmount = appliedVoucher.getMaxDiscount();
+                }
+            }
+        }
+
+        BigDecimal finalAmount = totalAmount.subtract(discountAmount);
+        if (finalAmount.compareTo(BigDecimal.ZERO) < 0) {
+            finalAmount = BigDecimal.ZERO;
+        }
+
+        // 3. TẠO ĐƠN HÀNG
         Order order = new Order();
         order.setCustomer(customer);
         order.setOrderType("ONLINE");
@@ -143,13 +164,25 @@ public class OrderService {
         order.setPaymentMethod(paymentMethod);
         order.setStatus(ORDER_STATUS_PENDING);
         order.setCreatedAt(LocalDateTime.now());
-
         order.setLoyaltyPointsApplied(false);
         order.setLoyaltyPointsEarned(0);
         order.setCompletedAt(null);
 
+        // NẾU CÓ DÙNG VOUCHER THÌ LƯU VÀO ĐƠN HÀNG VÀ CẬP NHẬT LƯỢT DÙNG
+        if (appliedVoucher != null) {
+            order.setVoucher(appliedVoucher); // Cần chắc chắn Entity Order đã có field private Voucher voucher;
+
+            // Cập nhật lượt dùng
+            appliedVoucher.setUsedCount(appliedVoucher.getUsedCount() + 1);
+            if (appliedVoucher.getUsedCount() >= appliedVoucher.getUsageLimit()) {
+                appliedVoucher.setStatus(0); // Tự động khóa nếu hết lượt
+            }
+            voucherRepo.save(appliedVoucher);
+        }
+
         Order savedOrder = orderRepo.save(order);
 
+        // 4. LƯU CHI TIẾT ĐƠN VÀ TRỪ TỒN KHO
         for (CartItem item : cartItems) {
             ProductVariant variant = item.getProductVariant();
 
@@ -161,10 +194,9 @@ public class OrderService {
             orderItem.setProductVariant(variant);
             orderItem.setQuantity(item.getQuantity());
             orderItem.setOriginalPrice(variant.getPrice());
-            orderItem.setDiscountAmount(BigDecimal.ZERO);
+            orderItem.setDiscountAmount(BigDecimal.ZERO); // Tạm set 0 ở mức Item
 
-            BigDecimal finalPrice = variant.getPrice()
-                    .multiply(BigDecimal.valueOf(item.getQuantity()));
+            BigDecimal finalPrice = variant.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
 
             orderItem.setFinalPrice(finalPrice);
             orderItem.setNote(normalizeOptionalNote(request.getNote()));
@@ -194,6 +226,10 @@ public class OrderService {
 
         return response;
     }
+
+    // =========================================================================
+    // CÁC HÀM BÊN DƯỚI GIỮ NGUYÊN HOÀN TOÀN NHƯ CŨ CỦA M
+    // =========================================================================
 
     @Transactional
     public Map<String, Object> verifyVnPayReturn(Map<String, String> params) {
@@ -268,14 +304,6 @@ public class OrderService {
                         || transactionStatus.isBlank());
 
         if (paymentSuccess) {
-            /*
-             * Không đổi Status sang 1.
-             *
-             * Lý do:
-             * - Status = 0: Chờ cửa hàng xác nhận đơn
-             * - VNPay thành công chỉ có nghĩa là khách đã thanh toán
-             * - Nhưng DB hiện chưa có PaymentStatus nên không thể lưu riêng trạng thái thanh toán
-             */
             return buildPaymentResponse(
                     true,
                     order,
@@ -683,6 +711,7 @@ public class OrderService {
 
         return sb.toString();
     }
+
     @Transactional
     public Map<String, Object> completeOrderAndApplyLoyalty(Integer orderId) {
         if (orderId == null || orderId <= 0) {

@@ -22,6 +22,7 @@ public interface VoucherRepository extends JpaRepository<Voucher, Integer> {
               AND v.usedCount  < v.usageLimit
             """)
     Optional<Voucher> findValidByCode(@Param("code") String code, @Param("now") LocalDateTime now);
+    Optional<Voucher> findByCode(String code);
 
     List<Voucher> findByIsDeletedFalseOrderByIdDesc();
 
