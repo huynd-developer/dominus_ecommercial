@@ -5,23 +5,22 @@
         <h2 class="section-title text-flash">Flash Sale Đang Diễn Ra</h2>
         <div class="countdown-timer">Kết thúc sau: <span>02:15:45</span></div>
       </div>
+
       <div class="product-grid">
         <div
           class="product-card luxury-card"
           v-for="item in productList"
           :key="'fs-' + item.id"
-          @click="$emit('open-detail', item)"
+          @click="emit('open-detail', item)"
         >
           <div class="card-img-wrapper">
             <div class="sale-badge">-20%</div>
+
             <img
-              :src="
-                item?.imageUrl ||
-                item?.image ||
-                'https://via.placeholder.com/300x300?text=No+Image'
-              "
+              :src="getProductImage(item)"
               :alt="item?.name || 'Sản phẩm'"
             />
+
             <button
               class="btn-heart-small"
               type="button"
@@ -48,24 +47,65 @@
               </svg>
             </button>
           </div>
+
           <div class="card-info">
             <div class="card-brand">
-              {{ item?.brand?.name || item?.brand || "Premium" }}
+              {{ getBrandName(item) }}
             </div>
-            <h3 class="card-name">{{ item?.name || "Tên sản phẩm" }}</h3>
+
+            <h3 class="card-name">
+              {{ item?.name || "Tên sản phẩm" }}
+            </h3>
+
             <div class="card-rating">
               <span class="stars">★★★★★</span>
               <span class="score">{{ item?.rating || "5.0" }}</span>
             </div>
+
             <div class="card-price-box">
               <span class="card-price">{{ formatPrice(item) }}</span>
-              <span class="card-old-price" v-if="item?.oldPrice">{{
-                formatOldPrice(item?.oldPrice)
-              }}</span>
+
+              <span class="card-old-price" v-if="item?.oldPrice">
+                {{ formatOldPrice(item?.oldPrice) }}
+              </span>
+            </div>
+
+            <div class="card-actions">
+              <button
+                type="button"
+                class="btn-buy-now-small"
+                :disabled="isBuyNowDisabled(item) || isBuyNowLoading(item)"
+                @click.stop="handleBuyNow(item)"
+              >
+                <span
+                  v-if="isBuyNowLoading(item)"
+                  class="spinner-border spinner-border-sm me-1"
+                ></span>
+
+                <span v-else>
+                  Mua ngay
+                </span>
+              </button>
+
+              <button
+                type="button"
+                class="btn-view-detail"
+                @click.stop="emit('open-detail', item)"
+              >
+                Chi tiết
+              </button>
+            </div>
+
+            <div
+              v-if="getVariantStock(item) <= 0"
+              class="card-stock-warning"
+            >
+              Tạm hết hàng
             </div>
           </div>
         </div>
       </div>
+
       <div class="pagination-container">
         <button class="page-btn" disabled>&lt;</button>
         <button class="page-btn active">1</button>
@@ -78,22 +118,20 @@
       <div class="section-header">
         <h2 class="section-title">Sản Phẩm Nổi Bật</h2>
       </div>
+
       <div class="product-grid">
         <div
           class="product-card luxury-card"
           v-for="item in productList"
           :key="'feat-' + item.id"
-          @click="$emit('open-detail', item)"
+          @click="emit('open-detail', item)"
         >
           <div class="card-img-wrapper">
             <img
-              :src="
-                item?.imageUrl ||
-                item?.image ||
-                'https://via.placeholder.com/300x300?text=No+Image'
-              "
+              :src="getProductImage(item)"
               :alt="item?.name || 'Sản phẩm'"
             />
+
             <button
               class="btn-heart-small"
               type="button"
@@ -120,21 +158,61 @@
               </svg>
             </button>
           </div>
+
           <div class="card-info">
             <div class="card-brand">
-              {{ item?.brand?.name || item?.brand || "Premium" }}
+              {{ getBrandName(item) }}
             </div>
-            <h3 class="card-name">{{ item?.name || "Tên sản phẩm" }}</h3>
+
+            <h3 class="card-name">
+              {{ item?.name || "Tên sản phẩm" }}
+            </h3>
+
             <div class="card-rating">
               <span class="stars">★★★★★</span>
               <span class="score">{{ item?.rating || "5.0" }}</span>
             </div>
+
             <div class="card-price-box">
               <span class="card-price">{{ formatPrice(item) }}</span>
+            </div>
+
+            <div class="card-actions">
+              <button
+                type="button"
+                class="btn-buy-now-small"
+                :disabled="isBuyNowDisabled(item) || isBuyNowLoading(item)"
+                @click.stop="handleBuyNow(item)"
+              >
+                <span
+                  v-if="isBuyNowLoading(item)"
+                  class="spinner-border spinner-border-sm me-1"
+                ></span>
+
+                <span v-else>
+                  Mua ngay
+                </span>
+              </button>
+
+              <button
+                type="button"
+                class="btn-view-detail"
+                @click.stop="emit('open-detail', item)"
+              >
+                Chi tiết
+              </button>
+            </div>
+
+            <div
+              v-if="getVariantStock(item) <= 0"
+              class="card-stock-warning"
+            >
+              Tạm hết hàng
             </div>
           </div>
         </div>
       </div>
+
       <div class="pagination-container">
         <button class="page-btn" disabled>&lt;</button>
         <button class="page-btn active">1</button>
@@ -147,8 +225,10 @@
     <section class="home-section">
       <div class="section-header">
         <h2 class="section-title">Nước Hoa Mới Nhất</h2>
+
         <div class="sort-box">
           <span>Sắp xếp:</span>
+
           <select>
             <option>Mới nhất</option>
             <option>Giá: Thấp đến Cao</option>
@@ -156,23 +236,22 @@
           </select>
         </div>
       </div>
+
       <div class="product-grid">
         <div
           class="product-card luxury-card"
           v-for="item in productList"
           :key="'new-' + item.id"
-          @click="$emit('open-detail', item)"
+          @click="emit('open-detail', item)"
         >
           <div class="card-img-wrapper">
             <div class="new-badge">NEW</div>
+
             <img
-              :src="
-                item?.imageUrl ||
-                item?.image ||
-                'https://via.placeholder.com/300x300?text=No+Image'
-              "
+              :src="getProductImage(item)"
               :alt="item?.name || 'Sản phẩm'"
             />
+
             <button
               class="btn-heart-small"
               type="button"
@@ -199,21 +278,61 @@
               </svg>
             </button>
           </div>
+
           <div class="card-info">
             <div class="card-brand">
-              {{ item?.brand?.name || item?.brand || "Premium" }}
+              {{ getBrandName(item) }}
             </div>
-            <h3 class="card-name">{{ item?.name || "Tên sản phẩm" }}</h3>
+
+            <h3 class="card-name">
+              {{ item?.name || "Tên sản phẩm" }}
+            </h3>
+
             <div class="card-rating">
               <span class="stars">★★★★★</span>
               <span class="score">{{ item?.rating || "5.0" }}</span>
             </div>
+
             <div class="card-price-box">
               <span class="card-price">{{ formatPrice(item) }}</span>
+            </div>
+
+            <div class="card-actions">
+              <button
+                type="button"
+                class="btn-buy-now-small"
+                :disabled="isBuyNowDisabled(item) || isBuyNowLoading(item)"
+                @click.stop="handleBuyNow(item)"
+              >
+                <span
+                  v-if="isBuyNowLoading(item)"
+                  class="spinner-border spinner-border-sm me-1"
+                ></span>
+
+                <span v-else>
+                  Mua ngay
+                </span>
+              </button>
+
+              <button
+                type="button"
+                class="btn-view-detail"
+                @click.stop="emit('open-detail', item)"
+              >
+                Chi tiết
+              </button>
+            </div>
+
+            <div
+              v-if="getVariantStock(item) <= 0"
+              class="card-stock-warning"
+            >
+              Tạm hết hàng
             </div>
           </div>
         </div>
       </div>
+
       <div class="pagination-container">
         <button class="page-btn">&lt;</button>
         <button class="page-btn">1</button>
@@ -227,64 +346,146 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
+import api from "@/common/api";
 import { favoriteService } from "../services/favorite.service";
 
 const props = defineProps<{
   productList: any[];
 }>();
 
-defineEmits(["open-detail"]);
+const emit = defineEmits<{
+  (e: "open-detail", item: any): void;
+}>();
 
 const router = useRouter();
 
 const favoritedMap = ref<Record<number, boolean>>({});
 const favoriteLoadingMap = ref<Record<number, boolean>>({});
+const buyNowLoadingMap = ref<Record<number, boolean>>({});
 
-const isCustomerLoggedIn = () => {
-  const token = localStorage.getItem("token");
-  const role = String(localStorage.getItem("role") || "")
-    .toUpperCase()
-    .trim();
-
-  return Boolean(token) && role === "USER";
+const getToken = () => {
+  return localStorage.getItem("token");
 };
 
-const getPrimaryVariantId = (item: any) => {
-  if (item?.productVariantId) {
-    return Number(item.productVariantId);
+const getCurrentRole = () => {
+  return String(
+    localStorage.getItem("role") ||
+      localStorage.getItem("userRole") ||
+      ""
+  )
+    .replace("ROLE_", "")
+    .toUpperCase()
+    .trim();
+};
+
+const hasToken = () => {
+  return Boolean(getToken());
+};
+
+const isCustomerLoggedIn = () => {
+  return hasToken() && getCurrentRole() === "USER";
+};
+
+const getBrandName = (item: any) => {
+  if (typeof item?.brand === "object") {
+    return item?.brand?.name || "Premium";
   }
 
-  if (item?.variantId) {
-    return Number(item.variantId);
+  return item?.brandName || item?.brand || "Premium";
+};
+
+const getProductImage = (item: any) => {
+  return (
+    item?.imageUrl ||
+    item?.image ||
+    "https://via.placeholder.com/300x300?text=No+Image"
+  );
+};
+
+const normalizeStock = (variant: any) => {
+  return Number(
+    variant?.stockQuantity ??
+      variant?.stock ??
+      variant?.availableQuantity ??
+      variant?.quantity ??
+      0
+  );
+};
+
+const normalizePrice = (variant: any) => {
+  return Number(
+    variant?.price ??
+      variant?.Price ??
+      0
+  );
+};
+
+const getPrimaryVariant = (item: any) => {
+  if (!item) {
+    return null;
   }
 
   if (Array.isArray(item?.variants) && item.variants.length > 0) {
     const firstAvailable =
       item.variants.find((variant: any) => {
-        const stock = Number(
-          variant?.stockQuantity ??
-            variant?.stock ??
-            variant?.availableQuantity ??
-            0
-        );
-
+        const stock = normalizeStock(variant);
+        const price = normalizePrice(variant);
         const status = Number(variant?.status ?? 1);
 
-        return status === 1 && stock > 0;
+        return status === 1 && stock > 0 && price > 0;
       }) || item.variants[0];
 
-    return Number(
-      firstAvailable?.id ??
-        firstAvailable?.Id ??
-        firstAvailable?.productVariantId ??
-        0
-    );
+    return firstAvailable;
   }
 
-  return 0;
+  if (item?.productVariantId || item?.variantId) {
+    return item;
+  }
+
+  return item;
+};
+
+const getPrimaryVariantId = (item: any) => {
+  const variant = getPrimaryVariant(item);
+
+  if (!variant) {
+    return 0;
+  }
+
+  return Number(
+    variant?.productVariantId ??
+      variant?.variantId ??
+      variant?.id ??
+      variant?.Id ??
+      0
+  );
+};
+
+const getVariantStock = (item: any) => {
+  const variant = getPrimaryVariant(item);
+
+  return normalizeStock(variant);
+};
+
+const getVariantPrice = (item: any) => {
+  const variant = getPrimaryVariant(item);
+
+  if (variant?.price != null || variant?.Price != null) {
+    return normalizePrice(variant);
+  }
+
+  return Number(item?.price || item?.Price || 0);
+};
+
+const isBuyNowDisabled = (item: any) => {
+  const variantId = getPrimaryVariantId(item);
+  const price = getVariantPrice(item);
+  const stock = getVariantStock(item);
+
+  return !variantId || price <= 0 || stock <= 0;
 };
 
 const isFavorited = (item: any) => {
@@ -307,9 +508,26 @@ const isFavoriteLoading = (item: any) => {
   return Boolean(favoriteLoadingMap.value[variantId]);
 };
 
+const isBuyNowLoading = (item: any) => {
+  const variantId = getPrimaryVariantId(item);
+
+  if (!variantId) {
+    return false;
+  }
+
+  return Boolean(buyNowLoadingMap.value[variantId]);
+};
+
 const setFavoriteLoading = (variantId: number, value: boolean) => {
   favoriteLoadingMap.value = {
     ...favoriteLoadingMap.value,
+    [variantId]: value,
+  };
+};
+
+const setBuyNowLoading = (variantId: number, value: boolean) => {
+  buyNowLoadingMap.value = {
+    ...buyNowLoadingMap.value,
     [variantId]: value,
   };
 };
@@ -321,11 +539,13 @@ const setFavorited = (variantId: number, value: boolean) => {
   };
 };
 
-const askLogin = async () => {
+const askLogin = async (
+  message = "Vui lòng đăng nhập để sử dụng chức năng này."
+) => {
   const result = await Swal.fire({
     icon: "info",
     title: "Bạn chưa đăng nhập",
-    text: "Vui lòng đăng nhập để thêm sản phẩm vào danh sách yêu thích.",
+    text: message,
     showCancelButton: true,
     confirmButtonText: "Đăng nhập ngay",
     cancelButtonText: "Ở lại xem tiếp",
@@ -383,8 +603,18 @@ const toggleFavorite = async (item: any) => {
     return;
   }
 
+  if (!hasToken()) {
+    await askLogin("Vui lòng đăng nhập để thêm sản phẩm vào danh sách yêu thích.");
+    return;
+  }
+
   if (!isCustomerLoggedIn()) {
-    await askLogin();
+    await Swal.fire({
+      icon: "warning",
+      title: "Không thể sử dụng chức năng này",
+      text: "Chỉ tài khoản khách hàng mới được thêm sản phẩm yêu thích.",
+      confirmButtonColor: "#bd9a5f",
+    });
     return;
   }
 
@@ -392,7 +622,6 @@ const toggleFavorite = async (item: any) => {
     setFavoriteLoading(variantId, true);
 
     const res = await favoriteService.toggleFavorite(variantId);
-
     const favorited = Boolean(res.data?.favorited);
 
     setFavorited(variantId, favorited);
@@ -434,6 +663,84 @@ const toggleFavorite = async (item: any) => {
   }
 };
 
+const handleBuyNow = async (item: any) => {
+  const variantId = getPrimaryVariantId(item);
+
+  if (!variantId || Number.isNaN(variantId)) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Không xác định được biến thể",
+      text: "Sản phẩm này chưa có biến thể hợp lệ để mua ngay.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  if (getVariantPrice(item) <= 0) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Sản phẩm chưa có giá",
+      text: "Sản phẩm chưa có giá bán. Vui lòng xem chi tiết hoặc liên hệ cửa hàng.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  if (getVariantStock(item) <= 0) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Tạm hết hàng",
+      text: "Sản phẩm này hiện đã hết hàng.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  if (!hasToken()) {
+    await askLogin("Vui lòng đăng nhập để mua sản phẩm.");
+    return;
+  }
+
+  if (!isCustomerLoggedIn()) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Không thể mua hàng",
+      text: "Chỉ tài khoản khách hàng mới được mua hàng.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  try {
+    setBuyNowLoading(variantId, true);
+
+    await api.post("/v1/customer/cart/add", {
+      productVariantId: variantId,
+      quantity: 1,
+    });
+
+    window.dispatchEvent(new Event("cart-updated"));
+
+    router.push({
+      name: "Checkout",
+    });
+  } catch (error: any) {
+    console.error("Lỗi mua ngay:", error);
+
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể mua ngay",
+      text:
+        error?.response?.data?.message ||
+        error?.response?.data ||
+        "Không thể thêm sản phẩm vào giỏ. Vui lòng thử lại.",
+      confirmButtonColor: "#bd9a5f",
+    });
+  } finally {
+    setBuyNowLoading(variantId, false);
+  }
+};
+
 const handleFavoriteUpdated = (event: Event) => {
   const customEvent = event as CustomEvent<{
     productVariantId?: number;
@@ -450,19 +757,11 @@ const handleFavoriteUpdated = (event: Event) => {
 };
 
 const formatPrice = (item: any) => {
-  let price = null;
+  const price = getVariantPrice(item);
 
-  if (item?.price != null) {
-    price = item.price;
-  } else if (
-    item?.variants &&
-    Array.isArray(item.variants) &&
-    item.variants.length > 0
-  ) {
-    price = item.variants[0]?.price;
+  if (price == null || Number.isNaN(price) || price <= 0) {
+    return "Liên hệ";
   }
-
-  if (price == null || isNaN(price)) return "Liên hệ";
 
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
@@ -471,17 +770,23 @@ const formatPrice = (item: any) => {
 };
 
 const formatOldPrice = (val: number) => {
-  if (val == null || isNaN(val)) return "";
+  if (val == null || Number.isNaN(Number(val))) {
+    return "";
+  }
 
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
     currency: "VND",
-  }).format(val);
+  }).format(Number(val));
 };
 
 onMounted(() => {
   window.addEventListener("favorite-updated", handleFavoriteUpdated);
   loadMyFavorites();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("favorite-updated", handleFavoriteUpdated);
 });
 
 watch(
@@ -496,7 +801,6 @@ watch(
 </script>
 
 <style scoped>
-/* GIỮ NGUYÊN TOÀN BỘ CSS CỦA M, KHÔNG ĐỤNG CHẠM TỚI 1 CHỮ */
 .btn-heart-small.active {
   color: #e53e3e;
   border-color: #e53e3e;
@@ -512,9 +816,11 @@ watch(
   width: 18px;
   height: 18px;
 }
+
 .home-section {
   margin-bottom: 70px;
 }
+
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -523,6 +829,7 @@ watch(
   padding-bottom: 15px;
   border-bottom: 2px solid #eaeaea;
 }
+
 .section-title {
   font-size: 20px;
   margin: 0;
@@ -530,6 +837,21 @@ watch(
   font-weight: 700;
   text-transform: uppercase;
 }
+
+.text-flash {
+  color: #e53e3e;
+}
+
+.countdown-timer {
+  font-size: 14px;
+  color: #718096;
+}
+
+.countdown-timer span {
+  color: #e53e3e;
+  font-weight: 800;
+}
+
 .sort-box {
   display: flex;
   align-items: center;
@@ -537,17 +859,20 @@ watch(
   font-size: 14px;
   color: #718096;
 }
+
 .sort-box select {
   padding: 8px 15px;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
   outline: none;
 }
+
 .product-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 30px;
 }
+
 .product-card.luxury-card {
   background: #fff;
   border-radius: 12px;
@@ -559,10 +884,12 @@ watch(
   position: relative;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
 }
+
 .product-card.luxury-card:hover {
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
   transform: translateY(-4px);
 }
+
 .card-img-wrapper {
   position: relative;
   background: #f8f9fa;
@@ -572,6 +899,7 @@ watch(
   align-items: center;
   justify-content: center;
 }
+
 .card-img-wrapper img {
   max-width: 100%;
   max-height: 100%;
@@ -579,9 +907,11 @@ watch(
   mix-blend-mode: multiply;
   transition: 0.4s ease;
 }
+
 .product-card.luxury-card:hover .card-img-wrapper img {
   transform: scale(1.06);
 }
+
 .btn-heart-small {
   position: absolute;
   top: 15px;
@@ -599,10 +929,12 @@ watch(
   transition: 0.2s;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
+
 .btn-heart-small:hover {
   color: #e53e3e;
   border-color: #e53e3e;
 }
+
 .sale-badge {
   position: absolute;
   top: 15px;
@@ -614,6 +946,7 @@ watch(
   padding: 4px 8px;
   border-radius: 4px;
 }
+
 .new-badge {
   position: absolute;
   top: 15px;
@@ -626,6 +959,7 @@ watch(
   border-radius: 4px;
   letter-spacing: 1px;
 }
+
 .card-info {
   padding: 20px;
   display: flex;
@@ -634,6 +968,7 @@ watch(
   text-align: center;
   gap: 6px;
 }
+
 .card-brand {
   font-size: 11px;
   font-weight: 700;
@@ -641,6 +976,7 @@ watch(
   text-transform: uppercase;
   letter-spacing: 1.5px;
 }
+
 .card-name {
   font-size: 16px;
   font-weight: 600;
@@ -652,35 +988,98 @@ watch(
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
 .card-rating {
   font-size: 12px;
   display: flex;
   align-items: center;
   gap: 6px;
 }
+
 .card-rating .stars {
   color: #ecc94b;
   letter-spacing: 1px;
 }
+
 .card-rating .score {
   color: #a0aec0;
 }
+
 .card-price-box {
   display: flex;
   align-items: baseline;
+  justify-content: center;
   gap: 12px;
   margin-top: 5px;
+  min-height: 24px;
 }
+
 .card-price {
   font-size: 16px;
   font-weight: 700;
   color: #0a142f;
 }
+
 .card-old-price {
   font-size: 13px;
   color: #a0aec0;
   text-decoration: line-through;
 }
+
+.card-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 0.85fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.btn-buy-now-small,
+.btn-view-detail {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 0.2s;
+  min-height: 38px;
+}
+
+.btn-buy-now-small {
+  background: #0a142f;
+  color: #ffffff;
+}
+
+.btn-buy-now-small:hover:not(:disabled) {
+  background: #13275a;
+  transform: translateY(-1px);
+}
+
+.btn-buy-now-small:disabled {
+  background: #a0aec0;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-view-detail {
+  background: #faf8f4;
+  color: #b78d52;
+  border: 1px solid rgba(183, 141, 82, 0.3);
+}
+
+.btn-view-detail:hover {
+  background: #b78d52;
+  color: #ffffff;
+}
+
+.card-stock-warning {
+  margin-top: 8px;
+  color: #e53e3e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .pagination-container {
   display: flex;
   justify-content: center;
@@ -688,6 +1087,7 @@ watch(
   gap: 8px;
   margin-top: 40px;
 }
+
 .page-btn {
   width: 36px;
   height: 36px;
@@ -703,17 +1103,42 @@ watch(
   transition: 0.2s;
   font-family: inherit;
 }
+
 .page-btn:hover:not(:disabled) {
   border-color: #c69c6d;
   color: #c69c6d;
 }
+
 .page-btn.active {
   background: #0a142f;
   color: white;
   border-color: #0a142f;
 }
+
 .page-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+@media (max-width: 1200px) {
+  .product-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .section-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .product-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card-actions {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
