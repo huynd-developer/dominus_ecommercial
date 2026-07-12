@@ -64,4 +64,15 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
             @Param("fromDate") LocalDateTime fromDate,
             @Param("toDate") LocalDateTime toDate
     );
+    @Query("""
+        SELECT oi
+        FROM OrderItem oi
+        JOIN FETCH oi.productVariant pv
+        LEFT JOIN FETCH pv.product p
+        LEFT JOIN FETCH pv.capacity c
+        LEFT JOIN FETCH pv.bottleType bt
+        WHERE oi.order.id = :orderId
+        ORDER BY oi.id ASC
+        """)
+    List<OrderItem> findByOrderIdWithVariant(@Param("orderId") Integer orderId);
 }
