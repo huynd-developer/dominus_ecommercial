@@ -18,6 +18,7 @@
         :finalTotal="finalTotal"
         :canCheckout="canCheckout"
         @checkout="goToCheckout"
+        @apply-voucher="handleApplyVoucher"
       />
     </main>
 
@@ -41,6 +42,10 @@ const router = useRouter();
 const cartItems = ref<any[]>([]);
 const isLoading = ref(true);
 const isUpdating = ref(false);
+
+// Biến lưu trữ Voucher
+const discountAmount = ref(0);
+const appliedVoucherCode = ref('');
 
 const getItemPrice = (item: any) => {
   return Number(item?.price || 0);
@@ -66,12 +71,22 @@ const totalAmount = computed(() => {
   }, 0);
 });
 
-const discountAmount = computed(() => {
-  return 0;
-});
+// Hàm hứng dữ liệu từ CartSummary khi khách bấm "Áp dụng"
+const handleApplyVoucher = (discount: number, code: string) => {
+  discountAmount.value = discount;
+  appliedVoucherCode.value = code;
+
+  // Lưu mã vào localStorage để mang sang trang Checkout xử lý tiếp
+  if (code) {
+    localStorage.setItem('applied_voucher', code);
+  } else {
+    localStorage.removeItem('applied_voucher');
+  }
+};
 
 const finalTotal = computed(() => {
-  return totalAmount.value - discountAmount.value;
+  // Đảm bảo tổng thanh toán không bao giờ bị âm
+  return Math.max(0, totalAmount.value - discountAmount.value);
 });
 
 const canCheckout = computed(() => {
@@ -104,6 +119,16 @@ const showError = async (title: string, text: string) => {
     confirmButtonText: "Đóng",
     confirmButtonColor: "#bd9a5f",
   });
+};
+
+// Hàm reset voucher khi giỏ hàng thay đổi
+const resetVoucher = () => {
+  if (discountAmount.value > 0) {
+    discountAmount.value = 0;
+    appliedVoucherCode.value = '';
+    localStorage.removeItem('applied_voucher');
+    showToast("info", "Vui lòng áp dụng lại mã giảm giá do giỏ hàng đã thay đổi!");
+  }
 };
 
 const loadCart = async () => {
@@ -156,6 +181,7 @@ const updateQty = async (item: any, newQty: number) => {
     });
 
     item.quantity = newQty;
+    resetVoucher(); // Giỏ hàng thay đổi thì reset mã voucher
 
     await showToast("success", "Đã cập nhật số lượng");
   } catch (err: any) {
@@ -198,6 +224,7 @@ const removeItem = async (cartItemId: number) => {
     cartItems.value = cartItems.value.filter(
       (item) => item.cartItemId !== cartItemId
     );
+    resetVoucher(); // Giỏ hàng thay đổi thì reset mã voucher
 
     await showToast("success", "Đã xóa sản phẩm khỏi giỏ");
   } catch (err: any) {

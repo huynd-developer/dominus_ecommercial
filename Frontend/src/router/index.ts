@@ -8,6 +8,8 @@ import ProductDetailView from "@/modules/shop/feature/product/views/ProductDetai
 import CartView from "@/modules/shop/feature/cart/views/CartView.vue";
 import CheckoutView from "@/modules/shop/feature/checkout/views/CheckoutView.vue";
 import PaymentReturnView from "@/modules/shop/feature/checkout/views/PaymentReturnView.vue";
+import VoucherListView from "@/modules/admin/feature/voucher/views/VoucherListView.vue";
+import VoucherCreateView from "@/modules/admin/feature/voucher/views/VoucherCreateView.vue";
 
 // Admin layout & pages
 import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
@@ -253,11 +255,14 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "vouchers",
         name: "AdminVouchers",
-        component: mockPage("Hệ thống Voucher", "Hiếu"),
-        meta: {
-          requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER"],
-        },
+        component: () => import("@/modules/admin/feature/voucher/views/VoucherListView.vue"),
+        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
+      },
+      {
+        path: "vouchers/create",
+        name: "AdminVoucherCreate",
+        component: () => import("@/modules/admin/feature/voucher/views/VoucherCreateView.vue"),
+        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "flash-sale",
