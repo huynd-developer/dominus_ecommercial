@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 import java.util.Optional;
@@ -55,4 +56,24 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     Optional<ProductVariant> findBySkuIgnoreCaseAndIsDeletedFalse(String sku);
 
     List<ProductVariant> findByProductIdAndIsDeletedFalse(Integer productId);
+
+    @EntityGraph(attributePaths = {
+            "product",
+            "capacity",
+            "bottleType"
+    })
+    @Query("""
+        SELECT v
+        FROM ProductVariant v
+        JOIN v.product p
+        WHERE COALESCE(p.isDeleted, false) = false
+          AND (:keyword IS NULL
+               OR LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
+               OR LOWER(v.sku) LIKE LOWER(CONCAT('%', :keyword, '%')))
+        ORDER BY p.name ASC, v.sku ASC
+    """)
+    Page<ProductVariant> searchVariantsForPromotion(
+            String keyword,
+            Pageable pageable
+    );
 }

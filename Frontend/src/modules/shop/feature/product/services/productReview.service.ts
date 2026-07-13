@@ -1,7 +1,9 @@
 import api from "@/common/api";
 import type {
+  PageResponse,
   ProductReviewSummaryResponse,
   PublicProductReviewResponse,
+  ReviewSearchParams,
 } from "../types/product-review.type";
 
 export const productReviewService = {
@@ -11,9 +13,14 @@ export const productReviewService = {
     );
   },
 
-  getReviews(productId: number) {
-    return api.get<PublicProductReviewResponse[]>(
-      `/shop/products/${productId}/reviews`
-    );
+  getReviews(productId: number, params: ReviewSearchParams = {}) {
+    return api.get<
+      PageResponse<PublicProductReviewResponse> | PublicProductReviewResponse[]
+    >(`/shop/products/${productId}/reviews`, {
+      params: {
+        page: params.page ?? 0,
+        size: params.size ?? 5,
+      },
+    });
   },
 };

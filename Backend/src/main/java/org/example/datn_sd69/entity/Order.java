@@ -64,11 +64,14 @@ public class Order extends BaseEntity {
     private String paymentMethod;
 
     /**
-     * 0 = Chờ xác nhận
-     * 1 = Đã xác nhận
-     * 2 = Đang giao hàng
-     * 3 = Hoàn thành
-     * 4 = Đã hủy
+     0 = Chờ xác nhận
+     1 = Đã xác nhận / Đang chuẩn bị hàng
+     2 = Đang giao hàng
+     3 = Hoàn thành
+     4 = Đã hủy
+     5 = Giao hàng thất bại
+     6 = Yêu cầu hoàn hàng / đổi trả
+     7 = Hoàn hàng / đổi trả hoàn tất
      */
     @Column(name = "Status")
     private Integer status = 0;
