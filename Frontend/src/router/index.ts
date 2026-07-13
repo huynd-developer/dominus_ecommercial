@@ -8,12 +8,11 @@ import ProductDetailView from "@/modules/shop/feature/product/views/ProductDetai
 import CartView from "@/modules/shop/feature/cart/views/CartView.vue";
 import CheckoutView from "@/modules/shop/feature/checkout/views/CheckoutView.vue";
 import PaymentReturnView from "@/modules/shop/feature/checkout/views/PaymentReturnView.vue";
-import VoucherListView from "@/modules/admin/feature/voucher/views/VoucherListView.vue";
-import VoucherCreateView from "@/modules/admin/feature/voucher/views/VoucherCreateView.vue";
 
 // Admin layout & pages
 import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
 import ShopLayout from "@/modules/shop/layout/ShopLayout.vue";
+import ProductView from "@/modules/admin/feature/product/views/ProductView.vue";
 
 const mockPage = (title: string, assignee: string) => ({
   render: () =>
@@ -165,30 +164,15 @@ const routes: Array<RouteRecordRaw> = [
           allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
         },
       },
-      //       {
-      //   path: "products",
-      //   meta: {
-      //     requiresAuth: true,
-      //     allowedRoles: ["OWNER", "MANAGER"],
-      //   },
-      //   children: [
-      //     {
-      //       path: "",
-      //       name: "AdminProducts",
-      //       component: ProductListView,
-      //     },
-      //     {
-      //       path: "create",
-      //       name: "AdminProductCreate",
-      //       component: ProductCreateView,
-      //     },
-      //     {
-      //       path: ":id",
-      //       name: "AdminProductUpdate",
-      //       component: ProductUpdateView,
-      //     },
-      //   ],
-      // },
+      {
+        path: "products",
+        name: "AdminProducts",
+        component: ProductView,
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER"]
+        }
+      },
       {
         path: "categories",
         name: "AdminCategories",
@@ -273,7 +257,8 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "flash-sale",
         name: "AdminFlashSale",
-        component: mockPage("Quản lý Flash Sale", "Huy"),
+        component: () =>
+          import("@/modules/admin/feature/promotion/views/PromotionView.vue"),
         meta: {
           requiresAuth: true,
           allowedRoles: ["OWNER", "MANAGER"],

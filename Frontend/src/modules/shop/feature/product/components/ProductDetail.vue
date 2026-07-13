@@ -120,37 +120,33 @@
         <div class="price-box">
           <span class="current-price">
             {{
-              selectedVariant?.price != null &&
-              Number(selectedVariant.price) > 0
-                ? formatCurrency(Number(selectedVariant.price))
+              selectedDisplayPrice > 0
+                ? formatCurrency(selectedDisplayPrice)
                 : "Liên hệ"
             }}
           </span>
 
           <span
             class="old-price"
-            v-if="
-              product?.oldPrice &&
-              Number(product.oldPrice) > Number(selectedVariant?.price || 0)
-            "
+            v-if="selectedHasFlashSale"
           >
-            {{ formatCurrency(Number(product.oldPrice)) }}
+            {{ formatCurrency(selectedOriginalPrice) }}
+          </span>
+
+          <span
+            v-if="selectedHasFlashSale"
+            class="flash-sale-badge"
+          >
+            -{{ selectedDiscountPercent }}%
           </span>
         </div>
 
         <div
           class="save-badge"
-          v-if="
-            product?.oldPrice &&
-            Number(product.oldPrice) > Number(selectedVariant?.price || 0)
-          "
+          v-if="selectedHasFlashSale"
         >
-          Tiết kiệm
-          {{
-            formatCurrency(
-              Number(product.oldPrice) - Number(selectedVariant?.price || 0)
-            )
-          }}
+          Flash Sale đang diễn ra - tiết kiệm
+          {{ formatCurrency(selectedOriginalPrice - selectedDisplayPrice) }}
         </div>
 
         <div class="desc-divider"></div>
@@ -229,7 +225,14 @@
               ]"
               @click="selectVariant(variant)"
             >
-              {{ variant.capacity || "N/A" }}
+              <span>{{ variant.capacity || "N/A" }}</span>
+
+              <span
+                v-if="variant.isFlashSale"
+                class="variant-sale-chip"
+              >
+                -{{ Number(variant.discountPercent || 0) }}%
+              </span>
 
               <span
                 v-if="selectedVariant?.id === variant.id"
@@ -638,6 +641,43 @@ const normalizeStock = (variant: any) => {
   );
 };
 
+const selectedOriginalPrice = computed(() => {
+  if (!selectedVariant.value) {
+    return 0;
+  }
+
+  return Number(
+    selectedVariant.value.originalPrice ??
+      selectedVariant.value.oldPrice ??
+      selectedVariant.value.price ??
+      0
+  );
+});
+
+const selectedDisplayPrice = computed(() => {
+  if (!selectedVariant.value) {
+    return 0;
+  }
+
+  return Number(
+    selectedVariant.value.salePrice ??
+      selectedVariant.value.price ??
+      0
+  );
+});
+
+const selectedDiscountPercent = computed(() => {
+  return Number(selectedVariant.value?.discountPercent ?? 0);
+});
+
+const selectedHasFlashSale = computed(() => {
+  return (
+    Boolean(selectedVariant.value?.isFlashSale) &&
+    selectedDiscountPercent.value > 0 &&
+    selectedOriginalPrice.value > selectedDisplayPrice.value
+  );
+});
+
 const isVariantOutOfStock = computed(() => {
   if (!selectedVariant.value) {
     return true;
@@ -659,7 +699,7 @@ const isVariantInvalidPrice = computed(() => {
     return true;
   }
 
-  return Number(selectedVariant.value.price || 0) <= 0;
+  return selectedDisplayPrice.value <= 0;
 });
 
 const formatCurrency = (value: number) => {
@@ -675,9 +715,10 @@ const formatCurrency = (value: number) => {
 
 const getVariantId = () => {
   return Number(
-    selectedVariant.value?.id ??
+    selectedVariant.value?.productVariantId ??
+      selectedVariant.value?.variantId ??
+      selectedVariant.value?.id ??
       selectedVariant.value?.Id ??
-      selectedVariant.value?.productVariantId ??
       0
   );
 };
@@ -1199,6 +1240,7 @@ watch(
   display: flex;
   align-items: baseline;
   gap: 15px;
+  flex-wrap: wrap;
 }
 
 .current-price {
@@ -1220,6 +1262,18 @@ watch(
   font-size: 13px;
   font-weight: 500;
   margin-bottom: 25px;
+}
+
+.flash-sale-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #dc2626;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .desc-divider {
@@ -1328,6 +1382,18 @@ watch(
 .cap-btn.active {
   border-color: #0a142f;
   background: #0a142f;
+  color: #ffffff;
+}
+
+.variant-sale-chip {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #dc2626;
+}
+
+.cap-btn.active .variant-sale-chip {
   color: #ffffff;
 }
 

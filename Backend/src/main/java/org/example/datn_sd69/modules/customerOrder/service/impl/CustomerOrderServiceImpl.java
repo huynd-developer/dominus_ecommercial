@@ -50,7 +50,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         return orderRepository.findByCustomer_UserIdOrderByCreatedAtDesc(customer.getUserId())
                 .stream()
                 .map(order -> {
-                    List<OrderItem> items = orderItemRepository.findByOrder_Id(order.getId());
+                    List<OrderItem> items =
+                            orderItemRepository.findByOrderId(order.getId());
                     return mapToOrderResponse(order, items);
                 })
                 .toList();
@@ -69,7 +70,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                         "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn"
                 ));
 
-        List<OrderItem> items = orderItemRepository.findByOrder_Id(order.getId());
+        List<OrderItem> items =
+                orderItemRepository.findByOrderId(order.getId());
 
         return mapToOrderResponse(order, items);
     }
@@ -91,7 +93,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             throw badRequest("Chỉ được hủy đơn hàng khi đơn đang ở trạng thái chờ xác nhận");
         }
 
-        List<OrderItem> items = orderItemRepository.findByOrder_Id(order.getId());
+        List<OrderItem> items =
+                orderItemRepository.findByOrderId(order.getId());
 
         if (items.isEmpty()) {
             throw badRequest("Đơn hàng không có sản phẩm, không thể hủy");

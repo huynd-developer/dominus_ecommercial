@@ -13,10 +13,10 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
 
     /**
      * Dùng cho xử lý đơn và hoàn kho khi VNPay thất bại.
-     * FETCH productVariant để tránh lỗi lazy khi cộng lại tồn kho.
      */
     @Query("""
-            SELECT oi FROM OrderItem oi
+            SELECT oi
+            FROM OrderItem oi
             LEFT JOIN FETCH oi.productVariant pv
             WHERE oi.order.id = :orderId
             """)
@@ -25,6 +25,21 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
     List<OrderItem> findByOrder_Id(Integer orderId);
 
     List<OrderItem> findByOrder_IdOrderByIdAsc(Integer orderId);
+
+    /**
+     * Dùng cho màn hình Admin xem chi tiết đơn hàng
+     */
+    @Query("""
+            SELECT oi
+            FROM OrderItem oi
+            JOIN FETCH oi.productVariant pv
+            JOIN FETCH pv.product
+            JOIN FETCH pv.capacity
+            JOIN FETCH pv.bottleType
+            WHERE oi.order.id = :orderId
+            ORDER BY oi.id ASC
+            """)
+    List<OrderItem> findDetailByOrderId(@Param("orderId") Integer orderId);
 
     @Query(value = """
             SELECT COALESCE(SUM(oi.Quantity), 0)
@@ -57,22 +72,26 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
               AND o.CreatedAt >= :fromDate
               AND o.CreatedAt < :toDate
             GROUP BY p.Id, p.Name, b.Name
-            ORDER BY SUM(oi.Quantity) DESC, SUM(oi.FinalPrice) DESC
+            ORDER BY SUM(oi.Quantity) DESC,
+                     SUM(oi.FinalPrice) DESC
             """, nativeQuery = true)
     List<BestSellingProductProjection> findBestSellingProducts(
             @Param("status") Integer status,
             @Param("fromDate") LocalDateTime fromDate,
             @Param("toDate") LocalDateTime toDate
     );
+
+    List<OrderItem> findAllByOrder_Id(Integer orderId);
+
     @Query("""
-        SELECT oi
-        FROM OrderItem oi
-        JOIN FETCH oi.productVariant pv
-        LEFT JOIN FETCH pv.product p
-        LEFT JOIN FETCH pv.capacity c
-        LEFT JOIN FETCH pv.bottleType bt
-        WHERE oi.order.id = :orderId
-        ORDER BY oi.id ASC
-        """)
+    SELECT oi
+    FROM OrderItem oi
+    JOIN FETCH oi.productVariant pv
+    LEFT JOIN FETCH pv.product p
+    LEFT JOIN FETCH pv.capacity c
+    LEFT JOIN FETCH pv.bottleType bt
+    WHERE oi.order.id = :orderId
+    ORDER BY oi.id ASC
+    """)
     List<OrderItem> findByOrderIdWithVariant(@Param("orderId") Integer orderId);
 }

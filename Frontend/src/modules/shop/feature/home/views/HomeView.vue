@@ -1,14 +1,18 @@
 <template>
   <div class="home-view">
     <div class="container-fluid px-3 px-lg-5 py-4">
-      <!-- Banner to trên cùng giữ nguyên -->
       <HomeBanner />
 
       <section class="product-section mt-5">
         <div class="section-header d-flex align-items-center justify-content-between mb-4">
           <div class="d-flex align-items-center gap-3 flex-wrap">
             <h2 class="section-title mb-0">FLASH SALE</h2>
-            <CountdownTimer />
+
+            <CountdownTimer
+              v-if="flashSaleEndDate"
+              :target-date="flashSaleEndDate"
+              @expired="handleFlashSaleExpired"
+            />
           </div>
 
           <RouterLink to="/products" class="view-all-link">
@@ -16,9 +20,27 @@
           </RouterLink>
         </div>
 
+<<<<<<< HEAD
         <div class="row row-cols-2 row-cols-md-4 row-cols-lg-4 g-4">
           <div v-for="product in flashSaleProducts" :key="product.id" class="col"
             @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })" style="cursor: pointer;">
+=======
+        <div v-if="flashSaleLoading" class="text-center py-5">
+          <span class="spinner-border spinner-border-sm me-2"></span>
+          Đang tải Flash Sale...
+        </div>
+
+        <div v-else-if="flashSaleProducts.length === 0" class="empty-box">
+          Hiện chưa có sản phẩm Flash Sale đang diễn ra.
+        </div>
+
+        <div v-else class="row row-cols-2 row-cols-md-4 row-cols-lg-4 g-4">
+          <div
+            v-for="product in flashSaleProducts"
+            :key="product.productVariantId || product.id"
+            class="col"
+          >
+>>>>>>> b7504e3ce6a0e42a0d6a324ec60919d297777aae
             <ProductCard :product="product" />
           </div>
         </div>
@@ -33,10 +55,28 @@
           </RouterLink>
         </div>
 
+<<<<<<< HEAD
         <div class="row row-cols-2 row-cols-md-4 row-cols-lg-4 g-4">
           <!-- Cập nhật đường dẫn chuẩn: /product/:id -->
           <div v-for="product in flashSaleProducts" :key="product.id" class="col"
             @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })" style="cursor: pointer;">
+=======
+        <div v-if="productLoading" class="text-center py-5">
+          <span class="spinner-border spinner-border-sm me-2"></span>
+          Đang tải sản phẩm...
+        </div>
+
+        <div v-else-if="newestProducts.length === 0" class="empty-box">
+          Chưa có sản phẩm mới nhất.
+        </div>
+
+        <div v-else class="row row-cols-2 row-cols-md-4 row-cols-lg-4 g-4">
+          <div
+            v-for="product in newestProducts"
+            :key="product.id"
+            class="col"
+          >
+>>>>>>> b7504e3ce6a0e42a0d6a324ec60919d297777aae
             <ProductCard :product="product" />
           </div>
         </div>
@@ -46,8 +86,11 @@
         <div class="row g-0 align-items-stretch special-collection-inner">
           <div class="col-12 col-lg-5">
             <div class="collection-image-card h-100">
-              <!-- Banner giữa giữ nguyên -->
-              <img :src="collectionImage" alt="Bộ sưu tập đặc biệt" class="collection-main-image" />
+              <img
+                :src="collectionImage"
+                alt="Bộ sưu tập đặc biệt"
+                class="collection-main-image"
+              />
             </div>
           </div>
 
@@ -55,22 +98,34 @@
             <div class="collection-copy h-100">
               <p class="collection-kicker mb-2">BỘ SƯU TẬP</p>
               <h2 class="collection-title mb-3">ĐẶC BIỆT</h2>
+
               <p class="collection-desc mb-4">
-                Tuyển chọn những tuyệt tác hương thơm hiếm có, dành riêng cho những dấu ấn khác biệt.
+                Tuyển chọn những tuyệt tác hương thơm hiếm có, dành riêng cho
+                những dấu ấn khác biệt.
               </p>
 
-              <!-- Nút Khám phá ngay giữ nguyên -->
-              <RouterLink to="/collections/special" class="btn collection-btn">
+              <RouterLink to="/products" class="btn collection-btn">
                 KHÁM PHÁ NGAY
                 <i class="bi bi-arrow-right-short ms-1"></i>
               </RouterLink>
             </div>
           </div>
 
+<<<<<<< HEAD
           <!-- Cập nhật đường dẫn chuẩn: /product/:id -->
           <div v-for="product in flashSaleProducts" :key="product.id" class="col"
             @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })" style="cursor: pointer;">
             <ProductCard :product="product" />
+=======
+          <div
+            v-for="product in specialProducts"
+            :key="product.id"
+            class="col-12 col-lg-2 special-product-col"
+          >
+            <div class="special-product-wrap">
+              <ProductCard :product="product" />
+            </div>
+>>>>>>> b7504e3ce6a0e42a0d6a324ec60919d297777aae
           </div>
         </div>
       </section>
@@ -84,10 +139,28 @@
           </RouterLink>
         </div>
 
+<<<<<<< HEAD
         <div class="row row-cols-2 row-cols-md-4 row-cols-lg-4 g-4">
           <!-- Cập nhật đường dẫn chuẩn: /product/:id -->
           <div v-for="product in flashSaleProducts" :key="product.id" class="col"
             @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })" style="cursor: pointer;">
+=======
+        <div v-if="productLoading" class="text-center py-5">
+          <span class="spinner-border spinner-border-sm me-2"></span>
+          Đang tải sản phẩm...
+        </div>
+
+        <div v-else-if="featuredProducts.length === 0" class="empty-box">
+          Chưa có sản phẩm nổi bật.
+        </div>
+
+        <div v-else class="row row-cols-2 row-cols-md-4 row-cols-lg-4 g-4">
+          <div
+            v-for="product in featuredProducts"
+            :key="product.id"
+            class="col"
+          >
+>>>>>>> b7504e3ce6a0e42a0d6a324ec60919d297777aae
             <ProductCard :product="product" />
           </div>
         </div>
@@ -97,52 +170,341 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
-import axios from "axios";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import api from "@/common/api";
 import HomeBanner from "../components/HomeBanner.vue";
 import CountdownTimer from "../components/CountdownTimer.vue";
 import ProductCard from "../components/ProductCard.vue";
 import collectionImage from "@/assets/images/collection-aura.png";
 
-const flashSaleProducts = ref<any[]>([]);
-const newestProducts = ref<any[]>([]);
-const featuredProducts = ref<any[]>([]);
-const specialProducts = ref<any[]>([]);
+interface PageResponse<T> {
+  content?: T[];
+  totalElements?: number;
+  totalPages?: number;
+  number?: number;
+  size?: number;
+  page?: {
+    size: number;
+    number: number;
+    totalElements: number;
+    totalPages: number;
+  };
+}
 
-const fetchAllProducts = async () => {
+interface FlashSaleProductResponse {
+  promotionId: number;
+  promotionName: string;
+  endDate: string;
+  productVariantId: number;
+  productId: number | null;
+  productName: string | null;
+  sku: string | null;
+  capacity: string | null;
+  bottleType: string | null;
+  originalPrice: number;
+  discountPercent: number;
+  salePrice: number;
+  stockQuantity: number | null;
+}
+
+interface ProductCardVariant {
+  id?: number;
+  productVariantId?: number;
+  variantId?: number;
+  price?: number;
+  stockQuantity?: number;
+  status?: number;
+}
+
+interface ProductCardItem {
+  id: number;
+  productId?: number;
+  productVariantId?: number;
+  variantId?: number;
+
+  name: string;
+  brand: string;
+  color?: string;
+  imageUrl?: string;
+
+  salePrice: number;
+  originalPrice: number;
+  discountPercent: number;
+
+  rating: number;
+  reviewCount: number;
+
+  stockQuantity?: number;
+  isFlashSale?: boolean;
+  endDate?: string;
+
+  variants?: ProductCardVariant[];
+}
+
+const flashSaleProducts = ref<ProductCardItem[]>([]);
+const newestProducts = ref<ProductCardItem[]>([]);
+const featuredProducts = ref<ProductCardItem[]>([]);
+const specialProducts = ref<ProductCardItem[]>([]);
+
+const flashSaleLoading = ref(false);
+const productLoading = ref(false);
+
+let flashSaleRefreshTimer: ReturnType<typeof window.setInterval> | null = null;
+
+const flashSaleEndDate = computed(() => {
+  const validEndDates = flashSaleProducts.value
+    .map((item) => item.endDate)
+    .filter((value): value is string => Boolean(value))
+    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+  return validEndDates[0] || null;
+});
+
+const toNumber = (value: unknown, fallback = 0) => {
+  const numberValue = Number(value);
+
+  if (Number.isNaN(numberValue)) {
+    return fallback;
+  }
+
+  return numberValue;
+};
+
+const resolvePageContent = <T,>(data: any): T[] => {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (Array.isArray(data?.content)) {
+    return data.content;
+  }
+
+  if (Array.isArray(data?.data?.content)) {
+    return data.data.content;
+  }
+
+  if (Array.isArray(data?.data)) {
+    return data.data;
+  }
+
+  return [];
+};
+
+const formatBrand = (raw: any) => {
+  return raw?.brand?.name || raw?.brandName || raw?.brand || "Premium";
+};
+
+const resolveProductImage = (raw: any) => {
+  return (
+    raw?.imageUrl ||
+    raw?.image ||
+    raw?.thumbnailUrl ||
+    raw?.mainImage ||
+    raw?.images?.[0]?.url ||
+    raw?.images?.[0]?.imageUrl ||
+    ""
+  );
+};
+
+const mapNormalProduct = (p: any): ProductCardItem => {
+  const firstVariant =
+    Array.isArray(p.variants) && p.variants.length > 0
+      ? p.variants[0]
+      : null;
+
+  const basePrice = toNumber(
+    p.price ??
+      firstVariant?.price ??
+      p.minPrice ??
+      p.originalPrice,
+    0
+  );
+
+  const discountPercent = toNumber(p.discountPercent ?? p.discount, 0);
+
+  const salePrice =
+    discountPercent > 0
+      ? basePrice - (basePrice * discountPercent) / 100
+      : toNumber(p.salePrice, basePrice);
+
+  const productId = toNumber(p.productId ?? p.id, 0);
+
+  const productVariantId = toNumber(
+    p.productVariantId ??
+      p.variantId ??
+      firstVariant?.productVariantId ??
+      firstVariant?.variantId ??
+      firstVariant?.id,
+    0
+  );
+
+  const stockQuantity = toNumber(
+    p.stockQuantity ??
+      p.stock ??
+      firstVariant?.stockQuantity ??
+      firstVariant?.stock,
+    1
+  );
+
+  return {
+    id: productId,
+    productId,
+    productVariantId: productVariantId || undefined,
+    variantId: productVariantId || undefined,
+
+    name: p.name || p.productName || "Sản phẩm",
+    brand: formatBrand(p),
+    color: p.color || "#0a192f",
+    imageUrl: resolveProductImage(p),
+
+    salePrice,
+    originalPrice: basePrice,
+    discountPercent,
+
+    rating: toNumber(p.rating, 5),
+    reviewCount: toNumber(p.reviewCount ?? p.reviews, 0),
+
+    stockQuantity,
+
+    variants: productVariantId
+      ? [
+          {
+            id: productVariantId,
+            productVariantId,
+            variantId: productVariantId,
+            price: salePrice,
+            stockQuantity,
+            status: toNumber(firstVariant?.status, 1),
+          },
+        ]
+      : undefined,
+  };
+};
+
+const mapFlashSaleProduct = (item: FlashSaleProductResponse): ProductCardItem => {
+  const productVariantId = toNumber(item.productVariantId, 0);
+  const productId = toNumber(item.productId ?? item.productVariantId, 0);
+  const stockQuantity = toNumber(item.stockQuantity, 0);
+  const salePrice = toNumber(item.salePrice, 0);
+  const originalPrice = toNumber(item.originalPrice, 0);
+
+  return {
+    id: productId,
+    productId,
+    productVariantId,
+    variantId: productVariantId,
+
+    name: item.productName || "Sản phẩm Flash Sale",
+    brand: item.promotionName || "Flash Sale",
+    color: "#0a192f",
+
+    salePrice,
+    originalPrice,
+    discountPercent: toNumber(item.discountPercent, 0),
+
+    rating: 5,
+    reviewCount: 0,
+
+    stockQuantity,
+    isFlashSale: true,
+    endDate: item.endDate,
+
+    variants: [
+      {
+        id: productVariantId,
+        productVariantId,
+        variantId: productVariantId,
+        price: salePrice,
+        stockQuantity,
+        status: 1,
+      },
+    ],
+  };
+};
+
+const fetchFlashSaleProducts = async () => {
   try {
-    const res = await axios.get('http://localhost:8080/api/products');
-    const all = res.data.data?.content || res.data.data || [];
+    flashSaleLoading.value = true;
 
-    const formatted = all.map((p: any) => {
-      const basePrice = p.price || (p.variants && p.variants.length > 0 ? p.variants[0].price : 0) || 0;
-      const discount = p.discountPercent || 0;
-      const salePrice = discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
+    const res = await api.get<PageResponse<FlashSaleProductResponse>>(
+      "/promotions/flash-sale",
+      {
+        params: {
+          page: 0,
+          size: 4,
+        },
+      }
+    );
 
-      return {
-        id: p.id,
-        name: p.name,
-        brand: p.brand?.name || p.brand || 'Premium',
-        imageUrl: p.imageUrl,
-        color: p.color || '#0a192f',
-        salePrice: salePrice,
-        originalPrice: basePrice,
-        discountPercent: discount,
-        rating: p.rating || 5,
-        reviewCount: p.reviewCount || 0
-      };
-    });
-
-    flashSaleProducts.value = formatted.slice(0, 4);
-    newestProducts.value = formatted.slice(0, 4);
-    featuredProducts.value = formatted.slice(0, 4);
-    specialProducts.value = formatted.slice(0, 2);
-  } catch (err) {
-    console.error("Lỗi API trang chủ:", err);
+    const rows = resolvePageContent<FlashSaleProductResponse>(res.data);
+    flashSaleProducts.value = rows.map(mapFlashSaleProduct);
+  } catch (error) {
+    console.error("Lỗi tải Flash Sale:", error);
+    flashSaleProducts.value = [];
+  } finally {
+    flashSaleLoading.value = false;
   }
 };
 
-onMounted(fetchAllProducts);
+const fetchNormalProducts = async () => {
+  try {
+    productLoading.value = true;
+
+    const res = await api.get("/products", {
+      params: {
+        page: 0,
+        size: 12,
+      },
+    });
+
+    const rows = resolvePageContent<any>(res.data);
+    const formatted = rows.map(mapNormalProduct);
+
+    newestProducts.value = formatted.slice(0, 4);
+
+    const featured = formatted.slice(4, 8);
+    featuredProducts.value = featured.length > 0 ? featured : formatted.slice(0, 4);
+
+    const special = formatted.slice(8, 10);
+    specialProducts.value = special.length > 0 ? special : formatted.slice(0, 2);
+  } catch (error) {
+    console.error("Lỗi tải sản phẩm trang chủ:", error);
+
+    newestProducts.value = [];
+    featuredProducts.value = [];
+    specialProducts.value = [];
+  } finally {
+    productLoading.value = false;
+  }
+};
+
+const handleFlashSaleExpired = async () => {
+  await fetchFlashSaleProducts();
+};
+
+const startFlashSaleRealtimeRefresh = () => {
+  stopFlashSaleRealtimeRefresh();
+
+  flashSaleRefreshTimer = window.setInterval(() => {
+    fetchFlashSaleProducts();
+  }, 60000);
+};
+
+const stopFlashSaleRealtimeRefresh = () => {
+  if (flashSaleRefreshTimer) {
+    window.clearInterval(flashSaleRefreshTimer);
+    flashSaleRefreshTimer = null;
+  }
+};
+
+onMounted(async () => {
+  await Promise.all([fetchFlashSaleProducts(), fetchNormalProducts()]);
+  startFlashSaleRealtimeRefresh();
+});
+
+onBeforeUnmount(() => {
+  stopFlashSaleRealtimeRefresh();
+});
 </script>
 
 <style scoped>
@@ -169,6 +531,16 @@ onMounted(fetchAllProducts);
 
 .view-all-link:hover {
   color: var(--aura-gold);
+}
+
+.empty-box {
+  border: 1px dashed rgba(189, 154, 95, 0.34);
+  background: #fffaf2;
+  color: #777777;
+  border-radius: 14px;
+  padding: 28px 20px;
+  text-align: center;
+  font-weight: 600;
 }
 
 .special-collection {

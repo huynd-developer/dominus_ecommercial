@@ -45,27 +45,86 @@ const router = useRouter();
 const product = ref<any>(null);
 const isLoading = ref(true);
 
-const extractArrayData = (data: any) => {
-  return data?.data?.content || data?.data || data?.content || data || [];
+interface FlashSaleProductResponse {
+  promotionId: number;
+  promotionName: string;
+  endDate: string;
+  productVariantId: number;
+  productId: number | null;
+  productName: string | null;
+  sku: string | null;
+  capacity: string | null;
+  bottleType: string | null;
+  originalPrice: number;
+  discountPercent: number;
+  salePrice: number;
+  stockQuantity: number | null;
+}
+
+interface FlashSaleIndex {
+  byVariantId: Map<number, FlashSaleProductResponse>;
+  bySku: Map<string, FlashSaleProductResponse>;
+}
+
+const extractArrayData = (data: any): any[] => {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (Array.isArray(data?.content)) {
+    return data.content;
+  }
+
+  if (Array.isArray(data?.data?.content)) {
+    return data.data.content;
+  }
+
+  if (Array.isArray(data?.data)) {
+    return data.data;
+  }
+
+  return [];
 };
 
 const extractObjectData = (data: any) => {
-  return data?.data || data || null;
+  if (data?.data && !Array.isArray(data.data)) {
+    return data.data;
+  }
+
+  return data || null;
 };
 
-const extractCapacity = (variant: any) => {
-  if (!variant) return "N/A";
+const toNumber = (value: unknown, fallback = 0) => {
+  const numberValue = Number(value);
+
+  if (Number.isNaN(numberValue)) {
+    return fallback;
+  }
+
+  return numberValue;
+};
+
+const normalizeSku = (value: unknown) => {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+};
+
+const extractCapacity = (variant: any, flashSale?: FlashSaleProductResponse | null) => {
+  if (!variant && !flashSale) return "N/A";
 
   let value = null;
 
-  if (variant.capacity && typeof variant.capacity === "object") {
+  if (variant?.capacity && typeof variant.capacity === "object") {
     value = variant.capacity.value ?? variant.capacity.name;
-  } else if (variant.capacityValue != null) {
+  } else if (variant?.capacityValue != null) {
     value = variant.capacityValue;
-  } else if (variant.volume != null) {
+  } else if (variant?.volume != null) {
     value = variant.volume;
-  } else if (variant.capacity != null) {
+  } else if (variant?.capacity != null) {
     value = variant.capacity;
+  } else if (flashSale?.capacity != null) {
+    value = flashSale.capacity;
   }
 
   if (value == null || value === "") {
@@ -83,9 +142,10 @@ const extractCapacity = (variant: any) => {
   return text.toLowerCase().includes("ml") ? text : `${text}ml`;
 };
 
-const normalizeStock = (variant: any) => {
+const normalizeStock = (variant: any, flashSale?: FlashSaleProductResponse | null) => {
   return Number(
-    variant?.stock ??
+    flashSale?.stockQuantity ??
+      variant?.stock ??
       variant?.stockQuantity ??
       variant?.StockQuantity ??
       variant?.quantity ??
@@ -94,41 +154,199 @@ const normalizeStock = (variant: any) => {
   );
 };
 
-const mapVariant = (variant: any) => {
-  const stock = normalizeStock(variant);
+const getVariantId = (variant: any) => {
+  return Number(
+    variant?.productVariantId ??
+      variant?.variantId ??
+      variant?.id ??
+      variant?.Id ??
+      0
+  );
+};
+
+const getVariantSku = (variant: any) => {
+  return normalizeSku(variant?.sku ?? variant?.SKU);
+};
+
+const getPageTotalPages = (data: any) => {
+  return Number(
+    data?.page?.totalPages ??
+      data?.totalPages ??
+      data?.data?.page?.totalPages ??
+      data?.data?.totalPages ??
+      1
+  );
+};
+
+const fetchFlashSalePage = async (page: number, size: number) => {
+  const res = await api.get("/promotions/flash-sale", {
+    params: {
+      page,
+      size,
+    },
+  });
+
+  const data = res.data?.data || res.data;
 
   return {
-    ...variant,
-    id: variant?.id || variant?.Id,
-    sku: variant?.sku || variant?.SKU || "",
-    capacity: extractCapacity(variant),
-    price: Number(variant?.price || variant?.Price || 0),
-    stock,
-    stockQuantity: stock,
-    bottleType:
-      typeof variant?.bottleType === "object"
-        ? variant?.bottleType?.name
-        : variant?.bottleTypeName || variant?.bottleType || "",
+    rows: extractArrayData(data) as FlashSaleProductResponse[],
+    totalPages: getPageTotalPages(data),
   };
 };
 
-const mapProduct = (p: any, rawVariants: any[]) => {
+const fetchActiveFlashSaleIndex = async (): Promise<FlashSaleIndex> => {
+  const index: FlashSaleIndex = {
+    byVariantId: new Map<number, FlashSaleProductResponse>(),
+    bySku: new Map<string, FlashSaleProductResponse>(),
+  };
+
+  try {
+    const size = 24;
+    const firstPage = await fetchFlashSalePage(0, size);
+
+    const addRowsToIndex = (rows: FlashSaleProductResponse[]) => {
+      rows.forEach((item) => {
+        const variantId = Number(item?.productVariantId || 0);
+        const sku = normalizeSku(item?.sku);
+
+        if (variantId > 0) {
+          index.byVariantId.set(variantId, item);
+        }
+
+        if (sku) {
+          index.bySku.set(sku, item);
+        }
+      });
+    };
+
+    addRowsToIndex(firstPage.rows);
+
+    if (firstPage.totalPages > 1) {
+      const requests = [];
+
+      for (let page = 1; page < firstPage.totalPages; page++) {
+        requests.push(fetchFlashSalePage(page, size));
+      }
+
+      const pages = await Promise.all(requests);
+
+      pages.forEach((pageResult) => {
+        addRowsToIndex(pageResult.rows);
+      });
+    }
+  } catch (error) {
+    console.error("Lỗi tải Flash Sale để map vào chi tiết:", error);
+  }
+
+  return index;
+};
+
+const findFlashSaleForVariant = (
+  variant: any,
+  flashSaleIndex: FlashSaleIndex
+) => {
+  const variantId = getVariantId(variant);
+
+  if (variantId > 0 && flashSaleIndex.byVariantId.has(variantId)) {
+    return flashSaleIndex.byVariantId.get(variantId) || null;
+  }
+
+  const sku = getVariantSku(variant);
+
+  if (sku && flashSaleIndex.bySku.has(sku)) {
+    return flashSaleIndex.bySku.get(sku) || null;
+  }
+
+  return null;
+};
+
+const mapVariant = (
+  variant: any,
+  flashSaleIndex: FlashSaleIndex
+) => {
+  const flashSale = findFlashSaleForVariant(variant, flashSaleIndex);
+  const variantId = getVariantId(variant);
+  const stock = normalizeStock(variant, flashSale);
+
+  const normalPrice = toNumber(variant?.price ?? variant?.Price, 0);
+
+  const originalPrice = flashSale
+    ? toNumber(flashSale.originalPrice, normalPrice)
+    : normalPrice;
+
+  const salePrice = flashSale
+    ? toNumber(flashSale.salePrice, originalPrice)
+    : originalPrice;
+
+  return {
+    ...variant,
+
+    id: variantId,
+    productVariantId: variantId,
+    variantId,
+
+    sku: variant?.sku || variant?.SKU || flashSale?.sku || "",
+    capacity: extractCapacity(variant, flashSale),
+
+    /**
+     * Giá hiển thị:
+     * - Có Flash Sale: price = salePrice
+     * - Không Flash Sale: price = giá gốc
+     *
+     * FE chỉ hiển thị. Khi cart/checkout, BE vẫn phải tự tính lại Flash Sale.
+     */
+    price: salePrice,
+    salePrice,
+    originalPrice,
+    oldPrice: flashSale ? originalPrice : null,
+
+    discountPercent: flashSale ? toNumber(flashSale.discountPercent, 0) : 0,
+    isFlashSale: Boolean(flashSale),
+    promotionId: flashSale?.promotionId ?? null,
+    promotionName: flashSale?.promotionName ?? null,
+    promotionEndDate: flashSale?.endDate ?? null,
+
+    stock,
+    stockQuantity: stock,
+
+    bottleType:
+      typeof variant?.bottleType === "object"
+        ? variant?.bottleType?.name
+        : variant?.bottleTypeName ||
+          variant?.bottleType ||
+          flashSale?.bottleType ||
+          "",
+  };
+};
+
+const mapProduct = (
+  p: any,
+  rawVariants: any[],
+  flashSaleIndex: FlashSaleIndex
+) => {
   const mappedVariants = Array.isArray(rawVariants)
-    ? rawVariants.map(mapVariant).sort((a: any, b: any) => {
-        const valA = parseFloat(String(a.capacity).replace("ml", "")) || 0;
-        const valB = parseFloat(String(b.capacity).replace("ml", "")) || 0;
-        return valA - valB;
-      })
+    ? rawVariants
+        .map((variant) => mapVariant(variant, flashSaleIndex))
+        .sort((a: any, b: any) => {
+          const valA = parseFloat(String(a.capacity).replace("ml", "")) || 0;
+          const valB = parseFloat(String(b.capacity).replace("ml", "")) || 0;
+          return valA - valB;
+        })
     : [];
+
+  const firstVariant = mappedVariants[0];
 
   return {
     ...p,
-    id: p?.id || p?.Id,
+
+    id: Number(p?.id || p?.Id || 0),
     name: p?.name || p?.Name || "Sản phẩm",
+
     brand:
       typeof p?.brand === "object"
         ? p?.brand?.name
         : p?.brandName || p?.brand || "Premium",
+
     image:
       p?.imageUrl ||
       p?.ImageUrl ||
@@ -143,13 +361,39 @@ const mapProduct = (p: any, rawVariants: any[]) => {
             </text>
           </svg>
         `),
+
+    imageUrl: p?.imageUrl || p?.ImageUrl || p?.image || "",
+
     description: p?.description || p?.Description || "",
     rating: Number(p?.rating || 0),
+
+    gender: p?.gender,
+    concentration: p?.concentration,
+    concentrationName: p?.concentrationName,
+    fragranceFamily: p?.fragranceFamily,
+    fragranceFamilyName: p?.fragranceFamilyName,
+    fragranceFamilies: p?.fragranceFamilies,
+    scents: p?.scents,
+
     variants: mappedVariants,
-    price:
-      mappedVariants.length > 0
-        ? mappedVariants[0].price
-        : Number(p?.price || p?.Price || 0),
+
+    price: firstVariant
+      ? Number(firstVariant.price || 0)
+      : Number(p?.price || p?.Price || 0),
+
+    salePrice: firstVariant
+      ? Number(firstVariant.salePrice || firstVariant.price || 0)
+      : Number(p?.salePrice || p?.price || p?.Price || 0),
+
+    originalPrice: firstVariant
+      ? Number(firstVariant.originalPrice || firstVariant.price || 0)
+      : Number(p?.originalPrice || p?.price || p?.Price || 0),
+
+    discountPercent: firstVariant
+      ? Number(firstVariant.discountPercent || 0)
+      : Number(p?.discountPercent || 0),
+
+    isFlashSale: mappedVariants.some((variant: any) => variant.isFlashSale),
   };
 };
 
@@ -166,7 +410,11 @@ const loadProductDetail = async () => {
     isLoading.value = true;
     product.value = null;
 
-    const productRes = await api.get(`/products/${productId}`);
+    const [productRes, flashSaleIndex] = await Promise.all([
+      api.get(`/products/${productId}`),
+      fetchActiveFlashSaleIndex(),
+    ]);
+
     const productData = extractObjectData(productRes.data);
 
     let variantData: any[] = [];
@@ -182,7 +430,7 @@ const loadProductDetail = async () => {
         [];
     }
 
-    product.value = mapProduct(productData, variantData);
+    product.value = mapProduct(productData, variantData, flashSaleIndex);
   } catch (error: any) {
     console.error("Lỗi tải chi tiết sản phẩm:", error);
 
