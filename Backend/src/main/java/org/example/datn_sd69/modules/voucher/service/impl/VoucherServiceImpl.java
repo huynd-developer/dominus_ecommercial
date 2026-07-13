@@ -81,4 +81,45 @@ public class VoucherServiceImpl implements VoucherService {
         // Trả về số tiền được giảm để Frontend trừ đi
         return new VoucherApplyResponse(voucher.getCode(), discountAmount, "Áp dụng mã thành công!");
     }
+
+    @Override
+    public Voucher getVoucherById(Integer id) {
+        return voucherRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Voucher không tồn tại!"));
+    }
+
+    @Override
+    public void updateVoucher(Integer id, VoucherRequest request) {
+        Voucher voucher = getVoucherById(id);
+
+        // Validate ngày tháng
+        if (request.getStartDate().isAfter(request.getEndDate())) {
+            throw new IllegalArgumentException("Ngày bắt đầu không được lớn hơn ngày kết thúc!");
+        }
+
+        // Check trùng mã nếu khách đổi mã khác
+        if (!voucher.getCode().equals(request.getCode()) && voucherRepository.existsByCode(request.getCode())) {
+            throw new IllegalArgumentException("Mã Voucher này đã tồn tại!");
+        }
+
+        voucher.setCode(request.getCode());
+        voucher.setDiscountType(request.getDiscountType());
+        voucher.setDiscountValue(request.getDiscountValue());
+        voucher.setMinOrderValue(request.getMinOrderValue() != null ? request.getMinOrderValue() : java.math.BigDecimal.ZERO);
+        voucher.setMaxDiscount(request.getMaxDiscount());
+        voucher.setUsageLimit(request.getUsageLimit());
+        voucher.setStartDate(request.getStartDate());
+        voucher.setEndDate(request.getEndDate());
+        voucher.setStatus(request.getStatus() != null ? request.getStatus() : 1);
+
+        voucherRepository.save(voucher);
+    }
+
+    @Override
+    public void deleteVoucher(Integer id) {
+        Voucher voucher = getVoucherById(id);
+        // Xóa mềm (Soft Delete) theo đúng chuẩn DB của m
+        voucher.setIsDeleted(true);
+        voucherRepository.save(voucher);
+    }
 }

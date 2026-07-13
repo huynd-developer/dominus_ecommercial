@@ -23,6 +23,7 @@
               <th>Đã dùng / Giới hạn</th>
               <th>Thời hạn</th>
               <th>Trạng thái</th>
+              <th>Thao tác</th> <!-- CỘT MỚI -->
             </tr>
           </thead>
           <tbody>
@@ -43,9 +44,20 @@
                   {{ v.status === 1 ? 'Hoạt động' : 'Tạm dừng' }}
                 </span>
               </td>
+              <!-- NÚT THAO TÁC SỬA/XÓA -->
+              <td>
+                <div class="d-flex gap-2">
+                  <RouterLink :to="`/admin/vouchers/edit/${v.id}`" class="btn btn-sm btn-outline-primary" title="Sửa">
+                    <i class="bi bi-pencil-square"></i>
+                  </RouterLink>
+                  <button @click="handleDelete(v.id)" class="btn btn-sm btn-outline-danger" title="Xóa">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </div>
+              </td>
             </tr>
             <tr v-if="vouchers.length === 0">
-              <td colspan="6" class="text-center py-4 text-muted">Chưa có mã giảm giá nào.</td>
+              <td colspan="7" class="text-center py-4 text-muted">Chưa có mã giảm giá nào.</td>
             </tr>
           </tbody>
         </table>
@@ -57,6 +69,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
+import Swal from 'sweetalert2';
 
 const vouchers = ref<any[]>([]);
 const isLoading = ref(true);
@@ -72,6 +85,32 @@ const fetchVouchers = async () => {
     console.error("Lỗi lấy danh sách Voucher:", error);
   } finally {
     isLoading.value = false;
+  }
+};
+
+const handleDelete = async (id: number) => {
+  const result = await Swal.fire({
+    title: 'Xác nhận xóa?',
+    text: "Voucher này sẽ bị ẩn khỏi hệ thống!",
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#3085d6',
+    confirmButtonText: 'Xóa ngay!',
+    cancelButtonText: 'Hủy'
+  });
+
+  if (result.isConfirmed) {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`http://localhost:8080/api/admin/vouchers/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      Swal.fire('Đã xóa!', 'Voucher đã được xóa.', 'success');
+      fetchVouchers();
+    } catch (error) {
+      Swal.fire('Lỗi', 'Không thể xóa voucher này', 'error');
+    }
   }
 };
 

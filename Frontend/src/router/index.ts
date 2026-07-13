@@ -265,6 +265,12 @@ const routes: Array<RouteRecordRaw> = [
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
+        path: "vouchers/edit/:id",
+        name: "AdminVoucherUpdate",
+        component: () => import("@/modules/admin/feature/voucher/views/VoucherUpdateView.vue"),
+        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
+      },
+      {
         path: "flash-sale",
         name: "AdminFlashSale",
         component: mockPage("Quản lý Flash Sale", "Huy"),

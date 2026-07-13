@@ -14,4 +14,7 @@ public interface VoucherService {
     List<Voucher> getAllVouchers();
 
     VoucherApplyResponse applyVoucher(String code, BigDecimal orderTotal);
+    Voucher getVoucherById(Integer id);
+    void updateVoucher(Integer id, VoucherRequest request);
+    void deleteVoucher(Integer id);
 }
