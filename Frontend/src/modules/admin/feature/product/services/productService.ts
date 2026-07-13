@@ -1,9 +1,6 @@
-// src/modules/admin/feature/product/services/productService.ts
-
 import request from '@/common/services/request'
 
 import type {
-  Product,
   ProductRequestDTO,
   ProductResponse
 } from '../types/product.type'
@@ -17,8 +14,8 @@ export const productService = {
     page = 0,
     size = 10
   ) => {
-    const response = await request.get<any, any>(
-      `/products/admin?page=${page}&size=${size}`
+    const response = await request.get(
+      `/api/v1/products/admin?page=${page}&size=${size}`
     )
 
     return response.data ?? response
@@ -27,8 +24,8 @@ export const productService = {
   getProductById: async (
     id: number
   ): Promise<ProductResponse> => {
-    const response = await request.get<any, any>(
-      `/products/${id}`
+    const response = await request.get(
+      `/api/v1/products/${id}`
     )
 
     return response.data ?? response
@@ -37,8 +34,8 @@ export const productService = {
   createProduct: async (
     payload: ProductRequestDTO
   ) => {
-    const response = await request.post<any, any>(
-      '/products/admin',
+    const response = await request.post(
+      '/api/v1/products/admin',
       payload
     )
 
@@ -49,8 +46,8 @@ export const productService = {
     id: number,
     payload: ProductRequestDTO
   ) => {
-    const response = await request.put<any, any>(
-      `/products/admin/${id}`,
+    const response = await request.put(
+      `/api/v1/products/admin/${id}`,
       payload
     )
 
@@ -60,9 +57,11 @@ export const productService = {
   deleteProduct: async (
     id: number
   ) => {
-    return await request.delete<any, any>(
-      `/products/admin/${id}`
+    const response = await request.delete(
+      `/api/v1/products/admin/${id}`
     )
+
+    return response.data ?? response
   },
 
   // ==========================
@@ -77,8 +76,8 @@ export const productService = {
 
     formData.append('file', file)
 
-    const response = await request.post<any, any>(
-      `/products/admin/${productId}/images`,
+    const response = await request.post(
+      `/api/v1/products/admin/${productId}/images`,
       formData,
       {
         headers: {
@@ -95,48 +94,48 @@ export const productService = {
   // ==========================
 
   getBrands: async () => {
-    const response = await request.get<any, any>(
-      '/brands'
+    const response = await request.get(
+      '/api/admin/brands'
     )
 
     return response.data ?? response
   },
 
   getCategories: async () => {
-    const response = await request.get<any, any>(
-      '/categories'
+    const response = await request.get(
+      '/api/admin/categories'
     )
 
     return response.data ?? response
   },
 
   getConcentrations: async () => {
-    const response = await request.get<any, any>(
-      '/concentrations'
+    const response = await request.get(
+      '/api/admin/concentrations'
     )
 
     return response.data ?? response
   },
 
   getCapacities: async () => {
-    const response = await request.get<any, any>(
-      '/capacities'
+    const response = await request.get(
+      '/api/admin/capacities'
     )
 
     return response.data ?? response
   },
 
   getBottleTypes: async () => {
-    const response = await request.get<any, any>(
-      '/bottle-types'
+    const response = await request.get(
+      '/api/admin/bottle-types'
     )
 
     return response.data ?? response
   },
 
   getFragranceFamilies: async () => {
-    const response = await request.get<any, any>(
-      '/fragrance-families'
+    const response = await request.get(
+      '/api/admin/fragrance-families'
     )
 
     return response.data ?? response

@@ -2,14 +2,16 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { productService } from '../services/productService'
 import { useAppStore } from '@/common/store/app.store'
-import type { Product } from '../types/product.type'
+import type {
+    ProductResponse
+} from "../types/product.type";
 
 export const useProductStore = defineStore(
   'productStore',
   () => {
     const appStore = useAppStore()
 
-    const products = ref<Product[]>([])
+    const products = ref<ProductResponse[]>([])
 
     const brandList = ref<any[]>([])
     const categoryList = ref<any[]>([])
@@ -25,26 +27,36 @@ export const useProductStore = defineStore(
     // =========================
 
     const fetchProducts = async () => {
-      isLoading.value = true
 
-      try {
-        const response =
-          await productService.getProducts()
+    isLoading.value = true
 
-        if (response.content) {
-          products.value = response.content
-        } else {
-          products.value = response
-        }
-      } catch (err: any) {
+    try {
+
+        const res =
+            await productService.getProducts()
+
+        const data =
+            res?.content ??
+            res?.data?.content ??
+            res?.data ??
+            []
+
+        products.value = data
+
+    } catch (e:any) {
+
         appStore.notifyError(
-          err?.response?.data?.message ||
-            'Không thể tải danh sách sản phẩm'
+            e?.response?.data?.message ??
+            "Không thể tải danh sách sản phẩm"
         )
-      } finally {
+
+    } finally {
+
         isLoading.value = false
-      }
+
     }
+
+}
 
     // =========================
     // DROPDOWN DATA
@@ -68,17 +80,62 @@ export const useProductStore = defineStore(
           productService.getBottleTypes()
         ])
 
-        brandList.value = brands
-        categoryList.value = categories
-        concentrationList.value = concentrations
+        brandList.value =
+          brands?.content ??
+          brands?.data?.content ??
+          brands?.data ??
+          brands ??
+          []
+
+        categoryList.value =
+          categories?.content ??
+          categories?.data?.content ??
+          categories?.data ??
+          categories ??
+          []
+
+        concentrationList.value =
+          concentrations?.content ??
+          concentrations?.data?.content ??
+          concentrations?.data ??
+          concentrations ??
+          []
+
         fragranceFamilyList.value =
-          fragranceFamilies
-        capacityList.value = capacities
-        bottleTypeList.value = bottleTypes
+          fragranceFamilies?.content ??
+          fragranceFamilies?.data?.content ??
+          fragranceFamilies?.data ??
+          fragranceFamilies ??
+          []
+
+        capacityList.value =
+          capacities?.content ??
+          capacities?.data?.content ??
+          capacities?.data ??
+          capacities ??
+          []
+
+        bottleTypeList.value =
+          bottleTypes?.content ??
+          bottleTypes?.data?.content ??
+          bottleTypes?.data ??
+          bottleTypes ??
+          []
+
+        console.log('brandList', brandList.value)
+        console.log('categoryList', categoryList.value)
+        console.log(
+          'concentrationList',
+          concentrationList.value
+        )
       } catch (err) {
         console.error(
           'Lỗi tải dữ liệu dropdown',
           err
+        )
+
+        appStore.notifyError(
+          'Không thể tải dữ liệu dropdown'
         )
       }
     }

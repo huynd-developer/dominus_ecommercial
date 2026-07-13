@@ -1,40 +1,62 @@
 export interface Brand {
   id: number
-  name: string
+
+  brandName?: string
+
+  name?: string
 }
 
 export interface Category {
   id: number
-  name: string
+
+  categoryName?: string
+
+  name?: string
 }
 
 export interface Concentration {
   id: number
-  name: string
+
+  concentrationName?: string
+
+  name?: string
 }
 
 export interface BottleType {
   id: number
-  name: string
+
+  bottleTypeName?: string
+
+  name?: string
 }
 
 export interface Capacity {
   id: number
-  value: number
+
+  capacityValue?: string
+
+  value?: string
+
+  name?: string
 }
 
 export interface FragranceFamily {
   id: number
-  name: string
-}
 
+  familyName?: string
+
+  name?: string
+}
 export interface ProductVariant {
+
   id?: number
 
   capacityId: number
+
   capacityName?: string
 
   bottleTypeId: number
+
   bottleTypeName?: string
 
   sku: string
@@ -43,10 +65,12 @@ export interface ProductVariant {
 
   stockQuantity: number
 
-  status?: number
+  status: number
+
 }
 
 export interface Product {
+
   id: number
 
   name: string
@@ -54,25 +78,29 @@ export interface Product {
   description?: string
 
   brandId: number
+
   brandName?: string
 
   categoryId: number
+
   categoryName?: string
 
   concentrationId: number
+
   concentrationName?: string
 
-  gender?: number
+  gender: number
 
-  isNiche?: boolean
+  isNiche: boolean
 
   status: number
 
   primaryImageUrl?: string
 
-  fragranceFamilies?: FragranceFamily[]
+  fragranceFamilies: FragranceFamily[]
 
   variants: ProductVariant[]
+
 }
 
 export interface ProductRequestDTO {
@@ -92,7 +120,7 @@ export interface ProductRequestDTO {
 
   status?: number
 
-  fragranceFamilyIds?: number[]
+  fragranceFamilyIds: number[]
 
   variants: ProductVariant[]
 }

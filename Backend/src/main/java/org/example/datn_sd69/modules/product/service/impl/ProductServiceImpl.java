@@ -148,6 +148,8 @@ public class ProductServiceImpl implements ProductService {
 
         productVariantRepository.deleteByProduct_Id(id);
 
+        productVariantRepository.flush();
+
         List<ProductVariant> variants = new ArrayList<>();
 
         for (ProductRequest.VariantRequestDTO dto : request.getVariants()) {

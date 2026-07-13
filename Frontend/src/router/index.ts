@@ -5,10 +5,10 @@ import { h } from "vue";
 
 
 // Import các trang của m
-import CartView from "@/modules/shop/feature/cart/CartViews.vue";
-import CheckoutView from "@/modules/shop/feature/checkout/CheckoutViews.vue";
-import PaymentReturnView from "@/modules/shop/feature/checkout/PaymentReturnView.vue";
-import ProductView from '@/modules/admin/feature/product/views/ProductView.vue'
+import CartView from "@/modules/shop/feature/cart/views/CartView.vue";
+import CheckoutView from "@/modules/shop/feature/checkout/views/CheckoutView.vue";
+import PaymentReturnView from "@/modules/shop/feature/checkout/views/PaymentReturnView.vue";
+import ProductView from "@/modules/admin/feature/product/views/ProductView.vue";
 
 // Admin layout & pages
 import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
@@ -130,7 +130,7 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "dashboard",
         name: "AdminDashboard",
-        component: () => import("@/modules/admin/feature/dashboard/views/DashboardView.vue"),
+        component: mockPage("Quản lý Đơn hàng", "Trung"),
         meta: {
           requiresAuth: true,
           allowedRoles: ["OWNER"],

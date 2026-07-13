@@ -11,12 +11,32 @@ import java.util.List;
 
 public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
 
+    // ==========================
+    // ORDER DETAIL
+    // ==========================
+
     @Query("""
-            SELECT oi FROM OrderItem oi
-            LEFT JOIN FETCH oi.productVariant pv
-            WHERE oi.order.id = :orderId
-            """)
-    List<OrderItem> findByOrderId(@Param("orderId") Integer orderId);
+        SELECT oi
+        FROM OrderItem oi
+        LEFT JOIN FETCH oi.productVariant pv
+        LEFT JOIN FETCH pv.product p
+        LEFT JOIN FETCH pv.capacity
+        LEFT JOIN FETCH pv.bottleType
+        WHERE oi.order.id = :orderId
+    """)
+    List<OrderItem> findByOrderId(
+            @Param("orderId") Integer orderId
+    );
+
+    // ==========================
+    // CANCEL ORDER
+    // ==========================
+
+    List<OrderItem> findAllByOrder_Id(Integer orderId);
+
+    // ==========================
+    // REPORT
+    // ==========================
 
     @Query(value = """
             SELECT COALESCE(SUM(oi.Quantity), 0)
@@ -49,12 +69,12 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
               AND o.CreatedAt >= :fromDate
               AND o.CreatedAt < :toDate
             GROUP BY p.Id, p.Name, b.Name
-            ORDER BY SUM(oi.Quantity) DESC, SUM(oi.FinalPrice) DESC
+            ORDER BY SUM(oi.Quantity) DESC,
+                     SUM(oi.FinalPrice) DESC
             """, nativeQuery = true)
     List<BestSellingProductProjection> findBestSellingProducts(
             @Param("status") Integer status,
             @Param("fromDate") LocalDateTime fromDate,
             @Param("toDate") LocalDateTime toDate
     );
-    List<OrderItem> findByOrder_Id(Integer orderId);
 }

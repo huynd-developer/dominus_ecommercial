@@ -181,15 +181,11 @@ const stopSelling = async (
         </div>
 
         <button
-          v-permission="[
-            'OWNER',
-            'MANAGER'
-          ]"
-          @click="openAddModal"
-          class="btn btn-dark rounded-pill px-4 fw-medium shadow-sm"
-        >
-          + Thêm mới
-        </button>
+  @click="openAddModal"
+  class="btn btn-dark rounded-pill px-4 fw-medium shadow-sm"
+>
+  + Thêm mới
+</button>
       </div>
     </div>
 
