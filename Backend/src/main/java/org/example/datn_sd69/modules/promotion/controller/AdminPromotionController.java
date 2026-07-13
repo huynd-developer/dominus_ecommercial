@@ -6,6 +6,7 @@ import org.example.datn_sd69.modules.promotion.dto.request.PromotionRequest;
 import org.example.datn_sd69.modules.promotion.dto.request.PromotionStatusRequest;
 import org.example.datn_sd69.modules.promotion.service.PromotionService;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -24,12 +25,14 @@ public class AdminPromotionController {
 
     /**
      * Danh sách chiến dịch khuyến mãi.
+     *
+     * GET /api/admin/promotions?page=0&size=10
      */
     @GetMapping
     public ResponseEntity<?> getAll(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Integer status,
-            Pageable pageable
+            @PageableDefault(size = 10) Pageable pageable
     ) {
         return ResponseEntity.ok(promotionService.getAll(keyword, status, pageable));
     }
@@ -45,7 +48,8 @@ public class AdminPromotionController {
     /**
      * API cho UI chọn sản phẩm khuyến mãi.
      * Admin không nhập ID thủ công.
-     * FE search theo tên sản phẩm / SKU / barcode rồi tick chọn biến thể.
+     *
+     * GET /api/admin/promotions/product-variants?page=0&size=10
      */
     @GetMapping("/product-variants")
     public ResponseEntity<?> searchProductVariantsForPromotion(
@@ -61,7 +65,7 @@ public class AdminPromotionController {
 
             @RequestParam(required = false) Integer ignorePromotionId,
 
-            Pageable pageable
+            @PageableDefault(size = 10) Pageable pageable
     ) {
         return ResponseEntity.ok(
                 promotionService.searchProductVariantsForPromotion(

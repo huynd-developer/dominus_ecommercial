@@ -1,3 +1,18 @@
+export interface PageResponse<T> {
+  content?: T[];
+  totalElements?: number;
+  totalPages?: number;
+  size?: number;
+  number?: number;
+
+  page?: {
+    size: number;
+    number: number;
+    totalElements: number;
+    totalPages: number;
+  };
+}
+
 export interface PublicProductReviewResponse {
   reviewId: number;
   productId: number | null;
@@ -21,4 +36,9 @@ export interface ProductReviewSummaryResponse {
   threeStarCount: number;
   twoStarCount: number;
   oneStarCount: number;
+}
+
+export interface ReviewSearchParams {
+  page?: number;
+  size?: number;
 }

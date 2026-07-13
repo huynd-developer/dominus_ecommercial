@@ -16,6 +16,7 @@ import org.example.datn_sd69.repository.ProductVariantRepository;
 import org.example.datn_sd69.repository.PromotionRepository;
 import org.example.datn_sd69.repository.PromotionVariantRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
@@ -47,7 +49,7 @@ public class PromotionServiceImpl implements PromotionService {
         validateStatusFilter(status);
 
         return promotionRepository
-                .search(normalizeKeyword(keyword), status, pageable)
+                .search(normalizeKeyword(keyword), status, normalizePageable(pageable, 10, 100))
                 .map(this::toPromotionResponse);
     }
 
@@ -147,14 +149,17 @@ public class PromotionServiceImpl implements PromotionService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<FlashSaleProductResponse> getActiveFlashSaleProducts() {
+    public Page<FlashSaleProductResponse> getActiveFlashSaleProducts(Pageable pageable) {
         LocalDateTime now = LocalDateTime.now();
+        LocalDate today = LocalDate.now();
 
-        return promotionVariantRepository.findActiveFlashSaleVariants(now)
-                .stream()
-                .filter(pv -> isVariantUsableNow(pv.getProductVariant()))
-                .map(this::toFlashSaleProductResponse)
-                .toList();
+        return promotionVariantRepository
+                .findActiveFlashSaleVariants(
+                        now,
+                        today,
+                        normalizePageable(pageable, 8, 24)
+                )
+                .map(this::toFlashSaleProductResponse);
     }
 
     @Override
@@ -167,7 +172,10 @@ public class PromotionServiceImpl implements PromotionService {
             Pageable pageable
     ) {
         return productVariantRepository
-                .searchVariantsForPromotion(normalizeKeyword(keyword), pageable)
+                .searchVariantsForPromotion(
+                        normalizeKeyword(keyword),
+                        normalizePageable(pageable, 10, 50)
+                )
                 .map(variant -> toPromotionProductVariantOptionResponse(
                         variant,
                         startDate,
@@ -471,6 +479,7 @@ public class PromotionServiceImpl implements PromotionService {
                 .status(promotion.getStatus())
                 .statusText(resolveStatusText(promotion))
                 .activeNow(isRunningNow(promotion))
+                .ended(isEnded(promotion))
                 .variants(variants)
                 .build();
     }
@@ -602,33 +611,6 @@ public class PromotionServiceImpl implements PromotionService {
                 .build();
     }
 
-    private boolean isVariantUsableNow(ProductVariant variant) {
-        if (variant == null) {
-            return false;
-        }
-
-        if (variant.getStatus() == null || variant.getStatus() != STATUS_ENABLED) {
-            return false;
-        }
-
-        if (variant.getProduct() == null
-                || variant.getProduct().getStatus() == null
-                || variant.getProduct().getStatus() != STATUS_ENABLED) {
-            return false;
-        }
-
-        if (variant.getStockQuantity() == null || variant.getStockQuantity() <= 0) {
-            return false;
-        }
-
-        if (variant.getExpirationDate() != null) {
-            LocalDateTime expirationDateTime = variant.getExpirationDate().atTime(23, 59, 59);
-            return !LocalDateTime.now().isAfter(expirationDateTime);
-        }
-
-        return true;
-    }
-
     private BigDecimal calculateSalePrice(BigDecimal originalPrice, Double discountPercent) {
         if (originalPrice == null || discountPercent == null) {
             return BigDecimal.ZERO;
@@ -709,5 +691,17 @@ public class PromotionServiceImpl implements PromotionService {
                     "Trạng thái khuyến mãi chỉ được là 0 hoặc 1"
             );
         }
+    }
+
+    private Pageable normalizePageable(Pageable pageable, int defaultSize, int maxSize) {
+        if (pageable == null || pageable.isUnpaged()) {
+            return PageRequest.of(0, defaultSize);
+        }
+
+        int page = Math.max(pageable.getPageNumber(), 0);
+        int size = pageable.getPageSize() <= 0 ? defaultSize : pageable.getPageSize();
+        size = Math.min(size, maxSize);
+
+        return PageRequest.of(page, size, pageable.getSort());
     }
 }

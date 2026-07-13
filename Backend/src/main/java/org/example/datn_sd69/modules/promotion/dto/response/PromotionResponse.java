@@ -28,5 +28,7 @@ public class PromotionResponse {
 
     private Boolean activeNow;
 
+    private Boolean ended;
+
     private List<PromotionVariantResponse> variants;
 }

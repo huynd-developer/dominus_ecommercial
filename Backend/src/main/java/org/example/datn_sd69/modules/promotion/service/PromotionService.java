@@ -8,7 +8,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 public interface PromotionService {
 
@@ -26,7 +25,7 @@ public interface PromotionService {
 
     int syncExpiredPromotions();
 
-    List<FlashSaleProductResponse> getActiveFlashSaleProducts();
+    Page<FlashSaleProductResponse> getActiveFlashSaleProducts(Pageable pageable);
 
     Page<PromotionProductVariantOptionResponse> searchProductVariantsForPromotion(
             String keyword,

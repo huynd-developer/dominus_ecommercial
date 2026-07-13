@@ -2,7 +2,14 @@
   <aside class="sidebar-filter">
     <div class="filter-header">
       <h3>BỘ LỌC TÌM KIẾM</h3>
-      <svg class="icon-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+
+      <svg
+        class="icon-filter"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
         <line x1="4" y1="21" x2="4" y2="14" />
         <line x1="4" y1="10" x2="4" y2="3" />
         <line x1="12" y1="21" x2="12" y2="12" />
@@ -16,123 +23,269 @@
     </div>
 
     <div class="filter-group">
-  <div class="group-title">Giới tính</div>
-  <div class="checkbox-list row">
-    <label class="custom-checkbox">
-      <input type="checkbox" value="Nam" v-model="selectedFilters.genders" @change="emitFilter">
-      <span class="checkmark"></span> Nam
-    </label>
-    
-    <label class="custom-checkbox">
-      <input type="checkbox" value="Nữ" v-model="selectedFilters.genders" @change="emitFilter">
-      <span class="checkmark"></span> Nữ
-    </label>
-    
-    <label class="custom-checkbox">
-      <input type="checkbox" value="Unisex" v-model="selectedFilters.genders" @change="emitFilter">
-      <span class="checkmark"></span> Unisex
-    </label>
-  </div>
-</div>
+      <div class="group-title">Giới tính</div>
 
-<div class="filter-group">
-      <div class="group-title">Dung tích <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15" /></svg></div>
-      <div class="checkbox-list col">
-        <label class="custom-checkbox" v-for="item in capacities" :key="item.id">
-          <input type="checkbox" :value="item.value + 'ml'" v-model="selectedFilters.capacities" @change="emitFilter" />
-          <span class="checkmark"></span> {{ item.value }}ml
+      <div class="checkbox-list row">
+        <label class="custom-checkbox">
+          <input
+            v-model="selectedFilters.genders"
+            type="checkbox"
+            value="Nam"
+            @change="emitFilter"
+          />
+          <span class="checkmark"></span>
+          Nam
+        </label>
+
+        <label class="custom-checkbox">
+          <input
+            v-model="selectedFilters.genders"
+            type="checkbox"
+            value="Nữ"
+            @change="emitFilter"
+          />
+          <span class="checkmark"></span>
+          Nữ
+        </label>
+
+        <label class="custom-checkbox">
+          <input
+            v-model="selectedFilters.genders"
+            type="checkbox"
+            value="Unisex"
+            @change="emitFilter"
+          />
+          <span class="checkmark"></span>
+          Unisex
         </label>
       </div>
     </div>
 
     <div class="filter-group">
-      <div class="group-title">Nồng độ <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15" /></svg></div>
+      <div class="group-title">
+        Dung tích
+        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="18 15 12 9 6 15" />
+        </svg>
+      </div>
+
       <div class="checkbox-list col">
-        <label class="custom-checkbox" v-for="item in concentrations" :key="item.id">
-          <input type="checkbox" :value="item.name" v-model="selectedFilters.concentrations" @change="emitFilter" />
-          <span class="checkmark"></span> {{ item.name }}
+        <label
+          v-for="item in capacities"
+          :key="item.id"
+          class="custom-checkbox"
+        >
+          <input
+            v-model="selectedFilters.capacities"
+            type="checkbox"
+            :value="formatCapacityValue(item)"
+            @change="emitFilter"
+          />
+          <span class="checkmark"></span>
+          {{ formatCapacityValue(item) }}
         </label>
       </div>
     </div>
 
     <div class="filter-group">
-      <div class="group-title">Nhóm hương <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15" /></svg></div>
+      <div class="group-title">
+        Nồng độ
+        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="18 15 12 9 6 15" />
+        </svg>
+      </div>
+
       <div class="checkbox-list col">
-        <label class="custom-checkbox" v-for="item in fragranceFamilies" :key="item.id">
-          <input type="checkbox" :value="item.name" v-model="selectedFilters.fragranceFamilies" @change="emitFilter" />
-          <span class="checkmark"></span> {{ item.name }}
+        <label
+          v-for="item in concentrations"
+          :key="item.id"
+          class="custom-checkbox"
+        >
+          <input
+            v-model="selectedFilters.concentrations"
+            type="checkbox"
+            :value="item.name"
+            @change="emitFilter"
+          />
+          <span class="checkmark"></span>
+          {{ item.name }}
         </label>
       </div>
     </div>
 
     <div class="filter-group">
-      <div class="group-title">Loại chai <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15" /></svg></div>
+      <div class="group-title">
+        Nhóm hương
+        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="18 15 12 9 6 15" />
+        </svg>
+      </div>
+
       <div class="checkbox-list col">
-        <label class="custom-checkbox" v-for="item in bottleTypes" :key="item.id">
-          <input type="checkbox" :value="item.name" v-model="selectedFilters.bottleTypes" @change="emitFilter" />
-          <span class="checkmark"></span> {{ item.name }}
+        <label
+          v-for="item in fragranceFamilies"
+          :key="item.id"
+          class="custom-checkbox"
+        >
+          <input
+            v-model="selectedFilters.fragranceFamilies"
+            type="checkbox"
+            :value="item.name"
+            @change="emitFilter"
+          />
+          <span class="checkmark"></span>
+          {{ item.name }}
         </label>
       </div>
     </div>
+
+    <div class="filter-group">
+      <div class="group-title">
+        Loại chai
+        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="18 15 12 9 6 15" />
+        </svg>
+      </div>
+
+      <div class="checkbox-list col">
+        <label
+          v-for="item in bottleTypes"
+          :key="item.id"
+          class="custom-checkbox"
+        >
+          <input
+            v-model="selectedFilters.bottleTypes"
+            type="checkbox"
+            :value="item.name"
+            @change="emitFilter"
+          />
+          <span class="checkmark"></span>
+          {{ item.name }}
+        </label>
+      </div>
+    </div>
+
+    <button
+      type="button"
+      class="btn-clear-filter"
+      @click="clearFilters"
+    >
+      Xóa bộ lọc
+    </button>
   </aside>
 </template>
 
-<script setup>
-import { ref, onMounted } from 'vue';
-import axios from 'axios';
+<script setup lang="ts">
+import { onMounted, reactive, ref } from "vue";
+import api from "@/common/api";
 
-const emit = defineEmits(['filter-change']);
+interface FilterOption {
+  id: number;
+  name?: string;
+  value?: number | string;
+}
 
-const bottleTypes = ref([]);
-const capacities = ref([]);
-const concentrations = ref([]);
-const fragranceFamilies = ref([]);
+interface SelectedFilters {
+  genders: string[];
+  bottleTypes: string[];
+  capacities: string[];
+  concentrations: string[];
+  fragranceFamilies: string[];
+}
 
-const filters = ref({
-  genders: []
-});
+const emit = defineEmits<{
+  (e: "filter-change", filters: SelectedFilters): void;
+}>();
 
-// Biến lưu trữ các mục người dùng đã tích chọn
-const selectedFilters = ref({
-  genders: [],          // 1. THÊM DÒNG NÀY VÀO
+const bottleTypes = ref<FilterOption[]>([]);
+const capacities = ref<FilterOption[]>([]);
+const concentrations = ref<FilterOption[]>([]);
+const fragranceFamilies = ref<FilterOption[]>([]);
+
+const selectedFilters = reactive<SelectedFilters>({
+  genders: [],
   bottleTypes: [],
   capacities: [],
   concentrations: [],
-  fragranceFamilies: []
+  fragranceFamilies: [],
 });
 
+const extractArrayData = <T,>(data: any): T[] => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.content)) return data.content;
+  if (Array.isArray(data?.data?.content)) return data.data.content;
+  if (Array.isArray(data?.data)) return data.data;
+
+  return [];
+};
+
+const formatCapacityValue = (item: FilterOption) => {
+  const raw = item.value ?? item.name ?? "";
+
+  if (raw === "") {
+    return "N/A";
+  }
+
+  const text = String(raw);
+
+  return text.toLowerCase().includes("ml") ? text : `${text}ml`;
+};
 
 const emitFilter = () => {
-  emit('filter-change', {
-    genders: selectedFilters.value.genders, // Đổi từ filters -> selectedFilters
-    bottleTypes: selectedFilters.value.bottleTypes,
-    capacities: selectedFilters.value.capacities,
-    concentrations: selectedFilters.value.concentrations,
-    fragranceFamilies: selectedFilters.value.fragranceFamilies
+  emit("filter-change", {
+    genders: [...selectedFilters.genders],
+    bottleTypes: [...selectedFilters.bottleTypes],
+    capacities: [...selectedFilters.capacities],
+    concentrations: [...selectedFilters.concentrations],
+    fragranceFamilies: [...selectedFilters.fragranceFamilies],
   });
+};
+
+const clearFilters = () => {
+  selectedFilters.genders = [];
+  selectedFilters.bottleTypes = [];
+  selectedFilters.capacities = [];
+  selectedFilters.concentrations = [];
+  selectedFilters.fragranceFamilies = [];
+
+  emitFilter();
 };
 
 const fetchFilters = async () => {
   try {
     const [bottleRes, capRes, concRes, fragRes] = await Promise.all([
-      axios.get('http://localhost:8080/api/bottle-types?size=50'),
-      axios.get('http://localhost:8080/api/capacities?size=50'),
-      axios.get('http://localhost:8080/api/concentrations?size=50'),
-      axios.get('http://localhost:8080/api/fragrance-families?size=50')
+      api.get("/bottle-types", {
+        params: {
+          page: 0,
+          size: 50,
+        },
+      }),
+      api.get("/capacities", {
+        params: {
+          page: 0,
+          size: 50,
+        },
+      }),
+      api.get("/concentrations", {
+        params: {
+          page: 0,
+          size: 50,
+        },
+      }),
+      api.get("/fragrance-families", {
+        params: {
+          page: 0,
+          size: 50,
+        },
+      }),
     ]);
 
-    // Bật F12 tab Console lên xem 4 dòng này để biết chính xác cấu trúc Object nhé!
-    console.log('Bottle Data:', bottleRes.data);
-    console.log('Capacity Data:', capRes.data);
-
-    // Ép mảng an toàn: Thử lấy .content, nếu không có thì lấy trực tiếp .data, cuối cùng là mảng rỗng
-    bottleTypes.value = bottleRes.data?.content || bottleRes.data || [];
-    capacities.value = capRes.data?.content || capRes.data || [];
-    concentrations.value = concRes.data?.content || concRes.data || [];
-    fragranceFamilies.value = fragRes.data?.content || fragRes.data || [];
-
+    bottleTypes.value = extractArrayData<FilterOption>(bottleRes.data);
+    capacities.value = extractArrayData<FilterOption>(capRes.data);
+    concentrations.value = extractArrayData<FilterOption>(concRes.data);
+    fragranceFamilies.value = extractArrayData<FilterOption>(fragRes.data);
   } catch (error) {
-    console.error('Lỗi khi tải bộ lọc từ API:', error);
+    console.error("Lỗi khi tải bộ lọc từ API:", error);
   }
 };
 
@@ -235,22 +388,22 @@ onMounted(() => {
   transition: 0.2s;
 }
 
-.custom-checkbox:hover input~.checkmark {
+.custom-checkbox:hover input ~ .checkmark {
   border-color: #0a142f;
 }
 
-.custom-checkbox input:checked~.checkmark {
+.custom-checkbox input:checked ~ .checkmark {
   background-color: #0a142f;
   border-color: #0a142f;
 }
 
-.checkmark:after {
+.checkmark::after {
   content: "";
   position: absolute;
   display: none;
 }
 
-.custom-checkbox input:checked~.checkmark:after {
+.custom-checkbox input:checked ~ .checkmark::after {
   display: block;
   left: 6px;
   top: 2px;
@@ -259,5 +412,21 @@ onMounted(() => {
   border: solid white;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
+}
+
+.btn-clear-filter {
+  width: 100%;
+  border: 1px solid #0a142f;
+  background: #ffffff;
+  color: #0a142f;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.btn-clear-filter:hover {
+  background: #0a142f;
+  color: #ffffff;
 }
 </style>

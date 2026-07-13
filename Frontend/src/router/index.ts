@@ -261,7 +261,8 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "flash-sale",
         name: "AdminFlashSale",
-        component: mockPage("Quản lý Flash Sale", "Huy"),
+        component: () =>
+          import("@/modules/admin/feature/promotion/views/PromotionView.vue"),
         meta: {
           requiresAuth: true,
           allowedRoles: ["OWNER", "MANAGER"],

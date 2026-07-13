@@ -10,7 +10,7 @@
         type="button"
         class="btn-refresh-review"
         :disabled="loading"
-        @click="fetchReviews"
+        @click="fetchReviews(0)"
       >
         <span
           v-if="loading"
@@ -106,6 +106,33 @@
       </div>
     </div>
 
+    <div
+      v-if="!loading && totalPages > 1"
+      class="review-pagination"
+    >
+      <button
+        type="button"
+        class="review-page-btn"
+        :disabled="pageNumber <= 0"
+        @click="fetchReviews(pageNumber - 1)"
+      >
+        Trước
+      </button>
+
+      <span>
+        Trang {{ pageNumber + 1 }} / {{ totalPages }}
+      </span>
+
+      <button
+        type="button"
+        class="review-page-btn"
+        :disabled="pageNumber + 1 >= totalPages"
+        @click="fetchReviews(pageNumber + 1)"
+      >
+        Sau
+      </button>
+    </div>
+
     <div v-if="errorMessage" class="review-error">
       {{ errorMessage }}
     </div>
@@ -116,6 +143,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { productReviewService } from "../services/productReview.service";
 import type {
+  PageResponse,
   ProductReviewSummaryResponse,
   PublicProductReviewResponse,
 } from "../types/product-review.type";
@@ -130,19 +158,28 @@ const emit = defineEmits<{
 
 const reviews = ref<PublicProductReviewResponse[]>([]);
 const summary = ref<ProductReviewSummaryResponse | null>(null);
+
 const loading = ref(false);
 const errorMessage = ref("");
 
-onMounted(() => {
-  fetchReviews();
-});
+const pageNumber = ref(0);
+const pageSize = ref(5);
+const totalPages = ref(0);
+const totalElements = ref(0);
 
-watch(
-  () => props.productId,
-  () => {
-    fetchReviews();
+const extractContent = <T,>(data: PageResponse<T> | T[]): T[] => {
+  if (Array.isArray(data)) {
+    totalPages.value = 1;
+    totalElements.value = data.length;
+    return data;
   }
-);
+
+  pageNumber.value = data.page?.number ?? data.number ?? 0;
+  totalPages.value = data.page?.totalPages ?? data.totalPages ?? 0;
+  totalElements.value = data.page?.totalElements ?? data.totalElements ?? 0;
+
+  return data.content || [];
+};
 
 const roundedAverage = computed(() => {
   return Math.round(summary.value?.averageRating || 0);
@@ -173,8 +210,10 @@ const ratingRows = computed(() => {
   ];
 });
 
-const fetchReviews = async () => {
+const fetchReviews = async (page = pageNumber.value) => {
   if (!props.productId || props.productId <= 0) {
+    reviews.value = [];
+    summary.value = null;
     return;
   }
 
@@ -184,14 +223,19 @@ const fetchReviews = async () => {
 
     const [summaryRes, reviewsRes] = await Promise.all([
       productReviewService.getSummary(props.productId),
-      productReviewService.getReviews(props.productId),
+      productReviewService.getReviews(props.productId, {
+        page,
+        size: pageSize.value,
+      }),
     ]);
 
     summary.value = summaryRes.data;
-    reviews.value = reviewsRes.data || [];
+    reviews.value = extractContent<PublicProductReviewResponse>(reviewsRes.data);
 
     emit("summary-loaded", summaryRes.data);
   } catch (error: any) {
+    reviews.value = [];
+
     errorMessage.value =
       error?.response?.data?.message ||
       error?.message ||
@@ -222,6 +266,18 @@ const formatDate = (value: string | null | undefined) => {
 
   return new Date(value).toLocaleDateString("vi-VN");
 };
+
+onMounted(() => {
+  fetchReviews(0);
+});
+
+watch(
+  () => props.productId,
+  () => {
+    pageNumber.value = 0;
+    fetchReviews(0);
+  }
+);
 </script>
 
 <style scoped>
@@ -385,6 +441,35 @@ const formatDate = (value: string | null | undefined) => {
 .empty-comment {
   color: #9ca3af;
   font-style: italic;
+}
+
+.review-pagination {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #718096;
+  font-size: 13px;
+}
+
+.review-page-btn {
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-weight: 700;
+  color: #0a142f;
+}
+
+.review-page-btn:hover:not(:disabled) {
+  border-color: #bd9a5f;
+  color: #bd9a5f;
+}
+
+.review-page-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .review-error {
