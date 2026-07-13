@@ -2,27 +2,67 @@
   <div class="cart-right">
     <h3 class="summary-title">Tóm tắt đơn hàng</h3>
 
-    <div class="voucher-row disabled-voucher">
-      <div class="voucher-input">
-        <svg class="voucher-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="2" y="7" width="20" height="10" rx="2" ry="2" />
-          <path d="M2 12a2 2 0 010-4m20 4a2 2 0 000-4M10 7v10m4-10v10" />
-        </svg>
+    <div class="voucher-row-wrapper position-relative">
+      <div class="voucher-row">
+        <div class="voucher-input">
+          <svg class="voucher-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="7" width="20" height="10" rx="2" ry="2" />
+            <path d="M2 12a2 2 0 010-4m20 4a2 2 0 000-4M10 7v10m4-10v10" />
+          </svg>
 
-        <input
-          type="text"
-          placeholder="Voucher chưa áp dụng ở bước này"
-          disabled
-        />
+          <!-- Thêm sự kiện focus và blur để bật/tắt dropdown -->
+          <input
+            type="text"
+            v-model="voucherCode"
+            placeholder="Nhập hoặc chọn mã..."
+            @keyup.enter="handleApplyVoucher"
+            @focus="showDropdown = true"
+            @blur="showDropdown = false"
+            :disabled="isApplying || isVoucherApplied"
+            class="text-uppercase"
+          />
+        </div>
+
+        <button 
+          v-if="isVoucherApplied"
+          class="btn-cancel" 
+          type="button" 
+          @click="handleCancelVoucher"
+        >
+          Hủy bỏ
+        </button>
+
+        <button 
+          v-else
+          class="btn-apply" 
+          type="button" 
+          @click="handleApplyVoucher" 
+          :disabled="isApplying || !voucherCode.trim()"
+        >
+          <span v-if="isApplying" class="spinner-border spinner-border-sm"></span>
+          <span v-else>Áp dụng</span>
+        </button>
       </div>
 
-      <button class="btn-apply" type="button" disabled>
-        Áp dụng
-      </button>
+      <!-- DANH SÁCH DROPDOWN TỰ CUSTOM -->
+      <div v-if="showDropdown && availableVouchers.length > 0 && !isVoucherApplied" class="custom-voucher-dropdown">
+        <div 
+          v-for="v in availableVouchers" 
+          :key="v.code" 
+          class="voucher-item"
+          @mousedown.prevent="selectVoucher(v.code)"
+        >
+          <div class="voucher-code-badge">{{ v.code }}</div>
+          <div class="voucher-desc">
+            Giảm <strong class="text-danger">{{ v.discountType === 'PERCENT' ? v.discountValue + '%' : formatCurrency(v.discountValue) }}</strong>
+          </div>
+          <div class="voucher-min">Đơn tối thiểu: {{ formatCurrency(v.minOrderValue) }}</div>
+        </div>
+      </div>
     </div>
 
-    <p class="voucher-note">
-      Voucher sẽ chỉ hoạt động khi BE checkout có xử lý mã giảm giá.
+    <p :class="['voucher-note', messageType]">
+      {{ voucherMessage || 'Nhập hoặc chọn mã giảm giá để nhận ưu đãi.' }}
     </p>
 
     <div class="summary-box">
@@ -33,7 +73,7 @@
 
       <div class="summary-line">
         <span>Giảm giá</span>
-        <span class="val">{{ formatCurrency(discountAmount) }}</span>
+        <span class="val discount-val">- {{ formatCurrency(discountAmount) }}</span>
       </div>
 
       <div class="summary-line">
@@ -63,16 +103,108 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+import { ref, onMounted } from 'vue';
+import axios from 'axios';
+
+const props = defineProps<{
   totalAmount: number;
   discountAmount: number;
   finalTotal: number;
   canCheckout: boolean;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: "checkout"): void;
+  (e: "apply-voucher", discount: number, code: string): void;
 }>();
+
+const voucherCode = ref('');
+const isApplying = ref(false);
+const isVoucherApplied = ref(false); 
+const voucherMessage = ref('');
+const messageType = ref('');
+const availableVouchers = ref<any[]>([]); 
+const showDropdown = ref(false); // Biến điều khiển bật/tắt menu xổ xuống
+
+const fetchAvailableVouchers = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    const res = await axios.get('http://localhost:8080/api/v1/customer/vouchers', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    availableVouchers.value = res.data;
+  } catch (error) {
+    console.error("Lỗi lấy danh sách Voucher:", error);
+  }
+};
+
+onMounted(() => {
+  fetchAvailableVouchers();
+  
+  const savedVoucher = localStorage.getItem('applied_voucher');
+  if (savedVoucher && props.discountAmount > 0) {
+    voucherCode.value = savedVoucher;
+    isVoucherApplied.value = true;
+    voucherMessage.value = 'Áp dụng mã thành công!';
+    messageType.value = 'text-success';
+  }
+});
+
+// Hàm hứng sự kiện khi người dùng click vào 1 mã trong Dropdown
+const selectVoucher = async (code: string) => {
+  voucherCode.value = code;
+  showDropdown.value = false;
+  
+  // TỰ ĐỘNG GỌI HÀM ÁP DỤNG NGAY SAU KHI CHỌN MÃ
+  await handleApplyVoucher(); 
+};
+
+const handleApplyVoucher = async () => {
+  if (!voucherCode.value.trim()) return;
+
+  isApplying.value = true;
+  voucherMessage.value = '';
+  messageType.value = '';
+  showDropdown.value = false;
+
+  try {
+    const token = localStorage.getItem('token');
+    
+    const res = await axios.get('http://localhost:8080/api/v1/customer/vouchers/apply', {
+      params: {
+        code: voucherCode.value.trim(),
+        orderTotal: props.totalAmount
+      },
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    const { discountAmount, message } = res.data;
+
+    voucherMessage.value = message || 'Áp dụng mã thành công!';
+    messageType.value = 'text-success';
+    isVoucherApplied.value = true; 
+
+    emit('apply-voucher', discountAmount, voucherCode.value.trim());
+
+  } catch (error: any) {
+    voucherMessage.value = error.response?.data || 'Không thể áp dụng mã giảm giá này!';
+    messageType.value = 'text-danger';
+    isVoucherApplied.value = false;
+
+    emit('apply-voucher', 0, '');
+  } finally {
+    isApplying.value = false;
+  }
+};
+
+const handleCancelVoucher = () => {
+  isVoucherApplied.value = false;
+  voucherCode.value = '';
+  voucherMessage.value = 'Đã hủy mã giảm giá.';
+  messageType.value = 'text-muted';
+  
+  emit('apply-voucher', 0, '');
+};
 
 const formatCurrency = (val: number) => {
   return new Intl.NumberFormat("vi-VN", {
@@ -83,147 +215,62 @@ const formatCurrency = (val: number) => {
 </script>
 
 <style scoped>
-.cart-right {
-  flex: 1;
+.cart-right { flex: 1; background: white; border: 1px solid #eaeaea; border-radius: 8px; padding: 30px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03); position: sticky; top: 20px; }
+.summary-title { font-size: 18px; margin: 0 0 20px 0; color: #06132b; }
+
+.voucher-row-wrapper { position: relative; margin-bottom: 8px; }
+.voucher-row { display: flex; gap: 10px; }
+.voucher-input { flex: 1; display: flex; align-items: center; border: 1px solid #ddd; border-radius: 6px; padding: 0 15px; background: #f8fafc; transition: all 0.2s; }
+.voucher-input:focus-within { border-color: #b78d52; background: #fff; box-shadow: 0 0 0 3px rgba(183, 141, 82, 0.1); }
+.voucher-icon { width: 20px; height: 20px; color: #b78d52; margin-right: 10px; }
+.voucher-input input { flex: 1; border: none; outline: none; padding: 12px 0; font-size: 14px; color: #06132b; background: transparent; width: 100%; }
+
+/* Giao diện Dropdown Custom */
+.custom-voucher-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: calc(100% - 100px); /* Bằng độ dài của ô input */
   background: white;
   border: 1px solid #eaeaea;
   border-radius: 8px;
-  padding: 30px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
-  position: sticky;
-  top: 20px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  z-index: 100;
+  max-height: 250px;
+  overflow-y: auto;
 }
-
-.summary-title {
-  font-size: 18px;
-  margin: 0 0 20px 0;
-  color: #06132b;
-}
-
-.voucher-row {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.voucher-input {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  padding: 0 15px;
-  background: #f8fafc;
-}
-
-.voucher-icon {
-  width: 20px;
-  height: 20px;
-  color: #b78d52;
-  margin-right: 10px;
-}
-
-.voucher-input input {
-  flex: 1;
-  border: none;
-  outline: none;
-  padding: 12px 0;
-  font-size: 14px;
-  color: #64748b;
-  background: transparent;
-}
-
-.btn-apply {
-  background: #06132b;
-  color: white;
-  border: none;
-  padding: 0 20px;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.btn-apply:disabled,
-.voucher-input input:disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.voucher-note {
-  margin: 0 0 20px;
-  font-size: 12px;
-  color: #94a3b8;
-  line-height: 1.4;
-}
-
-.summary-box {
-  background: #fafbfc;
-  border: 1px solid #f0f0f0;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 20px;
-}
-
-.summary-line {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  font-size: 15px;
-  color: #333;
-}
-
-.summary-line .val {
-  font-weight: 500;
-}
-
-.free-ship {
-  color: #38a169;
-  font-weight: 700;
-}
-
-.total-line {
-  border-top: 1px solid #eaeaea;
-  padding-top: 15px;
-  margin-top: 5px;
-  font-weight: 700;
-  font-size: 16px;
-}
-
-.total-val {
-  font-size: 22px;
-  color: #b78d52;
-}
-
-.checkout-warning {
-  background: #fff7ed;
-  color: #9a3412;
-  border: 1px solid #fed7aa;
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 13px;
-  line-height: 1.5;
-  margin-bottom: 14px;
-}
-
-.btn-checkout {
-  width: 100%;
-  padding: 16px;
-  background: #06132b;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-weight: bold;
-  font-size: 15px;
+.voucher-item {
+  padding: 12px 15px;
+  border-bottom: 1px solid #f0f0f0;
   cursor: pointer;
   transition: 0.2s;
 }
+.voucher-item:last-child { border-bottom: none; }
+.voucher-item:hover { background: #f8fafc; }
+.voucher-code-badge { font-weight: 700; color: #06132b; font-size: 14px; margin-bottom: 2px; display: inline-block; padding: 2px 8px; background: rgba(183, 141, 82, 0.15); border-radius: 4px;}
+.voucher-desc { font-size: 13px; color: #333; margin: 4px 0 2px;}
+.voucher-min { font-size: 12px; color: #64748b; }
 
-.btn-checkout:hover:not(:disabled) {
-  background: #0a1f44;
-}
+.btn-apply { background: #06132b; color: white; border: none; padding: 0 20px; border-radius: 6px; font-weight: 500; cursor: pointer; transition: 0.2s; min-width: 90px; }
+.btn-apply:hover:not(:disabled) { background: #b78d52; }
+.btn-apply:disabled, .voucher-input input:disabled { cursor: not-allowed; opacity: 0.7; }
+.btn-cancel { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; padding: 0 20px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.2s; min-width: 90px; }
+.btn-cancel:hover { background: #f87171; color: white; border-color: #ef4444; }
 
-.btn-checkout:disabled {
-  background: #94a3b8;
-  cursor: not-allowed;
-}
+.voucher-note { margin: 0 0 20px; font-size: 12px; color: #94a3b8; line-height: 1.4; font-weight: 500; }
+.text-success { color: #16a34a !important; }
+.text-danger { color: #dc2626 !important; }
+.text-muted { color: #94a3b8 !important; }
+.discount-val { color: #e53e3e !important; }
+
+.summary-box { background: #fafbfc; border: 1px solid #f0f0f0; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+.summary-line { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 15px; color: #333; }
+.summary-line .val { font-weight: 500; }
+.free-ship { color: #38a169; font-weight: 700; }
+.total-line { border-top: 1px solid #eaeaea; padding-top: 15px; margin-top: 5px; font-weight: 700; font-size: 16px; }
+.total-val { font-size: 22px; color: #b78d52; }
+.checkout-warning { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.5; margin-bottom: 14px; }
+.btn-checkout { width: 100%; padding: 16px; background: #06132b; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; cursor: pointer; transition: 0.2s; }
+.btn-checkout:hover:not(:disabled) { background: #0a1f44; }
+.btn-checkout:disabled { background: #94a3b8; cursor: not-allowed; }
 </style>

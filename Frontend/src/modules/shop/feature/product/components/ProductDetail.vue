@@ -251,6 +251,15 @@
           </div>
         </div>
 
+        <div class="stock-status mb-3" v-if="selectedVariant">
+          <span v-if="selectedVariant.stockQuantity > 0" style="color: #2e7d32; font-size: 14px; font-weight: 500;">
+            <i class="bi bi-box-seam me-1"></i> Kho còn: {{ selectedVariant.stockQuantity }} sản phẩm
+          </span>
+          <span v-else style="color: #d32f2f; font-size: 14px; font-weight: 500;">
+            <i class="bi bi-x-circle me-1"></i> Đã hết hàng
+          </span>
+        </div>
+
         <div class="quantity-section" v-if="selectedVariant">
           <h4>Số lượng</h4>
 

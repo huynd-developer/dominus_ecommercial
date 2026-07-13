@@ -41,6 +41,10 @@ const route = useRoute();
 const productList = ref<any[]>([]);
 const isLoading = ref(false);
 
+// === STATE CHO PHÂN TRANG ===
+const currentPage = ref(1);
+const itemsPerPage = ref(6); // Số sản phẩm trên 1 trang (M có thể đổi thành 12, 16 tùy ý)
+
 const activeFilters = ref<any>({
   genders: [],
   fragranceFamilies: [],

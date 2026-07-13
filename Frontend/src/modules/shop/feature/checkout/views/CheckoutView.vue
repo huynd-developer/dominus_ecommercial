@@ -73,6 +73,11 @@ const successDetails = ref<
     value: string | number;
   }[]
 >([]);
+
+// Đổi biến discountAmount thành ref để thay đổi được giá trị, thêm biến lưu mã Voucher
+const discountAmount = ref(0);
+const appliedVoucherCode = ref('');
+
 const getCartItemKey = (item: any) => {
   return (
     item?.cartItemId ||
@@ -146,6 +151,7 @@ const handleUpdateQuantity = async (item: any, quantity: number) => {
     window.dispatchEvent(new Event("cart-updated"));
 
     await loadCartSummary();
+    await loadSavedVoucher(); // Cập nhật số lượng giỏ hàng xong phải check lại xem Voucher còn đủ điều kiện không
   } catch (error: any) {
     console.error("Lỗi cập nhật số lượng:", error);
 
@@ -190,12 +196,9 @@ const totalAmount = computed(() => {
   }, 0);
 });
 
-const discountAmount = computed(() => {
-  return 0;
-});
-
+// Chỉnh lại finalTotal để trừ tiền discountAmount
 const finalTotal = computed(() => {
-  return totalAmount.value - discountAmount.value;
+  return Math.max(0, totalAmount.value - discountAmount.value);
 });
 
 const totalItems = computed(() => {
@@ -419,6 +422,7 @@ const validateCheckoutForm = async () => {
     shippingAddress,
     note: note || null,
     paymentMethod,
+    voucherCode: appliedVoucherCode.value || null // Đính kèm mã Voucher gửi xuống Backend
   };
 };
 
@@ -453,6 +457,30 @@ const loadCartSummary = async () => {
   }
 };
 
+// Hàm tự động gọi API lấy mã Voucher lưu trong localStorage
+const loadSavedVoucher = async () => {
+  const savedCode = localStorage.getItem('applied_voucher');
+  if (!savedCode || totalAmount.value <= 0) return;
+
+  try {
+    const res = await api.get('/v1/customer/vouchers/apply', {
+      params: { 
+        code: savedCode, 
+        orderTotal: totalAmount.value 
+      }
+    });
+
+    // Cập nhật số tiền giảm vào biến
+    discountAmount.value = res.data?.discountAmount || 0;
+    appliedVoucherCode.value = savedCode;
+  } catch (error) {
+    console.warn("Voucher không còn hợp lệ cho đơn hàng này:", error);
+    discountAmount.value = 0;
+    appliedVoucherCode.value = '';
+    localStorage.removeItem('applied_voucher'); // Xóa mã không hợp lệ đi
+  }
+};
+
 const handlePlaceOrder = async () => {
   const submitData = await validateCheckoutForm();
 
@@ -467,6 +495,7 @@ const handlePlaceOrder = async () => {
         <p><b>Số điện thoại:</b> ${escapeHtml(submitData.customerPhone)}</p>
         <p><b>Địa chỉ:</b> ${escapeHtml(submitData.shippingAddress)}</p>
         <p><b>Thanh toán:</b> ${escapeHtml(submitData.paymentMethod)}</p>
+        <p><b>Mã giảm giá:</b> <span style="color:#e53e3e; font-weight:bold">${submitData.voucherCode || 'Không có'}</span></p>
         <p><b>Tổng thanh toán:</b> ${formatCurrency(finalTotal.value)}</p>
       </div>
     `,
@@ -483,6 +512,9 @@ const handlePlaceOrder = async () => {
 
   try {
     const res = await api.post("/v1/orders/checkout", submitData);
+
+    // Đặt hàng xong thì xóa luôn mã voucher trong giỏ
+    localStorage.removeItem('applied_voucher');
 
     if (submitData.paymentMethod === "VNPAY" && res.data?.paymentUrl) {
       window.location.href = res.data.paymentUrl;
@@ -558,6 +590,7 @@ const loadInitialData = async () => {
     }
 
     await loadCartSummary();
+    await loadSavedVoucher(); // Tự động load mã Voucher sau khi tải giỏ hàng xong
   } finally {
     isPageLoading.value = false;
   }

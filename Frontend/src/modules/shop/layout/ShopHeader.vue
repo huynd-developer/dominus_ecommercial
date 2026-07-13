@@ -343,12 +343,13 @@ const handleSearch = () => {
   const trimmedKeyword = keyword.value.trim();
 
   if (!trimmedKeyword) {
-    router.push("/products");
+    router.push({ name: 'ProductList' }); // Về danh sách mặc định
     return;
   }
 
+  // Đẩy sang Component ProductDetailView kèm từ khóa
   router.push({
-    path: "/products",
+    name: 'ProductList',
     query: {
       keyword: trimmedKeyword,
     },
