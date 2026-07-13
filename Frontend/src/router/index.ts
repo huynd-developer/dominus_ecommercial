@@ -1,17 +1,15 @@
 import { createRouter, createWebHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
-import { useAuthStore } from "@/modules/auth/stores/authStore";
 import { h } from "vue";
+import { useAuthStore } from "@/modules/auth/stores/authStore";
 
-// Import các trang của m
-import ProductDetailView from "@/modules/shop/feature/product/views/ProductDetailView.vue";
+import ShopLayout from "@/modules/shop/layout/ShopLayout.vue";
+import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
+
 import CartView from "@/modules/shop/feature/cart/views/CartView.vue";
 import CheckoutView from "@/modules/shop/feature/checkout/views/CheckoutView.vue";
 import PaymentReturnView from "@/modules/shop/feature/checkout/views/PaymentReturnView.vue";
 
-// Admin layout & pages
-import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
-import ShopLayout from "@/modules/shop/layout/ShopLayout.vue";
 import ProductView from "@/modules/admin/feature/product/views/ProductView.vue";
 
 const mockPage = (title: string, assignee: string) => ({
@@ -33,9 +31,6 @@ const mockPage = (title: string, assignee: string) => ({
 });
 
 const routes: Array<RouteRecordRaw> = [
-  // ==========================================
-  // STOREFRONT - USER
-  // ==========================================
   {
     path: "/",
     component: ShopLayout,
@@ -50,9 +45,7 @@ const routes: Array<RouteRecordRaw> = [
         path: "customer/profile",
         name: "CustomerProfile",
         component: () =>
-          import(
-            "@/modules/shop/feature/profile/views/CustomerProfileView.vue"
-          ),
+          import("@/modules/shop/feature/profile/views/CustomerProfileView.vue"),
         meta: {
           requiresAuth: true,
           allowedRoles: ["USER"],
@@ -61,7 +54,6 @@ const routes: Array<RouteRecordRaw> = [
     ],
   },
 
-  // Code của m (Chi tiết SP, Giỏ hàng, Thanh toán)
   {
     path: "/products",
     name: "ProductList",
@@ -102,9 +94,6 @@ const routes: Array<RouteRecordRaw> = [
     component: PaymentReturnView,
   },
 
-  // ==========================================
-  // POS PAYMENT RETURN
-  // ==========================================
   {
     path: "/payment/result",
     name: "PosPaymentResult",
@@ -115,9 +104,6 @@ const routes: Array<RouteRecordRaw> = [
     },
   },
 
-  // ==========================================
-  // AUTH
-  // ==========================================
   {
     path: "/login",
     name: "Login",
@@ -134,9 +120,6 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import("@/modules/auth/views/RegisterView.vue"),
   },
 
-  // ==========================================
-  // ADMIN
-  // ==========================================
   {
     path: "/admin",
     component: AdminLayout,
@@ -170,8 +153,8 @@ const routes: Array<RouteRecordRaw> = [
         component: ProductView,
         meta: {
           requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER"]
-        }
+          allowedRoles: ["OWNER", "MANAGER"],
+        },
       },
       {
         path: "categories",
@@ -196,19 +179,24 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "fragrance-families",
         name: "AdminFragranceFamilies",
-        // Trỏ đúng đường dẫn tới file View của bạn
         component: () =>
           import(
             "@/modules/admin/feature/fragranceFamily/views/FragranceFamilyView.vue"
           ),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER"],
+        },
       },
       {
         path: "capacities",
         name: "AdminCapacities",
         component: () =>
           import("@/modules/admin/feature/capacity/views/CapacityView.vue"),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER"],
+        },
       },
       {
         path: "concentrations",
@@ -217,15 +205,20 @@ const routes: Array<RouteRecordRaw> = [
           import(
             "@/modules/admin/feature/concentration/views/ConcentrationView.vue"
           ),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER"],
+        },
       },
       {
         path: "bottle-types",
         name: "AdminBottleTypes",
-        // Import trực tiếp đến file Vue giao diện mà bạn vừa tạo
         component: () =>
           import("@/modules/admin/feature/bottleType/views/BottleTypeView.vue"),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER"],
+        },
       },
       {
         path: "orders",
@@ -239,20 +232,32 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "vouchers",
         name: "AdminVouchers",
-        component: () => import("@/modules/admin/feature/voucher/views/VoucherListView.vue"),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
+        component: () =>
+          import("@/modules/admin/feature/voucher/views/VoucherListView.vue"),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER"],
+        },
       },
       {
         path: "vouchers/create",
         name: "AdminVoucherCreate",
-        component: () => import("@/modules/admin/feature/voucher/views/VoucherCreateView.vue"),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
+        component: () =>
+          import("@/modules/admin/feature/voucher/views/VoucherCreateView.vue"),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER"],
+        },
       },
       {
         path: "vouchers/edit/:id",
         name: "AdminVoucherUpdate",
-        component: () => import("@/modules/admin/feature/voucher/views/VoucherUpdateView.vue"),
-        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
+        component: () =>
+          import("@/modules/admin/feature/voucher/views/VoucherUpdateView.vue"),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER"],
+        },
       },
       {
         path: "flash-sale",
@@ -286,6 +291,11 @@ const routes: Array<RouteRecordRaw> = [
       },
     ],
   },
+
+  {
+    path: "/:pathMatch(.*)*",
+    redirect: "/",
+  },
 ];
 
 const router = createRouter({
@@ -293,22 +303,22 @@ const router = createRouter({
   routes,
 });
 
-router.beforeEach(async (to, from) => {
+router.beforeEach((to) => {
   const authStore = useAuthStore();
 
   const token = localStorage.getItem("token");
   const localRole = localStorage.getItem("role");
 
-  const isAuthenticated = authStore.isAuthenticated || !!token;
+  const isAuthenticated = authStore.isAuthenticated || Boolean(token);
 
-  const userRole = (authStore.role || localRole || "")
+  const userRole = String(authStore.role || localRole || "")
     .toUpperCase()
     .replace("ROLE_", "")
     .trim();
 
   if (
     isAuthenticated &&
-    ["Login", "AdminLogin", "Register"].includes(to.name as string)
+    ["Login", "AdminLogin", "Register"].includes(String(to.name || ""))
   ) {
     if (userRole === "OWNER") {
       return {
@@ -342,6 +352,9 @@ router.beforeEach(async (to, from) => {
       return {
         name: "Login",
         replace: true,
+        query: {
+          redirect: to.fullPath,
+        },
       };
     }
 
