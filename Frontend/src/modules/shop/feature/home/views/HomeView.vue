@@ -20,11 +20,6 @@
           </RouterLink>
         </div>
 
-<<<<<<< HEAD
-        <div class="row row-cols-2 row-cols-md-4 row-cols-lg-4 g-4">
-          <div v-for="product in flashSaleProducts" :key="product.id" class="col"
-            @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })" style="cursor: pointer;">
-=======
         <div v-if="flashSaleLoading" class="text-center py-5">
           <span class="spinner-border spinner-border-sm me-2"></span>
           Đang tải Flash Sale...
@@ -40,7 +35,6 @@
             :key="product.productVariantId || product.id"
             class="col"
           >
->>>>>>> b7504e3ce6a0e42a0d6a324ec60919d297777aae
             <ProductCard :product="product" />
           </div>
         </div>
@@ -55,12 +49,6 @@
           </RouterLink>
         </div>
 
-<<<<<<< HEAD
-        <div class="row row-cols-2 row-cols-md-4 row-cols-lg-4 g-4">
-          <!-- Cập nhật đường dẫn chuẩn: /product/:id -->
-          <div v-for="product in flashSaleProducts" :key="product.id" class="col"
-            @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })" style="cursor: pointer;">
-=======
         <div v-if="productLoading" class="text-center py-5">
           <span class="spinner-border spinner-border-sm me-2"></span>
           Đang tải sản phẩm...
@@ -76,7 +64,6 @@
             :key="product.id"
             class="col"
           >
->>>>>>> b7504e3ce6a0e42a0d6a324ec60919d297777aae
             <ProductCard :product="product" />
           </div>
         </div>
@@ -111,12 +98,6 @@
             </div>
           </div>
 
-<<<<<<< HEAD
-          <!-- Cập nhật đường dẫn chuẩn: /product/:id -->
-          <div v-for="product in flashSaleProducts" :key="product.id" class="col"
-            @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })" style="cursor: pointer;">
-            <ProductCard :product="product" />
-=======
           <div
             v-for="product in specialProducts"
             :key="product.id"
@@ -125,7 +106,6 @@
             <div class="special-product-wrap">
               <ProductCard :product="product" />
             </div>
->>>>>>> b7504e3ce6a0e42a0d6a324ec60919d297777aae
           </div>
         </div>
       </section>
@@ -139,12 +119,6 @@
           </RouterLink>
         </div>
 
-<<<<<<< HEAD
-        <div class="row row-cols-2 row-cols-md-4 row-cols-lg-4 g-4">
-          <!-- Cập nhật đường dẫn chuẩn: /product/:id -->
-          <div v-for="product in flashSaleProducts" :key="product.id" class="col"
-            @click="$router.push({ name: 'ProductDetail', params: { id: product.id } })" style="cursor: pointer;">
-=======
         <div v-if="productLoading" class="text-center py-5">
           <span class="spinner-border spinner-border-sm me-2"></span>
           Đang tải sản phẩm...
@@ -160,7 +134,6 @@
             :key="product.id"
             class="col"
           >
->>>>>>> b7504e3ce6a0e42a0d6a324ec60919d297777aae
             <ProductCard :product="product" />
           </div>
         </div>
