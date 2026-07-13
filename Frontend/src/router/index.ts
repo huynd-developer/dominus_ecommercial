@@ -240,26 +240,6 @@ const routes: Array<RouteRecordRaw> = [
         },
       },
       {
-        path: "vouchers/create",
-        name: "AdminVoucherCreate",
-        component: () =>
-          import("@/modules/admin/feature/voucher/views/VoucherCreateView.vue"),
-        meta: {
-          requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER"],
-        },
-      },
-      {
-        path: "vouchers/edit/:id",
-        name: "AdminVoucherUpdate",
-        component: () =>
-          import("@/modules/admin/feature/voucher/views/VoucherUpdateView.vue"),
-        meta: {
-          requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER"],
-        },
-      },
-      {
         path: "flash-sale",
         name: "AdminFlashSale",
         component: () =>

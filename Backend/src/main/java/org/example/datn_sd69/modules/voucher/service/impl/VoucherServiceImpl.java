@@ -18,7 +18,13 @@ public class VoucherServiceImpl implements VoucherService {
 
 
     @Override
-    public List<Voucher> getAllVouchers() {
+    public org.springframework.data.domain.Page<Voucher> getVouchers(String keyword, Integer status, int page, int size) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+        return voucherRepository.searchVouchers(keyword, status, pageable);
+    }
+
+    @Override
+    public java.util.List<org.example.datn_sd69.entity.Voucher> getAllVouchers() {
         return voucherRepository.findByIsDeletedFalseOrderByIdDesc();
     }
 

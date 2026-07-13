@@ -11,8 +11,10 @@ public interface VoucherService {
     // Khai báo hàm tạo mới Voucher
     void createVoucher(VoucherRequest request);
 
-    List<Voucher> getAllVouchers();
+    org.springframework.data.domain.Page<Voucher> getVouchers(String keyword, Integer status, int page, int size);
 
+    // Dùng cho Customer lấy danh sách xổ xuống
+    List<org.example.datn_sd69.entity.Voucher> getAllVouchers();
     VoucherApplyResponse applyVoucher(String code, BigDecimal orderTotal);
     Voucher getVoucherById(Integer id);
     void updateVoucher(Integer id, VoucherRequest request);
