@@ -1,184 +1,181 @@
 package org.example.datn_sd69.modules.product.controller;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.example.datn_sd69.modules.product.dto.ProductRequest;
-import org.example.datn_sd69.modules.product.dto.ProductVariantRequest;
+import org.example.datn_sd69.modules.product.dto.request.ProductRequest;
+import org.example.datn_sd69.common.config.response.ApiResponse;
+import org.example.datn_sd69.modules.product.dto.response.ProductResponse;
 import org.example.datn_sd69.modules.product.service.ProductService;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/admin/products")
+@RequestMapping("/api/v1/products")
 @RequiredArgsConstructor
 public class AdminProductController {
 
     private final ProductService productService;
 
-    /* ================= PRODUCT ================= */
+    /**
+     * Chi tiết sản phẩm
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<ProductResponse>> getProductDetail(
+            @PathVariable Integer id) {
 
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        productService.getProductById(id),
+                        "Lấy chi tiết sản phẩm thành công"
+                )
+        );
+    }
+
+    /**
+     * Tạo sản phẩm
+     */
+    @PostMapping("/admin")
+    @PreAuthorize("hasAnyAuthority('MANAGER','OWNER')")
+    public ResponseEntity<ApiResponse<ProductResponse>> createProduct(
+            @Valid @RequestBody ProductRequest request) {
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        productService.createProduct(request),
+                        "Tạo sản phẩm thành công"
+                )
+        );
+    }
+
+    /**
+     * Danh sách sản phẩm public
+     */
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('CASHIER','MANAGER','OWNER')")
-    public ResponseEntity<?> getAll(
-            @RequestParam(required = false) String keyword,
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getAllProducts(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
         return ResponseEntity.ok(
-                productService.getAll(keyword, page, size)
-        );
-    }
-
-    @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('CASHIER','MANAGER','OWNER')")
-    public ResponseEntity<?> detail(@PathVariable Integer id) {
-
-        return ResponseEntity.ok(
-                productService.getById(id)
-        );
-    }
-
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyAuthority('MANAGER','OWNER')")
-    public ResponseEntity<?> create(
-
-            @ModelAttribute ProductRequest request,
-
-            @RequestPart(required = false) MultipartFile primaryImage,
-
-            @RequestPart(required = false) List<MultipartFile> images) {
-
-        return ResponseEntity.ok(
-                productService.create(
-                        request,
-                        primaryImage,
-                        images
+                ApiResponse.success(
+                        productService.getAllProducts(page, size),
+                        "Lấy danh sách sản phẩm thành công"
                 )
         );
     }
 
-    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyAuthority('MANAGER','OWNER')")
-    public ResponseEntity<?> update(
+    /**
+     * Danh sách sản phẩm admin
+     */
+    @GetMapping("/admin")
+    @PreAuthorize("hasAnyAuthority('MANAGER','OWNER','CASHIER')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getAllProductsAdmin(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
 
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        productService.getAllProductsAdmin(page, size),
+                        "Lấy danh sách sản phẩm Admin thành công"
+                )
+        );
+    }
+
+    /**
+     * Cập nhật sản phẩm
+     */
+    @PutMapping("/admin/{id}")
+    @PreAuthorize("hasAnyAuthority('MANAGER','OWNER')")
+    public ResponseEntity<ApiResponse<ProductResponse>> updateProduct(
             @PathVariable Integer id,
-
-            @ModelAttribute ProductRequest request,
-
-            @RequestPart(required = false) MultipartFile primaryImage,
-
-            @RequestPart(required = false) List<MultipartFile> images) {
+            @Valid @RequestBody ProductRequest request) {
 
         return ResponseEntity.ok(
-                productService.update(
-                        id,
-                        request,
-                        primaryImage,
-                        images
+                ApiResponse.success(
+                        productService.updateProduct(id, request),
+                        "Cập nhật sản phẩm thành công"
                 )
         );
     }
 
-    @DeleteMapping("/{id}")
+    /**
+     * Xóa mềm sản phẩm
+     */
+    @DeleteMapping("/admin/{id}")
     @PreAuthorize("hasAuthority('OWNER')")
-    public ResponseEntity<?> delete(@PathVariable Integer id) {
+    public ResponseEntity<ApiResponse<String>> deleteProduct(
+            @PathVariable Integer id) {
 
-        productService.delete(id);
+        productService.deleteProduct(id);
 
         return ResponseEntity.ok(
-                Map.of(
-                        "status", "SUCCESS",
-                        "message", "Xóa thành công"
+                ApiResponse.success(
+                        null,
+                        "Ẩn sản phẩm thành công"
                 )
         );
     }
 
-    /* ================= VARIANT ================= */
-
-    @GetMapping("/{productId}/variants")
-    @PreAuthorize("hasAnyAuthority('CASHIER','MANAGER','OWNER')")
-    public ResponseEntity<?> getVariants(
-            @PathVariable Integer productId) {
-
-        return ResponseEntity.ok(
-                productService.getVariantsByProduct(productId)
-        );
-    }
-
-    @GetMapping("/variants/{variantId}")
-    @PreAuthorize("hasAnyAuthority('CASHIER','MANAGER','OWNER')")
-    public ResponseEntity<?> getVariant(
-            @PathVariable Integer variantId) {
-
-        return ResponseEntity.ok(
-                productService.getVariantById(variantId)
-        );
-    }
-
-    @PostMapping("/{productId}/variants")
+    /**
+     * Upload ảnh sản phẩm
+     */
+    @PostMapping("/admin/{id}/images")
     @PreAuthorize("hasAnyAuthority('MANAGER','OWNER')")
-    public ResponseEntity<?> createVariant(
+    public ResponseEntity<ApiResponse<String>> uploadProductImage(
+            @PathVariable Integer id,
+            @RequestParam("file") MultipartFile file) throws Exception {
 
+        String imageUrl =
+                productService.uploadImage(id, file);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        imageUrl,
+                        "Upload ảnh thành công"
+                )
+        );
+    }
+
+    /**
+     * Chọn ảnh đại diện
+     */
+    @PutMapping("/admin/{productId}/images/{imageId}/primary")
+    @PreAuthorize("hasAnyAuthority('MANAGER','OWNER')")
+    public ResponseEntity<ApiResponse<String>> setPrimaryImage(
             @PathVariable Integer productId,
+            @PathVariable Integer imageId) {
 
-            @RequestBody ProductVariantRequest request) {
+        productService.setPrimaryImage(
+                productId,
+                imageId
+        );
 
         return ResponseEntity.ok(
-                productService.createVariant(
-                        productId,
-                        request
+                ApiResponse.success(
+                        null,
+                        "Đặt ảnh chính thành công"
                 )
         );
     }
 
-    @PutMapping("/variants/{variantId}")
+    /**
+     * Xóa ảnh
+     */
+    @DeleteMapping("/admin/images/{imageId}")
     @PreAuthorize("hasAnyAuthority('MANAGER','OWNER')")
-    public ResponseEntity<?> updateVariant(
+    public ResponseEntity<ApiResponse<String>> deleteImage(
+            @PathVariable Integer imageId) {
 
-            @PathVariable Integer variantId,
-
-            @RequestBody ProductVariantRequest request) {
-
-        return ResponseEntity.ok(
-                productService.updateVariant(
-                        variantId,
-                        request
-                )
-        );
-    }
-
-    @DeleteMapping("/variants/{variantId}")
-    @PreAuthorize("hasAuthority('OWNER')")
-    public ResponseEntity<?> deleteVariant(
-            @PathVariable Integer variantId) {
-
-        productService.deleteVariant(variantId);
+        productService.deleteProductImage(imageId);
 
         return ResponseEntity.ok(
-                Map.of(
-                        "status", "SUCCESS",
-                        "message", "Xóa biến thể thành công"
+                ApiResponse.success(
+                        null,
+                        "Xóa ảnh thành công"
                 )
         );
-    }
-
-    @PatchMapping("/{id}/status")
-    public ResponseEntity<?> updateStatus(
-            @PathVariable Integer id,
-            @RequestBody Map<String, Integer> body
-    ) {
-
-        productService.updateStatus(
-                id,
-                body.get("status")
-        );
-
-        return ResponseEntity.ok().build();
-
     }
 }

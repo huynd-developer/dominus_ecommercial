@@ -6,11 +6,21 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface ProductVariantRepository extends JpaRepository<ProductVariant, Integer> {
+
+    // Lấy toàn bộ variant của 1 sản phẩm
+    List<ProductVariant> findByProduct_Id(Integer productId);
+
+    // Xóa toàn bộ variant theo ProductId
+    @Modifying
+    @Query("DELETE FROM ProductVariant v WHERE v.product.id = :productId")
+    void deleteByProduct_Id(@Param("productId") Integer productId);
 
     boolean existsBySkuIgnoreCase(String sku);
 
