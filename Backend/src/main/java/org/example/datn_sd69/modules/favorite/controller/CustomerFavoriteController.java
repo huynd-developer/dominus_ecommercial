@@ -2,7 +2,7 @@ package org.example.datn_sd69.modules.favorite.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.example.datn_sd69.modules.favorite.dto.AddFavoriteRequest;
+import org.example.datn_sd69.modules.favorite.dto.request.AddFavoriteRequest;
 import org.example.datn_sd69.modules.favorite.service.CustomerFavoriteService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -28,6 +28,23 @@ public class CustomerFavoriteController {
             @Valid @RequestBody AddFavoriteRequest request
     ) {
         return ResponseEntity.ok(customerFavoriteService.addFavorite(request));
+    }
+
+    @PostMapping("/toggle")
+    public ResponseEntity<?> toggleFavorite(
+            @Valid @RequestBody AddFavoriteRequest request
+    ) {
+        return ResponseEntity.ok(customerFavoriteService.toggleFavorite(request));
+    }
+
+    @GetMapping("/check/{productVariantId}")
+    public ResponseEntity<?> checkFavorite(
+            @PathVariable Integer productVariantId
+    ) {
+        return ResponseEntity.ok(Map.of(
+                "productVariantId", productVariantId,
+                "favorited", customerFavoriteService.checkFavorite(productVariantId)
+        ));
     }
 
     @DeleteMapping("/{favoriteId}")

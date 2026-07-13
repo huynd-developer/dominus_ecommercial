@@ -1,4 +1,4 @@
-package org.example.datn_sd69.modules.pos.dto;
+package org.example.datn_sd69.modules.pos.dto.response;
 
 import lombok.Builder;
 import lombok.Data;

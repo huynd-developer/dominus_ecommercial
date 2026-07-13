@@ -17,4 +17,5 @@ public interface FavoriteRepository extends JpaRepository<Favorite, Integer> {
     Optional<Favorite> findByCustomer_UserIdAndProductVariant_Id(Integer customerId, Integer productVariantId);
 
 
+
 }

@@ -1,4 +1,4 @@
-package org.example.datn_sd69.modules.pos.dto;
+package org.example.datn_sd69.modules.pos.dto.response;
 
 import lombok.Builder;
 import lombok.Data;
@@ -7,7 +7,11 @@ import lombok.Data;
 @Builder
 public class CustomerPosResponse {
 
+    /**
+     * Với DB hiện tại, customerId chính là Customer.UserId.
+     */
     private Integer customerId;
+
     private String name;
     private String phone;
     private String email;

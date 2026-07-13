@@ -1,77 +1,201 @@
-import { defineStore } from 'pinia'
-import axios from 'axios'
+import { defineStore } from "pinia";
+import api from "@/common/api";
 
-// Định nghĩa kiểu dữ liệu cho sản phẩm
-export interface Product {
-  id: number | string;
-  name: string;
+export interface CartItem {
+  cartItemId: number;
+  productVariantId: number;
+
+  sku?: string;
+  productName?: string;
+  capacity?: string;
+
+  quantity: number;
   price: number;
-  image?: string;
+  stockQuantity: number;
+
+  note?: string | null;
+  imageUrl?: string | null;
+  thumbnailUrl?: string | null;
+
+  available?: boolean;
+  unavailableReason?: string | null;
 }
 
-// Khai báo Pinia Store
-export const useCartStore = defineStore('cart', {
+export interface AddToCartPayload {
+  productVariantId?: number;
+  id?: number | string;
+  quantity?: number;
+  note?: string | null;
+  thumbnailUrl?: string | null;
+  image?: string | null;
+  imageUrl?: string | null;
+}
+
+const getCurrentRole = () => {
+  return String(localStorage.getItem("role") || "")
+    .toUpperCase()
+    .trim();
+};
+
+const isCustomerUser = () => {
+  const token = localStorage.getItem("token");
+  const role = getCurrentRole();
+
+  return Boolean(token) && role === "USER";
+};
+
+export const useCartStore = defineStore("cart", {
   state: () => ({
-    items: [] as Array<{ product: Product; quantity: number }>,
+    items: [] as CartItem[],
+    isLoading: false,
     isOpen: false,
   }),
 
   getters: {
-    cartTotal: (state) => state.items.reduce((total, item) => total + (item.product.price * item.quantity), 0),
-    cartCount: (state) => state.items.reduce((count, item) => count + item.quantity, 0),
+    cartCount: (state) => {
+      return state.items.reduce((count, item) => {
+        return count + Number(item.quantity || 0);
+      }, 0);
+    },
+
+    cartTotal: (state) => {
+      return state.items.reduce((total, item) => {
+        return total + Number(item.price || 0) * Number(item.quantity || 0);
+      }, 0);
+    },
+
+    hasInvalidItem: (state) => {
+      return state.items.some((item) => {
+        const quantity = Number(item.quantity || 0);
+        const stockQuantity = Number(item.stockQuantity || 0);
+
+        return (
+          item.available === false ||
+          quantity <= 0 ||
+          stockQuantity <= 0 ||
+          quantity > stockQuantity
+        );
+      });
+    },
   },
 
   actions: {
     toggleCart() {
-      this.isOpen = !this.isOpen
+      this.isOpen = !this.isOpen;
     },
 
-    // Thêm hàm này vào
-  updateQuantity(cartItemId: number, currentQty: number, change: number, stockQty: number) {
-    const newQty = currentQty + change;
-    
-    // Logic chặn không cho vượt quá tồn kho
-    if (newQty < 1) return;
-    if (newQty > stockQty) {
-      alert(`Sản phẩm này chỉ còn tối đa ${stockQty} cái trong kho!`);
-      return;
-    }
+    openCart() {
+      this.isOpen = true;
+    },
 
-    // Tìm item trong giỏ để cập nhật
-    const item = this.items.find(i => i.product.id === cartItemId);
-    if (item) {
-      item.quantity = newQty;
-    }
-  },
+    closeCart() {
+      this.isOpen = false;
+    },
 
-    addToCart(product: Product, quantity: number) {
-      const existingItem = this.items.find(item => item.product.id === product.id)
-      if (existingItem) {
-        existingItem.quantity += quantity
-      } else {
-        this.items.push({ product, quantity })
+    clearCartLocal() {
+      this.items = [];
+      this.isOpen = false;
+    },
+
+    async loadCart() {
+      if (!isCustomerUser()) {
+        this.clearCartLocal();
+        return;
       }
-      this.isOpen = true
-    },
 
-    removeItem(productId: number | string) {
-      this.items = this.items.filter(item => item.product.id !== productId)
+      try {
+        this.isLoading = true;
+
+        const res = await api.get("/v1/customer/cart/my-cart");
+
+        this.items = Array.isArray(res.data) ? res.data : [];
+      } catch (error: any) {
+        console.error("Lỗi đồng bộ giỏ hàng:", error);
+
+        if (error?.response?.status === 401 || error?.response?.status === 403) {
+          this.clearCartLocal();
+        }
+      } finally {
+        this.isLoading = false;
+      }
     },
 
     async fetchRealCart() {
-      const token = localStorage.getItem('token');
-      if (!token) return; // Chưa đăng nhập thì thôi
-      
-      try {
-        const res = await axios.get('http://localhost:8080/api/v1/customer/cart/my-cart', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        // Đập luôn data API trả về vào state.items để update giao diện
-        this.items = res.data; 
-      } catch (error) {
-        console.error("Lỗi đồng bộ giỏ hàng:", error);
-      }
-    }
-  }
-})
+      await this.loadCart();
+    },
 
+    async addToCart(payload: AddToCartPayload, quantityArg?: number) {
+      if (!isCustomerUser()) {
+        throw new Error("Vui lòng đăng nhập bằng tài khoản khách hàng để thêm vào giỏ.");
+      }
+
+      const productVariantId = Number(payload.productVariantId ?? payload.id ?? 0);
+      const quantity = Number(payload.quantity ?? quantityArg ?? 1);
+
+      if (!productVariantId || productVariantId <= 0) {
+        throw new Error("Biến thể sản phẩm không hợp lệ.");
+      }
+
+      if (!quantity || quantity <= 0) {
+        throw new Error("Số lượng phải lớn hơn 0.");
+      }
+
+      await api.post("/v1/customer/cart/add", {
+        productVariantId,
+        quantity,
+        note: payload.note || null,
+        thumbnailUrl: payload.thumbnailUrl || payload.imageUrl || payload.image || null,
+      });
+
+      await this.loadCart();
+
+      this.isOpen = true;
+
+      window.dispatchEvent(new Event("cart-updated"));
+    },
+
+    async updateQuantity(
+      cartItemId: number,
+      quantityOrCurrentQty: number,
+      change?: number,
+      stockQty?: number
+    ) {
+      if (!cartItemId || cartItemId <= 0) {
+        throw new Error("Mã sản phẩm trong giỏ không hợp lệ.");
+      }
+
+      const newQuantity =
+        typeof change === "number"
+          ? Number(quantityOrCurrentQty || 0) + change
+          : Number(quantityOrCurrentQty || 0);
+
+      if (newQuantity < 1) {
+        return;
+      }
+
+      if (typeof stockQty === "number" && newQuantity > stockQty) {
+        throw new Error(`Sản phẩm này chỉ còn tối đa ${stockQty} cái trong kho.`);
+      }
+
+      await api.put(`/v1/customer/cart/update/${cartItemId}`, {
+        quantity: newQuantity,
+      });
+
+      await this.loadCart();
+
+      window.dispatchEvent(new Event("cart-updated"));
+    },
+
+    async removeItem(cartItemId: number) {
+      if (!cartItemId || cartItemId <= 0) {
+        throw new Error("Mã sản phẩm trong giỏ không hợp lệ.");
+      }
+
+      await api.delete(`/v1/customer/cart/remove/${cartItemId}`);
+
+      this.items = this.items.filter((item) => item.cartItemId !== cartItemId);
+
+      window.dispatchEvent(new Event("cart-updated"));
+    },
+  },
+});

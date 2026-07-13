@@ -3,12 +3,14 @@ import type { RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
 import { h } from "vue";
 
-
 // Import các trang của m
 import CartView from "@/modules/shop/feature/cart/views/CartView.vue";
 import CheckoutView from "@/modules/shop/feature/checkout/views/CheckoutView.vue";
 import PaymentReturnView from "@/modules/shop/feature/checkout/views/PaymentReturnView.vue";
+<<<<<<< HEAD
 import ProductView from "@/modules/admin/feature/product/views/ProductView.vue";
+=======
+>>>>>>> 8259f5ae4aab0ac85645cac22aa74deb9843c28a
 
 // Admin layout & pages
 import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
@@ -26,9 +28,9 @@ const mockPage = (title: string, assignee: string) => ({
         h("h1", `🚧 Trang ${title}`),
         h(
           "p",
-          `Giao diện đang được xây dựng bởi: ${assignee}. Sau khi code xong file Vue, hãy mở comment import trong router ra!`,
+          `Giao diện đang được xây dựng bởi: ${assignee}. Sau khi code xong file Vue, hãy mở comment import trong router ra!`
         ),
-      ],
+      ]
     ),
 });
 
@@ -50,7 +52,9 @@ const routes: Array<RouteRecordRaw> = [
         path: "customer/profile",
         name: "CustomerProfile",
         component: () =>
-          import("@/modules/shop/feature/profile/views/CustomerProfileView.vue"),
+          import(
+            "@/modules/shop/feature/profile/views/CustomerProfileView.vue"
+          ),
         meta: {
           requiresAuth: true,
           allowedRoles: ["USER"],
@@ -61,6 +65,25 @@ const routes: Array<RouteRecordRaw> = [
 
   // Code của m (Chi tiết SP, Giỏ hàng, Thanh toán)
   {
+<<<<<<< HEAD
+=======
+    path: "/products",
+    name: "ProductList",
+    component: () =>
+      import("@/modules/shop/feature/product/views/ProductDetailView.vue"),
+  },
+  {
+    path: "/product/:id",
+    name: "SingleProduct",
+    component: () =>
+      import("@/modules/shop/feature/product/views/SingleProductView.vue"),
+  },
+  {
+    path: "/product",
+    redirect: "/products",
+  },
+  {
+>>>>>>> 8259f5ae4aab0ac85645cac22aa74deb9843c28a
     path: "/cart",
     name: "Cart",
     component: CartView,
@@ -130,7 +153,12 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "dashboard",
         name: "AdminDashboard",
+<<<<<<< HEAD
         component: mockPage("Quản lý Đơn hàng", "Trung"),
+=======
+        component: () =>
+          import("@/modules/admin/feature/report/views/OwnerReportView.vue"),
+>>>>>>> 8259f5ae4aab0ac85645cac22aa74deb9843c28a
         meta: {
           requiresAuth: true,
           allowedRoles: ["OWNER"],
@@ -145,6 +173,7 @@ const routes: Array<RouteRecordRaw> = [
           allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
         },
       },
+<<<<<<< HEAD
       {
         path: "products",
         name: "AdminProducts",
@@ -154,6 +183,32 @@ const routes: Array<RouteRecordRaw> = [
           allowedRoles: ["OWNER", "MANAGER"]
         }
       },
+=======
+      //       {
+      //   path: "products",
+      //   meta: {
+      //     requiresAuth: true,
+      //     allowedRoles: ["OWNER", "MANAGER"],
+      //   },
+      //   children: [
+      //     {
+      //       path: "",
+      //       name: "AdminProducts",
+      //       component: ProductListView,
+      //     },
+      //     {
+      //       path: "create",
+      //       name: "AdminProductCreate",
+      //       component: ProductCreateView,
+      //     },
+      //     {
+      //       path: ":id",
+      //       name: "AdminProductUpdate",
+      //       component: ProductUpdateView,
+      //     },
+      //   ],
+      // },
+>>>>>>> 8259f5ae4aab0ac85645cac22aa74deb9843c28a
       {
         path: "categories",
         name: "AdminCategories",
@@ -178,26 +233,46 @@ const routes: Array<RouteRecordRaw> = [
         path: "fragrance-families",
         name: "AdminFragranceFamilies",
         // Trỏ đúng đường dẫn tới file View của bạn
+<<<<<<< HEAD
         component: () => import('@/modules/admin/feature/fragranceFamily/views/FragranceFamilyView.vue'),
+=======
+        component: () =>
+          import(
+            "@/modules/admin/feature/fragranceFamily/views/FragranceFamilyView.vue"
+          ),
+>>>>>>> 8259f5ae4aab0ac85645cac22aa74deb9843c28a
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "capacities",
         name: "AdminCapacities",
-        component: () => import("@/modules/admin/feature/capacity/views/CapacityView.vue"),
+        component: () =>
+          import("@/modules/admin/feature/capacity/views/CapacityView.vue"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "concentrations",
         name: "AdminConcentrations",
+<<<<<<< HEAD
         component: () => import("@/modules/admin/feature/concentration/views/ConcentrationView.vue"),
+=======
+        component: () =>
+          import(
+            "@/modules/admin/feature/concentration/views/ConcentrationView.vue"
+          ),
+>>>>>>> 8259f5ae4aab0ac85645cac22aa74deb9843c28a
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "bottle-types",
         name: "AdminBottleTypes",
         // Import trực tiếp đến file Vue giao diện mà bạn vừa tạo
+<<<<<<< HEAD
         component: () => import("@/modules/admin/feature/bottleType/views/BottleTypeView.vue"),
+=======
+        component: () =>
+          import("@/modules/admin/feature/bottleType/views/BottleTypeView.vue"),
+>>>>>>> 8259f5ae4aab0ac85645cac22aa74deb9843c28a
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
@@ -221,7 +296,8 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "flash-sale",
         name: "AdminFlashSale",
-        component: mockPage("Quản lý Flash Sale", "Huy"),
+        component: () =>
+          import("@/modules/admin/feature/promotion/views/PromotionView.vue"),
         meta: {
           requiresAuth: true,
           allowedRoles: ["OWNER", "MANAGER"],

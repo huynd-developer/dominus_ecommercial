@@ -11,32 +11,35 @@ import java.util.List;
 
 public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
 
-    // ==========================
-    // ORDER DETAIL
-    // ==========================
-
+    /**
+     * Dùng cho xử lý đơn và hoàn kho khi VNPay thất bại.
+     */
     @Query("""
-        SELECT oi
-        FROM OrderItem oi
-        LEFT JOIN FETCH oi.productVariant pv
-        LEFT JOIN FETCH pv.product p
-        LEFT JOIN FETCH pv.capacity
-        LEFT JOIN FETCH pv.bottleType
-        WHERE oi.order.id = :orderId
-    """)
-    List<OrderItem> findByOrderId(
-            @Param("orderId") Integer orderId
-    );
+            SELECT oi
+            FROM OrderItem oi
+            LEFT JOIN FETCH oi.productVariant pv
+            WHERE oi.order.id = :orderId
+            """)
+    List<OrderItem> findByOrderId(@Param("orderId") Integer orderId);
 
-    // ==========================
-    // CANCEL ORDER
-    // ==========================
+    List<OrderItem> findByOrder_Id(Integer orderId);
 
-    List<OrderItem> findAllByOrder_Id(Integer orderId);
+    List<OrderItem> findByOrder_IdOrderByIdAsc(Integer orderId);
 
-    // ==========================
-    // REPORT
-    // ==========================
+    /**
+     * Dùng cho màn hình Admin xem chi tiết đơn hàng
+     */
+    @Query("""
+            SELECT oi
+            FROM OrderItem oi
+            JOIN FETCH oi.productVariant pv
+            JOIN FETCH pv.product
+            JOIN FETCH pv.capacity
+            JOIN FETCH pv.bottleType
+            WHERE oi.order.id = :orderId
+            ORDER BY oi.id ASC
+            """)
+    List<OrderItem> findDetailByOrderId(@Param("orderId") Integer orderId);
 
     @Query(value = """
             SELECT COALESCE(SUM(oi.Quantity), 0)
@@ -77,4 +80,18 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
             @Param("fromDate") LocalDateTime fromDate,
             @Param("toDate") LocalDateTime toDate
     );
+
+    List<OrderItem> findAllByOrder_Id(Integer orderId);
+
+    @Query("""
+    SELECT oi
+    FROM OrderItem oi
+    JOIN FETCH oi.productVariant pv
+    LEFT JOIN FETCH pv.product p
+    LEFT JOIN FETCH pv.capacity c
+    LEFT JOIN FETCH pv.bottleType bt
+    WHERE oi.order.id = :orderId
+    ORDER BY oi.id ASC
+    """)
+    List<OrderItem> findByOrderIdWithVariant(@Param("orderId") Integer orderId);
 }
