@@ -27,6 +27,22 @@ public class PosController {
 
     private final PosService posService;
 
+    /**
+     * Danh sách sản phẩm/biến thể dành riêng cho POS.
+     *
+     * Không dùng /api/admin/products để tránh phụ thuộc module quản trị sản phẩm.
+     * API này trả đúng dữ liệu POS cần:
+     * SKU, giá, tồn kho, NSX, HSD, trạng thái, sellable, lý do không bán được.
+     */
+    @GetMapping("/products")
+    public ResponseEntity<List<ProductVariantPosResponse>> getProductsForPos() {
+        return ResponseEntity.ok(posService.getProductsForPos());
+    }
+
+    /**
+     * Quét SKU/barcode tại POS.
+     * Nếu sản phẩm không bán được, BE trả lỗi luôn.
+     */
     @GetMapping("/product")
     public ResponseEntity<ProductVariantPosResponse> findProductBySku(
             @RequestParam String sku

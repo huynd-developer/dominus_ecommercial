@@ -1,6 +1,5 @@
 <template>
   <div class="product-panel d-flex flex-column h-100 select-none">
-    <!-- Bộ lọc -->
     <div class="filter-search-section mb-2 shrink-0">
       <div class="category-slider d-flex gap-2 overflow-auto pb-2 no-scrollbar">
         <button
@@ -15,7 +14,6 @@
       </div>
     </div>
 
-    <!-- Loading -->
     <div
       v-if="posStore.isLoading"
       class="flex-grow-1 d-flex flex-column align-items-center justify-content-center text-muted-custom font-sm"
@@ -24,7 +22,6 @@
       <p class="mt-2 mb-0">Đang tải sản phẩm từ máy chủ...</p>
     </div>
 
-    <!-- Empty -->
     <div
       v-else-if="posStore.filteredProducts.length === 0"
       class="flex-grow-1 d-flex align-items-center justify-content-center text-muted-custom font-sm"
@@ -32,7 +29,6 @@
       Không tìm thấy sản phẩm phù hợp.
     </div>
 
-    <!-- Table sản phẩm -->
     <div v-else class="product-table-wrapper flex-grow-1 overflow-auto rounded-3">
       <table class="table table-dark-custom align-middle mb-0">
         <thead>
@@ -40,8 +36,11 @@
             <th class="col-product">Sản phẩm</th>
             <th class="col-variant">Biến thể</th>
             <th class="col-sku">SKU</th>
+            <th class="text-center col-date">NSX</th>
+            <th class="text-center col-date">HSD</th>
             <th class="text-end col-price">Giá</th>
             <th class="text-center col-stock">Kho</th>
+            <th class="text-center col-status">Trạng thái</th>
             <th class="text-end col-action">Thao tác</th>
           </tr>
         </thead>
@@ -51,7 +50,8 @@
             v-for="product in posStore.filteredProducts"
             :key="product.sku"
             :class="{
-              'row-disabled': product.stockQuantity <= 0 || posStore.isOrderLocked
+              'row-disabled': isProductDisabled(product),
+              'row-expired': isExpired(product),
             }"
           >
             <td>
@@ -63,17 +63,11 @@
                 />
 
                 <div class="min-w-0">
-                  <div
-                    class="product-name text-truncate"
-                    :title="product.name"
-                  >
+                  <div class="product-name text-truncate" :title="product.name">
                     {{ product.name }}
                   </div>
 
-                  <div
-                    class="product-category text-truncate"
-                    :title="product.category"
-                  >
+                  <div class="product-category text-truncate" :title="product.category">
                     {{ product.category || "Chưa phân loại" }}
                   </div>
                 </div>
@@ -81,22 +75,27 @@
             </td>
 
             <td>
-              <div
-                class="variant-text text-truncate"
-                :title="getVariantText(product)"
-              >
+              <div class="variant-text text-truncate" :title="getVariantText(product)">
                 <i class="bi bi-droplet-half me-1"></i>
                 {{ getVariantText(product) }}
               </div>
             </td>
 
             <td>
-              <span
-                class="sku-text text-truncate d-inline-block"
-                :title="product.sku"
-              >
+              <span class="sku-text text-truncate d-inline-block" :title="product.sku">
                 {{ product.sku }}
               </span>
+            </td>
+
+            <td class="text-center date-text">
+              {{ formatDate(product.manufacturingDate) }}
+            </td>
+
+            <td
+              class="text-center date-text"
+              :class="isExpired(product) ? 'text-danger fw-bold' : ''"
+            >
+              {{ formatDate(product.expirationDate) }}
             </td>
 
             <td class="text-end">
@@ -114,11 +113,29 @@
               </span>
             </td>
 
+            <td class="text-center">
+              <span
+                class="status-badge"
+                :class="isSellable(product) ? 'status-ok' : 'status-error'"
+                :title="getDisabledReason(product) || 'Có thể bán'"
+              >
+                {{ isSellable(product) ? "Bán được" : "Không bán" }}
+              </span>
+
+              <div
+                v-if="getDisabledReason(product)"
+                class="reason-text text-truncate"
+                :title="getDisabledReason(product)"
+              >
+                {{ getDisabledReason(product) }}
+              </div>
+            </td>
+
             <td class="text-end">
               <button
                 type="button"
                 class="btn-add-product"
-                :disabled="product.stockQuantity <= 0 || posStore.isOrderLocked"
+                :disabled="isProductDisabled(product)"
                 @click.stop="handleAddToCart(product)"
               >
                 <i class="bi bi-plus-lg"></i>
@@ -132,7 +149,7 @@
 
     <div class="table-hint mt-2 font-xs text-muted-custom">
       <i class="bi bi-info-circle me-1"></i>
-      Chỉ bấm nút <strong>Chọn</strong> để thêm sản phẩm vào giỏ.
+      POS chỉ bán sản phẩm còn hàng, đang hoạt động, chưa hết hạn sử dụng và đã tới ngày bán.
     </div>
   </div>
 </template>
@@ -146,6 +163,36 @@ const formatPrice = (val?: number | null) => {
   return new Intl.NumberFormat("vi-VN").format(Number(val || 0));
 };
 
+const formatDate = (value?: string | null) => {
+  if (!value) return "-";
+
+  const date = new Date(`${String(value).substring(0, 10)}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleDateString("vi-VN");
+};
+
+const isBeforeToday = (value?: string | null) => {
+  if (!value) return false;
+
+  const date = new Date(`${String(value).substring(0, 10)}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return !Number.isNaN(date.getTime()) && date.getTime() < today.getTime();
+};
+
+const isAfterToday = (value?: string | null) => {
+  if (!value) return false;
+
+  const date = new Date(`${String(value).substring(0, 10)}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return !Number.isNaN(date.getTime()) && date.getTime() > today.getTime();
+};
+
 const placeholderImage = (name?: string) => {
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(
     name || "Product"
@@ -153,7 +200,7 @@ const placeholderImage = (name?: string) => {
 };
 
 const getVariantText = (product: any) => {
-  return product.subName && String(product.subName).trim()
+  return product?.subName && String(product.subName).trim()
     ? product.subName
     : "Biến thể mặc định";
 };
@@ -162,10 +209,61 @@ const getProductTitle = (product: any) => {
   return `${product.name} - ${getVariantText(product)} - ${product.sku}`;
 };
 
+const isExpired = (product: any) => {
+  return Boolean(product?.expired) || isBeforeToday(product?.expirationDate);
+};
+
+const getDisabledReason = (product: any) => {
+  if (posStore.isOrderLocked) {
+    return "Đơn đang bị khóa";
+  }
+
+  if (!product) {
+    return "Sản phẩm không hợp lệ";
+  }
+
+  if (product.unavailableReason) {
+    return product.unavailableReason;
+  }
+
+  if (product.sellable === false) {
+    return "Sản phẩm hiện không được bán";
+  }
+
+  if (product.status != null && Number(product.status) !== 1) {
+    return "Sản phẩm đang ngừng bán";
+  }
+
+  if (Number(product.stockQuantity || 0) <= 0) {
+    return "Hết hàng";
+  }
+
+  if (isAfterToday(product.manufacturingDate)) {
+    return "Chưa tới ngày bán";
+  }
+
+  if (isExpired(product)) {
+    return "Đã hết hạn sử dụng";
+  }
+
+  return "";
+};
+
+const isSellable = (product: any) => {
+  return !getDisabledReason(product);
+};
+
+const isProductDisabled = (product: any) => {
+  return Boolean(getDisabledReason(product));
+};
+
 const handleAddToCart = (product: any) => {
-  if (!product) return;
-  if (product.stockQuantity <= 0) return;
-  if (posStore.isOrderLocked) return;
+  const reason = getDisabledReason(product);
+
+  if (reason) {
+    posStore.errorMsg = reason;
+    return;
+  }
 
   posStore.addToCart(product);
 };
@@ -271,6 +369,10 @@ const handleAddToCart = (product: any) => {
   opacity: 0.52;
 }
 
+.row-expired td {
+  background: rgba(127, 29, 29, 0.16) !important;
+}
+
 .product-thumb {
   width: 42px;
   height: 42px;
@@ -304,6 +406,12 @@ const handleAddToCart = (product: any) => {
   max-width: 130px;
 }
 
+.date-text {
+  color: #cbd5e1;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
 .price-text {
   color: #f8fafc;
   white-space: nowrap;
@@ -329,6 +437,36 @@ const handleAddToCart = (product: any) => {
   background: rgba(239, 68, 68, 0.12);
   color: #fca5a5;
   border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-weight: 900;
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.status-ok {
+  background: rgba(34, 197, 94, 0.1);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.22);
+}
+
+.status-error {
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.reason-text {
+  max-width: 130px;
+  margin-top: 3px;
+  color: #fca5a5;
+  font-size: 0.66rem;
 }
 
 .btn-add-product {
@@ -374,12 +512,20 @@ const handleAddToCart = (product: any) => {
   min-width: 130px;
 }
 
+.col-date {
+  min-width: 95px;
+}
+
 .col-price {
   min-width: 110px;
 }
 
 .col-stock {
   min-width: 65px;
+}
+
+.col-status {
+  min-width: 135px;
 }
 
 .col-action {

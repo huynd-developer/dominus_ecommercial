@@ -29,6 +29,10 @@ public class PromotionRequest {
     @Valid
     private List<PromotionVariantRequest> variants;
 
+    public void setName(String name) {
+        this.name = name == null ? null : name.trim().replaceAll("\\s+", " ");
+    }
+
     @JsonIgnore
     @AssertTrue(message = "Ngày bắt đầu không được để trống")
     public boolean isStartDateValid() {

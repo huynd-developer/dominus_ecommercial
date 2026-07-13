@@ -71,7 +71,6 @@ public class PromotionServiceImpl implements PromotionService {
         promotion.setIsDeleted(false);
 
         Promotion savedPromotion = promotionRepository.save(promotion);
-
         savePromotionVariants(savedPromotion, request.getVariants());
 
         return toPromotionResponse(savedPromotion);
@@ -188,59 +187,35 @@ public class PromotionServiceImpl implements PromotionService {
         String name = request.getName() == null ? "" : request.getName().trim();
 
         if (name.isBlank()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Tên chiến dịch khuyến mãi không được để trống"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tên chiến dịch khuyến mãi không được để trống");
         }
 
         if (name.length() < 3 || name.length() > 255) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Tên chiến dịch khuyến mãi phải từ 3 đến 255 ký tự"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tên chiến dịch khuyến mãi phải từ 3 đến 255 ký tự");
         }
 
         if (request.getStartDate() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Ngày bắt đầu không được để trống"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày bắt đầu không được để trống");
         }
 
         if (request.getEndDate() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Ngày kết thúc không được để trống"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày kết thúc không được để trống");
         }
 
         if (!request.getEndDate().isAfter(request.getStartDate())) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Ngày kết thúc phải lớn hơn ngày bắt đầu"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày kết thúc phải lớn hơn ngày bắt đầu");
         }
 
         if (!request.getEndDate().isAfter(LocalDateTime.now())) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Ngày kết thúc phải lớn hơn thời gian hiện tại"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày kết thúc phải lớn hơn thời gian hiện tại");
         }
 
         if (request.getVariants() == null || request.getVariants().isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Phải chọn ít nhất 1 biến thể sản phẩm"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phải chọn ít nhất 1 biến thể sản phẩm");
         }
 
         if (request.getVariants().size() > 100) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Một chiến dịch chỉ nên áp dụng tối đa 100 biến thể"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Một chiến dịch chỉ nên áp dụng tối đa 100 biến thể");
         }
 
         Set<Integer> selectedVariantIds = new HashSet<>();
@@ -263,7 +238,11 @@ public class PromotionServiceImpl implements PromotionService {
                             "Không tìm thấy biến thể sản phẩm"
                     ));
 
-            validateVariantCanJoinPromotion(productVariant, request.getStartDate(), request.getEndDate());
+            validateVariantCanJoinPromotion(
+                    productVariant,
+                    request.getStartDate(),
+                    request.getEndDate()
+            );
 
             long overlapCount = promotionVariantRepository.countOverlapPromotion(
                     productVariantId,
@@ -283,32 +262,16 @@ public class PromotionServiceImpl implements PromotionService {
     }
 
     private void validateVariantRequest(PromotionVariantRequest request) {
-        if (request.getProductVariantId() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Biến thể sản phẩm không được để trống"
-            );
-        }
-
-        if (request.getProductVariantId() <= 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "ID biến thể sản phẩm phải lớn hơn 0"
-            );
+        if (request.getProductVariantId() == null || request.getProductVariantId() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ID biến thể sản phẩm phải lớn hơn 0");
         }
 
         if (request.getDiscountPercent() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Phần trăm giảm giá không được để trống"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phần trăm giảm giá không được để trống");
         }
 
         if (request.getDiscountPercent() <= 0 || request.getDiscountPercent() >= 100) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Phần trăm giảm giá phải lớn hơn 0 và nhỏ hơn 100"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phần trăm giảm giá phải lớn hơn 0 và nhỏ hơn 100");
         }
     }
 
@@ -317,6 +280,17 @@ public class PromotionServiceImpl implements PromotionService {
             LocalDateTime startDate,
             LocalDateTime endDate
     ) {
+        if (productVariant == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Biến thể sản phẩm không tồn tại");
+        }
+
+        if (Boolean.TRUE.equals(productVariant.getIsDeleted())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Biến thể " + productVariant.getSku() + " đã bị xóa"
+            );
+        }
+
         if (productVariant.getStatus() == null || productVariant.getStatus() != STATUS_ENABLED) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -330,6 +304,13 @@ public class PromotionServiceImpl implements PromotionService {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Sản phẩm của biến thể " + productVariant.getSku() + " đang ngừng bán"
+            );
+        }
+
+        if (productVariant.getPrice() == null || productVariant.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Biến thể " + productVariant.getSku() + " chưa có giá bán hợp lệ"
             );
         }
 
@@ -348,58 +329,63 @@ public class PromotionServiceImpl implements PromotionService {
             LocalDateTime startDate,
             LocalDateTime endDate
     ) {
-        if (productVariant.getManufacturingDate() != null) {
-            LocalDateTime manufacturingDateTime = productVariant
-                    .getManufacturingDate()
-                    .atStartOfDay();
-
-            if (startDate.isBefore(manufacturingDateTime)) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Chiến dịch không được bắt đầu trước ngày sản xuất của biến thể "
-                                + productVariant.getSku()
-                );
-            }
+        if (productVariant.getManufacturingDate() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Biến thể " + productVariant.getSku() + " chưa có ngày sản xuất"
+            );
         }
 
-        if (productVariant.getExpirationDate() != null) {
-            LocalDateTime expirationDateTime = productVariant
-                    .getExpirationDate()
-                    .atTime(23, 59, 59);
+        if (productVariant.getExpirationDate() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Biến thể " + productVariant.getSku() + " chưa có hạn sử dụng"
+            );
+        }
 
-            if (LocalDateTime.now().isAfter(expirationDateTime)) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Biến thể " + productVariant.getSku()
-                                + " đã hết hạn sử dụng, không thể thêm vào khuyến mãi"
-                );
-            }
+        if (!productVariant.getExpirationDate().isAfter(productVariant.getManufacturingDate())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Biến thể " + productVariant.getSku() + " có hạn sử dụng không hợp lệ"
+            );
+        }
 
-            if (endDate.isAfter(expirationDateTime)) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Chiến dịch không được kết thúc sau hạn sử dụng của biến thể "
-                                + productVariant.getSku()
-                );
-            }
+        LocalDateTime manufacturingDateTime = productVariant.getManufacturingDate().atStartOfDay();
+        LocalDateTime expirationDateTime = productVariant.getExpirationDate().atTime(23, 59, 59);
+
+        if (LocalDateTime.now().isAfter(expirationDateTime)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Biến thể " + productVariant.getSku() + " đã hết hạn sử dụng, không thể thêm vào khuyến mãi"
+            );
+        }
+
+        if (startDate.isBefore(manufacturingDateTime)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chiến dịch không được bắt đầu trước ngày sản xuất của biến thể "
+                            + productVariant.getSku()
+            );
+        }
+
+        if (endDate.isAfter(expirationDateTime)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chiến dịch không được kết thúc sau hạn sử dụng của biến thể "
+                            + productVariant.getSku()
+            );
         }
     }
 
     private void validateExistingPromotionBeforeEnable(Promotion promotion) {
         if (promotion.getEndDate() == null || !promotion.getEndDate().isAfter(LocalDateTime.now())) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Không thể bật chiến dịch đã hết hạn"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể bật chiến dịch đã hết hạn");
         }
 
         List<PromotionVariant> variants = promotionVariantRepository.findDetailByPromotionId(promotion.getId());
 
         if (variants.isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Chiến dịch chưa có biến thể sản phẩm"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chiến dịch chưa có biến thể sản phẩm");
         }
 
         for (PromotionVariant promotionVariant : variants) {
@@ -535,7 +521,12 @@ public class PromotionServiceImpl implements PromotionService {
         boolean available = true;
         String unavailableReason = null;
 
-        if (variant.getStatus() == null || variant.getStatus() != STATUS_ENABLED) {
+        if (Boolean.TRUE.equals(variant.getIsDeleted())) {
+            available = false;
+            unavailableReason = "Biến thể đã bị xóa";
+        }
+
+        if (available && (variant.getStatus() == null || variant.getStatus() != STATUS_ENABLED)) {
             available = false;
             unavailableReason = "Biến thể đang ngừng bán";
         }
@@ -547,18 +538,34 @@ public class PromotionServiceImpl implements PromotionService {
             unavailableReason = "Sản phẩm đang ngừng bán";
         }
 
+        if (available && (variant.getPrice() == null || variant.getPrice().compareTo(BigDecimal.ZERO) <= 0)) {
+            available = false;
+            unavailableReason = "Biến thể chưa có giá bán hợp lệ";
+        }
+
         if (available && (variant.getStockQuantity() == null || variant.getStockQuantity() <= 0)) {
             available = false;
             unavailableReason = "Biến thể đã hết hàng";
         }
 
-        if (available && variant.getExpirationDate() != null) {
-            LocalDateTime expirationDateTime = variant.getExpirationDate().atTime(23, 59, 59);
+        if (available && variant.getManufacturingDate() == null) {
+            available = false;
+            unavailableReason = "Biến thể chưa có ngày sản xuất";
+        }
 
-            if (LocalDateTime.now().isAfter(expirationDateTime)) {
-                available = false;
-                unavailableReason = "Biến thể đã hết hạn sử dụng";
-            }
+        if (available && variant.getExpirationDate() == null) {
+            available = false;
+            unavailableReason = "Biến thể chưa có hạn sử dụng";
+        }
+
+        if (available && !variant.getExpirationDate().isAfter(variant.getManufacturingDate())) {
+            available = false;
+            unavailableReason = "Hạn sử dụng không hợp lệ";
+        }
+
+        if (available && variant.getExpirationDate().isBefore(LocalDate.now())) {
+            available = false;
+            unavailableReason = "Biến thể đã hết hạn sử dụng";
         }
 
         if (available && startDate != null && endDate != null) {
@@ -566,14 +573,12 @@ public class PromotionServiceImpl implements PromotionService {
                 available = false;
                 unavailableReason = "Khoảng thời gian khuyến mãi không hợp lệ";
             } else {
-                if (variant.getManufacturingDate() != null
-                        && startDate.isBefore(variant.getManufacturingDate().atStartOfDay())) {
+                if (startDate.isBefore(variant.getManufacturingDate().atStartOfDay())) {
                     available = false;
                     unavailableReason = "Ngày bắt đầu trước ngày sản xuất";
                 }
 
-                if (available && variant.getExpirationDate() != null
-                        && endDate.isAfter(variant.getExpirationDate().atTime(23, 59, 59))) {
+                if (available && endDate.isAfter(variant.getExpirationDate().atTime(23, 59, 59))) {
                     available = false;
                     unavailableReason = "Ngày kết thúc sau hạn sử dụng";
                 }

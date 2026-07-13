@@ -312,14 +312,31 @@ const validateBeforeSubmit = async () => {
       item.discountPercent == null ||
       Number.isNaN(Number(item.discountPercent)) ||
       Number(item.discountPercent) <= 0 ||
-      Number(item.discountPercent) >= 100
+      Number(item.discountPercent) > 99.99
   );
 
   if (invalidDiscount) {
     await Swal.fire({
       icon: "warning",
       title: "Phần trăm giảm giá chưa hợp lệ",
-      text: "Mỗi biến thể phải có % giảm lớn hơn 0 và nhỏ hơn 100.",
+      text: "Mỗi biến thể phải có % giảm lớn hơn 0 và nhỏ hơn hoặc bằng 99.99.",
+      confirmButtonColor: "#bd9a5f",
+    });
+
+    return false;
+  }
+
+  const unavailableSelected = selectedVariants.value.find(
+    (item) => item.availableForPromotion === false
+  );
+
+  if (unavailableSelected) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Có biến thể không đủ điều kiện",
+      text:
+        unavailableSelected.unavailableReason ||
+        "Vui lòng bỏ các biến thể không đủ điều kiện khuyến mãi.",
       confirmButtonColor: "#bd9a5f",
     });
 

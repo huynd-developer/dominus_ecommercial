@@ -29,7 +29,7 @@ export interface PromotionVariantResponse {
 }
 
 export interface PromotionResponse {
-   id: number;
+  id: number;
   name: string;
   startDate: string;
   endDate: string;
@@ -75,18 +75,26 @@ export interface FlashSaleProductResponse {
 export interface PromotionVariantFormItem {
   productVariantId: number;
   discountPercent: number;
+
   sku?: string | null;
   productName?: string | null;
   capacity?: string | null;
   bottleType?: string | null;
+
   originalPrice?: number;
   price?: number;
   salePrice?: number;
   stockQuantity?: number | null;
+
+  manufacturingDate?: string | null;
+  expirationDate?: string | null;
+
+  availableForPromotion?: boolean;
+  unavailableReason?: string | null;
 }
 
 export interface PageResponse<T> {
-  content: T[];
+  content?: T[];
 
   totalElements?: number;
   totalPages?: number;
@@ -113,6 +121,11 @@ export interface ProductVariantSearchParams {
   startDate?: string;
   endDate?: string;
   ignorePromotionId?: number | null;
+  page?: number;
+  size?: number;
+}
+
+export interface FlashSaleSearchParams {
   page?: number;
   size?: number;
 }

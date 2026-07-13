@@ -23,11 +23,6 @@ public class AdminPromotionController {
 
     private final PromotionService promotionService;
 
-    /**
-     * Danh sách chiến dịch khuyến mãi.
-     *
-     * GET /api/admin/promotions?page=0&size=10
-     */
     @GetMapping
     public ResponseEntity<?> getAll(
             @RequestParam(required = false) String keyword,
@@ -38,18 +33,8 @@ public class AdminPromotionController {
     }
 
     /**
-     * Chi tiết chiến dịch + danh sách biến thể đã chọn.
-     */
-    @GetMapping("/{id}")
-    public ResponseEntity<?> getById(@PathVariable Integer id) {
-        return ResponseEntity.ok(promotionService.getById(id));
-    }
-
-    /**
-     * API cho UI chọn sản phẩm khuyến mãi.
-     * Admin không nhập ID thủ công.
-     *
-     * GET /api/admin/promotions/product-variants?page=0&size=10
+     * Đặt /product-variants TRƯỚC /{id}
+     * để tránh trường hợp Spring hiểu nhầm "product-variants" là id.
      */
     @GetMapping("/product-variants")
     public ResponseEntity<?> searchProductVariantsForPromotion(
@@ -78,17 +63,16 @@ public class AdminPromotionController {
         );
     }
 
-    /**
-     * Tạo chiến dịch.
-     */
+    @GetMapping("/{id}")
+    public ResponseEntity<?> getById(@PathVariable Integer id) {
+        return ResponseEntity.ok(promotionService.getById(id));
+    }
+
     @PostMapping
     public ResponseEntity<?> create(@Valid @RequestBody PromotionRequest request) {
         return ResponseEntity.ok(promotionService.create(request));
     }
 
-    /**
-     * Cập nhật chiến dịch.
-     */
     @PutMapping("/{id}")
     public ResponseEntity<?> update(
             @PathVariable Integer id,
@@ -97,10 +81,6 @@ public class AdminPromotionController {
         return ResponseEntity.ok(promotionService.update(id, request));
     }
 
-    /**
-     * Bật / tắt chiến dịch.
-     * status: 1 = bật, 0 = tắt.
-     */
     @PatchMapping("/{id}/status")
     public ResponseEntity<?> changeStatus(
             @PathVariable Integer id,
@@ -109,9 +89,6 @@ public class AdminPromotionController {
         return ResponseEntity.ok(promotionService.changeStatus(id, request.getStatus()));
     }
 
-    /**
-     * Xóa mềm chiến dịch.
-     */
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable Integer id) {
         promotionService.softDelete(id);

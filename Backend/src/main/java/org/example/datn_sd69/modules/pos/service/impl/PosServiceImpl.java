@@ -39,6 +39,7 @@ import org.example.datn_sd69.modules.pos.dto.request.PosTransferHeldOrderRequest
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -86,17 +87,17 @@ public class PosServiceImpl implements PosService {
 
         Product product = variant.getProduct();
 
-        String imageUrl = productImageRepository
-                .findFirstByProduct_IdAndIsPrimaryTrue(
-                        product.getId()
-                )
-                .or(() ->
-                        productImageRepository.findFirstByProduct_Id(
-                                product.getId()
-                        )
-                )
-                .map(ProductImage::getImageUrl)
-                .orElse(null);
+        String imageUrl = null;
+
+        if (product != null && product.getId() != null) {
+            imageUrl = productImageRepository
+                    .findFirstByProduct_IdAndIsPrimaryTrue(product.getId())
+                    .or(() -> productImageRepository.findFirstByProduct_Id(product.getId()))
+                    .map(ProductImage::getImageUrl)
+                    .orElse(null);
+        }
+
+        String unavailableReason = getVariantUnavailableReason(variant, 1);
 
         return ProductVariantPosResponse.builder()
                 .variantId(variant.getId())
@@ -107,6 +108,12 @@ public class PosServiceImpl implements PosService {
                 .bottleTypeName(variant.getBottleType() != null ? variant.getBottleType().getName() : null)
                 .price(variant.getPrice())
                 .stockQuantity(variant.getStockQuantity())
+                .manufacturingDate(variant.getManufacturingDate())
+                .expirationDate(variant.getExpirationDate())
+                .status(variant.getStatus())
+                .expired(isVariantExpired(variant))
+                .sellable(unavailableReason == null)
+                .unavailableReason(unavailableReason)
                 .imageUrl(imageUrl)
                 .build();
     }
@@ -733,37 +740,82 @@ public class PosServiceImpl implements PosService {
     }
 
     private void validateVariantCanSell(ProductVariant variant, Integer quantity) {
+        String reason = getVariantUnavailableReason(variant, quantity);
+
+        if (reason != null) {
+            throw new RuntimeException(reason);
+        }
+    }
+
+    private String getVariantUnavailableReason(ProductVariant variant, Integer quantity) {
         if (variant == null) {
-            throw new RuntimeException("Biến thể sản phẩm không tồn tại");
+            return "Biến thể sản phẩm không tồn tại";
+        }
+
+        String sku = variant.getSku() != null ? variant.getSku() : "N/A";
+
+        if (Boolean.TRUE.equals(variant.getIsDeleted())) {
+            return "Sản phẩm [" + sku + "] đã bị xóa, không thể bán";
         }
 
         if (variant.getStatus() == null || variant.getStatus() != STATUS_ACTIVE) {
-            throw new RuntimeException("Sản phẩm [" + variant.getSku() + "] hiện không được bán");
+            return "Sản phẩm [" + sku + "] hiện không được bán";
         }
 
         if (variant.getProduct() == null) {
-            throw new RuntimeException("Sản phẩm của SKU [" + variant.getSku() + "] không tồn tại");
+            return "Sản phẩm của SKU [" + sku + "] không tồn tại";
         }
 
-        if (variant.getProduct().getStatus() == null || variant.getProduct().getStatus() != STATUS_ACTIVE) {
-            throw new RuntimeException("Sản phẩm [" + variant.getProduct().getName() + "] hiện không được bán");
+        if (variant.getProduct().getStatus() == null
+                || variant.getProduct().getStatus() != STATUS_ACTIVE) {
+            return "Sản phẩm [" + variant.getProduct().getName() + "] hiện không được bán";
         }
 
         if (variant.getPrice() == null || variant.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new RuntimeException("Sản phẩm [" + variant.getSku() + "] chưa có giá bán hợp lệ");
+            return "Sản phẩm [" + sku + "] chưa có giá bán hợp lệ";
         }
 
         if (variant.getStockQuantity() == null || variant.getStockQuantity() < 0) {
-            throw new RuntimeException("Tồn kho của sản phẩm [" + variant.getSku() + "] không hợp lệ");
+            return "Tồn kho của sản phẩm [" + sku + "] không hợp lệ";
         }
 
         if (quantity == null || quantity <= 0) {
-            throw new RuntimeException("Số lượng sản phẩm [" + variant.getSku() + "] không hợp lệ");
+            return "Số lượng sản phẩm [" + sku + "] không hợp lệ";
         }
 
         if (variant.getStockQuantity() < quantity) {
-            throw new RuntimeException("Sản phẩm [" + variant.getProduct().getName() + "] chỉ còn " + variant.getStockQuantity());
+            return "Sản phẩm [" + variant.getProduct().getName() + "] chỉ còn " + variant.getStockQuantity();
         }
+
+        LocalDate today = LocalDate.now();
+
+        if (variant.getManufacturingDate() == null) {
+            return "Sản phẩm [" + sku + "] chưa có ngày sản xuất";
+        }
+
+        if (variant.getExpirationDate() == null) {
+            return "Sản phẩm [" + sku + "] chưa có hạn sử dụng";
+        }
+
+        if (variant.getManufacturingDate().isAfter(today)) {
+            return "Sản phẩm [" + sku + "] chưa tới ngày được bán";
+        }
+
+        if (variant.getExpirationDate().isBefore(today)) {
+            return "Sản phẩm [" + sku + "] đã hết hạn sử dụng";
+        }
+
+        if (!variant.getExpirationDate().isAfter(variant.getManufacturingDate())) {
+            return "Sản phẩm [" + sku + "] có hạn sử dụng không hợp lệ";
+        }
+
+        return null;
+    }
+
+    private boolean isVariantExpired(ProductVariant variant) {
+        return variant != null
+                && variant.getExpirationDate() != null
+                && variant.getExpirationDate().isBefore(LocalDate.now());
     }
 
     private Voucher resolveVoucher(String voucherCode, BigDecimal totalAmount) {
@@ -1512,5 +1564,47 @@ public class PosServiceImpl implements PosService {
                 || "ROLE_MANAGER".equals(roleName)
                 || "OWNER".equals(roleName)
                 || "ROLE_OWNER".equals(roleName);
+    }
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductVariantPosResponse> getProductsForPos() {
+        return variantRepository.findAll()
+                .stream()
+                .filter(variant -> !Boolean.TRUE.equals(variant.getIsDeleted()))
+                .map(this::toProductVariantPosResponseForPosList)
+                .toList();
+    }
+    private ProductVariantPosResponse toProductVariantPosResponseForPosList(ProductVariant variant) {
+        Product product = variant.getProduct();
+
+        String imageUrl = null;
+
+        if (product != null && product.getId() != null) {
+            imageUrl = productImageRepository
+                    .findFirstByProduct_IdAndIsPrimaryTrue(product.getId())
+                    .or(() -> productImageRepository.findFirstByProduct_Id(product.getId()))
+                    .map(ProductImage::getImageUrl)
+                    .orElse(null);
+        }
+
+        String unavailableReason = getVariantUnavailableReason(variant, 1);
+
+        return ProductVariantPosResponse.builder()
+                .variantId(variant.getId())
+                .sku(variant.getSku())
+                .productName(product != null ? product.getName() : null)
+                .brandName(product != null && product.getBrand() != null ? product.getBrand().getName() : null)
+                .capacityLabel(buildCapacityLabel(variant))
+                .bottleTypeName(variant.getBottleType() != null ? variant.getBottleType().getName() : null)
+                .price(variant.getPrice())
+                .stockQuantity(variant.getStockQuantity())
+                .manufacturingDate(variant.getManufacturingDate())
+                .expirationDate(variant.getExpirationDate())
+                .status(variant.getStatus())
+                .expired(isVariantExpired(variant))
+                .sellable(unavailableReason == null)
+                .unavailableReason(unavailableReason)
+                .imageUrl(imageUrl)
+                .build();
     }
 }

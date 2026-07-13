@@ -56,4 +56,5 @@ public interface PosService {
      * không bắt thu ngân nhập UserId/EmployeeId thủ công.
      */
     List<PosTransferTargetResponse> getTransferTargets(String cashierEmail);
+    List<ProductVariantPosResponse> getProductsForPos();
 }
