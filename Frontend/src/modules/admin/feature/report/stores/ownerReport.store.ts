@@ -41,13 +41,11 @@ function parseLocalDate(value: string): Date | null {
 
   const parts = value.split("-");
 
-  const rawYear = parts[0];
-  const rawMonth = parts[1];
-  const rawDay = parts[2];
-
-  if (!rawYear || !rawMonth || !rawDay || parts.length !== 3) {
+  if (parts.length !== 3) {
     return null;
   }
+
+  const [rawYear, rawMonth, rawDay] = parts;
 
   const year = Number(rawYear);
   const month = Number(rawMonth);
@@ -88,8 +86,23 @@ function getTodayDateOnly(): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
+function normalizeLimit(value: string): string {
+  const cleanValue = String(value || "").replace(/[^\d]/g, "").slice(0, 2);
+
+  return cleanValue || "10";
+}
+
+function toNumber(value: unknown): number {
+  const numberValue = Number(value ?? 0);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
 function getErrorMessage(error: any): string {
   const responseData = error?.response?.data;
+
+  if (typeof responseData === "string") {
+    return responseData;
+  }
 
   if (responseData?.message) {
     return responseData.message;
@@ -101,6 +114,10 @@ function getErrorMessage(error: any): string {
     if (typeof firstError === "string") {
       return firstError;
     }
+
+    if (Array.isArray(firstError) && typeof firstError[0] === "string") {
+      return firstError[0];
+    }
   }
 
   if (error?.message) {
@@ -108,6 +125,48 @@ function getErrorMessage(error: any): string {
   }
 
   return "Có lỗi xảy ra khi tải báo cáo";
+}
+
+function normalizeSummary(data: any): ReportSummaryResponse | null {
+  if (!data) {
+    return null;
+  }
+
+  return {
+    filterType: data.filterType || "MONTH",
+    fromDate: data.fromDate || "",
+    toDate: data.toDate || "",
+    totalRevenue: toNumber(data.totalRevenue),
+    totalOrders: toNumber(data.totalOrders),
+    totalProductsSold: toNumber(data.totalProductsSold),
+  };
+}
+
+function normalizeChartData(data: any): RevenueChartResponse[] {
+  if (!Array.isArray(data)) {
+    return [];
+  }
+
+  return data.map((item) => ({
+    label: String(item?.label || ""),
+    revenue: toNumber(item?.revenue),
+    totalOrders: toNumber(item?.totalOrders),
+  }));
+}
+
+function normalizeBestSellingProducts(data: any): BestSellingProductResponse[] {
+  if (!Array.isArray(data)) {
+    return [];
+  }
+
+  return data.map((item) => ({
+    productId: toNumber(item?.productId),
+    productName: String(item?.productName || "Sản phẩm"),
+    brandName: String(item?.brandName || "Không rõ thương hiệu"),
+    totalSold: toNumber(item?.totalSold),
+    revenue: toNumber(item?.revenue),
+    imageUrl: item?.imageUrl || null,
+  }));
 }
 
 export const useOwnerReportStore = defineStore("ownerReport", {
@@ -132,7 +191,9 @@ export const useOwnerReportStore = defineStore("ownerReport", {
       const filterType = this.filter.filterType;
       const fromDate = this.filter.fromDate;
       const toDate = this.filter.toDate;
-      const limit = this.filter.limit;
+      const limit = normalizeLimit(this.filter.limit);
+
+      this.filter.limit = limit;
 
       if (!filterType) {
         return "Vui lòng chọn mốc thời gian";
@@ -217,10 +278,10 @@ export const useOwnerReportStore = defineStore("ownerReport", {
         return "Ngày kết thúc không được lớn hơn ngày hiện tại";
       }
 
-      const diffDays =
-        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+      const inclusiveDays =
+        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) + 1;
 
-      if (diffDays > MAX_CUSTOM_DAYS) {
+      if (inclusiveDays > MAX_CUSTOM_DAYS) {
         return `Khoảng thời gian tùy chỉnh tối đa là ${MAX_CUSTOM_DAYS} ngày`;
       }
 
@@ -229,8 +290,8 @@ export const useOwnerReportStore = defineStore("ownerReport", {
 
     buildParams(): ReportFilterParams {
       const params: ReportFilterParams = {
-        filterType: this.filter.filterType,
-        limit: this.filter.limit,
+        filterType: this.filter.filterType || "MONTH",
+        limit: normalizeLimit(this.filter.limit),
       };
 
       if (this.filter.filterType === "CUSTOM") {
@@ -271,11 +332,16 @@ export const useOwnerReportStore = defineStore("ownerReport", {
           ownerReportService.getBestSellingProducts(params),
         ]);
 
-        this.summary = summaryRes.data;
-        this.chartData = chartRes.data || [];
-        this.bestSellingProducts = bestSellingRes.data || [];
+        this.summary = normalizeSummary(summaryRes.data);
+        this.chartData = normalizeChartData(chartRes.data);
+        this.bestSellingProducts = normalizeBestSellingProducts(
+          bestSellingRes.data
+        );
       } catch (error: any) {
         this.error = getErrorMessage(error);
+        this.summary = null;
+        this.chartData = [];
+        this.bestSellingProducts = [];
       } finally {
         this.loading = false;
       }
