@@ -127,7 +127,12 @@
               <div class="row g-4">
                 <div class="col-md-12">
                   <label class="form-label fw-bold">Mã Voucher <span class="text-danger">*</span></label>
-                  <input type="text" class="form-control form-control-lg text-uppercase" v-model="form.code" required placeholder="VD: SUMMER24" />
+                  <div class="input-group">
+                    <input type="text" class="form-control form-control-lg text-uppercase" v-model="form.code" required maxlength="20" placeholder="VD: SUMMER24" />
+                    <button class="btn btn-outline-secondary px-4 fw-bold" type="button" @click="generateRandomCode">
+                      <i class="bi bi-magic me-1"></i> Tạo ngẫu nhiên
+                    </button>
+                  </div>
                 </div>
                 
                 <div class="col-md-6">
@@ -139,16 +144,16 @@
                 </div>
                 <div class="col-md-6">
                   <label class="form-label fw-bold">Mức giảm <span class="text-danger">*</span></label>
-                  <input type="number" class="form-control form-control-lg" v-model="form.discountValue" required min="0" />
+                  <input type="number" class="form-control form-control-lg" v-model="form.discountValue" required min="1" :max="form.discountType === 'PERCENT' ? 100 : 100000000" placeholder="Tối đa 100 triệu..." />
                 </div>
 
                 <div class="col-md-6">
-                  <label class="form-label fw-bold">Đơn tối thiểu (VNĐ)</label>
-                  <input type="number" class="form-control form-control-lg" v-model="form.minOrderValue" min="0" />
+                  <label class="form-label fw-bold">Đơn tối thiểu (VNĐ) <span class="text-danger">*</span></label>
+                  <input type="number" class="form-control form-control-lg" v-model="form.minOrderValue" required min="0" max="100000000" />
                 </div>
                 <div class="col-md-6">
                   <label class="form-label fw-bold">Mức giảm tối đa (VNĐ)</label>
-                  <input type="number" class="form-control form-control-lg" v-model="form.maxDiscount" min="0" :disabled="form.discountType === 'FIXED'" />
+                  <input type="number" class="form-control form-control-lg" v-model="form.maxDiscount" min="0" max="100000000" :disabled="form.discountType === 'FIXED'" />
                 </div>
 
                 <div class="col-md-6">
@@ -163,7 +168,7 @@
 
                 <div class="col-md-6">
                   <label class="form-label fw-bold">Giới hạn số lượt dùng <span class="text-danger">*</span></label>
-                  <input type="number" class="form-control form-control-lg" v-model="form.usageLimit" required min="1" />
+                  <input type="number" class="form-control form-control-lg" v-model="form.usageLimit" required min="1" max="1000000" />
                 </div>
                 <div class="col-md-6">
                   <label class="form-label fw-bold">Trạng thái</label>
@@ -250,6 +255,16 @@ const changePage = (page: number) => {
 const handleSearch = () => {
   currentPage.value = 0; // Reset về trang 1 khi search
   fetchVouchers();
+};
+
+// Hàm tạo mã ngẫu nhiên 8 ký tự
+const generateRandomCode = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = 'SALE'; // Tiền tố
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  form.value.code = code;
 };
 
 // ================= CÁC HÀM XỬ LÝ MODAL =================

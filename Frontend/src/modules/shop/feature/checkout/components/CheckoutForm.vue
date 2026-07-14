@@ -17,7 +17,7 @@
 
       <div class="form-row">
         <div class="form-group half">
-          <label>Họ và tên *</label>
+          <label>Họ và tên <span class="text-danger">*</span></label>
 
           <div class="input-box">
             <svg
@@ -47,7 +47,7 @@
         </div>
 
         <div class="form-group half">
-          <label>Số điện thoại *</label>
+          <label>Số điện thoại <span class="text-danger">*</span></label>
 
           <div class="input-box">
             <svg
@@ -80,7 +80,7 @@
 
       <div class="address-box">
         <div class="address-title">
-          <strong>Địa chỉ nhận hàng *</strong>
+          <strong>Địa chỉ nhận hàng <span class="text-danger">*</span></strong>
           <span>
             Có thể dùng địa chỉ tài khoản hoặc đổi địa chỉ nhận hàng riêng cho đơn này.
           </span>
@@ -119,7 +119,7 @@
 
           <div class="form-row">
             <div class="form-group half">
-              <label>Tỉnh / Thành phố *</label>
+              <label>Tỉnh / Thành phố <span class="text-danger">*</span></label>
 
               <div class="select-box">
                 <select
@@ -143,7 +143,7 @@
             </div>
 
             <div class="form-group half">
-              <label>Phường / Xã / Đặc khu *</label>
+              <label>Phường / Xã / Đặc khu <span class="text-danger">*</span></label>
 
               <div class="select-box">
                 <select
@@ -178,7 +178,7 @@
           </div>
 
           <div class="form-group">
-            <label>Địa chỉ cụ thể *</label>
+            <label>Địa chỉ cụ thể <span class="text-danger">*</span></label>
 
             <div class="input-box textarea-box">
               <svg
@@ -301,7 +301,7 @@
 
           <div class="form-row">
             <div class="form-group half">
-              <label>Mã số thuế *</label>
+              <label>Mã số thuế <span class="text-danger">*</span></label>
 
               <div class="input-box">
                 <input
@@ -315,7 +315,7 @@
             </div>
 
             <div class="form-group half">
-              <label>Email nhận hóa đơn *</label>
+              <label>Email nhận hóa đơn <span class="text-danger">*</span></label>
 
               <div class="input-box">
                 <input
@@ -330,7 +330,7 @@
           </div>
 
           <div class="form-group">
-            <label>Tên công ty / đơn vị *</label>
+            <label>Tên công ty / đơn vị <span class="text-danger">*</span></label>
 
             <div class="input-box">
               <input
@@ -344,7 +344,7 @@
           </div>
 
           <div class="form-group mb-0">
-            <label>Địa chỉ công ty *</label>
+            <label>Địa chỉ công ty <span class="text-danger">*</span></label>
 
             <div class="input-box">
               <input
@@ -402,25 +402,24 @@
         </svg>
       </label>
 
+      <!-- ĐÃ SỬA THÀNH VIETQR -->
       <label class="payment-option">
         <div class="radio-wrapper">
           <input
             type="radio"
             name="payment"
-            value="VNPAY"
+            value="VIETQR"
             v-model="form.paymentMethod"
           />
           <span class="custom-radio"></span>
         </div>
 
         <div class="option-info">
-          <strong>Thanh toán trực tuyến qua VNPay</strong>
-          <span>Thanh toán an toàn qua thẻ ATM/Internet Banking</span>
+          <strong>Chuyển khoản VietQR</strong>
+          <span>Quét mã QR qua ứng dụng ngân hàng (Miễn phí)</span>
         </div>
 
-        <span class="vnpay-text">
-          <span class="red">VN</span><span class="blue">PAY</span>
-        </span>
+        <img src="https://vietqr.net/portal/v1.0.0/assets/img/logo-vietqr.png" alt="VietQR" style="height: 24px; object-fit: contain;" />
       </label>
     </div>
   </div>

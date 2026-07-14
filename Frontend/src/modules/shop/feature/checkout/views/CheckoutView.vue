@@ -399,10 +399,10 @@ const validateCheckoutForm = async () => {
     return null;
   }
 
-  if (!["COD", "VNPAY"].includes(paymentMethod)) {
+ if (!["COD", "VIETQR"].includes(paymentMethod)) {
     await showWarning(
       "Phương thức thanh toán không hợp lệ",
-      "Chỉ hỗ trợ COD hoặc VNPAY."
+      "Chỉ hỗ trợ COD hoặc VIETQR."
     );
     return null;
   }
@@ -516,9 +516,20 @@ const handlePlaceOrder = async () => {
     // Đặt hàng xong thì xóa luôn mã voucher trong giỏ
     localStorage.removeItem('applied_voucher');
 
-    if (submitData.paymentMethod === "VNPAY" && res.data?.paymentUrl) {
-      window.location.href = res.data.paymentUrl;
-      return;
+    if (submitData.paymentMethod === "VIETQR" && res.data?.qrUrl) {
+      // Hiển thị mã QR lên màn hình cho khách quét
+      await Swal.fire({
+        title: 'Thanh toán VietQR',
+        text: 'Vui lòng mở ứng dụng ngân hàng và quét mã dưới đây để thanh toán.',
+        imageUrl: res.data.qrUrl,
+        imageWidth: 250,
+        imageHeight: 250,
+        imageAlt: 'Mã QR Thanh Toán',
+        confirmButtonText: 'Tôi đã thanh toán',
+        confirmButtonColor: '#10b981',
+        allowOutsideClick: false
+      });
+      // Bấm "Đã thanh toán" xong nó sẽ tự trôi xuống đoạn code bật Modal Thành Công ở dưới
     }
 
     successDetails.value = [

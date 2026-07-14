@@ -32,10 +32,7 @@ public class OrderRequest {
     private String shippingAddress;
 
     @NotBlank(message = "Phương thức thanh toán không được để trống")
-    @Pattern(
-            regexp = "(?i)^(COD|VNPAY)$",
-            message = "Phương thức thanh toán chỉ hỗ trợ COD hoặc VNPAY"
-    )
+    @Pattern(regexp = "^(COD|VIETQR)$", message = "Phương thức thanh toán không hợp lệ")
     private String paymentMethod;
 
     @Size(max = 255, message = "Ghi chú tối đa 255 ký tự")
