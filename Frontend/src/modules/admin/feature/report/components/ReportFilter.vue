@@ -7,7 +7,8 @@
           <select
             v-model="reportStore.filter.filterType"
             class="form-select"
-            @change="reportStore.resetCustomDateIfNeeded()"
+            :disabled="reportStore.loading"
+            @change="handleFilterTypeChange"
           >
             <option value="DAY">Hôm nay</option>
             <option value="WEEK">Tuần này</option>
@@ -26,6 +27,8 @@
             v-model="reportStore.filter.fromDate"
             type="date"
             class="form-control"
+            :max="todayText"
+            :disabled="reportStore.loading"
           />
         </div>
 
@@ -38,6 +41,9 @@
             v-model="reportStore.filter.toDate"
             type="date"
             class="form-control"
+            :min="reportStore.filter.fromDate || undefined"
+            :max="todayText"
+            :disabled="reportStore.loading"
           />
         </div>
 
@@ -50,7 +56,10 @@
             maxlength="2"
             class="form-control"
             placeholder="10"
+            :disabled="reportStore.loading"
             @input="handleLimitInput"
+            @blur="handleLimitBlur"
+            @keyup.enter="reportStore.fetchAll()"
           />
         </div>
 
@@ -69,6 +78,10 @@
         </div>
       </div>
 
+      <div class="form-text mt-3">
+        Doanh thu chỉ ghi nhận từ các đơn đã hoàn thành.
+      </div>
+
       <div v-if="reportStore.error" class="alert alert-danger mt-3 mb-0">
         {{ reportStore.error }}
       </div>
@@ -77,11 +90,33 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { useOwnerReportStore } from "../stores/ownerReport.store";
 
 const reportStore = useOwnerReportStore();
 
+const todayText = computed(() => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+});
+
+const handleFilterTypeChange = () => {
+  reportStore.resetCustomDateIfNeeded();
+};
+
 const handleLimitInput = () => {
-  reportStore.filter.limit = reportStore.filter.limit.replace(/[^\d]/g, "");
+  reportStore.filter.limit = String(reportStore.filter.limit || "")
+    .replace(/[^\d]/g, "")
+    .slice(0, 2);
+};
+
+const handleLimitBlur = () => {
+  if (!reportStore.filter.limit) {
+    reportStore.filter.limit = "10";
+  }
 };
 </script>

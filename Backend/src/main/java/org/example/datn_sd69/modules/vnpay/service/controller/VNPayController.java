@@ -6,7 +6,6 @@ import org.example.datn_sd69.entity.Customer;
 import org.example.datn_sd69.entity.Order;
 import org.example.datn_sd69.entity.OrderItem;
 import org.example.datn_sd69.entity.ProductVariant;
-import org.example.datn_sd69.entity.User;
 import org.example.datn_sd69.entity.Voucher;
 import org.example.datn_sd69.modules.vnpay.service.VNPayService;
 import org.example.datn_sd69.repository.CustomerRepository;
@@ -36,11 +35,14 @@ import java.util.Map;
 public class VNPayController {
 
     private static final int ORDER_STATUS_PENDING = 0;
+    private static final int ORDER_STATUS_CONFIRMED = 1;
     private static final int ORDER_STATUS_COMPLETED = 3;
     private static final int ORDER_STATUS_CANCELLED = 4;
 
     private static final String PAYMENT_VNPAY = "VNPAY";
     private static final String PAYMENT_MIXED = "MIXED";
+
+    private static final String ORDER_TYPE_ONLINE = "ONLINE";
 
     private static final BigDecimal POINT_RATE_AMOUNT = BigDecimal.valueOf(10_000);
 
@@ -51,13 +53,18 @@ public class VNPayController {
     private final CustomerRepository customerRepository;
     private final VoucherRepository voucherRepository;
 
+    /**
+     * VNPay IPN server-to-server.
+     *
+     * Dùng để VNPay gọi về BE xác nhận giao dịch.
+     * Trả về RspCode theo chuẩn VNPay.
+     */
     @GetMapping("/ipn")
     @Transactional
     public ResponseEntity<Map<String, String>> handleIpn(@RequestParam Map<String, String> params) {
         log.info("[VNPay IPN] Nhận callback params: {}", params);
 
-        Map<String, String> paramsCopy = new HashMap<>(params);
-        boolean isValidSignature = vnPayService.verifyCallback(paramsCopy);
+        boolean isValidSignature = vnPayService.verifyCallback(params);
 
         if (!isValidSignature) {
             log.warn("[VNPay IPN] Chữ ký không hợp lệ!");
@@ -65,10 +72,9 @@ public class VNPayController {
         }
 
         String responseCode = params.get("vnp_ResponseCode");
-        String orderInfo = params.get("vnp_OrderInfo");
         String vnpAmount = params.get("vnp_Amount");
 
-        Integer orderId = parseOrderId(orderInfo);
+        Integer orderId = extractOrderId(params);
 
         if (orderId == null) {
             return ResponseEntity.ok(Map.of("RspCode", "01", "Message", "Order Not Found"));
@@ -107,24 +113,29 @@ public class VNPayController {
         return ResponseEntity.ok(Map.of("RspCode", "00", "Message", "Confirm Success"));
     }
 
+    /**
+     * VNPay Return browser redirect.
+     *
+     * FE hoặc trình duyệt có thể gọi URL này sau khi thanh toán.
+     * Vẫn verify chữ ký để tránh giả callback.
+     */
     @GetMapping("/return")
     @Transactional
     public ResponseEntity<Map<String, Object>> handleReturn(@RequestParam Map<String, String> params) {
         log.info("[VNPay Return] Trình duyệt chuyển hướng về params: {}", params);
 
-        Map<String, String> paramsCopy = new HashMap<>(params);
-        boolean isValidSignature = vnPayService.verifyCallback(paramsCopy);
+        boolean isValidSignature = vnPayService.verifyCallback(params);
 
         String responseCode = params.get("vnp_ResponseCode");
-        String orderInfo = params.get("vnp_OrderInfo");
         String vnpAmount = params.get("vnp_Amount");
 
-        Integer orderId = parseOrderId(orderInfo);
+        Integer orderId = extractOrderId(params);
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", false);
         result.put("responseCode", responseCode);
-        result.put("orderInfo", orderInfo);
+        result.put("orderInfo", params.get("vnp_OrderInfo"));
+        result.put("txnRef", params.get("vnp_TxnRef"));
         result.put("amount", vnpAmount);
         result.put("transactionNo", params.get("vnp_TransactionNo"));
         result.put("bankCode", params.get("vnp_BankCode"));
@@ -165,25 +176,72 @@ public class VNPayController {
 
         Order freshOrder = orderRepository.findById(orderId).orElse(order);
 
-        result.put("success", freshOrder.getStatus() != null && freshOrder.getStatus() == ORDER_STATUS_COMPLETED);
-        result.put("message", result.get("success").equals(true) ? "Thanh toán thành công" : "Thanh toán chưa hoàn tất");
+        boolean success = isPaymentSuccessStatus(freshOrder);
+
+        result.put("success", success);
+        result.put("message", success ? "Thanh toán thành công" : "Thanh toán chưa hoàn tất");
 
         appendOrderDetailToResult(result, freshOrder, vnpAmount);
 
         return ResponseEntity.ok(result);
     }
 
-    private Integer parseOrderId(String orderInfo) {
+    private Integer extractOrderId(Map<String, String> params) {
+        if (params == null || params.isEmpty()) {
+            return null;
+        }
+
+        Integer orderIdFromTxnRef = vnPayService.extractOrderIdFromTxnRef(params.get("vnp_TxnRef"));
+
+        if (orderIdFromTxnRef != null) {
+            return orderIdFromTxnRef;
+        }
+
+        /*
+         * Fallback giữ logic cũ:
+         * vnp_OrderInfo = "Thanh toan don hang 132"
+         */
+        return parseOrderIdFromOrderInfo(params.get("vnp_OrderInfo"));
+    }
+
+    private Integer parseOrderIdFromOrderInfo(String orderInfo) {
         try {
             if (orderInfo == null || orderInfo.trim().isBlank()) {
                 return null;
             }
 
-            return Integer.parseInt(orderInfo.replaceAll("[^0-9]", ""));
+            String cleaned = orderInfo.trim();
+
+            /*
+             * Giữ tương thích với OrderInfo cũ.
+             * Lấy cụm số đầu tiên trong chuỗi.
+             */
+            java.util.regex.Matcher matcher = java.util.regex.Pattern
+                    .compile("(\\d+)")
+                    .matcher(cleaned);
+
+            if (!matcher.find()) {
+                return null;
+            }
+
+            return Integer.parseInt(matcher.group(1));
         } catch (NumberFormatException e) {
             log.error("Không thể ép kiểu orderId từ chuỗi OrderInfo: {}", orderInfo);
             return null;
         }
+    }
+
+    private boolean isPaymentSuccessStatus(Order order) {
+        if (order == null || order.getStatus() == null) {
+            return false;
+        }
+
+        /*
+         * ONLINE: thanh toán xong -> CONFIRMED = 1.
+         * POS/MIXED cũ: thanh toán xong có thể -> COMPLETED = 3.
+         */
+        return order.getStatus() == ORDER_STATUS_CONFIRMED
+                || order.getStatus() == ORDER_STATUS_COMPLETED;
     }
 
     private boolean isVnpayOrder(Order order) {
@@ -208,6 +266,12 @@ public class VNPayController {
                 && PAYMENT_VNPAY.equalsIgnoreCase(order.getPaymentMethod().trim());
     }
 
+    private boolean isOnlineOrder(Order order) {
+        return order != null
+                && order.getOrderType() != null
+                && ORDER_TYPE_ONLINE.equalsIgnoreCase(order.getOrderType().trim());
+    }
+
     /**
      * VNPay trả amount theo đơn vị *100.
      *
@@ -216,8 +280,8 @@ public class VNPayController {
      *
      * MIXED:
      * - VNPay chỉ là phần còn thiếu.
-     * - Vì không thêm DB nên không có chỗ lưu cashGiven.
-     * - Chỉ kiểm tra amount VNPay > 0 và < finalAmount.
+     * - Không thêm DB nên không có chỗ lưu cashGiven.
+     * - Giữ logic cũ: chỉ kiểm tra amount VNPay > 0 và < finalAmount.
      */
     private boolean isValidVnpayAmount(Order order, String rawVnpAmount) {
         try {
@@ -234,7 +298,7 @@ public class VNPayController {
             }
 
             long receivedAmount = Long.parseLong(rawVnpAmount);
-            long finalAmountInVnpUnit = toVnpAmountUnit(finalAmount);
+            long finalAmountInVnpUnit = vnPayService.toVnpayAmountUnit(finalAmount);
 
             if (isFullVnpayOrder(order)) {
                 return receivedAmount == finalAmountInVnpUnit;
@@ -248,30 +312,6 @@ public class VNPayController {
         } catch (Exception e) {
             log.error("Không kiểm tra được số tiền VNPay. rawVnpAmount={}", rawVnpAmount, e);
             return false;
-        }
-    }
-
-    private long toVnpAmountUnit(BigDecimal amount) {
-        if (amount == null) {
-            return 0L;
-        }
-
-        return amount
-                .setScale(0, RoundingMode.DOWN)
-                .multiply(BigDecimal.valueOf(100))
-                .longValue();
-    }
-
-    private BigDecimal parseVnpAmountToVnd(String rawVnpAmount) {
-        try {
-            if (rawVnpAmount == null || rawVnpAmount.trim().isBlank()) {
-                return BigDecimal.ZERO;
-            }
-
-            return new BigDecimal(rawVnpAmount)
-                    .divide(BigDecimal.valueOf(100), 0, RoundingMode.DOWN);
-        } catch (Exception e) {
-            return BigDecimal.ZERO;
         }
     }
 
@@ -292,7 +332,7 @@ public class VNPayController {
                 ? order.getDiscountAmount()
                 : BigDecimal.ZERO;
 
-        BigDecimal vnpayPaidAmount = parseVnpAmountToVnd(rawVnpAmount);
+        BigDecimal vnpayPaidAmount = vnPayService.parseVnpayAmountToVnd(rawVnpAmount);
 
         BigDecimal cashGiven = BigDecimal.ZERO;
         BigDecimal transferAmount = BigDecimal.ZERO;
@@ -302,7 +342,7 @@ public class VNPayController {
         if (isFullVnpayOrder(order)) {
             transferAmount = finalAmount;
 
-            if (order.getStatus() != null && order.getStatus() == ORDER_STATUS_COMPLETED) {
+            if (isPaymentSuccessStatus(order)) {
                 paidAmount = finalAmount;
                 remainingAmount = BigDecimal.ZERO;
             }
@@ -310,14 +350,13 @@ public class VNPayController {
 
         if (isMixedOrder(order)) {
             transferAmount = vnpayPaidAmount;
-
             cashGiven = finalAmount.subtract(transferAmount);
 
             if (cashGiven.compareTo(BigDecimal.ZERO) < 0) {
                 cashGiven = BigDecimal.ZERO;
             }
 
-            if (order.getStatus() != null && order.getStatus() == ORDER_STATUS_COMPLETED) {
+            if (isPaymentSuccessStatus(order)) {
                 paidAmount = finalAmount;
                 remainingAmount = BigDecimal.ZERO;
             } else {
@@ -328,6 +367,8 @@ public class VNPayController {
 
         result.put("orderId", order.getId());
         result.put("status", order.getStatus());
+        result.put("statusText", getStatusText(order.getStatus()));
+        result.put("orderType", order.getOrderType());
         result.put("paymentMethod", order.getPaymentMethod());
 
         result.put("totalAmount", totalAmount);
@@ -373,7 +414,7 @@ public class VNPayController {
                 }
 
                 if (variant.getCapacity() != null && variant.getCapacity().getValue() != null) {
-                    capacity = variant.getCapacity().getValue() + " ml";
+                    capacity = formatCapacityValue(variant.getCapacity().getValue());
                 }
 
                 if (variant.getBottleType() != null) {
@@ -381,32 +422,125 @@ public class VNPayController {
                 }
             }
 
-            BigDecimal unitPrice = oi.getOriginalPrice() != null
-                    ? oi.getOriginalPrice()
-                    : BigDecimal.ZERO;
-
             Integer quantity = oi.getQuantity() != null
                     ? oi.getQuantity()
                     : 0;
 
-            BigDecimal lineTotal = oi.getFinalPrice() != null
-                    ? oi.getFinalPrice()
-                    : unitPrice.multiply(BigDecimal.valueOf(quantity));
+            BigDecimal originalUnitPrice = oi.getOriginalPrice() != null
+                    ? oi.getOriginalPrice()
+                    : BigDecimal.ZERO;
+
+            BigDecimal discountPerUnit = oi.getDiscountAmount() != null
+                    ? oi.getDiscountAmount()
+                    : BigDecimal.ZERO;
+
+            BigDecimal finalUnitPrice = resolveFinalUnitPrice(oi, originalUnitPrice);
+            BigDecimal lineTotal = resolveLineTotal(oi, quantity, originalUnitPrice, finalUnitPrice);
 
             itemMap.put("productName", productName);
             itemMap.put("sku", sku);
             itemMap.put("variantName", buildVariantName(capacity, bottle));
             itemMap.put("capacityLabel", capacity);
             itemMap.put("bottleTypeName", bottle);
+
             itemMap.put("quantity", quantity);
-            itemMap.put("price", unitPrice);
-            itemMap.put("unitPrice", unitPrice);
+            itemMap.put("originalPrice", originalUnitPrice);
+            itemMap.put("discountAmount", discountPerUnit);
+            itemMap.put("finalPrice", finalUnitPrice);
+
+            itemMap.put("price", finalUnitPrice);
+            itemMap.put("unitPrice", finalUnitPrice);
             itemMap.put("lineTotal", lineTotal);
 
             itemsList.add(itemMap);
         }
 
         result.put("items", itemsList);
+    }
+
+    private BigDecimal resolveFinalUnitPrice(OrderItem item, BigDecimal originalUnitPrice) {
+        if (item == null || item.getFinalPrice() == null) {
+            return originalUnitPrice != null ? originalUnitPrice : BigDecimal.ZERO;
+        }
+
+        BigDecimal finalPrice = item.getFinalPrice();
+
+        /*
+         * Flow mới:
+         * OrderItem.finalPrice là giá cuối / 1 sản phẩm.
+         *
+         * Flow cũ có thể lưu finalPrice là line total.
+         * Hàm lineTotal bên dưới sẽ xử lý fallback.
+         */
+        return finalPrice;
+    }
+
+    private BigDecimal resolveLineTotal(
+            OrderItem item,
+            Integer quantity,
+            BigDecimal originalUnitPrice,
+            BigDecimal finalUnitPrice
+    ) {
+        int safeQuantity = quantity != null ? quantity : 0;
+
+        if (safeQuantity <= 0) {
+            return BigDecimal.ZERO;
+        }
+
+        if (item == null || item.getFinalPrice() == null) {
+            return originalUnitPrice.multiply(BigDecimal.valueOf(safeQuantity));
+        }
+
+        BigDecimal rawFinalPrice = item.getFinalPrice();
+
+        /*
+         * Nếu quantity > 1 và finalPrice <= originalUnitPrice,
+         * gần như chắc chắn finalPrice là giá / 1 sản phẩm theo flow mới.
+         */
+        if (safeQuantity > 1
+                && originalUnitPrice != null
+                && originalUnitPrice.compareTo(BigDecimal.ZERO) > 0
+                && rawFinalPrice.compareTo(originalUnitPrice) <= 0) {
+            return rawFinalPrice.multiply(BigDecimal.valueOf(safeQuantity));
+        }
+
+        /*
+         * Với quantity = 1 thì unit price = line total.
+         * Với flow cũ nếu finalPrice đã là line total thì giữ nguyên.
+         */
+        if (safeQuantity == 1) {
+            return rawFinalPrice;
+        }
+
+        return rawFinalPrice;
+    }
+
+    private String formatCapacityValue(Object value) {
+        if (value == null) {
+            return "";
+        }
+
+        String rawText = String.valueOf(value).trim();
+
+        if (rawText.isEmpty()) {
+            return "";
+        }
+
+        String lower = rawText.toLowerCase().replace("ml", "").trim();
+
+        try {
+            BigDecimal number = new BigDecimal(lower);
+
+            number = number.stripTrailingZeros();
+
+            return number.toPlainString() + "ml";
+        } catch (Exception ignored) {
+            if (rawText.toLowerCase().contains("ml")) {
+                return rawText.replace(" ", "");
+            }
+
+            return rawText + "ml";
+        }
     }
 
     private String buildVariantName(String capacity, String bottle) {
@@ -430,46 +564,88 @@ public class VNPayController {
             return;
         }
 
+        /*
+         * ONLINE:
+         * Thanh toán VNPay thành công chỉ xác nhận đơn.
+         * Không cộng điểm ở đây.
+         * Điểm chỉ cộng khi đơn hoàn thành sau giao hàng.
+         */
+        if (isOnlineOrder(order)) {
+            order.setStatus(ORDER_STATUS_CONFIRMED);
+            orderRepository.save(order);
+
+            log.info("[VNPay] Đơn ONLINE #{} đã thanh toán thành công, chuyển sang Đã xác nhận.", order.getId());
+            return;
+        }
+
+        /*
+         * POS / MIXED / logic cũ:
+         * Giữ hành vi cũ: thanh toán xong thì hoàn thành đơn.
+         */
         order.setStatus(ORDER_STATUS_COMPLETED);
         order.setCompletedAt(LocalDateTime.now());
 
-        if (order.getCustomer() != null && !Boolean.TRUE.equals(order.getLoyaltyPointsApplied())) {
-            Customer customer = order.getCustomer();
-
-            int currentPoints = customer.getLoyaltyPoints() != null
-                    ? customer.getLoyaltyPoints()
-                    : 0;
-
-            BigDecimal finalAmount = order.getFinalAmount() != null
-                    ? order.getFinalAmount()
-                    : BigDecimal.ZERO;
-
-            int pointsEarned = finalAmount
-                    .divide(POINT_RATE_AMOUNT, 0, RoundingMode.DOWN)
-                    .intValue();
-
-            pointsEarned = Math.max(pointsEarned, 0);
-
-            customer.setLoyaltyPoints(currentPoints + pointsEarned);
-            updateCustomerRank(customer);
-            customerRepository.save(customer);
-
-            order.setLoyaltyPointsApplied(true);
-            order.setLoyaltyPointsEarned(pointsEarned);
-        }
-
-        if (order.getVoucher() != null) {
-            Voucher voucher = order.getVoucher();
-
-            int usedCount = voucher.getUsedCount() != null
-                    ? voucher.getUsedCount()
-                    : 0;
-
-            voucher.setUsedCount(usedCount + 1);
-            voucherRepository.save(voucher);
-        }
+        applyLoyaltyPointsIfNeeded(order);
+        increaseVoucherUsageForOldFlowIfNeeded(order);
 
         orderRepository.save(order);
+    }
+
+    private void applyLoyaltyPointsIfNeeded(Order order) {
+        if (order == null || order.getCustomer() == null) {
+            return;
+        }
+
+        if (Boolean.TRUE.equals(order.getLoyaltyPointsApplied())) {
+            return;
+        }
+
+        Customer customer = order.getCustomer();
+
+        int currentPoints = customer.getLoyaltyPoints() != null
+                ? customer.getLoyaltyPoints()
+                : 0;
+
+        BigDecimal finalAmount = order.getFinalAmount() != null
+                ? order.getFinalAmount()
+                : BigDecimal.ZERO;
+
+        int pointsEarned = finalAmount
+                .divide(POINT_RATE_AMOUNT, 0, RoundingMode.DOWN)
+                .intValue();
+
+        pointsEarned = Math.max(pointsEarned, 0);
+
+        customer.setLoyaltyPoints(currentPoints + pointsEarned);
+        updateCustomerRank(customer);
+        customerRepository.save(customer);
+
+        order.setLoyaltyPointsApplied(true);
+        order.setLoyaltyPointsEarned(pointsEarned);
+    }
+
+    private void increaseVoucherUsageForOldFlowIfNeeded(Order order) {
+        if (order == null || order.getVoucher() == null) {
+            return;
+        }
+
+        /*
+         * ONLINE checkout mới đã giữ lượt voucher khi tạo đơn pending.
+         * POS/MIXED cũ thường chưa tăng usedCount khi tạo đơn,
+         * nên chỉ tăng ở đây cho non-online để tránh phá logic cũ.
+         */
+        if (isOnlineOrder(order)) {
+            return;
+        }
+
+        Voucher voucher = order.getVoucher();
+
+        int usedCount = voucher.getUsedCount() != null
+                ? voucher.getUsedCount()
+                : 0;
+
+        voucher.setUsedCount(usedCount + 1);
+        voucherRepository.save(voucher);
     }
 
     private void updateCustomerRank(Customer customer) {
@@ -500,31 +676,78 @@ public class VNPayController {
         order.setStatus(ORDER_STATUS_CANCELLED);
         orderRepository.save(order);
 
+        restoreStock(order);
+
+        /*
+         * ONLINE checkout mới đã giữ lượt voucher khi tạo đơn pending,
+         * nên VNPay fail/cancel phải hoàn lượt voucher.
+         *
+         * POS/MIXED cũ chưa tăng usedCount khi tạo đơn pending,
+         * nên không trừ để tránh âm lượt voucher.
+         */
+        if (isOnlineOrder(order)) {
+            restoreVoucherUsage(order);
+        }
+
+        log.info("[VNPay] Đơn #{} đã hủy do thanh toán thất bại. ResponseCode={}",
+                order.getId(), responseCode);
+    }
+
+    private void restoreStock(Order order) {
+        if (order == null || order.getId() == null) {
+            return;
+        }
+
         List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
 
         for (OrderItem oi : items) {
             ProductVariant variant = oi.getProductVariant();
 
-            if (variant != null) {
-                int currentStock = variant.getStockQuantity() != null
-                        ? variant.getStockQuantity()
-                        : 0;
-
-                int quantity = oi.getQuantity() != null
-                        ? oi.getQuantity()
-                        : 0;
-
-                variant.setStockQuantity(currentStock + quantity);
-                variantRepository.save(variant);
+            if (variant == null) {
+                continue;
             }
+
+            int currentStock = variant.getStockQuantity() != null
+                    ? variant.getStockQuantity()
+                    : 0;
+
+            int quantity = oi.getQuantity() != null
+                    ? oi.getQuantity()
+                    : 0;
+
+            variant.setStockQuantity(currentStock + quantity);
+            variantRepository.save(variant);
+        }
+    }
+
+    private void restoreVoucherUsage(Order order) {
+        if (order == null || order.getVoucher() == null) {
+            return;
         }
 
-        /*
-         * Không trừ usedCount voucher ở đây.
-         * Với VNPAY/MIXED, PosServiceImpl chưa tăng usedCount khi tạo đơn pending.
-         * usedCount chỉ tăng trong processPaymentSuccess().
-         */
-        log.info("[VNPay] Đơn #{} đã hủy do thanh toán thất bại. ResponseCode={}",
-                order.getId(), responseCode);
+        Voucher voucher = order.getVoucher();
+
+        int usedCount = voucher.getUsedCount() != null
+                ? voucher.getUsedCount()
+                : 0;
+
+        if (usedCount > 0) {
+            voucher.setUsedCount(usedCount - 1);
+            voucherRepository.save(voucher);
+        }
+    }
+
+    private String getStatusText(Integer status) {
+        if (status == null) {
+            return "Không xác định";
+        }
+
+        return switch (status) {
+            case ORDER_STATUS_PENDING -> "Chờ xác nhận";
+            case ORDER_STATUS_CONFIRMED -> "Đã xác nhận";
+            case ORDER_STATUS_COMPLETED -> "Hoàn thành";
+            case ORDER_STATUS_CANCELLED -> "Đã hủy";
+            default -> "Không xác định";
+        };
     }
 }

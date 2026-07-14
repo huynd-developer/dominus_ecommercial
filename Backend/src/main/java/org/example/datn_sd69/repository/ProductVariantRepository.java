@@ -86,4 +86,5 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
             String keyword,
             Pageable pageable
     );
+
 }

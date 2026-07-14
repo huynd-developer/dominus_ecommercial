@@ -46,7 +46,16 @@
           <div class="modal-body">
             <div class="mb-3">
               <label class="form-label fw-medium">Tên nồng độ <span class="text-danger">*</span></label>
-              <input v-model="formData.name" type="text" class="form-control" placeholder="VD: EDP, EDT, Parfum..." @keyup.enter="handleSubmit">
+              <input 
+                v-model="formData.name" 
+                type="text" 
+                class="form-control" 
+                :class="{ 'is-invalid': errors.name }"
+                placeholder="VD: EDP, EDT, Parfum..." 
+                @input="validateForm"
+                @keyup.enter="handleSubmit"
+              >
+              <small v-if="errors.name" class="text-danger mt-1 d-block">{{ errors.name }}</small>
             </div>
             <div class="mb-3">
               <label class="form-label fw-medium">Trạng thái</label>
@@ -65,7 +74,7 @@
         </div>
       </div>
     </div>
-    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -88,6 +97,9 @@ const formData = ref<ConcentrationRequest>({
   name: '',
   status: 1
 });
+
+// 👇 THÊM MỚI: Biến lưu trữ lỗi
+const errors = ref({ name: '' });
 
 // Cấu hình SweetAlert2 Toast
 const Toast = Swal.mixin({
@@ -112,10 +124,32 @@ const changePage = (pageIndex: number) => {
   }
 };
 
+// 👇 THÊM MỚI: Hàm kiểm tra lỗi Form Frontend
+const validateForm = () => {
+  errors.value.name = ''; 
+  const nameValue = formData.value.name.trim();
+  const nameRegex = /^[\p{L}\s()]+$/u; 
+
+  if (!nameValue) {
+    errors.value.name = 'Tên nồng độ không được để trống';
+    return false;
+  }
+  if (nameValue.length > 255) {
+    errors.value.name = 'Tên nồng độ không được vượt quá 255 ký tự';
+    return false;
+  }
+  if (!nameRegex.test(nameValue)) {
+    errors.value.name = 'Chỉ được chứa chữ cái, khoảng trắng và dấu ngoặc đơn';
+    return false;
+  }
+  return true;
+};
+
 const openAddModal = () => {
   isEdit.value = false;
   editId.value = null;
   formData.value = { name: '', status: 1 };
+  errors.value.name = ''; // Reset lỗi
   showModal.value = true;
 };
 
@@ -123,14 +157,13 @@ const openEditModal = (item: Concentration) => {
   isEdit.value = true;
   editId.value = item.id;
   formData.value = { name: item.name, status: item.status };
+  errors.value.name = ''; // Reset lỗi
   showModal.value = true;
 };
 
 const handleSubmit = async () => {
-  if (!formData.value.name.trim()) {
-    Toast.fire({ icon: 'warning', title: 'Vui lòng nhập tên nồng độ!' });
-    return;
-  }
+  // 👇 CHẶN LƯU NẾU FORM CÓ LỖI
+  if (!validateForm()) return;
 
   isSaving.value = true;
   try {
@@ -143,7 +176,31 @@ const handleSubmit = async () => {
     }
     showModal.value = false;
   } catch (error: any) {
-    Toast.fire({ icon: 'error', title: error.message || 'Có lỗi xảy ra!' });
+    // 👇 THÊM MỚI: Hứng lỗi từ Backend trả về
+    console.error("Chi tiết lỗi Axios:", error);
+
+    if (error.response && error.response.data) {
+      const responseData = error.response.data;
+
+      // Xử lý lỗi Regex/Validate từ Backend
+      if (responseData.errors && responseData.errors.name) {
+        errors.value.name = responseData.errors.name;
+        return; 
+      }
+
+      // Xử lý lỗi trùng lặp (Duplicate)
+      if (responseData.message) {
+        const lowerMsg = responseData.message.toLowerCase();
+        if (lowerMsg.includes('tồn tại') || lowerMsg.includes('exists') || lowerMsg.includes('duplicate')) {
+          errors.value.name = 'Nồng độ này đã tồn tại trong hệ thống!';
+        } else {
+          Toast.fire({ icon: 'error', title: responseData.message });
+        }
+        return;
+      }
+    }
+    // Lỗi hệ thống, rớt mạng...
+    Toast.fire({ icon: 'error', title: 'Máy chủ không phản hồi!' });
   } finally {
     isSaving.value = false;
   }

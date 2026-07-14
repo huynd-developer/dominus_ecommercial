@@ -197,6 +197,7 @@
             <tr>
               <th>Sản phẩm</th>
               <th>SKU</th>
+              <th>NSX/HSD</th>
               <th class="text-end">Giá gốc</th>
               <th style="width: 170px">% giảm</th>
               <th class="text-end">Giá sau giảm</th>
@@ -208,16 +209,29 @@
             <tr v-for="selected in modelValue" :key="selected.productVariantId">
               <td>
                 <div class="fw-semibold">
-                  {{ selected.productName || "Biến thể #" + selected.productVariantId }}
+                  {{
+                    selected.productName ||
+                    "Biến thể #" + selected.productVariantId
+                  }}
                 </div>
 
                 <small class="text-muted">
-                  {{ selected.capacity || "N/A" }} - {{ selected.bottleType || "N/A" }}
+                  {{ selected.capacity || "N/A" }} -
+                  {{ selected.bottleType || "N/A" }}
                 </small>
               </td>
 
               <td>
                 <code>{{ selected.sku || "N/A" }}</code>
+              </td>
+
+              <td>
+                <small class="text-muted d-block">
+                  NSX: {{ selected.manufacturingDate ? formatDate(selected.manufacturingDate) : "-" }}
+                </small>
+                <small class="text-muted d-block">
+                  HSD: {{ selected.expirationDate ? formatDate(selected.expirationDate) : "-" }}
+                </small>
               </td>
 
               <td class="text-end">
@@ -268,6 +282,7 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
+import Swal from "sweetalert2";
 import { usePromotionStore } from "../stores/promotion.store";
 import type {
   PromotionProductVariantOptionResponse,
@@ -297,6 +312,17 @@ const keyword = ref("");
 const handleSearch = async (page = 0) => {
   if (props.readonly) return;
 
+  if (!props.startDate || !props.endDate) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Thiếu thời gian khuyến mãi",
+      text: "Vui lòng chọn ngày bắt đầu và ngày kết thúc trước khi tìm biến thể.",
+      confirmButtonColor: "#bd9a5f",
+    });
+
+    return;
+  }
+
   await store.searchProductVariants({
     keyword: keyword.value,
     startDate: props.startDate,
@@ -313,11 +339,22 @@ const isSelected = (productVariantId: number) => {
   );
 };
 
-const toggleVariant = (item: PromotionProductVariantOptionResponse) => {
+const toggleVariant = async (item: PromotionProductVariantOptionResponse) => {
   if (props.readonly) return;
 
   if (isSelected(item.productVariantId)) {
     removeSelected(item.productVariantId);
+    return;
+  }
+
+  if (!item.availableForPromotion) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Không thể chọn biến thể",
+      text: item.unavailableReason || "Biến thể này không đủ điều kiện khuyến mãi.",
+      confirmButtonColor: "#bd9a5f",
+    });
+
     return;
   }
 
@@ -333,6 +370,10 @@ const toggleVariant = (item: PromotionProductVariantOptionResponse) => {
       price: item.price,
       originalPrice: item.price,
       stockQuantity: item.stockQuantity,
+      manufacturingDate: item.manufacturingDate,
+      expirationDate: item.expirationDate,
+      availableForPromotion: item.availableForPromotion,
+      unavailableReason: item.unavailableReason,
     },
   ];
 
@@ -390,6 +431,14 @@ const formatCurrency = (value?: number | null) => {
 };
 
 const formatDate = (value: string) => {
-  return new Date(value).toLocaleDateString("vi-VN");
+  if (!value) return "-";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  return date.toLocaleDateString("vi-VN");
 };
 </script>

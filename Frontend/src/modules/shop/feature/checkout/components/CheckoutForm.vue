@@ -42,7 +42,7 @@
           </div>
 
           <small class="field-hint">
-            Từ 2 đến 100 ký tự, chỉ nhập chữ và khoảng trắng.
+            Từ 2 đến 100 ký tự, chỉ nhập chữ và khoảng trắng. Không nhập số hoặc ký tự đặc biệt.
           </small>
         </div>
 
@@ -73,7 +73,7 @@
           </div>
 
           <small class="field-hint">
-            Đúng 10 số và bắt đầu bằng 0.
+            Đúng 10 chữ số, bắt đầu bằng 0. Không nhập chữ hoặc ký tự đặc biệt.
           </small>
         </div>
       </div>
@@ -202,7 +202,7 @@
             </div>
 
             <small class="field-hint">
-              Nhập số nhà, ngõ, đường, tòa nhà. Không cần nhập lại phường/xã và tỉnh/thành.
+              Nhập số nhà, ngõ, đường, tòa nhà. Không nhập ký tự lạ như @ $ %.
             </small>
           </div>
 
@@ -538,18 +538,6 @@ const normalizeWard = (item: any): Ward => {
   };
 };
 
-const collapseSpaces = (value: string) => {
-  return String(value || "").replace(/\s{2,}/g, " ");
-};
-
-const cleanText = (value: string) => {
-  return collapseSpaces(String(value || "").replace(/^\s+/, ""));
-};
-
-const cleanAddressText = (value: string) => {
-  return cleanText(value).replace(/[^\p{L}\d\s,./#()\-]/gu, "");
-};
-
 const syncFullAddress = () => {
   const provinceName = selectedProvince.value?.name || "";
   const wardName = selectedWard.value?.name || "";
@@ -566,49 +554,42 @@ const syncFullAddress = () => {
   props.form.shippingAddress = parts.join(", ");
 };
 
+/**
+ * Không tự xóa ký tự sai ở FE.
+ * FE chỉ giới hạn độ dài để tránh nhập quá dài.
+ * Sai format sẽ được báo ở CheckoutView trước khi gọi BE.
+ */
 const validateName = () => {
-  props.form.customerName = cleanText(
-    String(props.form.customerName || "").replace(/[^\p{L}\s]/gu, "")
-  ).slice(0, 100);
+  props.form.customerName = String(props.form.customerName || "").slice(0, 100);
 };
 
 const validatePhone = () => {
-  props.form.customerPhone = String(props.form.customerPhone || "")
-    .replace(/[^\d]/g, "")
-    .slice(0, 10);
+  props.form.customerPhone = String(props.form.customerPhone || "").slice(0, 10);
 };
 
 const validateSpecificAddress = () => {
-  specificAddress.value = cleanAddressText(specificAddress.value).slice(0, 255);
+  specificAddress.value = String(specificAddress.value || "").slice(0, 255);
   syncFullAddress();
 };
 
 const validateNote = () => {
-  props.form.note = cleanText(props.form.note).slice(0, 255);
+  props.form.note = String(props.form.note || "").slice(0, 255);
 };
 
 const validateVatTaxCode = () => {
-  props.form.vatTaxCode = String(props.form.vatTaxCode || "")
-    .replace(/[^\d]/g, "")
-    .slice(0, 14);
+  props.form.vatTaxCode = String(props.form.vatTaxCode || "").slice(0, 14);
 };
 
 const validateVatEmail = () => {
-  props.form.vatEmail = String(props.form.vatEmail || "")
-    .replace(/\s/g, "")
-    .slice(0, 255);
+  props.form.vatEmail = String(props.form.vatEmail || "").slice(0, 255);
 };
 
 const validateVatCompanyName = () => {
-  props.form.vatCompanyName = cleanText(
-    String(props.form.vatCompanyName || "").replace(/[^\p{L}\d\s.,()\-&]/gu, "")
-  ).slice(0, 255);
+  props.form.vatCompanyName = String(props.form.vatCompanyName || "").slice(0, 255);
 };
 
 const validateVatCompanyAddress = () => {
-  props.form.vatCompanyAddress = cleanAddressText(
-    String(props.form.vatCompanyAddress || "")
-  ).slice(0, 500);
+  props.form.vatCompanyAddress = String(props.form.vatCompanyAddress || "").slice(0, 500);
 };
 
 const handleProvinceChange = async () => {
@@ -1198,31 +1179,18 @@ input:checked + .slider:before {
 }
 
 .vat-form-title {
-  margin: 0 0 15px 0;
-  color: #2b6cb0;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.vat-form-box .form-group label {
-  color: #2d3748;
-}
-
-.vat-form-box .input-box {
-  border-color: #bee3f8;
-}
-
-.vat-form-box .input-box:focus-within {
-  border-color: #3182ce;
-  box-shadow: 0 0 0 1px #3182ce;
+  margin: 0 0 16px;
+  color: #1a365d;
+  font-size: 16px;
+  font-weight: 800;
 }
 
 .vat-warning {
-  margin-top: 14px;
+  margin-top: 12px;
   padding: 10px 12px;
   background: #fff7ed;
-  color: #9a3412;
   border: 1px solid #fed7aa;
+  color: #9a3412;
   border-radius: 8px;
   font-size: 12px;
   line-height: 1.5;
@@ -1230,7 +1198,7 @@ input:checked + .slider:before {
 
 .divider {
   height: 1px;
-  background: #f0f0f0;
+  background: #edf2f7;
   margin: 30px 0;
 }
 
@@ -1238,98 +1206,85 @@ input:checked + .slider:before {
   display: flex;
   align-items: center;
   gap: 15px;
-  padding: 20px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  margin-bottom: 15px;
+  padding: 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
   cursor: pointer;
+  margin-bottom: 14px;
   transition: 0.2s;
 }
 
-.payment-option:hover,
-.payment-option:has(input:checked) {
+.payment-option:hover {
   border-color: #b78d52;
-  background: #fdfaf6;
+  background: #fffaf0;
 }
 
 .radio-wrapper {
   position: relative;
-  width: 20px;
-  height: 20px;
 }
 
 .radio-wrapper input {
   opacity: 0;
   position: absolute;
-  cursor: pointer;
 }
 
 .custom-radio {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 20px;
   width: 20px;
-  background: #fff;
-  border: 2px solid #ddd;
-  border-radius: 50%;
-}
-
-.radio-wrapper input:checked ~ .custom-radio {
-  border-color: #06132b;
-}
-
-.custom-radio:after {
-  content: "";
-  position: absolute;
-  display: none;
-  top: 4px;
-  left: 4px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #06132b;
-}
-
-.radio-wrapper input:checked ~ .custom-radio:after {
+  height: 20px;
   display: block;
+  border: 2px solid #cbd5e0;
+  border-radius: 50%;
+  position: relative;
+}
+
+.radio-wrapper input:checked + .custom-radio {
+  border-color: #b78d52;
+}
+
+.radio-wrapper input:checked + .custom-radio::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  background: #b78d52;
+  border-radius: 50%;
+  position: absolute;
+  inset: 3px;
 }
 
 .option-info {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .option-info strong {
-  color: #333;
-  font-size: 15px;
+  color: #06132b;
+  font-size: 14px;
 }
 
 .option-info span {
-  color: #777;
+  color: #718096;
   font-size: 13px;
 }
 
 .option-icon {
-  width: 32px;
-  height: 32px;
-  color: #b78d52;
+  width: 30px;
+  height: 30px;
+  color: #4a5568;
 }
 
 .vnpay-text {
-  font-weight: 800;
+  font-weight: 900;
   font-size: 18px;
-  letter-spacing: -0.5px;
 }
 
 .vnpay-text .red {
-  color: #e53e3e;
+  color: #e11d48;
 }
 
 .vnpay-text .blue {
-  color: #3182ce;
+  color: #2563eb;
 }
 
 @media (max-width: 768px) {
@@ -1342,14 +1297,9 @@ input:checked + .slider:before {
     gap: 0;
   }
 
-  .vat-toggle-box,
   .saved-address-card,
-  .account-address-box {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .address-editor-actions {
+  .account-address-box,
+  .vat-toggle-box {
     flex-direction: column;
   }
 }

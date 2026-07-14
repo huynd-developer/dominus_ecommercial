@@ -82,7 +82,18 @@
             
             <div class="mb-3">
               <label class="form-label fw-medium">Giá trị dung tích (ml) <span class="text-danger">*</span></label>
-              <input v-model="formData.value" type="number" step="0.1" min="0.1" class="form-control shadow-none" placeholder="VD: 50, 100...">
+              <input 
+                v-model="formData.value" 
+                type="number" 
+                step="0.1" 
+                min="0.1" 
+                class="form-control shadow-none" 
+                :class="{ 'is-invalid': errors.value }"
+                placeholder="VD: 50, 100..."
+                @input="validateForm"
+                @keyup.enter="handleSubmit"
+              >
+              <small v-if="errors.value" class="text-danger mt-1 d-block">{{ errors.value }}</small>
             </div>
             
           </div>
@@ -96,7 +107,6 @@
         </div>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -105,7 +115,7 @@ import { ref, onMounted } from 'vue';
 import CapacityTable from '../components/CapacityTable.vue';
 import { useCapacityStore } from '../stores/capacity.store';
 import type { Capacity, CapacityRequest } from '../types/capacity.type';
-import Swal from 'sweetalert2'; // 1. Import thư viện SweetAlert2
+import Swal from 'sweetalert2'; 
 
 const capacityStore = useCapacityStore();
 const searchKeyword = ref('');
@@ -121,7 +131,10 @@ const formData = ref<CapacityRequest>({
   status: 1
 });
 
-// 2. Định nghĩa cấu hình hiệu ứng Toast nhảy ra ở góc trên bên phải
+// 👇 THÊM MỚI: Biến state chứa thông báo lỗi cho ô input
+const errors = ref({ value: '' });
+
+// Định nghĩa cấu hình Toast
 const Toast = Swal.mixin({
   toast: true,
   position: 'top-end',
@@ -130,12 +143,10 @@ const Toast = Swal.mixin({
   timerProgressBar: true
 });
 
-// Init load
 onMounted(() => {
   capacityStore.fetchCapacities();
 });
 
-// Handlers
 const handleSearch = () => {
   capacityStore.fetchCapacities(searchKeyword.value, 0);
 };
@@ -146,10 +157,30 @@ const changePage = (pageIndex: number) => {
   }
 };
 
+// 👇 THÊM MỚI: Hàm kiểm tra lỗi Form trước khi gọi API
+const validateForm = () => {
+  errors.value.value = ''; 
+  const val = formData.value.value;
+
+  // Xử lý trường hợp null, undefined hoặc người dùng xóa trắng ô input
+  if (val === null || val === undefined || String(val).trim() === '') {
+    errors.value.value = 'Vui lòng nhập dung tích';
+    return false;
+  }
+  // Xử lý trường hợp nhập số âm hoặc bằng 0
+  if (Number(val) <= 0) {
+    errors.value.value = 'Dung tích phải lớn hơn 0';
+    return false;
+  }
+  return true;
+};
+
 const openAddModal = () => {
   isEdit.value = false;
   editId.value = null;
-  formData.value = { value: 0, status: 1 };
+  // Dùng trick nhỏ ép kiểu (as any) để set rỗng tạm thời cho ô input hiện placeholder
+  formData.value = { value: '' as any, status: 1 }; 
+  errors.value.value = ''; // Reset lỗi
   showModal.value = true;
 };
 
@@ -157,6 +188,7 @@ const openEditModal = (capacity: Capacity) => {
   isEdit.value = true;
   editId.value = capacity.id;
   formData.value = { value: capacity.value, status: capacity.status };
+  errors.value.value = ''; // Reset lỗi
   showModal.value = true;
 };
 
@@ -165,34 +197,52 @@ const closeModal = () => {
 };
 
 const handleSubmit = async () => {
-  if (!formData.value.value || formData.value.value <= 0) {
-    // Thay alert thành Toast cảnh báo
-    Toast.fire({ icon: 'warning', title: 'Vui lòng nhập dung tích hợp lệ (lớn hơn 0)!' });
-    return;
-  }
+  // 👇 CHẶN LẠI NẾU FORM LỖI
+  if (!validateForm()) return;
 
   isSaving.value = true;
   try {
     if (isEdit.value && editId.value) {
       await capacityStore.updateCapacity(editId.value, formData.value);
-      // Thay alert thành Toast thành công
       Toast.fire({ icon: 'success', title: 'Cập nhật thành công!' });
     } else {
       await capacityStore.createCapacity(formData.value);
-      // Thay alert thành Toast thành công
       Toast.fire({ icon: 'success', title: 'Thêm dung tích thành công!' });
     }
     closeModal();
   } catch (error: any) {
-    // Thay alert thành Toast báo lỗi
-    Toast.fire({ icon: 'error', title: error.message || 'Có lỗi xảy ra!' });
+    console.error("Chi tiết lỗi Axios:", error);
+
+    // 👇 BÓC TÁCH LỖI TỪ BACKEND TRẢ VỀ
+    if (error.response && error.response.data) {
+      const responseData = error.response.data;
+
+      // 1. Lỗi Validation từ Spring Boot (vd: @Min, @NotNull)
+      if (responseData.errors && responseData.errors.value) {
+        errors.value.value = responseData.errors.value;
+        return; 
+      }
+
+      // 2. Lỗi trùng lặp từ Service (IllegalArgumentException)
+      if (responseData.message) {
+        const lowerMsg = responseData.message.toLowerCase();
+        if (lowerMsg.includes('tồn tại') || lowerMsg.includes('exists') || lowerMsg.includes('duplicate')) {
+          errors.value.value = 'Dung tích này đã tồn tại trong hệ thống!';
+        } else {
+          Toast.fire({ icon: 'error', title: responseData.message });
+        }
+        return;
+      }
+    }
+
+    // Các lỗi khác (Mất mạng, sập server...)
+    Toast.fire({ icon: 'error', title: 'Máy chủ không phản hồi!' });
   } finally {
     isSaving.value = false;
   }
 };
 
 const handleDelete = (id: number) => {
-  // Thay confirm thành hộp thoại Swal xịn sò ở giữa màn hình
   Swal.fire({
     title: 'Bạn có chắc chắn muốn xóa?',
     text: "Hành động này sẽ đưa dung tích này vào thùng rác!",
@@ -217,7 +267,6 @@ const handleDelete = (id: number) => {
 const handleToggleStatus = async (capacity: Capacity) => {
   const newStatus = capacity.status === 1 ? 0 : 1;
   
-  // Bỏ hẳn hộp thoại confirm để đổi trạng thái mượt mà bằng một cú click con mắt, báo Toast liền
   try {
     await capacityStore.updateCapacity(capacity.id, {
       value: capacity.value,
@@ -226,7 +275,6 @@ const handleToggleStatus = async (capacity: Capacity) => {
     Toast.fire({ icon: 'success', title: 'Đã thay đổi trạng thái!' });
   } catch (error: any) {
     Toast.fire({ icon: 'error', title: 'Không thể đổi trạng thái!' });
-    // Reload lại nếu lỗi để đồng bộ UI
     capacityStore.fetchCapacities(searchKeyword.value, capacityStore.currentPage);
   }
 };

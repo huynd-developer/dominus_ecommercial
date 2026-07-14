@@ -5,17 +5,22 @@ import org.example.datn_sd69.entity.Cart;
 import org.example.datn_sd69.entity.CartItem;
 import org.example.datn_sd69.entity.Customer;
 import org.example.datn_sd69.entity.ProductVariant;
+import org.example.datn_sd69.entity.PromotionVariant;
 import org.example.datn_sd69.modules.cart.dto.response.CartItemResponse;
 import org.example.datn_sd69.repository.CartItemRepository;
 import org.example.datn_sd69.repository.CartRepository;
 import org.example.datn_sd69.repository.CustomerRepository;
 import org.example.datn_sd69.repository.ProductVariantRepository;
+import org.example.datn_sd69.repository.PromotionVariantRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -26,6 +31,7 @@ public class CartService {
 
     private static final int STATUS_ACTIVE = 1;
 
+    private final PromotionVariantRepository promotionVariantRepository;
     private final CartRepository cartRepo;
     private final CartItemRepository cartItemRepo;
     private final ProductVariantRepository variantRepo;
@@ -62,14 +68,7 @@ public class CartService {
                         "Biến thể sản phẩm không tồn tại"
                 ));
 
-        validateVariantCanAddToCart(variant);
-
-        if (quantity > variant.getStockQuantity()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Sản phẩm " + variant.getSku() + " chỉ còn " + variant.getStockQuantity() + " trong kho"
-            );
-        }
+        validateVariantCanAddToCart(variant, quantity);
 
         CartItem item = cartItemRepo.findByCartIdAndProductVariantId(cart.getId(), variantId)
                 .orElse(null);
@@ -78,14 +77,7 @@ public class CartService {
             int currentQuantity = item.getQuantity() == null ? 0 : item.getQuantity();
             int newQuantity = currentQuantity + quantity;
 
-            if (newQuantity > variant.getStockQuantity()) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Tổng số lượng trong giỏ vượt quá tồn kho hiện tại. Sản phẩm chỉ còn "
-                                + variant.getStockQuantity()
-                                + " trong kho"
-                );
-            }
+            validateVariantCanAddToCart(variant, newQuantity);
 
             item.setQuantity(newQuantity);
 
@@ -158,14 +150,7 @@ public class CartService {
             );
         }
 
-        validateVariantCanAddToCart(variant);
-
-        if (newQuantity > variant.getStockQuantity()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Sản phẩm " + variant.getSku() + " chỉ còn " + variant.getStockQuantity() + " trong kho"
-            );
-        }
+        validateVariantCanAddToCart(variant, newQuantity);
 
         item.setQuantity(newQuantity);
         cartItemRepo.save(item);
@@ -216,14 +201,22 @@ public class CartService {
 
         if (variant == null) {
             res.setAvailable(false);
+            res.setSellable(false);
+            res.setExpired(false);
+            res.setHasPromotion(false);
             res.setUnavailableReason("Sản phẩm không tồn tại");
             return res;
         }
 
         res.setProductVariantId(variant.getId());
         res.setSku(variant.getSku());
-        res.setPrice(variant.getPrice());
         res.setStockQuantity(variant.getStockQuantity());
+        res.setManufacturingDate(variant.getManufacturingDate());
+        res.setExpirationDate(variant.getExpirationDate());
+        res.setVariantStatus(variant.getStatus());
+        res.setExpired(isVariantExpired(variant));
+
+        applyCurrentPrice(res, variant);
 
         if (variant.getProduct() != null) {
             res.setProductName(variant.getProduct().getName());
@@ -233,12 +226,111 @@ public class CartService {
             res.setCapacity(formatCapacity(variant.getCapacity().getValue()));
         }
 
+        if (variant.getBottleType() != null) {
+            res.setBottleType(variant.getBottleType().getName());
+        }
+
         String unavailableReason = getUnavailableReason(variant, item.getQuantity());
 
-        res.setAvailable(unavailableReason == null);
+        boolean sellable = unavailableReason == null;
+
+        res.setAvailable(sellable);
+        res.setSellable(sellable);
         res.setUnavailableReason(unavailableReason);
 
         return res;
+    }
+
+    /**
+     * Set giá cho cart.
+     *
+     * Có Flash Sale active:
+     * - originalPrice = ProductVariant.Price
+     * - salePrice = giá sau giảm
+     * - price = salePrice
+     *
+     * Không có Flash Sale:
+     * - originalPrice = ProductVariant.Price
+     * - price = originalPrice
+     */
+    private void applyCurrentPrice(CartItemResponse res, ProductVariant variant) {
+        BigDecimal originalPrice = variant.getPrice() == null
+                ? BigDecimal.ZERO
+                : variant.getPrice();
+
+        res.setOriginalPrice(originalPrice);
+
+        PromotionVariant activePromotion = findActivePromotion(variant);
+
+        if (activePromotion == null) {
+            res.setPrice(originalPrice);
+            res.setSalePrice(null);
+            res.setDiscountPercent(null);
+            res.setHasPromotion(false);
+            res.setPromotionId(null);
+            res.setPromotionName(null);
+            res.setPromotionEndDate(null);
+            return;
+        }
+
+        Number discountNumber = activePromotion.getDiscountPercent();
+        Double discountPercent = discountNumber == null
+                ? null
+                : discountNumber.doubleValue();
+
+        BigDecimal salePrice = calculateSalePrice(originalPrice, discountNumber);
+
+        res.setPrice(salePrice);
+        res.setSalePrice(salePrice);
+        res.setDiscountPercent(discountPercent);
+        res.setHasPromotion(true);
+
+        if (activePromotion.getPromotion() != null) {
+            res.setPromotionId(activePromotion.getPromotion().getId());
+            res.setPromotionName(activePromotion.getPromotion().getName());
+            res.setPromotionEndDate(activePromotion.getPromotion().getEndDate());
+        }
+    }
+
+    private PromotionVariant findActivePromotion(ProductVariant variant) {
+        if (variant == null || variant.getId() == null) {
+            return null;
+        }
+
+        List<PromotionVariant> activePromotions =
+                promotionVariantRepository.findActivePromotionByProductVariantId(
+                        variant.getId(),
+                        LocalDateTime.now(),
+                        LocalDate.now()
+                );
+
+        if (activePromotions == null || activePromotions.isEmpty()) {
+            return null;
+        }
+
+        return activePromotions.get(0);
+    }
+
+    private BigDecimal calculateSalePrice(BigDecimal originalPrice, Number discountPercent) {
+        if (originalPrice == null) {
+            return BigDecimal.ZERO;
+        }
+
+        if (discountPercent == null) {
+            return originalPrice;
+        }
+
+        BigDecimal discount = BigDecimal.valueOf(discountPercent.doubleValue());
+
+        if (discount.compareTo(BigDecimal.ZERO) <= 0) {
+            return originalPrice;
+        }
+
+        BigDecimal discountAmount = originalPrice
+                .multiply(discount)
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+
+        return originalPrice.subtract(discountAmount).max(BigDecimal.ZERO);
     }
 
     private String getUnavailableReason(ProductVariant variant, Integer quantity) {
@@ -246,35 +338,72 @@ public class CartService {
             return "Sản phẩm không tồn tại";
         }
 
+        String sku = variant.getSku() != null ? variant.getSku() : "N/A";
+
+        if (Boolean.TRUE.equals(variant.getIsDeleted())) {
+            return "Sản phẩm [" + sku + "] đã bị xóa, không thể mua";
+        }
+
         if (variant.getStatus() == null || variant.getStatus() != STATUS_ACTIVE) {
-            return "Sản phẩm hiện không còn kinh doanh";
+            return "Sản phẩm [" + sku + "] hiện không còn kinh doanh";
         }
 
         if (variant.getProduct() == null) {
-            return "Sản phẩm không tồn tại";
+            return "Sản phẩm [" + sku + "] không tồn tại";
         }
 
-        if (variant.getProduct().getStatus() == null || variant.getProduct().getStatus() != STATUS_ACTIVE) {
-            return "Sản phẩm hiện không còn kinh doanh";
+        if (variant.getProduct().getStatus() == null
+                || variant.getProduct().getStatus() != STATUS_ACTIVE) {
+            return "Sản phẩm [" + variant.getProduct().getName() + "] hiện không còn kinh doanh";
         }
 
         if (variant.getPrice() == null || variant.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
-            return "Giá sản phẩm không hợp lệ";
+            return "Giá sản phẩm [" + sku + "] không hợp lệ";
         }
 
         if (variant.getStockQuantity() == null || variant.getStockQuantity() <= 0) {
-            return "Sản phẩm đã hết hàng";
+            return "Sản phẩm [" + sku + "] đã hết hàng";
+        }
+
+        if (quantity != null && quantity <= 0) {
+            return "Số lượng sản phẩm [" + sku + "] không hợp lệ";
         }
 
         if (quantity != null && quantity > variant.getStockQuantity()) {
-            return "Số lượng trong giỏ vượt quá tồn kho hiện tại";
+            return "Số lượng trong giỏ vượt quá tồn kho hiện tại. Sản phẩm ["
+                    + sku
+                    + "] chỉ còn "
+                    + variant.getStockQuantity()
+                    + " trong kho";
+        }
+
+        LocalDate today = LocalDate.now();
+
+        if (variant.getManufacturingDate() == null) {
+            return "Sản phẩm [" + sku + "] chưa có ngày sản xuất";
+        }
+
+        if (variant.getExpirationDate() == null) {
+            return "Sản phẩm [" + sku + "] chưa có hạn sử dụng";
+        }
+
+        if (variant.getManufacturingDate().isAfter(today)) {
+            return "Sản phẩm [" + sku + "] chưa tới ngày được bán";
+        }
+
+        if (variant.getExpirationDate().isBefore(today)) {
+            return "Sản phẩm [" + sku + "] đã hết hạn sử dụng";
+        }
+
+        if (!variant.getExpirationDate().isAfter(variant.getManufacturingDate())) {
+            return "Sản phẩm [" + sku + "] có hạn sử dụng không hợp lệ";
         }
 
         return null;
     }
 
-    private void validateVariantCanAddToCart(ProductVariant variant) {
-        String reason = getUnavailableReason(variant, null);
+    private void validateVariantCanAddToCart(ProductVariant variant, Integer quantity) {
+        String reason = getUnavailableReason(variant, quantity);
 
         if (reason != null) {
             throw new ResponseStatusException(
@@ -282,6 +411,12 @@ public class CartService {
                     reason
             );
         }
+    }
+
+    private boolean isVariantExpired(ProductVariant variant) {
+        return variant != null
+                && variant.getExpirationDate() != null
+                && variant.getExpirationDate().isBefore(LocalDate.now());
     }
 
     private void validateCartItemOwner(CartItem item, Integer customerId) {

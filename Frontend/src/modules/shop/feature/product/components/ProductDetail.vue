@@ -126,25 +126,16 @@
             }}
           </span>
 
-          <span
-            class="old-price"
-            v-if="selectedHasFlashSale"
-          >
+          <span class="old-price" v-if="selectedHasFlashSale">
             {{ formatCurrency(selectedOriginalPrice) }}
           </span>
 
-          <span
-            v-if="selectedHasFlashSale"
-            class="flash-sale-badge"
-          >
-            -{{ selectedDiscountPercent }}%
+          <span v-if="selectedHasFlashSale" class="flash-sale-badge">
+            -{{ formatDiscount(selectedDiscountPercent) }}%
           </span>
         </div>
 
-        <div
-          class="save-badge"
-          v-if="selectedHasFlashSale"
-        >
+        <div class="save-badge" v-if="selectedHasFlashSale">
           Flash Sale đang diễn ra - tiết kiệm
           {{ formatCurrency(selectedOriginalPrice - selectedDisplayPrice) }}
         </div>
@@ -217,25 +208,32 @@
           >
             <button
               v-for="variant in product.variants"
-              :key="variant.id"
+              :key="getVariantIdFromVariant(variant)"
               type="button"
               :class="[
                 'cap-btn',
-                { active: selectedVariant?.id === variant.id },
+                {
+                  active:
+                    getVariantIdFromVariant(selectedVariant) ===
+                    getVariantIdFromVariant(variant),
+                },
               ]"
               @click="selectVariant(variant)"
             >
-              <span>{{ variant.capacity || "N/A" }}</span>
+             <span>{{ getCapacityText(variant) }}</span>
 
               <span
-                v-if="variant.isFlashSale"
+                v-if="isVariantFlashSale(variant)"
                 class="variant-sale-chip"
               >
-                -{{ Number(variant.discountPercent || 0) }}%
+                -{{ formatDiscount(variant.discountPercent) }}%
               </span>
 
               <span
-                v-if="selectedVariant?.id === variant.id"
+                v-if="
+                  getVariantIdFromVariant(selectedVariant) ===
+                  getVariantIdFromVariant(variant)
+                "
                 class="check-icon"
               >
                 ✓
@@ -252,11 +250,20 @@
         </div>
 
         <div class="stock-status mb-3" v-if="selectedVariant">
-          <span v-if="selectedVariant.stockQuantity > 0" style="color: #2e7d32; font-size: 14px; font-weight: 500;">
-            <i class="bi bi-box-seam me-1"></i> Kho còn: {{ selectedVariant.stockQuantity }} sản phẩm
+          <span
+            v-if="normalizeStock(selectedVariant) > 0"
+            style="color: #2e7d32; font-size: 14px; font-weight: 500"
+          >
+            <i class="bi bi-box-seam me-1"></i>
+            Kho còn: {{ normalizeStock(selectedVariant) }} sản phẩm
           </span>
-          <span v-else style="color: #d32f2f; font-size: 14px; font-weight: 500;">
-            <i class="bi bi-x-circle me-1"></i> Đã hết hàng
+
+          <span
+            v-else
+            style="color: #d32f2f; font-size: 14px; font-weight: 500"
+          >
+            <i class="bi bi-x-circle me-1"></i>
+            Đã hết hàng
           </span>
         </div>
 
@@ -445,7 +452,7 @@
 
         <div class="toast-text">
           <strong>Thêm thành công</strong>
-          <span>Đã thêm {{ quantity }} sản phẩm vào giỏ.</span>
+          <span>Đã thêm {{ lastAddedQuantity }} sản phẩm vào giỏ.</span>
         </div>
       </div>
 
@@ -478,6 +485,7 @@ const emit = defineEmits<{
 
 const selectedVariant = ref<any>(null);
 const quantity = ref<number>(1);
+const lastAddedQuantity = ref<number>(1);
 const showToast = ref(false);
 const isAdding = ref(false);
 const reviewSummary = ref<ProductReviewSummaryResponse | null>(null);
@@ -582,21 +590,19 @@ const fragranceFamilyText = computed(() => {
 });
 
 const selectedCapacityText = computed(() => {
-  return selectedVariant.value?.capacity || "Chưa chọn";
+  if (!selectedVariant.value) {
+    return "Chưa chọn";
+  }
+
+  return getCapacityText(selectedVariant.value);
 });
 
 const bottleTypeText = computed(() => {
-  if (typeof selectedVariant.value?.bottleType === "object") {
-    return selectedVariant.value?.bottleType?.name || "Đang cập nhật";
+  if (!selectedVariant.value) {
+    return "Đang cập nhật";
   }
 
-  return (
-    selectedVariant.value?.bottleType ||
-    selectedVariant.value?.bottleTypeName ||
-    props.product?.bottleTypeName ||
-    props.product?.bottleType ||
-    "Đang cập nhật"
-  );
+  return getBottleTypeText(selectedVariant.value);
 });
 
 const selectedSkuText = computed(() => {
@@ -641,6 +647,140 @@ const normalizeStock = (variant: any) => {
   );
 };
 
+const getVariantIdFromVariant = (variant: any) => {
+  return Number(
+    variant?.productVariantId ??
+      variant?.variantId ??
+      variant?.id ??
+      variant?.Id ??
+      0
+  );
+};
+
+const isEmptyDisplayValue = (value: any) => {
+  if (value === null || value === undefined) {
+    return true;
+  }
+
+  const text = String(value).trim();
+
+  return (
+    text === "" ||
+    text.toUpperCase() === "N/A" ||
+    text.toUpperCase() === "NULL" ||
+    text.toUpperCase() === "UNDEFINED" ||
+    text === "-"
+  );
+};
+
+const formatCapacityNumber = (value: any) => {
+  const text = String(value || "").trim();
+
+  if (!text) {
+    return "";
+  }
+
+  const lowerText = text.toLowerCase().replace(/\s+/g, "");
+
+  if (lowerText.endsWith("ml")) {
+    const numberPart = lowerText.replace("ml", "");
+    const numberValue = Number(numberPart);
+
+    if (Number.isFinite(numberValue)) {
+      return `${Number.isInteger(numberValue) ? numberValue : numberValue.toString()}ml`;
+    }
+
+    return text;
+  }
+
+  const numberValue = Number(text);
+
+  if (Number.isFinite(numberValue)) {
+    return `${Number.isInteger(numberValue) ? numberValue : numberValue.toString()}ml`;
+  }
+
+  return text.toLowerCase().includes("ml") ? text : `${text}ml`;
+};
+
+const getCapacityText = (variant: any) => {
+  const candidates = [
+    variant?.capacityName,
+    variant?.capacityText,
+    variant?.capacityValue,
+    variant?.volume,
+    variant?.volumeValue,
+    variant?.capacity?.name,
+    variant?.capacity?.value,
+    variant?.capacity,
+  ];
+
+  for (const value of candidates) {
+    if (!isEmptyDisplayValue(value)) {
+      return formatCapacityNumber(value);
+    }
+  }
+
+  const sku = String(variant?.sku || variant?.SKU || "").toUpperCase();
+  const match = sku.match(/-(\d+(?:\.\d+)?)-/);
+
+  if (match?.[1]) {
+    return formatCapacityNumber(match[1]);
+  }
+
+  return "Đang cập nhật";
+};
+
+const getBottleTypeText = (variant: any) => {
+  const candidates = [
+    variant?.bottleTypeName,
+    variant?.bottleTypeText,
+    variant?.variantBottleType,
+    variant?.bottleName,
+    variant?.bottleType?.name,
+    variant?.bottleType,
+    props.product?.bottleTypeName,
+    props.product?.bottleType,
+  ];
+
+  for (const value of candidates) {
+    if (!isEmptyDisplayValue(value)) {
+      return String(value).trim();
+    }
+  }
+
+  const sku = String(variant?.sku || variant?.SKU || "").toUpperCase();
+
+  if (sku.includes("FULL")) {
+    return "Chai gốc Fullbox";
+  }
+
+  if (sku.includes("CHIET") || sku.includes("DECANT")) {
+    return "Chai chiết";
+  }
+
+  return "Đang cập nhật";
+};
+
+const getVariantId = () => {
+  return getVariantIdFromVariant(selectedVariant.value);
+};
+
+const isVariantFlashSale = (variant: any) => {
+  const originalPrice = Number(
+    variant?.originalPrice ?? variant?.oldPrice ?? variant?.price ?? 0
+  );
+
+  const salePrice = Number(variant?.salePrice ?? variant?.price ?? 0);
+
+  const discountPercent = Number(variant?.discountPercent ?? 0);
+
+  return (
+    Boolean(variant?.isFlashSale || variant?.hasPromotion) &&
+    discountPercent > 0 &&
+    originalPrice > salePrice
+  );
+};
+
 const selectedOriginalPrice = computed(() => {
   if (!selectedVariant.value) {
     return 0;
@@ -659,11 +799,15 @@ const selectedDisplayPrice = computed(() => {
     return 0;
   }
 
-  return Number(
-    selectedVariant.value.salePrice ??
-      selectedVariant.value.price ??
-      0
-  );
+  if (isVariantFlashSale(selectedVariant.value)) {
+    return Number(
+      selectedVariant.value.salePrice ??
+        selectedVariant.value.price ??
+        0
+    );
+  }
+
+  return Number(selectedVariant.value.price ?? 0);
 });
 
 const selectedDiscountPercent = computed(() => {
@@ -671,11 +815,7 @@ const selectedDiscountPercent = computed(() => {
 });
 
 const selectedHasFlashSale = computed(() => {
-  return (
-    Boolean(selectedVariant.value?.isFlashSale) &&
-    selectedDiscountPercent.value > 0 &&
-    selectedOriginalPrice.value > selectedDisplayPrice.value
-  );
+  return isVariantFlashSale(selectedVariant.value);
 });
 
 const isVariantOutOfStock = computed(() => {
@@ -713,14 +853,40 @@ const formatCurrency = (value: number) => {
   }).format(Number(value));
 };
 
-const getVariantId = () => {
-  return Number(
-    selectedVariant.value?.productVariantId ??
-      selectedVariant.value?.variantId ??
-      selectedVariant.value?.id ??
-      selectedVariant.value?.Id ??
-      0
-  );
+const formatDiscount = (value?: number | null) => {
+  const numberValue = Number(value || 0);
+
+  if (Number.isInteger(numberValue)) {
+    return String(numberValue);
+  }
+
+  return numberValue.toFixed(2).replace(/\.?0+$/, "");
+};
+
+const getErrorMessage = (error: any) => {
+  const data = error?.response?.data;
+
+  if (!data) {
+    return "Có lỗi xảy ra, vui lòng thử lại.";
+  }
+
+  if (typeof data === "string") {
+    return data;
+  }
+
+  if (data.message) {
+    return data.message;
+  }
+
+  if (data.errors && typeof data.errors === "object") {
+    const firstError = Object.values(data.errors)[0];
+
+    if (firstError) {
+      return String(firstError);
+    }
+  }
+
+  return "Có lỗi xảy ra, vui lòng thử lại.";
 };
 
 const handleReviewSummaryLoaded = (summary: ProductReviewSummaryResponse) => {
@@ -755,6 +921,16 @@ const showWarning = async (title: string, text: string) => {
     icon: "warning",
     title,
     text,
+    confirmButtonText: "Đã hiểu",
+    confirmButtonColor: "#bd9a5f",
+  });
+};
+
+const showWarningHtml = async (title: string, html: string) => {
+  await Swal.fire({
+    icon: "warning",
+    title,
+    html,
     confirmButtonText: "Đã hiểu",
     confirmButtonColor: "#bd9a5f",
   });
@@ -874,12 +1050,28 @@ const toggleFavorite = async () => {
 
     await showError(
       "Không thể xử lý yêu thích",
-      error?.response?.data?.message ||
-        error?.response?.data ||
-        "Vui lòng thử lại sau."
+      getErrorMessage(error)
     );
   } finally {
     isFavoriteLoading.value = false;
+  }
+};
+
+const getCurrentCartQuantity = async (productVariantId: number) => {
+  try {
+    const res = await api.get("/v1/customer/cart/my-cart");
+
+    const items = Array.isArray(res.data) ? res.data : [];
+
+    const cartItem = items.find(
+      (item: any) =>
+        Number(item.productVariantId) === Number(productVariantId)
+    );
+
+    return Number(cartItem?.quantity || 0);
+  } catch (error) {
+    console.error("Không kiểm tra được giỏ hàng hiện tại:", error);
+    return 0;
   }
 };
 
@@ -928,6 +1120,44 @@ const validateBeforeCartAction = async () => {
     return false;
   }
 
+  const stockQuantity = normalizeStock(selectedVariant.value);
+  const quantityToAdd = Number(quantity.value || 1);
+
+  if (quantityToAdd <= 0) {
+    await showWarning(
+      "Số lượng không hợp lệ",
+      "Số lượng phải lớn hơn 0."
+    );
+    return false;
+  }
+
+  if (quantityToAdd > stockQuantity) {
+    await showWarning(
+      "Vượt quá tồn kho",
+      `Sản phẩm chỉ còn ${stockQuantity} trong kho.`
+    );
+    return false;
+  }
+
+  const currentCartQuantity = await getCurrentCartQuantity(variantId);
+  const totalAfterAdd = currentCartQuantity + quantityToAdd;
+
+  if (totalAfterAdd > stockQuantity) {
+    await showWarningHtml(
+      "Vượt quá tồn kho",
+      `
+        Sản phẩm này chỉ còn <b>${stockQuantity}</b> trong kho.<br/>
+        Trong giỏ hàng của bạn hiện đã có <b>${currentCartQuantity}</b> sản phẩm.<br/>
+        Bạn chỉ có thể thêm tối đa <b>${Math.max(
+          stockQuantity - currentCartQuantity,
+          0
+        )}</b> sản phẩm nữa.
+      `
+    );
+
+    return false;
+  }
+
   return true;
 };
 
@@ -941,10 +1171,15 @@ const addToCart = async () => {
   try {
     isAdding.value = true;
 
+    const variantId = getVariantId();
+    const quantityToAdd = Number(quantity.value || 1);
+
     await api.post("/v1/customer/cart/add", {
-      productVariantId: getVariantId(),
-      quantity: quantity.value,
+      productVariantId: variantId,
+      quantity: quantityToAdd,
     });
+
+    lastAddedQuantity.value = quantityToAdd;
 
     window.dispatchEvent(new Event("cart-updated"));
 
@@ -958,9 +1193,7 @@ const addToCart = async () => {
 
     await showError(
       "Không thể thêm vào giỏ",
-      error?.response?.data?.message ||
-        error?.response?.data ||
-        "Không thể thêm vào giỏ. Vui lòng thử lại."
+      getErrorMessage(error)
     );
   } finally {
     isAdding.value = false;
@@ -977,10 +1210,15 @@ const buyNow = async () => {
   try {
     isAdding.value = true;
 
+    const variantId = getVariantId();
+    const quantityToAdd = Number(quantity.value || 1);
+
     await api.post("/v1/customer/cart/add", {
-      productVariantId: getVariantId(),
-      quantity: quantity.value,
+      productVariantId: variantId,
+      quantity: quantityToAdd,
     });
+
+    lastAddedQuantity.value = quantityToAdd;
 
     window.dispatchEvent(new Event("cart-updated"));
 
@@ -990,9 +1228,7 @@ const buyNow = async () => {
 
     await showError(
       "Không thể mua ngay",
-      error?.response?.data?.message ||
-        error?.response?.data ||
-        "Không thể tiến hành mua ngay. Vui lòng thử lại."
+      getErrorMessage(error)
     );
   } finally {
     isAdding.value = false;

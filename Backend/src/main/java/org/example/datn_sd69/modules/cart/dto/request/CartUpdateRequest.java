@@ -7,6 +7,9 @@ import lombok.Data;
 @Data
 public class CartUpdateRequest {
 
+    /**
+     * quantity = 0 thì BE xóa dòng giỏ hàng.
+     */
     @NotNull(message = "Số lượng không được để trống")
     @Min(value = 0, message = "Số lượng không được âm")
     private Integer quantity;

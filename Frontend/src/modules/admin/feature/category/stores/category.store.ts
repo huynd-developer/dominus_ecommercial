@@ -41,39 +41,22 @@ export const useCategoryStore = defineStore('categoryStore', {
         this.isLoading = false;
       }
     },
+
     async createCategory(data: CategoryRequest) {
       try {
         await categoryService.create(data);
-        // ĐÃ XÓA: dòng fetchCategories tự động để View tự quản lý luồng dữ liệu mượt hơn
-      } catch (error: any) {
-        if (error.response && error.response.status === 400) {
-          const errorData = error.response.data;
-          const targetError = errorData?.message || errorData;
-          if (typeof targetError === 'string') throw new Error(targetError);
-          if (typeof targetError === 'object') {
-            const firstErrorMessage = Object.values(targetError)[0] as string;
-            throw new Error(firstErrorMessage);
-          }
-        }
-        throw new Error("Lỗi hệ thống khi thêm danh mục!");
+      } catch (error) {
+        // 👇 ĐÃ SỬA: Ném nguyên vẹn lỗi Axios ra cho Vue Component tự xử lý
+        throw error; 
       }
     },
 
     async updateCategory(id: number, data: CategoryRequest) {
       try {
         await categoryService.update(id, data);
-        // ĐÃ XÓA: dòng fetchCategories tự động nhằm tránh ghi đè mất từ khóa tìm kiếm hiện tại
-      } catch (error: any) {
-        if (error.response && error.response.status === 400) {
-          const errorData = error.response.data;
-          const targetError = errorData?.message || errorData;
-          if (typeof targetError === 'string') throw new Error(targetError);
-          if (typeof targetError === 'object') {
-            const firstErrorMessage = Object.values(targetError)[0] as string;
-            throw new Error(firstErrorMessage);
-          }
-        }
-        throw new Error("Lỗi hệ thống khi cập nhật danh mục!");
+      } catch (error) {
+        // 👇 ĐÃ SỬA: Ném nguyên vẹn lỗi Axios ra cho Vue Component tự xử lý
+        throw error; 
       }
     },
 
@@ -82,6 +65,7 @@ export const useCategoryStore = defineStore('categoryStore', {
         await categoryService.delete(id);
       } catch (error: any) {
         console.error("Lỗi khi xóa danh mục:", error);
+        // Ở hàm xóa (hiển thị bằng Swal), mình giữ lại logic bóc tách string này cho Swal dễ đọc
         if (error.response && error.response.data) {
           throw new Error(error.response.data.message || error.response.data);
         }
