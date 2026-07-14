@@ -1,10 +1,6 @@
 package org.example.datn_sd69.modules.bottleType.dto.request;
 
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -14,6 +10,7 @@ public class BottleTypeRequest {
 
     @NotBlank(message = "Tên loại chai không được để trống")
     @Size(max = 255, message = "Tên loại chai không được vượt quá 255 ký tự")
+    @Pattern(regexp = "^[\\p{L}\\d\\s\\-\\(\\)]+$", message = "Tên loại chai chỉ được chứa chữ cái, số, khoảng trắng và các ký tự: -, ()")
     private String name;
 
     @NotNull(message = "Trạng thái không được để trống")
