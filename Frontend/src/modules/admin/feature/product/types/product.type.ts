@@ -47,16 +47,14 @@ export interface FragranceFamily {
 
   name?: string
 }
-export interface ProductVariant {
 
+export interface ProductVariant {
   id?: number
 
   capacityId: number
-
   capacityName?: string
 
   bottleTypeId: number
-
   bottleTypeName?: string
 
   sku: string
@@ -65,8 +63,11 @@ export interface ProductVariant {
 
   stockQuantity: number
 
-  status: number
+  manufacturingDate: string
 
+  expirationDate: string
+
+  status: number
 }
 
 export interface Product {

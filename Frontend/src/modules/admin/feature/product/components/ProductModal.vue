@@ -431,7 +431,7 @@
 
     </div>
 
-    <div class="table-responsive">
+    <div class="table-responsive variant-table-wrapper">
 
       <table
         class="table align-middle"
@@ -458,6 +458,14 @@
             Tồn
 
           </th>
+
+          <th width="170">
+  Ngày sản xuất
+</th>
+
+<th width="170">
+  Hạn sử dụng
+</th>
 
           <th width="150">
 
@@ -575,6 +583,22 @@
             >
 
           </td>
+
+          <td>
+  <input
+    v-model="variant.manufacturingDate"
+    type="date"
+    class="form-control form-control-sm"
+  >
+</td>
+
+<td>
+  <input
+    v-model="variant.expirationDate"
+    type="date"
+    class="form-control form-control-sm"
+  >
+</td>
 
           <!-- STATUS -->
 
@@ -779,20 +803,15 @@ const resetForm = () => {
 const addVariant = () => {
 
   formData.value.variants.push({
-
-    capacityId: 0,
-
-    bottleTypeId: 0,
-
-    sku: "",
-
-    price: 0,
-
-    stockQuantity: 0,
-
-    status: 1
-
-  });
+  capacityId: 0,
+  bottleTypeId: 0,
+  sku: "",
+  price: 0,
+  stockQuantity: 0,
+  manufacturingDate: "",
+  expirationDate: "",
+  status: 1
+});
 
 };
 
@@ -822,23 +841,17 @@ status: product.status ?? 1,
       ) ?? [],
 
     variants:
-      product.variants?.map(v => ({
-
-        id: v.id,
-
-        capacityId: v.capacityId,
-
-        bottleTypeId: v.bottleTypeId,
-
-        sku: v.sku,
-
-        price: v.price,
-
-        stockQuantity: v.stockQuantity,
-
-        status: v.status ?? 1
-
-      })) ?? []
+  product.variants?.map(v => ({
+    id: v.id,
+    capacityId: v.capacityId,
+    bottleTypeId: v.bottleTypeId,
+    sku: v.sku,
+    price: v.price,
+    stockQuantity: v.stockQuantity,
+    manufacturingDate: v.manufacturingDate ?? "",
+    expirationDate: v.expirationDate ?? "",
+    status: v.status ?? 1
+  })) ?? []
 
   };
 
@@ -978,20 +991,19 @@ const saveData = async () => {
       ...formData.value,
 
       variants: formData.value.variants.map(v => ({
-        id: v.id,
+  id: v.id,
+  capacityId: Number(v.capacityId),
+  bottleTypeId: Number(v.bottleTypeId),
+  sku: v.sku.trim(),
+  price: Number(v.price),
+  stockQuantity: Number(v.stockQuantity),
 
-        capacityId: Number(v.capacityId),
+  manufacturingDate: v.manufacturingDate,
 
-        bottleTypeId: Number(v.bottleTypeId),
+  expirationDate: v.expirationDate,
 
-        sku: v.sku.trim(),
-
-        price: Number(v.price),
-
-        stockQuantity: Number(v.stockQuantity),
-
-        status: Number(v.status)
-      })),
+  status: Number(v.status)
+})),
 
       fragranceFamilyIds:
         formData.value.fragranceFamilyIds.map(Number)
@@ -1065,10 +1077,25 @@ const closeModal = () => {
 ============================ */
 
 .offcanvas{
-    width:1100px;
-    max-width:100vw;
-    transition:.3s;
-    background:#f8fafc;
+    width:min(1700px,95vw);
+}
+
+.table th,
+.table td{
+    white-space: nowrap;
+}
+
+.table{
+    min-width: 1600px;
+}
+
+.variant-table-wrapper{
+    overflow-x:auto;
+    overflow-y:hidden;
+}
+
+.variant-table-wrapper::-webkit-scrollbar{
+    height:8px;
 }
 
 .offcanvas-body{

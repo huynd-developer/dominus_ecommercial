@@ -95,23 +95,23 @@ export const productService = {
 
   getBrands: async () => {
     const response = await request.get(
-      '/api/admin/brands'
+      '/api/admin/brands?page=0&size=999'
     )
 
     return response.data ?? response
   },
 
   getCategories: async () => {
-    const response = await request.get(
-      '/api/admin/categories'
-    )
+  const response = await request.get(
+    '/api/admin/categories?page=0&size=999'
+  )
 
-    return response.data ?? response
-  },
+  return response.data ?? response
+},
 
   getConcentrations: async () => {
     const response = await request.get(
-      '/api/admin/concentrations'
+      '/api/admin/concentrations?page=0&size=999'
     )
 
     return response.data ?? response
@@ -119,7 +119,7 @@ export const productService = {
 
   getCapacities: async () => {
     const response = await request.get(
-      '/api/admin/capacities'
+      '/api/admin/capacities?page=0&size=999'
     )
 
     return response.data ?? response
@@ -127,7 +127,7 @@ export const productService = {
 
   getBottleTypes: async () => {
     const response = await request.get(
-      '/api/admin/bottle-types'
+      '/api/admin/bottle-types?page=0&size=999'
     )
 
     return response.data ?? response
@@ -135,7 +135,7 @@ export const productService = {
 
   getFragranceFamilies: async () => {
     const response = await request.get(
-      '/api/admin/fragrance-families'
+      '/api/admin/fragrance-families?page=0&size=999'
     )
 
     return response.data ?? response
