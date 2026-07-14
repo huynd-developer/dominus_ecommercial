@@ -36,11 +36,8 @@
             <th class="col-product">Sản phẩm</th>
             <th class="col-variant">Biến thể</th>
             <th class="col-sku">SKU</th>
-            <th class="text-center col-date">NSX</th>
-            <th class="text-center col-date">HSD</th>
             <th class="text-end col-price">Giá</th>
             <th class="text-center col-stock">Kho</th>
-            <th class="text-center col-status">Trạng thái</th>
             <th class="text-end col-action">Thao tác</th>
           </tr>
         </thead>
@@ -53,6 +50,7 @@
               'row-disabled': isProductDisabled(product),
               'row-expired': isExpired(product),
             }"
+            :title="getDisabledReason(product) || getProductTitle(product)"
           >
             <td>
               <div class="d-flex align-items-center gap-2 min-w-0">
@@ -87,17 +85,6 @@
               </span>
             </td>
 
-            <td class="text-center date-text">
-              {{ formatDate(product.manufacturingDate) }}
-            </td>
-
-            <td
-              class="text-center date-text"
-              :class="isExpired(product) ? 'text-danger fw-bold' : ''"
-            >
-              {{ formatDate(product.expirationDate) }}
-            </td>
-
             <td class="text-end">
               <strong class="price-text">
                 {{ formatPrice(product.price) }} ₫
@@ -113,29 +100,12 @@
               </span>
             </td>
 
-            <td class="text-center">
-              <span
-                class="status-badge"
-                :class="isSellable(product) ? 'status-ok' : 'status-error'"
-                :title="getDisabledReason(product) || 'Có thể bán'"
-              >
-                {{ isSellable(product) ? "Bán được" : "Không bán" }}
-              </span>
-
-              <div
-                v-if="getDisabledReason(product)"
-                class="reason-text text-truncate"
-                :title="getDisabledReason(product)"
-              >
-                {{ getDisabledReason(product) }}
-              </div>
-            </td>
-
             <td class="text-end">
               <button
                 type="button"
                 class="btn-add-product"
                 :disabled="isProductDisabled(product)"
+                :title="getDisabledReason(product) || 'Chọn sản phẩm'"
                 @click.stop="handleAddToCart(product)"
               >
                 <i class="bi bi-plus-lg"></i>
@@ -149,7 +119,7 @@
 
     <div class="table-hint mt-2 font-xs text-muted-custom">
       <i class="bi bi-info-circle me-1"></i>
-      POS chỉ bán sản phẩm còn hàng, đang hoạt động, chưa hết hạn sử dụng và đã tới ngày bán.
+      POS chỉ cho chọn sản phẩm còn hàng, đang hoạt động và đủ điều kiện bán.
     </div>
   </div>
 </template>
@@ -161,16 +131,6 @@ const posStore = usePosStore();
 
 const formatPrice = (val?: number | null) => {
   return new Intl.NumberFormat("vi-VN").format(Number(val || 0));
-};
-
-const formatDate = (value?: string | null) => {
-  if (!value) return "-";
-
-  const date = new Date(`${String(value).substring(0, 10)}T00:00:00`);
-
-  if (Number.isNaN(date.getTime())) return "-";
-
-  return date.toLocaleDateString("vi-VN");
 };
 
 const isBeforeToday = (value?: string | null) => {
@@ -247,10 +207,6 @@ const getDisabledReason = (product: any) => {
   }
 
   return "";
-};
-
-const isSellable = (product: any) => {
-  return !getDisabledReason(product);
 };
 
 const isProductDisabled = (product: any) => {
@@ -385,31 +341,25 @@ const handleAddToCart = (product: any) => {
 .product-name {
   color: #f8fafc;
   font-weight: 800;
-  max-width: 220px;
+  max-width: 260px;
 }
 
 .product-category {
   color: #64748b;
   font-size: 0.7rem;
-  max-width: 220px;
+  max-width: 260px;
 }
 
 .variant-text {
   color: #f3c63f;
   font-weight: 800;
-  max-width: 170px;
+  max-width: 190px;
 }
 
 .sku-text {
   color: #94a3b8;
   font-size: 0.72rem;
-  max-width: 130px;
-}
-
-.date-text {
-  color: #cbd5e1;
-  font-size: 0.72rem;
-  white-space: nowrap;
+  max-width: 150px;
 }
 
 .price-text {
@@ -437,36 +387,6 @@ const handleAddToCart = (product: any) => {
   background: rgba(239, 68, 68, 0.12);
   color: #fca5a5;
   border: 1px solid rgba(239, 68, 68, 0.25);
-}
-
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  padding: 3px 7px;
-  font-weight: 900;
-  font-size: 0.68rem;
-  white-space: nowrap;
-}
-
-.status-ok {
-  background: rgba(34, 197, 94, 0.1);
-  color: #86efac;
-  border: 1px solid rgba(34, 197, 94, 0.22);
-}
-
-.status-error {
-  background: rgba(239, 68, 68, 0.12);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.25);
-}
-
-.reason-text {
-  max-width: 130px;
-  margin-top: 3px;
-  color: #fca5a5;
-  font-size: 0.66rem;
 }
 
 .btn-add-product {
@@ -501,35 +421,27 @@ const handleAddToCart = (product: any) => {
 }
 
 .col-product {
-  min-width: 260px;
+  min-width: 300px;
 }
 
 .col-variant {
-  min-width: 170px;
+  min-width: 190px;
 }
 
 .col-sku {
-  min-width: 130px;
-}
-
-.col-date {
-  min-width: 95px;
+  min-width: 150px;
 }
 
 .col-price {
-  min-width: 110px;
+  min-width: 120px;
 }
 
 .col-stock {
-  min-width: 65px;
-}
-
-.col-status {
-  min-width: 135px;
+  min-width: 70px;
 }
 
 .col-action {
-  min-width: 85px;
+  min-width: 90px;
 }
 
 .table-hint {

@@ -121,15 +121,35 @@ const getBackendMessage = (error: any, fallback: string): string => {
     return fallback;
   }
 
+  if (typeof data === "string") {
+    return data;
+  }
+
+  if (data.message) {
+    return String(data.message);
+  }
+
+  if (data.detail) {
+    return String(data.detail);
+  }
+
+  if (data.error) {
+    return String(data.error);
+  }
+
   if (data.errors && typeof data.errors === "object") {
     const firstError = Object.values(data.errors)[0];
+
+    if (Array.isArray(firstError) && firstError.length > 0) {
+      return String(firstError[0]);
+    }
 
     if (firstError) {
       return String(firstError);
     }
   }
 
-  return data.message || fallback;
+  return fallback;
 };
 
 const toDateOnly = (value?: string | null): string | null => {
@@ -252,7 +272,9 @@ const mapPosProductFromBackend = (
   }
 
   return {
-    id: Number(raw.variantId || raw.productVariantId || raw.id || parent.id || 0),
+    id: Number(
+      raw.variantId || raw.productVariantId || raw.id || parent.id || 0
+    ),
     sku: String(raw.sku || ""),
     name: productName,
     subName: buildVariantText(raw),
@@ -354,6 +376,99 @@ export const usePosStore = defineStore("posStore", {
   },
 
   actions: {
+    clearVoucherLocal(silent = false) {
+      const hadVoucher = Boolean(this.voucherCode || this.discountAmount > 0);
+
+      this.voucherCode = "";
+      this.discountAmount = 0;
+
+      if (!silent && hadVoucher) {
+        this.errorMsg = "Đã xóa mã giảm giá.";
+      }
+    },
+
+    clearVoucher() {
+      if (this.activeHeldOrderId) {
+        this.errorMsg = "Đang mở phiếu treo, không được đổi mã giảm giá.";
+        return;
+      }
+
+      if (this.cashPaid > 0) {
+        this.errorMsg =
+          "Đơn đã nhận tiền mặt một phần, không được đổi mã giảm giá.";
+        return;
+      }
+
+      this.clearVoucherLocal(false);
+    },
+
+    handleVoucherTyping() {
+      if (this.discountAmount > 0) {
+        this.discountAmount = 0;
+      }
+    },
+
+    async applyVoucher() {
+      this.errorMsg = "";
+
+      if (this.activeHeldOrderId) {
+        this.errorMsg = "Đang mở phiếu treo, không được áp mã giảm giá.";
+        return false;
+      }
+
+      if (this.cashPaid > 0) {
+        this.errorMsg =
+          "Đơn đã nhận tiền mặt một phần, không được áp mã giảm giá.";
+        return false;
+      }
+
+      if (this.cart.length === 0) {
+        this.errorMsg = "Giỏ hàng chưa có sản phẩm để áp mã giảm giá.";
+        return false;
+      }
+
+      const cleanCode = normalizeText(this.voucherCode).toUpperCase();
+
+      if (!cleanCode) {
+        this.errorMsg = "Vui lòng nhập mã giảm giá.";
+        return false;
+      }
+
+      this.isLoading = true;
+      this.errorMsg = "";
+
+      try {
+        const { data } = await api.get("/admin/pos/voucher/apply", {
+          params: {
+            code: cleanCode,
+            totalAmount: this.totalAmount,
+          },
+        });
+
+        this.voucherCode = String(data?.voucherCode || cleanCode)
+          .trim()
+          .toUpperCase();
+        this.discountAmount = Number(data?.discountAmount || 0);
+        this.errorMsg = "";
+
+        return {
+          success: true,
+          data,
+        };
+      } catch (error: any) {
+        this.discountAmount = 0;
+
+        this.errorMsg = getBackendMessage(
+          error,
+          "Mã giảm giá không hợp lệ hoặc không đủ điều kiện áp dụng."
+        );
+
+        return false;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
     resetLocalOrderOnly() {
       this.cart = [];
       this.customer = null;
@@ -390,9 +505,7 @@ export const usePosStore = defineStore("posStore", {
         this.categories = [
           "Tất cả",
           ...new Set(
-            flatProducts
-              .map((p) => p.category)
-              .filter((category) => !!category)
+            flatProducts.map((p) => p.category).filter((category) => !!category)
           ),
         ];
       } catch (error: any) {
@@ -475,6 +588,7 @@ export const usePosStore = defineStore("posStore", {
         }
 
         existingItem.quantity++;
+        this.clearVoucherLocal(true);
         return;
       }
 
@@ -482,6 +596,8 @@ export const usePosStore = defineStore("posStore", {
         product,
         quantity: 1,
       });
+
+      this.clearVoucherLocal(true);
     },
 
     async handleBarcodeScan(sku: string) {
@@ -574,10 +690,12 @@ export const usePosStore = defineStore("posStore", {
       if (qty > item.product.stockQuantity) {
         this.errorMsg = `Không thể chỉnh sửa. Kho chỉ còn tối đa ${item.product.stockQuantity} sản phẩm!`;
         item.quantity = item.product.stockQuantity;
+        this.clearVoucherLocal(true);
         return;
       }
 
       item.quantity = qty;
+      this.clearVoucherLocal(true);
     },
 
     removeFromCart(sku: string) {
@@ -596,6 +714,7 @@ export const usePosStore = defineStore("posStore", {
       }
 
       this.cart = this.cart.filter((item) => item.product.sku !== sku);
+      this.clearVoucherLocal(true);
     },
 
     async searchCustomer(phone: string) {
@@ -804,8 +923,8 @@ export const usePosStore = defineStore("posStore", {
           selectedPaymentMethod === "MIXED"
             ? transferAmount
             : selectedPaymentMethod === "VNPAY"
-              ? null
-              : null,
+            ? null
+            : null,
 
         items: this.cart.map((item) => ({
           sku: item.product.sku,
@@ -935,8 +1054,8 @@ export const usePosStore = defineStore("posStore", {
                 selectedPaymentMethod === "MIXED"
                   ? transferAmount
                   : selectedPaymentMethod === "VNPAY"
-                    ? null
-                    : null,
+                  ? null
+                  : null,
             }
           );
 
@@ -1099,7 +1218,9 @@ export const usePosStore = defineStore("posStore", {
           manufacturingDate: toDateOnly(item.manufacturingDate),
           expirationDate: toDateOnly(item.expirationDate),
           status: item.variantStatus ?? item.status ?? null,
-          expired: Boolean(item.expired ?? isDateBeforeToday(item.expirationDate)),
+          expired: Boolean(
+            item.expired ?? isDateBeforeToday(item.expirationDate)
+          ),
           sellable: item.sellable ?? true,
           unavailableReason: item.unavailableReason || null,
         },
@@ -1209,6 +1330,51 @@ export const usePosStore = defineStore("posStore", {
         this.errorMsg = getBackendMessage(
           error,
           "Chuyển phiếu thất bại. Bạn chỉ được chuyển phiếu của mình, trừ khi là MANAGER/OWNER."
+        );
+
+        return false;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    async cancelHeldOrder(orderId: number) {
+      if (!orderId) {
+        this.errorMsg = "Mã phiếu treo không hợp lệ.";
+        return false;
+      }
+
+      if (this.cashPaid > 0) {
+        this.errorMsg =
+          "Đơn hiện tại đã nhận tiền mặt một phần, không được hủy phiếu treo.";
+        return false;
+      }
+
+      this.isLoading = true;
+      this.errorMsg = "";
+
+      try {
+        const { data } = await api.patch(
+          `/admin/pos/held-orders/${orderId}/cancel`
+        );
+
+        if (this.activeHeldOrderId === orderId) {
+          this.resetLocalOrderOnly();
+        }
+
+        await this.fetchHeldOrders();
+        await this.fetchProducts();
+
+        this.errorMsg = `Đã hủy phiếu treo #${orderId}.`;
+
+        return {
+          success: true,
+          data,
+        };
+      } catch (error: any) {
+        this.errorMsg = getBackendMessage(
+          error,
+          "Hủy phiếu treo thất bại. Phiếu có thể đã thanh toán, đã bị hủy hoặc không thuộc quyền của bạn."
         );
 
         return false;

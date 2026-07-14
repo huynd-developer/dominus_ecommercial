@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -50,6 +51,12 @@ public class PosController {
         return ResponseEntity.ok(posService.findVariantBySku(sku));
     }
 
+    /**
+     * Tìm khách hàng theo SĐT.
+     *
+     * POS bắt buộc có SĐT, họ tên, email.
+     * Nếu chưa có khách thì FE cho nhập thông tin và BE sẽ tạo Customer khi checkout/hold.
+     */
     @GetMapping("/customer")
     public ResponseEntity<?> findCustomerByPhone(
             @RequestParam String phone
@@ -69,16 +76,19 @@ public class PosController {
         ));
     }
 
+    /**
+     * Thanh toán đơn POS bình thường.
+     *
+     * CASH: hoàn thành ngay.
+     * VNPAY/MIXED: tạo đơn chờ thanh toán VNPay.
+     */
     @PostMapping("/checkout")
     public ResponseEntity<PosOrderResponse> checkout(
             @Valid @RequestBody PosCheckoutRequest request,
             Authentication authentication,
             HttpServletRequest httpRequest
     ) {
-        String cashierEmail = authentication != null
-                ? authentication.getName()
-                : null;
-
+        String cashierEmail = getCurrentEmail(authentication);
         String clientIp = getClientIp(httpRequest);
 
         return ResponseEntity.ok(
@@ -86,47 +96,67 @@ public class PosController {
         );
     }
 
+    /**
+     * Treo phiếu mua hàng.
+     *
+     * Đúng nghiệp vụ hiện tại:
+     * - Tạo Order status = 0
+     * - PaymentMethod = HOLD
+     * - Chưa trừ kho
+     * - Khi thanh toán phiếu treo mới re-check tồn kho và trừ kho
+     */
     @PostMapping("/hold")
     public ResponseEntity<PosOrderResponse> holdOrder(
             @Valid @RequestBody PosHoldRequest request,
             Authentication authentication
     ) {
-        String cashierEmail = authentication != null
-                ? authentication.getName()
-                : null;
+        String cashierEmail = getCurrentEmail(authentication);
 
         return ResponseEntity.ok(
                 posService.holdOrder(request, cashierEmail)
         );
     }
 
+    /**
+     * Danh sách phiếu treo.
+     *
+     * CASHIER: chỉ thấy phiếu của mình.
+     * MANAGER/OWNER: thấy toàn bộ phiếu treo.
+     */
     @GetMapping("/held-orders")
     public ResponseEntity<List<PosHeldOrderResponse>> getHeldOrders(
             Authentication authentication
     ) {
-        String cashierEmail = authentication != null
-                ? authentication.getName()
-                : null;
+        String cashierEmail = getCurrentEmail(authentication);
 
         return ResponseEntity.ok(
                 posService.getHeldOrders(cashierEmail)
         );
     }
 
+    /**
+     * Xem chi tiết phiếu treo.
+     */
     @GetMapping("/held-orders/{orderId}")
     public ResponseEntity<PosOrderResponse> getHeldOrderDetail(
             @PathVariable Integer orderId,
             Authentication authentication
     ) {
-        String cashierEmail = authentication != null
-                ? authentication.getName()
-                : null;
+        String cashierEmail = getCurrentEmail(authentication);
 
         return ResponseEntity.ok(
                 posService.getHeldOrderDetail(orderId, cashierEmail)
         );
     }
 
+    /**
+     * Thanh toán phiếu treo.
+     *
+     * Phiếu treo chưa trừ kho, nên khi thanh toán phải:
+     * - Re-check sản phẩm còn bán được không
+     * - Re-check tồn kho
+     * - Trừ kho sau khi hợp lệ
+     */
     @PostMapping("/held-orders/{orderId}/checkout")
     public ResponseEntity<PosOrderResponse> checkoutHeldOrder(
             @PathVariable Integer orderId,
@@ -134,10 +164,7 @@ public class PosController {
             Authentication authentication,
             HttpServletRequest httpRequest
     ) {
-        String cashierEmail = authentication != null
-                ? authentication.getName()
-                : null;
-
+        String cashierEmail = getCurrentEmail(authentication);
         String clientIp = getClientIp(httpRequest);
 
         return ResponseEntity.ok(
@@ -145,18 +172,45 @@ public class PosController {
         );
     }
 
+    /**
+     * Chuyển phiếu treo cho nhân viên khác.
+     *
+     * CASHIER: chỉ được chuyển phiếu của mình.
+     * MANAGER/OWNER: được chuyển phiếu của nhân viên khác.
+     */
     @PatchMapping("/held-orders/{orderId}/transfer")
     public ResponseEntity<PosHeldOrderResponse> transferHeldOrder(
             @PathVariable Integer orderId,
             @Valid @RequestBody PosTransferHeldOrderRequest request,
             Authentication authentication
     ) {
-        String cashierEmail = authentication != null
-                ? authentication.getName()
-                : null;
+        String cashierEmail = getCurrentEmail(authentication);
 
         return ResponseEntity.ok(
                 posService.transferHeldOrder(orderId, request, cashierEmail)
+        );
+    }
+
+    /**
+     * Hủy phiếu treo.
+     *
+     * Không hard delete DB.
+     * Chỉ đổi trạng thái phiếu sang đã hủy.
+     *
+     * Với logic hiện tại:
+     * - Phiếu treo chưa trừ kho nên không cần hoàn kho
+     * - Voucher chưa tăng lượt dùng nên không cần hoàn voucher
+     * - Giữ lại Order/OrderItem để truy vết nghiệp vụ
+     */
+    @PatchMapping("/held-orders/{orderId}/cancel")
+    public ResponseEntity<Map<String, Object>> cancelHeldOrder(
+            @PathVariable Integer orderId,
+            Authentication authentication
+    ) {
+        String cashierEmail = getCurrentEmail(authentication);
+
+        return ResponseEntity.ok(
+                posService.cancelHeldOrder(orderId, cashierEmail)
         );
     }
 
@@ -169,13 +223,15 @@ public class PosController {
     public ResponseEntity<List<PosTransferTargetResponse>> getTransferTargets(
             Authentication authentication
     ) {
-        String cashierEmail = authentication != null
-                ? authentication.getName()
-                : null;
+        String cashierEmail = getCurrentEmail(authentication);
 
         return ResponseEntity.ok(
                 posService.getTransferTargets(cashierEmail)
         );
+    }
+
+    private String getCurrentEmail(Authentication authentication) {
+        return authentication != null ? authentication.getName() : null;
     }
 
     private String getClientIp(HttpServletRequest request) {
@@ -192,5 +248,14 @@ public class PosController {
         }
 
         return request.getRemoteAddr();
+    }
+    @GetMapping("/voucher/apply")
+    public ResponseEntity<Map<String, Object>> applyVoucher(
+            @RequestParam String code,
+            @RequestParam BigDecimal totalAmount
+    ) {
+        return ResponseEntity.ok(
+                posService.applyVoucher(code, totalAmount)
+        );
     }
 }

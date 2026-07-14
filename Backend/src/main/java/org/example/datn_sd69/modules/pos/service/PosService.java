@@ -10,7 +10,9 @@ import org.example.datn_sd69.modules.pos.dto.response.PosOrderResponse;
 import org.example.datn_sd69.modules.pos.dto.response.PosTransferTargetResponse;
 import org.example.datn_sd69.modules.pos.dto.response.ProductVariantPosResponse;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 public interface PosService {
 
@@ -57,4 +59,6 @@ public interface PosService {
      */
     List<PosTransferTargetResponse> getTransferTargets(String cashierEmail);
     List<ProductVariantPosResponse> getProductsForPos();
+    Map<String, Object> cancelHeldOrder(Integer orderId, String cashierEmail);
+    Map<String, Object> applyVoucher(String voucherCode, BigDecimal totalAmount);
 }

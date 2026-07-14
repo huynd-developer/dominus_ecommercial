@@ -55,6 +55,7 @@ public class PosServiceImpl implements PosService {
 
     private static final int ORDER_STATUS_PENDING = 0;
     private static final int ORDER_STATUS_COMPLETED = 3;
+    private static final int ORDER_STATUS_CANCELLED = 4;
 
     private static final String PAYMENT_CASH = "CASH";
     private static final String PAYMENT_VNPAY = "VNPAY";
@@ -346,7 +347,9 @@ public class PosServiceImpl implements PosService {
 
         if (userByPhone != null) {
             if (!isUserRole(userByPhone)) {
-                throw new RuntimeException("Số điện thoại đã tồn tại nhưng không thuộc tài khoản khách hàng.");
+                throw new RuntimeException(
+                        "Số điện thoại này đã thuộc tài khoản nhân viên/quản trị. Vui lòng nhập số điện thoại khác cho khách hàng."
+                );
             }
 
             User userByEmail = userRepository.findByEmailIgnoreCase(email)
@@ -377,7 +380,9 @@ public class PosServiceImpl implements PosService {
 
         if (userByEmail != null) {
             if (!isUserRole(userByEmail)) {
-                throw new RuntimeException("Email đã tồn tại nhưng không thuộc tài khoản khách hàng.");
+                throw new RuntimeException(
+                        "Email này đã thuộc tài khoản nhân viên/quản trị. Vui lòng nhập email khác cho khách hàng."
+                );
             }
 
             if (userByEmail.getStatus() == null || userByEmail.getStatus() != STATUS_ACTIVE) {
@@ -1276,6 +1281,43 @@ public class PosServiceImpl implements PosService {
         return toHeldOrderResponse(savedOrder);
     }
 
+    @Override
+    @Transactional
+    public Map<String, Object> cancelHeldOrder(
+            Integer orderId,
+            String cashierEmail
+    ) {
+        Employee currentEmployee = resolveCashier(cashierEmail);
+
+        Order order = getHeldOrderOrThrow(orderId);
+
+        /*
+         * Quyền hủy phiếu:
+         * - CASHIER chỉ được hủy phiếu của mình
+         * - MANAGER/OWNER được hủy phiếu của nhân viên khác
+         */
+        validateCanCancelHeldOrder(order, currentEmployee);
+
+        /*
+         * Phiếu treo hiện tại chưa trừ kho khi tạo.
+         * Vì vậy hủy phiếu treo không hoàn kho.
+         *
+         * Voucher cũng chưa tăng usedCount khi treo phiếu,
+         * nên hủy phiếu không cần giảm usedCount voucher.
+         */
+        order.setStatus(ORDER_STATUS_CANCELLED);
+        order.setCompletedAt(null);
+
+        Order savedOrder = orderRepository.save(order);
+
+        return Map.of(
+                "success", true,
+                "orderId", savedOrder.getId(),
+                "status", "CANCELLED",
+                "message", "Đã hủy phiếu treo #" + savedOrder.getId()
+        );
+    }
+
     private void validateHoldRequest(PosHoldRequest request) {
         if (request == null) {
             throw new RuntimeException("Dữ liệu phiếu treo không được để trống.");
@@ -1344,7 +1386,17 @@ public class PosServiceImpl implements PosService {
 
         throw new RuntimeException("Bạn không có quyền chuyển phiếu treo của nhân viên khác.");
     }
+    private void validateCanCancelHeldOrder(Order order, Employee currentEmployee) {
+        if (isManagerOrOwner(currentEmployee)) {
+            return;
+        }
 
+        if (isSameCashier(order, currentEmployee)) {
+            return;
+        }
+
+        throw new RuntimeException("Bạn không có quyền hủy phiếu treo của nhân viên khác.");
+    }
     private void validateCashierCanCheckoutHeldOrder(Order order, Employee currentEmployee) {
         if (!isSameCashier(order, currentEmployee)) {
             throw new RuntimeException("Phiếu này đang thuộc nhân viên khác. Vui lòng chuyển phiếu trước khi thanh toán.");
@@ -1606,5 +1658,40 @@ public class PosServiceImpl implements PosService {
                 .unavailableReason(unavailableReason)
                 .imageUrl(imageUrl)
                 .build();
+    }
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Object> applyVoucher(
+            String voucherCode,
+            BigDecimal totalAmount
+    ) {
+        if (voucherCode == null || voucherCode.trim().isBlank()) {
+            throw new RuntimeException("Vui lòng nhập mã giảm giá.");
+        }
+
+        if (totalAmount == null || totalAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("Giỏ hàng chưa có sản phẩm để áp mã giảm giá.");
+        }
+
+        String cleanCode = voucherCode.trim();
+
+        Voucher voucher = resolveVoucher(cleanCode, totalAmount);
+
+        BigDecimal discountAmount = calculateDiscountAmount(voucher, totalAmount);
+        BigDecimal finalAmount = totalAmount.subtract(discountAmount);
+
+        if (finalAmount.compareTo(BigDecimal.ZERO) < 0) {
+            finalAmount = BigDecimal.ZERO;
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("voucherCode", cleanCode);
+        response.put("totalAmount", totalAmount);
+        response.put("discountAmount", discountAmount);
+        response.put("finalAmount", finalAmount);
+        response.put("message", "Áp dụng mã giảm giá thành công.");
+
+        return response;
     }
 }
