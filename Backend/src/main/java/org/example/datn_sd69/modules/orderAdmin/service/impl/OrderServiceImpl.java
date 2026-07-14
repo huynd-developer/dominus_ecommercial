@@ -2,265 +2,296 @@ package org.example.datn_sd69.modules.orderAdmin.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.Order;
-import org.example.datn_sd69.entity.OrderItem;
-import org.example.datn_sd69.entity.ProductVariant;
-import org.example.datn_sd69.modules.orderAdmin.dto.response.OrderResponse;
-import org.example.datn_sd69.modules.orderAdmin.service.OrderService;
+import org.example.datn_sd69.entity.ProductImage;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
+import org.example.datn_sd69.repository.ProductImageRepository;
 import org.example.datn_sd69.repository.ProductVariantRepository;
+import org.example.datn_sd69.modules.orderAdmin.dto.request.UpdateOrderStatusRequest;
+import org.example.datn_sd69.modules.orderAdmin.dto.response.OrderDetailResponse;
+import org.example.datn_sd69.modules.orderAdmin.dto.response.OrderItemResponse;
+import org.example.datn_sd69.modules.orderAdmin.dto.response.OrderResponse;
+import org.example.datn_sd69.modules.orderAdmin.service.OrderService;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class OrderServiceImpl implements OrderService {
 
-    private static final Integer PENDING = 0;
-    private static final Integer CONFIRMED = 1;
-    private static final Integer SHIPPING = 2;
-    private static final Integer COMPLETED = 3;
-    private static final Integer CANCELLED = 4;
-
     private final OrderRepository orderRepository;
+
     private final OrderItemRepository orderItemRepository;
+
     private final ProductVariantRepository productVariantRepository;
+
+    private final ProductImageRepository productImageRepository;
 
     @Override
     @Transactional(readOnly = true)
-    public Page<OrderResponse.ListItem> getOrders(
+    public Page<OrderResponse> getAll(
             String keyword,
-            Integer status,
             String orderType,
-            Pageable pageable
+            Integer status,
+            int page,
+            int size
     ) {
 
-        Page<Order> page = orderRepository.searchAdminOrders(
+        Pageable pageable = PageRequest.of(page, size);
+
+        Page<Order> orderPage = orderRepository.searchAdminOrders(
                 keyword,
                 status,
                 orderType,
                 pageable
         );
 
-        return page.map(order -> {
+        return orderPage.map(this::mapOrderResponse);
+    }
 
-            OrderResponse.ListItem dto =
-                    new OrderResponse.ListItem();
+    /**
+     * Mapping Order -> OrderResponse
+     */
+    private OrderResponse mapOrderResponse(Order order) {
 
-            dto.setOrderId(order.getId());
-            dto.setOrderType(order.getOrderType());
-            dto.setCustomerName(order.getCustomerName());
-            dto.setCustomerPhone(order.getCustomerPhone());
-            dto.setFinalAmount(order.getFinalAmount());
-            dto.setStatus(order.getStatus());
-            dto.setStatusName(getStatusName(order.getStatus()));
-            dto.setCreatedAt(order.getCreatedAt());
+        OrderResponse response = new OrderResponse();
 
-            return dto;
-        });
+        response.setId(order.getId());
+
+        response.setOrderType(order.getOrderType());
+
+        response.setCustomerName(order.getCustomerName());
+
+        response.setCustomerPhone(order.getCustomerPhone());
+
+        response.setPaymentMethod(order.getPaymentMethod());
+
+        response.setStatus(order.getStatus());
+
+        response.setTotalAmount(order.getTotalAmount());
+
+        response.setDiscountAmount(order.getDiscountAmount());
+
+        response.setFinalAmount(order.getFinalAmount());
+
+        response.setCreatedAt(order.getCreatedAt());
+
+        return response;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public OrderResponse.Detail getOrderDetail(
-            Integer orderId
-    ) {
+    public OrderDetailResponse getById(Integer id) {
 
-        Order order = orderRepository.findDetailById(orderId)
-                .orElseThrow(() ->
-                        new RuntimeException("Không tìm thấy đơn hàng"));
+        Order order = orderRepository.findDetailById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng"));
 
-        List<OrderItem> orderItems =
-                orderItemRepository.findByOrderId(orderId);
+        OrderDetailResponse response = new OrderDetailResponse();
 
-        OrderResponse.Detail detail =
-                new OrderResponse.Detail();
+        response.setId(order.getId());
+        response.setOrderType(order.getOrderType());
+        response.setCustomerName(order.getCustomerName());
+        response.setCustomerPhone(order.getCustomerPhone());
+        response.setShippingAddress(order.getShippingAddress());
+        response.setPaymentMethod(order.getPaymentMethod());
+        response.setStatus(order.getStatus());
+        response.setTotalAmount(order.getTotalAmount());
+        response.setDiscountAmount(order.getDiscountAmount());
+        response.setFinalAmount(order.getFinalAmount());
+        response.setCreatedAt(order.getCreatedAt());
 
-        detail.setOrderId(order.getId());
-        detail.setOrderType(order.getOrderType());
-        detail.setCustomerName(order.getCustomerName());
-        detail.setCustomerPhone(order.getCustomerPhone());
-        detail.setShippingAddress(order.getShippingAddress());
-        detail.setPaymentMethod(order.getPaymentMethod());
-        detail.setStatus(order.getStatus());
-        detail.setStatusName(getStatusName(order.getStatus()));
-        detail.setTotalAmount(order.getTotalAmount());
-        detail.setDiscountAmount(order.getDiscountAmount());
-        detail.setFinalAmount(order.getFinalAmount());
-        detail.setCreatedAt(order.getCreatedAt());
+        if (order.getVoucher() != null) {
+            response.setVoucherName(order.getVoucher().getCode());
+        }
 
-        List<OrderResponse.OrderItem> itemResponses =
-                orderItems.stream()
+        response.setItems(
+                orderItemRepository.findDetailByOrderId(id)
+                        .stream()
                         .map(item -> {
 
-                            OrderResponse.OrderItem dto =
-                                    new OrderResponse.OrderItem();
+                            OrderItemResponse dto = new OrderItemResponse();
 
-                            ProductVariant variant = item.getProductVariant();
+                            dto.setId(item.getId());
 
                             dto.setProductVariantId(
-                                    variant != null ? variant.getId() : null
+                                    item.getProductVariant().getId()
                             );
 
                             dto.setProductName(
-                                    variant != null && variant.getProduct() != null
-                                            ? variant.getProduct().getName()
-                                            : "Không xác định"
+                                    item.getProductVariant()
+                                            .getProduct()
+                                            .getName()
                             );
 
-                            dto.setQuantity(
-                                    item.getQuantity()
+                            dto.setSku(
+                                    item.getProductVariant()
+                                            .getSku()
                             );
 
-                            dto.setOriginalPrice(
-                                    item.getOriginalPrice()
+                            dto.setCapacity(
+                                    item.getProductVariant()
+                                            .getCapacity()
+                                            .getValue() + " ml"
                             );
 
-                            dto.setDiscountAmount(
-                                    item.getDiscountAmount()
+                            dto.setBottleType(
+                                    item.getProductVariant()
+                                            .getBottleType()
+                                            .getName()
                             );
 
-                            dto.setFinalPrice(
-                                    item.getFinalPrice()
-                            );
+                            dto.setQuantity(item.getQuantity());
+
+                            dto.setOriginalPrice(item.getOriginalPrice());
+
+                            dto.setDiscountAmount(item.getDiscountAmount());
+
+                            dto.setFinalPrice(item.getFinalPrice());
+
+                            dto.setNote(item.getNote());
 
                             dto.setImage(
-                                    item.getImage()
+                                    getPrimaryImage(
+                                            item.getProductVariant()
+                                                    .getProduct()
+                                                    .getId()
+                                    )
                             );
 
                             return dto;
+
                         })
-                        .toList();
+                        .toList()
+        );
 
-        detail.setItems(itemResponses);
+        return response;
 
-        return detail;
     }
 
     @Override
-    public OrderResponse.UpdateStatus nextStatus(
-            Integer orderId
+    public void updateStatus(
+            Integer id,
+            UpdateOrderStatusRequest request
     ) {
 
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findById(id)
                 .orElseThrow(() ->
-                        new RuntimeException("Không tìm thấy đơn hàng"));
+                        new RuntimeException("Không tìm thấy đơn hàng")
+                );
 
-        Integer oldStatus = order.getStatus();
+        Integer currentStatus = order.getStatus();
 
-        if (CANCELLED.equals(oldStatus)) {
-            throw new RuntimeException(
-                    "Đơn hàng đã bị hủy"
-            );
+        Integer newStatus = request.getStatus();
+
+        // Không cho cập nhật đơn đã hủy
+        if (currentStatus == 4) {
+            throw new RuntimeException("Đơn hàng đã hủy.");
         }
 
-        if (COMPLETED.equals(oldStatus)) {
-            throw new RuntimeException(
-                    "Đơn hàng đã hoàn thành"
-            );
+        // Không cho cập nhật đơn đã hoàn thành
+        if (currentStatus == 3) {
+            throw new RuntimeException("Đơn hàng đã hoàn thành.");
         }
 
-        Integer newStatus = oldStatus + 1;
+        // Chỉ cho phép tăng đúng 1 trạng thái
+        if (newStatus != currentStatus + 1) {
+            throw new RuntimeException(
+                    "Chỉ được chuyển trạng thái theo luồng: "
+                            + currentStatus + " -> " + (currentStatus + 1)
+            );
+        }
 
         order.setStatus(newStatus);
 
+        // Nếu hoàn thành thì lưu thời gian hoàn thành
+        if (newStatus == 3) {
+            order.setCompletedAt(java.time.LocalDateTime.now());
+        }
+
         orderRepository.save(order);
 
-        OrderResponse.UpdateStatus response =
-                new OrderResponse.UpdateStatus();
-
-        response.setOrderId(order.getId());
-        response.setOldStatus(oldStatus);
-        response.setNewStatus(newStatus);
-        response.setMessage(
-                "Cập nhật trạng thái thành công"
-        );
-
-        return response;
+        validateStatusTransition(currentStatus, newStatus);
     }
 
     @Override
-    public OrderResponse.UpdateStatus cancelOrder(
-            Integer orderId
-    ) {
+    public void cancel(Integer id) {
 
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findById(id)
                 .orElseThrow(() ->
-                        new RuntimeException("Không tìm thấy đơn hàng"));
-
-        if (COMPLETED.equals(order.getStatus())) {
-            throw new RuntimeException(
-                    "Không thể hủy đơn đã hoàn thành"
-            );
-        }
-
-        if (CANCELLED.equals(order.getStatus())) {
-            throw new RuntimeException(
-                    "Đơn hàng đã bị hủy"
-            );
-        }
-
-        List<OrderItem> items =
-                orderItemRepository.findAllByOrder_Id(
-                        orderId
+                        new RuntimeException("Không tìm thấy đơn hàng")
                 );
 
-        for (OrderItem item : items) {
+        switch (order.getStatus()) {
 
-            ProductVariant variant =
-                    item.getProductVariant();
+            case 3 ->
+                    throw new RuntimeException("Đơn hàng đã hoàn thành.");
 
-            variant.setStockQuantity(
-                    variant.getStockQuantity()
-                            + item.getQuantity()
-            );
+            case 4 ->
+                    throw new RuntimeException("Đơn hàng đã hủy.");
 
-            productVariantRepository.save(
-                    variant
-            );
         }
 
-        Integer oldStatus = order.getStatus();
+        var items = orderItemRepository.findDetailByOrderId(id);
 
-        order.setStatus(CANCELLED);
+        for (var item : items) {
+
+            var variant = item.getProductVariant();
+
+            variant.setStockQuantity(
+                    variant.getStockQuantity() + item.getQuantity()
+            );
+
+            productVariantRepository.save(variant);
+
+        }
+
+        order.setStatus(4);
 
         orderRepository.save(order);
 
-        OrderResponse.UpdateStatus response =
-                new OrderResponse.UpdateStatus();
-
-        response.setOrderId(order.getId());
-        response.setOldStatus(oldStatus);
-        response.setNewStatus(CANCELLED);
-        response.setMessage(
-                "Hủy đơn hàng thành công"
-        );
-
-        return response;
     }
 
-    private String getStatusName(
-            Integer status
-    ) {
+    private void validateStatusTransition(Integer currentStatus,
+                                          Integer newStatus) {
 
-        return switch (status) {
+        if (currentStatus == 4) {
+            throw new RuntimeException("Đơn hàng đã hủy.");
+        }
 
-            case 0 -> "Chờ xác nhận";
+        if (currentStatus == 3) {
+            throw new RuntimeException("Đơn hàng đã hoàn thành.");
+        }
 
-            case 1 -> "Đã xác nhận";
+        if (!newStatus.equals(currentStatus + 1)) {
+            throw new RuntimeException(
+                    "Không thể chuyển trạng thái từ "
+                            + currentStatus + " sang " + newStatus
+            );
+        }
 
-            case 2 -> "Đang giao";
+    }
 
-            case 3 -> "Hoàn thành";
+    private String getPrimaryImage(Integer productId){
 
-            case 4 -> "Đã hủy";
+        Optional<ProductImage> image =
+                productImageRepository
+                        .findFirstByProduct_IdAndIsPrimaryTrue(productId);
 
-            default -> "Không xác định";
-        };
+        if(image.isPresent()){
+            return image.get().getImageUrl();
+        }
+
+        image = productImageRepository
+                .findFirstByProduct_Id(productId);
+
+        return image.map(ProductImage::getImageUrl)
+                .orElse(null);
+
     }
 }

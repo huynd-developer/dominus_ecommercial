@@ -24,7 +24,7 @@ public class AdminCategoryController {
     public ResponseEntity<Page<Category>> getAllCategories(
             @RequestParam(name = "keyword", required = false) String keyword,
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "5") int size) {
+            @RequestParam(name = "size", defaultValue = "99") int size) {
 
         Pageable pageable = PageRequest.of(page, size);
 

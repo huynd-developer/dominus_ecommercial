@@ -7,6 +7,7 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
+import java.time.LocalDate;
 
 @Data
 public class ProductRequest {
@@ -72,6 +73,12 @@ public class ProductRequest {
                 message = "Tồn kho không được âm"
         )
         private Integer stockQuantity;
+
+        @NotNull(message = "Ngày sản xuất không được để trống")
+        private LocalDate manufacturingDate;
+
+        @NotNull(message = "Hạn sử dụng không được để trống")
+        private LocalDate expirationDate;
 
         private Integer status = 1;
     }

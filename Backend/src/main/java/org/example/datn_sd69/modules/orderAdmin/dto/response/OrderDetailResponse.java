@@ -5,10 +5,11 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
-public class OrderResponse {
+public class OrderDetailResponse {
 
     private Integer id;
 
@@ -18,16 +19,22 @@ public class OrderResponse {
 
     private String customerPhone;
 
+    private String shippingAddress;
+
+    private String paymentMethod;
+
+    private Integer status;
+
     private BigDecimal totalAmount;
 
     private BigDecimal discountAmount;
 
     private BigDecimal finalAmount;
 
-    private String paymentMethod;
-
-    private Integer status;
+    private String voucherName;
 
     private LocalDateTime createdAt;
+
+    private List<OrderItemResponse> items;
 
 }

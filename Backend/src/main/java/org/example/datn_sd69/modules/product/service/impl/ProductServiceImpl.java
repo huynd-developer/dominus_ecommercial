@@ -13,6 +13,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import java.time.LocalDate;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -95,6 +96,22 @@ public class ProductServiceImpl implements ProductService {
             variant.setSku(dto.getSku());
             variant.setPrice(dto.getPrice());
             variant.setStockQuantity(dto.getStockQuantity());
+
+            if (dto.getExpirationDate()
+                    .isBefore(dto.getManufacturingDate())) {
+                throw new RuntimeException(
+                        "Hạn sử dụng phải sau ngày sản xuất"
+                );
+            }
+
+            variant.setManufacturingDate(
+                    dto.getManufacturingDate()
+            );
+
+            variant.setExpirationDate(
+                    dto.getExpirationDate()
+            );
+
             variant.setStatus(dto.getStatus());
             variant.setIsDeleted(false);
 
@@ -172,6 +189,22 @@ public class ProductServiceImpl implements ProductService {
             variant.setSku(dto.getSku());
             variant.setPrice(dto.getPrice());
             variant.setStockQuantity(dto.getStockQuantity());
+
+            if (dto.getExpirationDate()
+                    .isBefore(dto.getManufacturingDate())) {
+                throw new RuntimeException(
+                        "Hạn sử dụng phải sau ngày sản xuất"
+                );
+            }
+
+            variant.setManufacturingDate(
+                    dto.getManufacturingDate()
+            );
+
+            variant.setExpirationDate(
+                    dto.getExpirationDate()
+            );
+
             variant.setStatus(dto.getStatus());
             variant.setIsDeleted(false);
 
@@ -449,6 +482,14 @@ public class ProductServiceImpl implements ProductService {
 
                             dto.setStockQuantity(
                                     v.getStockQuantity()
+                            );
+
+                            dto.setManufacturingDate(
+                                    v.getManufacturingDate()
+                            );
+
+                            dto.setExpirationDate(
+                                    v.getExpirationDate()
                             );
 
                             dto.setStatus(
