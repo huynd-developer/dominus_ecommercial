@@ -28,4 +28,5 @@ public interface CategoryRepository extends JpaRepository<Category, Integer> {
     Page<Category> findByNameContainingIgnoreCaseAndStatusAndIsDeletedFalse(String name, Integer status, Pageable pageable);
 
     Page<Category> findByStatusAndIsDeletedFalse(Integer status, Pageable pageable);
+
 }

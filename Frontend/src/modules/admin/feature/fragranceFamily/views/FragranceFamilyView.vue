@@ -40,7 +40,16 @@
           <div class="modal-body">
             <div class="mb-3">
               <label class="form-label fw-medium">Tên nhóm hương <span class="text-danger">*</span></label>
-              <input v-model="formData.name" type="text" class="form-control" placeholder="VD: Floral, Woody..." @keyup.enter="handleSubmit">
+              <input 
+                v-model="formData.name" 
+                type="text" 
+                class="form-control" 
+                :class="{ 'is-invalid': errors.name }" 
+                placeholder="VD: Floral, Woody..." 
+                @input="validateForm" 
+                @keyup.enter="handleSubmit"
+              >
+              <small v-if="errors.name" class="text-danger mt-1 d-block">{{ errors.name }}</small>
             </div>
             <div class="mb-3">
               <label class="form-label fw-medium">Trạng thái</label>
@@ -59,26 +68,27 @@
         </div>
       </div>
     </div>
-    </div>
+  </div>
 </template>
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useFragranceFamilyStore } from '../stores/fragrance-family.store';
 import FragranceFamilyTable from '../components/FragranceFamilyTable.vue';
 import type { FragranceFamily, FragranceFamilyRequest } from '../types/fragrance-family.type';
-import Swal from 'sweetalert2'; // Bắt buộc import SweetAlert2 để làm hiệu ứng
+import Swal from 'sweetalert2'; 
 
 const store = useFragranceFamilyStore();
 const searchKeyword = ref('');
 
-// Các biến phục vụ cho form Modal Thêm/Sửa
 const showModal = ref(false);
 const isEdit = ref(false);
 const currentId = ref<number | null>(null);
 const isSaving = ref(false);
 const formData = ref<FragranceFamilyRequest>({ name: '', status: 1 });
 
-// Cấu hình Toast thông báo góc trên bên phải
+// 👇 THÊM MỚI: Biến lưu trữ lỗi của Form
+const errors = ref({ name: '' });
+
 const Toast = Swal.mixin({
   toast: true, 
   position: 'top-end', 
@@ -94,27 +104,46 @@ onMounted(() => {
 const handleSearch = () => { store.fetchFragranceFamilies(searchKeyword.value, 0); };
 const changePage = (page: number) => { if (page >= 0 && page < store.totalPages) store.fetchFragranceFamilies(searchKeyword.value, page); };
 
-// Mở modal thêm mới (thay cho prompt cũ)
+// 👇 THÊM MỚI: Hàm kiểm tra lỗi (sẽ chạy khi gõ phím và khi bấm Lưu)
+const validateForm = () => {
+  errors.value.name = ''; // Reset lỗi
+  const nameValue = formData.value.name.trim();
+  // Trong Javascript, Regex có unicode (tiếng Việt) phải thêm cờ 'u' ở cuối
+  const nameRegex = /^[\p{L}\s\(\)]+$/u;
+
+  if (!nameValue) {
+    errors.value.name = 'Tên nhóm hương không được để trống';
+    return false;
+  }
+  if (nameValue.length > 255) {
+    errors.value.name = 'Tên nhóm hương không được vượt quá 255 ký tự';
+    return false;
+  }
+  if (!nameRegex.test(nameValue)) {
+    // Sửa lại câu thông báo cho hợp lý
+    errors.value.name = 'Chỉ được chứa chữ cái, khoảng trắng và dấu ngoặc đơn';
+    return false;
+  }
+  return true;
+};
+
 const openCreateModal = () => {
   isEdit.value = false;
   formData.value = { name: '', status: 1 };
+  errors.value.name = ''; // Reset lỗi khi mở form
   showModal.value = true;
 };
 
-// Mở modal sửa (Đổ dữ liệu lên form thay cho prompt cũ)
 const openEditModal = (item: FragranceFamily) => {
   isEdit.value = true;
   currentId.value = item.id;
   formData.value = { name: item.name, status: item.status };
+  errors.value.name = ''; // Reset lỗi khi mở form
   showModal.value = true;
 };
 
-// Hàm mới: Xử lý khi click "Lưu" trong Form Modal
 const handleSubmit = async () => {
-  if (!formData.value.name.trim()) {
-    Toast.fire({ icon: 'warning', title: 'Vui lòng nhập tên nhóm hương!' });
-    return;
-  }
+  if (!validateForm()) return; 
 
   try {
     isSaving.value = true;
@@ -127,14 +156,45 @@ const handleSubmit = async () => {
       Toast.fire({ icon: 'success', title: 'Thêm mới thành công!' });
     }
     showModal.value = false; 
+
   } catch (error: any) {
-    Toast.fire({ icon: 'error', title: error.message || 'Có lỗi xảy ra!' });
+    // 1. In ra console để bạn dễ debug F12
+    console.error("Chi tiết lỗi API:", error);
+
+    // 2. Bóc tách thông báo lỗi an toàn
+    let errorMsg = 'Có lỗi xảy ra!';
+    
+    if (error.response?.data) {
+      if (typeof error.response.data === 'string') {
+        // Trường hợp backend trả về thẳng 1 chuỗi text
+        errorMsg = error.response.data;
+      } else if (error.response.data.message) {
+        // Trường hợp backend trả về JSON có trường message
+        errorMsg = error.response.data.message;
+      } else if (error.response.data.timestamp) {
+        // Trường hợp rớt vào lỗi mặc định của Spring Boot (nơi giấu message)
+        errorMsg = 'Nhóm hương này đã tồn tại hoặc dữ liệu không hợp lệ!';
+      }
+    } else if (error.message) {
+      // Lỗi đứt kết nối mạng hoặc Axios
+      errorMsg = error.message;
+    }
+
+    // 3. Ép kiểu về chuỗi chữ thường để an toàn so sánh
+    const lowerMsg = String(errorMsg).toLowerCase();
+
+    // 4. Nếu là lỗi trùng lặp -> Nhét xuống chữ đỏ dưới ô input
+    if (lowerMsg.includes('tồn tại') || lowerMsg.includes('exists') || lowerMsg.includes('duplicate')) {
+      errors.value.name = 'Nhóm hương này đã tồn tại trong hệ thống!'; 
+    } else {
+      // Các lỗi hệ thống khác -> Văng Toast
+      Toast.fire({ icon: 'error', title: errorMsg });
+    }
   } finally {
     isSaving.value = false;
   }
 };
 
-// Thay đổi trạng thái nhanh bằng con mắt (Ẩn/Hiện) có Toast góc phải
 const handleToggleStatus = async (item: FragranceFamily) => {
   const newStatus = item.status === 1 ? 0 : 1;
   try {
@@ -145,12 +205,10 @@ const handleToggleStatus = async (item: FragranceFamily) => {
     Toast.fire({ icon: 'success', title: 'Đã thay đổi trạng thái!' });
   } catch (error) {
     Toast.fire({ icon: 'error', title: 'Không thể đổi trạng thái!' });
-    // Nếu lỗi thì gọi lại list để reset UI về như cũ
     store.fetchFragranceFamilies(searchKeyword.value, store.currentPage);
   }
 };
 
-// Xóa nhóm hương: Dùng SweetAlert2 ở giữa màn hình thay cho confirm()
 const handleDelete = (id: number) => {
   Swal.fire({
     title: 'Bạn có chắc chắn muốn xóa?',

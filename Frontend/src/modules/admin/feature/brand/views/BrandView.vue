@@ -82,11 +82,28 @@
 
             <div class="mb-3">
               <label class="form-label fw-medium">Tên thương hiệu <span class="text-danger">*</span></label>
-              <input v-model="formData.name" type="text" class="form-control shadow-none" placeholder="VD: Nike, Adidas...">
+              <input 
+                v-model="formData.name" 
+                type="text" 
+                class="form-control shadow-none" 
+                :class="{ 'is-invalid': errors.name }"
+                placeholder="VD: Nike, Adidas, H&M..."
+                @input="validateForm"
+                @keyup.enter="handleSubmit"
+              >
+              <small v-if="errors.name" class="text-danger mt-1 d-block">{{ errors.name }}</small>
             </div>
             <div class="mb-3">
               <label class="form-label fw-medium">Mô tả chi tiết</label>
-              <textarea v-model="formData.description" class="form-control shadow-none" rows="3" placeholder="Giới thiệu thương hiệu..."></textarea>
+              <textarea 
+                v-model="formData.description" 
+                class="form-control shadow-none" 
+                :class="{ 'is-invalid': errors.description }"
+                rows="3" 
+                placeholder="Giới thiệu thương hiệu..."
+                @input="validateForm"
+              ></textarea>
+              <small v-if="errors.description" class="text-danger mt-1 d-block">{{ errors.description }}</small>
             </div>
           </div>
           <div class="modal-footer border-0 bg-light">
@@ -106,7 +123,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useBrandStore } from '../stores/brand.store';
-import { brandService } from '../services/brand.service'; // Import service để gọi riêng hàm upload
+import { brandService } from '../services/brand.service'; 
 import BrandTable from '../components/BrandTable.vue';
 import type { Brand, BrandRequest } from '../types/brand.type';
 import Swal from 'sweetalert2'; 
@@ -125,6 +142,9 @@ const isUploading = ref(false);
 
 const formData = ref<BrandRequest>({ name: '', description: '', status: 1, logoUrl: null });
 
+// Quản lý lỗi hiển thị (chữ đỏ)
+const errors = ref({ name: '', description: '' });
+
 const Toast = Swal.mixin({
   toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true
 });
@@ -139,83 +159,129 @@ const changePage = (page: number) => { if (page >= 0 && page < brandStore.totalP
 // Xử lý chọn File Ảnh
 const handleFileChange = (event: Event) => {
   const target = event.target as HTMLInputElement;
-  
-  // Dùng ?.[0] để lấy file an toàn. Nếu không có, nó sẽ trả về undefined
   const file = target.files?.[0];
-
-  // THÊM DÒNG NÀY: Chặn đứng mọi trường hợp undefined/null
   if (!file) return; 
 
-  // Check dung lượng (5MB) - Lúc này TS đã chắc chắn 100% 'file' tồn tại
   if (file.size > 5 * 1024 * 1024) {
     Toast.fire({ icon: 'error', title: 'Dung lượng ảnh quá lớn (> 5MB)' });
-    target.value = ''; // Reset input
+    target.value = ''; 
     return;
   }
   
   selectedFile.value = file;
-  previewImageUrl.value = URL.createObjectURL(file); // Tạo link preview tạm thời
+  previewImageUrl.value = URL.createObjectURL(file); 
 };
 
-// Xóa ảnh khỏi form
 const removeImage = () => {
   selectedFile.value = null;
   previewImageUrl.value = null;
   formData.value.logoUrl = null; 
 };
 
-// Reset toàn bộ Form
+// 👇 ĐÃ CẬP NHẬT: Validate Frontend đồng bộ 100% với DTO Backend
+const validateForm = () => {
+  errors.value = { name: '', description: '' };
+  let isValid = true;
+  
+  const nameValue = formData.value.name.trim();
+  const descValue = formData.value.description?.trim() || '';
+  
+  // Khớp với @Pattern: "^[\\p{L}\\d\\s&'\\.\\-]+$" của Backend (Cho phép L'Oréal, Dr.Brandt...)
+  const nameRegex = /^[\p{L}\d\s&'.\-]+$/u; 
+
+  if (!nameValue) {
+    errors.value.name = 'Tên thương hiệu không được để trống!';
+    isValid = false;
+  } else if (nameValue.length > 255) {
+    errors.value.name = 'Tên thương hiệu không được vượt quá 255 ký tự!';
+    isValid = false;
+  } else if (!nameRegex.test(nameValue)) {
+    errors.value.name = "Tên thương hiệu chỉ được chứa chữ cái, số, khoảng trắng và các ký tự: &, -, ., '";
+    isValid = false;
+  }
+
+  if (descValue.length > 1000) {
+    errors.value.description = 'Mô tả không được vượt quá 1000 ký tự!';
+    isValid = false;
+  }
+
+  return isValid;
+};
+
 const openAddModal = () => {
   isEdit.value = false;
   formData.value = { name: '', description: '', status: 1, logoUrl: null };
   selectedFile.value = null;
   previewImageUrl.value = null;
+  errors.value = { name: '', description: '' }; 
   showModal.value = true;
 };
 
-// Đổ dữ liệu vào Form
 const openEditModal = (brand: Brand) => {
   isEdit.value = true;
   currentId.value = brand.id;
   formData.value = { name: brand.name, description: brand.description, status: brand.status, logoUrl: brand.logoUrl };
   
-  selectedFile.value = null; // Reset file mới
-  previewImageUrl.value = brand.logoUrl; // Hiển thị ảnh cũ từ DB
+  selectedFile.value = null; 
+  previewImageUrl.value = brand.logoUrl; 
+  errors.value = { name: '', description: '' }; 
   showModal.value = true;
 };
 
 const handleSubmit = async () => {
-  if (!formData.value.name.trim()) {
-    Toast.fire({ icon: 'warning', title: 'Vui lòng nhập tên thương hiệu!' });
-    return;
-  }
+  if (!validateForm()) return; 
 
   try {
     isUploading.value = true;
 
-    // 1. Nếu có chọn file ảnh mới -> Upload lên Cloudinary trước
+    // 1. Upload ảnh
     if (selectedFile.value) {
       const uploadRes = await brandService.uploadLogo(selectedFile.value);
-      formData.value.logoUrl = uploadRes.data.url; // Lấy URL từ Cloudinary trả về
+      formData.value.logoUrl = uploadRes.data.url; 
     }
 
-    // 2. Gửi dữ liệu Brand (đã bao gồm URL ảnh mới nếu có)
+    // 2. Gửi dữ liệu đi
     if (isEdit.value && currentId.value) {
       await brandStore.updateBrand(currentId.value, formData.value);
+      await brandStore.fetchBrands(searchKeyword.value, brandStore.currentPage); 
       Toast.fire({ icon: 'success', title: 'Cập nhật thành công!' });
     } else {
       await brandStore.createBrand(formData.value);
+      searchKeyword.value = '';
+      await brandStore.fetchBrands('', 0); 
       Toast.fire({ icon: 'success', title: 'Thêm mới thành công!' });
     }
     showModal.value = false; 
   } catch (error: any) {
-    Toast.fire({ icon: 'error', title: error.message || 'Có lỗi xảy ra!' });
+    console.error("Lỗi từ backend:", error);
+    
+    if (error.response && error.response.data) {
+      const responseData = error.response.data;
+
+      // Hứng chính xác lỗi validation từ DTO
+      if (responseData.errors) {
+        if (responseData.errors.name) errors.value.name = responseData.errors.name;
+        if (responseData.errors.description) errors.value.description = responseData.errors.description;
+        return; 
+      }
+
+      // Hứng lỗi trùng tên từ Service
+      if (responseData.message) {
+        const lowerMsg = responseData.message.toLowerCase();
+        if (lowerMsg.includes('tồn tại') || lowerMsg.includes('exists') || lowerMsg.includes('duplicate')) {
+          errors.value.name = 'Thương hiệu này đã tồn tại trong hệ thống!';
+        } else {
+          Toast.fire({ icon: 'error', title: responseData.message });
+        }
+        return;
+      }
+    }
+    Toast.fire({ icon: 'error', title: 'Máy chủ không phản hồi!' });
   } finally {
     isUploading.value = false;
   }
 };
 
-// Đổi trạng thái Ẩn/Hiện
 const handleToggleStatus = async (brand: Brand) => {
   const newStatus = brand.status === 1 ? 0 : 1;
   try {
@@ -223,29 +289,38 @@ const handleToggleStatus = async (brand: Brand) => {
       name: brand.name, 
       description: brand.description, 
       status: newStatus,
-      logoUrl: brand.logoUrl // Nhớ mang theo link ảnh cũ để không bị mất
+      logoUrl: brand.logoUrl 
     });
+    await brandStore.fetchBrands(searchKeyword.value, brandStore.currentPage);
     Toast.fire({ icon: 'success', title: 'Đã thay đổi trạng thái!' });
   } catch (error) {
     Toast.fire({ icon: 'error', title: 'Không thể đổi trạng thái!' });
-    brandStore.fetchBrands(searchKeyword.value, brandStore.currentPage);
   }
 };
 
-// Xóa mềm
 const handleDelete = (id: number) => {
   Swal.fire({
     title: 'Bạn có chắc chắn muốn xóa?',
-    text: "Hành động này không thể hoàn tác!",
+    text: "Thương hiệu sẽ bị chuyển vào thùng rác!",
     icon: 'warning', showCancelButton: true, confirmButtonColor: '#dc3545', cancelButtonColor: '#6c757d',
     confirmButtonText: 'Vâng, xóa nó!', cancelButtonText: 'Hủy'
   }).then(async (result) => {
     if (result.isConfirmed) {
       try {
+        const isLastItemOnPage = brandStore.brands && brandStore.brands.length === 1;
+        const isNotFirstPage = brandStore.currentPage > 0;
+
         await brandStore.deleteBrand(id);
+        
+        if (isLastItemOnPage && isNotFirstPage) {
+          await brandStore.fetchBrands(searchKeyword.value, brandStore.currentPage - 1);
+        } else {
+          await brandStore.fetchBrands(searchKeyword.value, brandStore.currentPage);
+        }
+
         Swal.fire('Đã xóa!', 'Thương hiệu đã bị xóa.', 'success');
-      } catch (error) {
-        Swal.fire('Lỗi!', 'Không thể xóa thương hiệu này.', 'error');
+      } catch (error: any) {
+        Swal.fire('Lỗi!', error.message || 'Không thể xóa thương hiệu này.', 'error');
       }
     }
   });

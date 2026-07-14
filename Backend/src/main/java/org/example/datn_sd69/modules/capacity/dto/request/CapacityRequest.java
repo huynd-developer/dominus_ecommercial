@@ -13,6 +13,8 @@ public class CapacityRequest {
 
     @NotNull(message = "Dung tích không được để trống")
     @Positive(message = "Dung tích phải lớn hơn 0")
+    // 👇 BỔ SUNG: Chặn việc nhập số quá lớn (Nước hoa thực tế hiếm khi quá 5000ml)
+    @Max(value = 5000, message = "Dung tích không hợp lệ, không được vượt quá 5000 ml")
     private Double value;
 
     @NotNull(message = "Trạng thái không được để trống")
