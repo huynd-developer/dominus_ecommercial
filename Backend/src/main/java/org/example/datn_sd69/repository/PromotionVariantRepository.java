@@ -13,11 +13,6 @@ import java.util.List;
 
 public interface PromotionVariantRepository extends JpaRepository<PromotionVariant, PromotionVariantId> {
 
-    /**
-     * Lấy chi tiết biến thể trong 1 chiến dịch.
-     *
-     * Dùng cho màn hình admin xem/sửa chiến dịch.
-     */
     @Query("""
         SELECT pv
         FROM PromotionVariant pv
@@ -31,18 +26,8 @@ public interface PromotionVariantRepository extends JpaRepository<PromotionVaria
     """)
     List<PromotionVariant> findDetailByPromotionId(Integer promotionId);
 
-    /**
-     * Xóa danh sách biến thể cũ khi cập nhật chiến dịch.
-     */
     void deleteByPromotion_Id(Integer promotionId);
 
-    /**
-     * Kiểm tra 1 biến thể có bị trùng thời gian với chiến dịch khác không.
-     *
-     * Logic overlap chuẩn:
-     * Campaign A overlap Campaign B khi:
-     * A.start < B.end AND A.end > B.start
-     */
     @Query("""
         SELECT COUNT(pv)
         FROM PromotionVariant pv
@@ -61,23 +46,6 @@ public interface PromotionVariantRepository extends JpaRepository<PromotionVaria
             Integer ignorePromotionId
     );
 
-    /**
-     * Public Flash Sale có phân trang.
-     *
-     * Không filter ở service sau khi đã phân trang.
-     * Filter trực tiếp ở query để page không bị hụt sản phẩm.
-     *
-     * Điều kiện sản phẩm được hiển thị ngoài trang chủ:
-     * - Promotion chưa xóa mềm
-     * - Promotion đang bật
-     * - StartDate <= now < EndDate
-     * - ProductVariant chưa xóa mềm
-     * - ProductVariant đang hoạt động
-     * - Product đang hoạt động
-     * - Còn hàng
-     * - Đã tới ngày sản xuất
-     * - Chưa hết hạn sử dụng
-     */
     @Query(
             value = """
                 SELECT pv
@@ -121,5 +89,37 @@ public interface PromotionVariantRepository extends JpaRepository<PromotionVaria
             LocalDateTime now,
             LocalDate today,
             Pageable pageable
+    );
+
+    /**
+     * Dùng riêng cho cart/checkout để lấy Flash Sale active của 1 biến thể.
+     *
+     * Query này phải cùng điều kiện với public flash-sale để:
+     * - ProductDetail thấy sale
+     * - Cart cũng tính đúng salePrice
+     */
+    @Query("""
+        SELECT pv
+        FROM PromotionVariant pv
+        JOIN FETCH pv.promotion p
+        JOIN FETCH pv.productVariant v
+        JOIN FETCH v.product product
+        WHERE v.id = :productVariantId
+          AND COALESCE(p.isDeleted, false) = false
+          AND p.status = 1
+          AND p.startDate <= :now
+          AND p.endDate > :now
+          AND COALESCE(v.isDeleted, false) = false
+          AND v.status = 1
+          AND product.status = 1
+          AND v.stockQuantity > 0
+          AND v.manufacturingDate <= :today
+          AND v.expirationDate >= :today
+        ORDER BY pv.discountPercent DESC, p.endDate ASC
+    """)
+    List<PromotionVariant> findActivePromotionByProductVariantId(
+            Integer productVariantId,
+            LocalDateTime now,
+            LocalDate today
     );
 }

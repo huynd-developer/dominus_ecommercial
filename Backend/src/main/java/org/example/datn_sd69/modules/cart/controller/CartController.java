@@ -59,13 +59,12 @@ public class CartController {
     }
 
     /**
-     * Endpoint cũ - giữ nguyên để không ảnh hưởng các màn hình khác.
+     * Endpoint cũ.
      *
-     * FE nào đang gọi:
      * PUT /api/v1/customer/cart/update/{cartItemId}
      * body: { "quantity": 2 }
      *
-     * vẫn chạy bình thường.
+     * quantity = 0 thì xóa dòng giỏ hàng.
      */
     @PutMapping("/update/{cartItemId}")
     @PreAuthorize("hasAuthority('USER')")
@@ -88,9 +87,8 @@ public class CartController {
     }
 
     /**
-     * Endpoint mới - thêm để khớp với CheckoutView hiện tại.
+     * Endpoint mới khớp CheckoutView.
      *
-     * FE checkout đang gọi:
      * PUT /api/v1/customer/cart/update
      * body:
      * {
@@ -99,7 +97,7 @@ public class CartController {
      *   "quantity": 2
      * }
      *
-     * productVariantId nhận vào để FE gửi không lỗi, nhưng BE không cần dùng.
+     * productVariantId nhận vào để FE gửi không lỗi mapping.
      * BE update theo cartItemId và tự check chủ giỏ hàng trong service.
      */
     @PutMapping("/update")
@@ -168,16 +166,17 @@ public class CartController {
     public static class CartUpdateBodyRequest {
 
         @NotNull(message = "Mã sản phẩm trong giỏ không được để trống")
+        @Min(value = 1, message = "Mã sản phẩm trong giỏ không hợp lệ")
         private Integer cartItemId;
 
         /**
-         * Không bắt buộc dùng ở BE vì cartItemId đã đủ để xác định dòng giỏ hàng.
+         * Không bắt buộc dùng ở BE vì cartItemId đã đủ xác định dòng giỏ hàng.
          * Giữ field này để FE gửi lên không bị lỗi mapping.
          */
         private Integer productVariantId;
 
         @NotNull(message = "Số lượng không được để trống")
-        @Min(value = 1, message = "Số lượng phải lớn hơn 0")
+        @Min(value = 0, message = "Số lượng không được âm")
         private Integer quantity;
     }
 }
