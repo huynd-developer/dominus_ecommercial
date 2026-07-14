@@ -37,31 +37,148 @@ import ShopFooter from "@/modules/shop/layout/ShopFooter.vue";
 import CartItemList from "../components/CartItemList.vue";
 import CartSummary from "../components/CartSummary.vue";
 
+interface CartItem {
+  cartItemId: number;
+  productVariantId?: number;
+  sku?: string | null;
+  productName?: string | null;
+  capacity?: string | null;
+  bottleType?: string | null;
+  quantity?: number | null;
+  price?: number | null;
+  stockQuantity?: number | null;
+  note?: string | null;
+  imageUrl?: string | null;
+  thumbnailUrl?: string | null;
+  manufacturingDate?: string | null;
+  expirationDate?: string | null;
+  variantStatus?: number | null;
+  expired?: boolean | null;
+  available?: boolean | null;
+  sellable?: boolean | null;
+  unavailableReason?: string | null;
+}
+
 const router = useRouter();
 
-const cartItems = ref<any[]>([]);
+const cartItems = ref<CartItem[]>([]);
 const isLoading = ref(true);
 const isUpdating = ref(false);
 
-// Biến lưu trữ Voucher
 const discountAmount = ref(0);
-const appliedVoucherCode = ref('');
+const appliedVoucherCode = ref("");
 
-const getItemPrice = (item: any) => {
+const toDateOnly = (value?: string | null) => {
+  if (!value) return null;
+  return String(value).substring(0, 10);
+};
+
+const isBeforeToday = (value?: string | null) => {
+  const dateOnly = toDateOnly(value);
+
+  if (!dateOnly) return false;
+
+  const date = new Date(`${dateOnly}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return !Number.isNaN(date.getTime()) && date.getTime() < today.getTime();
+};
+
+const isAfterToday = (value?: string | null) => {
+  const dateOnly = toDateOnly(value);
+
+  if (!dateOnly) return false;
+
+  const date = new Date(`${dateOnly}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return !Number.isNaN(date.getTime()) && date.getTime() > today.getTime();
+};
+
+const getItemPrice = (item: CartItem) => {
   return Number(item?.price || 0);
 };
 
-const getItemQuantity = (item: any) => {
+const getItemQuantity = (item: CartItem) => {
   return Number(item?.quantity || 0);
 };
 
-const isItemAvailable = (item: any) => {
-  if (item?.available === false) return false;
+const isItemExpired = (item: CartItem) => {
+  return Boolean(item?.expired) || isBeforeToday(item?.expirationDate);
+};
+
+const getUnavailableReason = (item: CartItem) => {
+  if (!item) {
+    return "Sản phẩm không hợp lệ.";
+  }
+
+  if (item.unavailableReason) {
+    return item.unavailableReason;
+  }
+
+  if (item.available === false || item.sellable === false) {
+    return "Sản phẩm hiện không khả dụng.";
+  }
+
+  if (item.variantStatus != null && Number(item.variantStatus) !== 1) {
+    return "Sản phẩm đang ngừng bán.";
+  }
 
   const quantity = getItemQuantity(item);
   const stockQuantity = Number(item?.stockQuantity || 0);
 
-  return quantity > 0 && stockQuantity > 0 && quantity <= stockQuantity;
+  if (quantity <= 0) {
+    return "Số lượng sản phẩm không hợp lệ.";
+  }
+
+  if (stockQuantity <= 0) {
+    return "Sản phẩm đã hết hàng.";
+  }
+
+  if (quantity > stockQuantity) {
+    return `Số lượng trong giỏ vượt quá tồn kho. Sản phẩm chỉ còn ${stockQuantity}.`;
+  }
+
+  if (isAfterToday(item.manufacturingDate)) {
+    return "Sản phẩm chưa tới ngày được bán.";
+  }
+
+  if (isItemExpired(item)) {
+    return "Sản phẩm đã hết hạn sử dụng.";
+  }
+
+  return "Sản phẩm hiện không khả dụng.";
+};
+
+const isItemAvailable = (item: CartItem) => {
+  if (!item) return false;
+
+  if (item.available === false || item.sellable === false) {
+    return false;
+  }
+
+  if (item.variantStatus != null && Number(item.variantStatus) !== 1) {
+    return false;
+  }
+
+  const quantity = getItemQuantity(item);
+  const stockQuantity = Number(item?.stockQuantity || 0);
+
+  if (quantity <= 0 || stockQuantity <= 0 || quantity > stockQuantity) {
+    return false;
+  }
+
+  if (isAfterToday(item.manufacturingDate)) {
+    return false;
+  }
+
+  if (isItemExpired(item)) {
+    return false;
+  }
+
+  return true;
 };
 
 const totalAmount = computed(() => {
@@ -71,21 +188,7 @@ const totalAmount = computed(() => {
   }, 0);
 });
 
-// Hàm hứng dữ liệu từ CartSummary khi khách bấm "Áp dụng"
-const handleApplyVoucher = (discount: number, code: string) => {
-  discountAmount.value = discount;
-  appliedVoucherCode.value = code;
-
-  // Lưu mã vào localStorage để mang sang trang Checkout xử lý tiếp
-  if (code) {
-    localStorage.setItem('applied_voucher', code);
-  } else {
-    localStorage.removeItem('applied_voucher');
-  }
-};
-
 const finalTotal = computed(() => {
-  // Đảm bảo tổng thanh toán không bao giờ bị âm
   return Math.max(0, totalAmount.value - discountAmount.value);
 });
 
@@ -121,13 +224,29 @@ const showError = async (title: string, text: string) => {
   });
 };
 
-// Hàm reset voucher khi giỏ hàng thay đổi
+const handleApplyVoucher = (discount: number, code: string) => {
+  discountAmount.value = Number(discount || 0);
+  appliedVoucherCode.value = code || "";
+
+  if (code) {
+    localStorage.setItem("applied_voucher", code);
+  } else {
+    localStorage.removeItem("applied_voucher");
+  }
+};
+
 const resetVoucher = () => {
-  if (discountAmount.value > 0) {
-    discountAmount.value = 0;
-    appliedVoucherCode.value = '';
-    localStorage.removeItem('applied_voucher');
-    showToast("info", "Vui lòng áp dụng lại mã giảm giá do giỏ hàng đã thay đổi!");
+  const hadVoucher = discountAmount.value > 0 || appliedVoucherCode.value;
+
+  discountAmount.value = 0;
+  appliedVoucherCode.value = "";
+  localStorage.removeItem("applied_voucher");
+
+  if (hadVoucher) {
+    showToast(
+      "info",
+      "Vui lòng áp dụng lại mã giảm giá do giỏ hàng đã thay đổi!"
+    );
   }
 };
 
@@ -138,6 +257,10 @@ const loadCart = async () => {
     const res = await api.get("/v1/customer/cart/my-cart");
 
     cartItems.value = Array.isArray(res.data) ? res.data : [];
+
+    if (!canCheckout.value) {
+      resetVoucher();
+    }
   } catch (err: any) {
     console.error("Lỗi tải giỏ hàng:", err);
 
@@ -156,7 +279,7 @@ const loadCart = async () => {
   }
 };
 
-const updateQty = async (item: any, newQty: number) => {
+const updateQty = async (item: CartItem, newQty: number) => {
   if (!item?.cartItemId) return;
 
   if (newQty < 1) {
@@ -165,11 +288,34 @@ const updateQty = async (item: any, newQty: number) => {
 
   const stockQuantity = Number(item?.stockQuantity || 0);
 
+  if (stockQuantity <= 0) {
+    await showToast("warning", "Sản phẩm đã hết hàng");
+    return;
+  }
+
   if (newQty > stockQuantity) {
     await showToast(
       "warning",
       `Sản phẩm chỉ còn ${stockQuantity} trong kho`
     );
+    return;
+  }
+
+  if (
+    item.available === false ||
+    item.sellable === false ||
+    item.variantStatus !== 1 ||
+    isAfterToday(item.manufacturingDate) ||
+    isItemExpired(item)
+  ) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Không thể cập nhật",
+      text: getUnavailableReason(item),
+      confirmButtonColor: "#bd9a5f",
+    });
+
+    await loadCart();
     return;
   }
 
@@ -181,7 +327,7 @@ const updateQty = async (item: any, newQty: number) => {
     });
 
     item.quantity = newQty;
-    resetVoucher(); // Giỏ hàng thay đổi thì reset mã voucher
+    resetVoucher();
 
     await showToast("success", "Đã cập nhật số lượng");
   } catch (err: any) {
@@ -203,19 +349,6 @@ const updateQty = async (item: any, newQty: number) => {
 const removeItem = async (cartItemId: number) => {
   if (!cartItemId) return;
 
-  const confirmResult = await Swal.fire({
-    icon: "question",
-    title: "Xóa sản phẩm?",
-    text: "Sản phẩm này sẽ được xóa khỏi giỏ hàng của bạn.",
-    showCancelButton: true,
-    confirmButtonText: "Xóa",
-    cancelButtonText: "Hủy",
-    confirmButtonColor: "#dc2626",
-    cancelButtonColor: "#6b7280",
-  });
-
-  if (!confirmResult.isConfirmed) return;
-
   try {
     isUpdating.value = true;
 
@@ -224,7 +357,8 @@ const removeItem = async (cartItemId: number) => {
     cartItems.value = cartItems.value.filter(
       (item) => item.cartItemId !== cartItemId
     );
-    resetVoucher(); // Giỏ hàng thay đổi thì reset mã voucher
+
+    resetVoucher();
 
     await showToast("success", "Đã xóa sản phẩm khỏi giỏ");
   } catch (err: any) {
@@ -255,9 +389,7 @@ const goToCheckout = async () => {
     await Swal.fire({
       icon: "warning",
       title: "Giỏ hàng chưa hợp lệ",
-      text:
-        invalidItem.unavailableReason ||
-        "Có sản phẩm không khả dụng hoặc vượt tồn kho. Vui lòng kiểm tra lại.",
+      text: getUnavailableReason(invalidItem),
       confirmButtonText: "Đã hiểu",
       confirmButtonColor: "#bd9a5f",
     });

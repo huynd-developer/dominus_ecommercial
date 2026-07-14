@@ -10,6 +10,13 @@ export interface PosProduct {
   stockQuantity: number;
   image: string;
   category: string;
+
+  manufacturingDate?: string | null;
+  expirationDate?: string | null;
+  status?: number | null;
+  expired?: boolean;
+  sellable?: boolean;
+  unavailableReason?: string | null;
 }
 
 export interface CartItem {
@@ -114,15 +121,73 @@ const getBackendMessage = (error: any, fallback: string): string => {
     return fallback;
   }
 
+  if (typeof data === "string") {
+    return data;
+  }
+
+  if (data.message) {
+    return String(data.message);
+  }
+
+  if (data.detail) {
+    return String(data.detail);
+  }
+
+  if (data.error) {
+    return String(data.error);
+  }
+
   if (data.errors && typeof data.errors === "object") {
     const firstError = Object.values(data.errors)[0];
+
+    if (Array.isArray(firstError) && firstError.length > 0) {
+      return String(firstError[0]);
+    }
 
     if (firstError) {
       return String(firstError);
     }
   }
 
-  return data.message || fallback;
+  return fallback;
+};
+
+const toDateOnly = (value?: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  return String(value).substring(0, 10);
+};
+
+const isDateBeforeToday = (value?: string | null): boolean => {
+  const dateOnly = toDateOnly(value);
+
+  if (!dateOnly) {
+    return false;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const date = new Date(`${dateOnly}T00:00:00`);
+
+  return !Number.isNaN(date.getTime()) && date.getTime() < today.getTime();
+};
+
+const isDateAfterToday = (value?: string | null): boolean => {
+  const dateOnly = toDateOnly(value);
+
+  if (!dateOnly) {
+    return false;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const date = new Date(`${dateOnly}T00:00:00`);
+
+  return !Number.isNaN(date.getTime()) && date.getTime() > today.getTime();
 };
 
 const buildVariantText = (variant: any): string => {
@@ -133,6 +198,103 @@ const buildVariantText = (variant: any): string => {
   ].filter(Boolean);
 
   return parts.length > 0 ? parts.join(" - ") : "Biến thể mặc định";
+};
+
+const getProductUnavailableReason = (
+  product?: PosProduct | null
+): string | null => {
+  if (!product) {
+    return "Sản phẩm không hợp lệ.";
+  }
+
+  if (product.unavailableReason) {
+    return product.unavailableReason;
+  }
+
+  if (product.sellable === false) {
+    return "Sản phẩm hiện không được bán.";
+  }
+
+  if (product.status != null && Number(product.status) !== 1) {
+    return "Sản phẩm đang ngừng bán.";
+  }
+
+  if (Number(product.stockQuantity || 0) <= 0) {
+    return `Sản phẩm ${product.name} đã hết hàng trong kho!`;
+  }
+
+  if (isDateAfterToday(product.manufacturingDate)) {
+    return `Sản phẩm ${product.name} chưa tới ngày được bán.`;
+  }
+
+  if (product.expired || isDateBeforeToday(product.expirationDate)) {
+    return `Sản phẩm ${product.name} đã hết hạn sử dụng.`;
+  }
+
+  return null;
+};
+
+const mapPosProductFromBackend = (
+  raw: any,
+  parent: any = {},
+  fallbackImage = ""
+): PosProduct => {
+  const productName = String(
+    raw.productName ||
+      raw.name ||
+      parent.productName ||
+      parent.name ||
+      "Sản phẩm"
+  );
+
+  const image =
+    raw.imageUrl ||
+    parent.imageUrl ||
+    fallbackImage ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      productName || "Product"
+    )}&background=random&color=fff&size=200`;
+
+  const manufacturingDate = toDateOnly(raw.manufacturingDate);
+  const expirationDate = toDateOnly(raw.expirationDate);
+  const status = raw.status ?? raw.variantStatus ?? null;
+  const stockQuantity = Number(raw.stockQuantity ?? raw.stock ?? 0);
+  const expired = Boolean(raw.expired ?? isDateBeforeToday(expirationDate));
+
+  let sellable = raw.sellable;
+
+  if (sellable == null) {
+    sellable =
+      Number(status ?? 1) === 1 &&
+      stockQuantity > 0 &&
+      !expired &&
+      !isDateAfterToday(manufacturingDate);
+  }
+
+  return {
+    id: Number(
+      raw.variantId || raw.productVariantId || raw.id || parent.id || 0
+    ),
+    sku: String(raw.sku || ""),
+    name: productName,
+    subName: buildVariantText(raw),
+    price: Number(raw.price || raw.unitPrice || 0),
+    stockQuantity,
+    image,
+    category:
+      raw.brandName ||
+      raw.categoryName ||
+      parent.brandName ||
+      parent.categoryName ||
+      parent.category ||
+      "Tất cả",
+    manufacturingDate,
+    expirationDate,
+    status,
+    expired,
+    sellable: Boolean(sellable),
+    unavailableReason: raw.unavailableReason || null,
+  };
 };
 
 export const usePosStore = defineStore("posStore", {
@@ -214,6 +376,99 @@ export const usePosStore = defineStore("posStore", {
   },
 
   actions: {
+    clearVoucherLocal(silent = false) {
+      const hadVoucher = Boolean(this.voucherCode || this.discountAmount > 0);
+
+      this.voucherCode = "";
+      this.discountAmount = 0;
+
+      if (!silent && hadVoucher) {
+        this.errorMsg = "Đã xóa mã giảm giá.";
+      }
+    },
+
+    clearVoucher() {
+      if (this.activeHeldOrderId) {
+        this.errorMsg = "Đang mở phiếu treo, không được đổi mã giảm giá.";
+        return;
+      }
+
+      if (this.cashPaid > 0) {
+        this.errorMsg =
+          "Đơn đã nhận tiền mặt một phần, không được đổi mã giảm giá.";
+        return;
+      }
+
+      this.clearVoucherLocal(false);
+    },
+
+    handleVoucherTyping() {
+      if (this.discountAmount > 0) {
+        this.discountAmount = 0;
+      }
+    },
+
+    async applyVoucher() {
+      this.errorMsg = "";
+
+      if (this.activeHeldOrderId) {
+        this.errorMsg = "Đang mở phiếu treo, không được áp mã giảm giá.";
+        return false;
+      }
+
+      if (this.cashPaid > 0) {
+        this.errorMsg =
+          "Đơn đã nhận tiền mặt một phần, không được áp mã giảm giá.";
+        return false;
+      }
+
+      if (this.cart.length === 0) {
+        this.errorMsg = "Giỏ hàng chưa có sản phẩm để áp mã giảm giá.";
+        return false;
+      }
+
+      const cleanCode = normalizeText(this.voucherCode).toUpperCase();
+
+      if (!cleanCode) {
+        this.errorMsg = "Vui lòng nhập mã giảm giá.";
+        return false;
+      }
+
+      this.isLoading = true;
+      this.errorMsg = "";
+
+      try {
+        const { data } = await api.get("/admin/pos/voucher/apply", {
+          params: {
+            code: cleanCode,
+            totalAmount: this.totalAmount,
+          },
+        });
+
+        this.voucherCode = String(data?.voucherCode || cleanCode)
+          .trim()
+          .toUpperCase();
+        this.discountAmount = Number(data?.discountAmount || 0);
+        this.errorMsg = "";
+
+        return {
+          success: true,
+          data,
+        };
+      } catch (error: any) {
+        this.discountAmount = 0;
+
+        this.errorMsg = getBackendMessage(
+          error,
+          "Mã giảm giá không hợp lệ hoặc không đủ điều kiện áp dụng."
+        );
+
+        return false;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
     resetLocalOrderOnly() {
       this.cart = [];
       this.customer = null;
@@ -235,75 +490,30 @@ export const usePosStore = defineStore("posStore", {
       this.errorMsg = "";
 
       try {
-        const { data } = await api.get("/admin/products");
-        const rawProducts = data.data || data.content || data || [];
-        const flatProducts: PosProduct[] = [];
+        const { data } = await api.get("/admin/pos/products");
 
-        rawProducts.forEach((p: any) => {
-          let imgUrl =
-            p.images && p.images.length > 0
-              ? p.images[0].imageUrl
-              : p.imageUrl || "";
+        const rawProducts = Array.isArray(data)
+          ? data
+          : data?.data || data?.content || [];
 
-          if (!imgUrl || !imgUrl.startsWith("http")) {
-            imgUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-              p.name || p.productName || "Product"
-            )}&background=random&color=fff&size=200`;
-          }
-
-          if (p.variants && p.variants.length > 0) {
-            p.variants.forEach((v: any) => {
-              flatProducts.push({
-                id: Number(v.variantId || v.id || p.id),
-                sku: String(v.sku || ""),
-                name: String(p.name || p.productName || "Sản phẩm"),
-                subName: buildVariantText(v),
-                price: Number(v.price || 0),
-                stockQuantity: Number(v.stockQuantity || 0),
-                image: imgUrl,
-                category:
-                  p.categoryName ||
-                  p.brandName ||
-                  p.category ||
-                  "Tất cả",
-              });
-            });
-
-            return;
-          }
-
-          if (p.sku) {
-            flatProducts.push({
-              id: Number(p.variantId || p.id || p.productId),
-              sku: String(p.sku || ""),
-              name: String(p.productName || p.name || "Sản phẩm"),
-              subName: buildVariantText(p),
-              price: Number(p.price || 0),
-              stockQuantity: Number(p.stockQuantity || 0),
-              image: p.imageUrl || imgUrl,
-              category:
-                p.brandName ||
-                p.categoryName ||
-                p.category ||
-                "Tất cả",
-            });
-          }
-        });
+        const flatProducts: PosProduct[] = rawProducts.map((item: any) =>
+          mapPosProductFromBackend(item, item, item.imageUrl)
+        );
 
         this.allProducts = flatProducts;
 
         this.categories = [
           "Tất cả",
           ...new Set(
-            flatProducts
-              .map((p) => p.category)
-              .filter((category) => !!category)
+            flatProducts.map((p) => p.category).filter((category) => !!category)
           ),
         ];
       } catch (error: any) {
+        this.allProducts = [];
+        this.categories = ["Tất cả"];
         this.errorMsg = getBackendMessage(
           error,
-          "Không thể tải danh sách sản phẩm từ máy chủ!"
+          "Không thể tải danh sách sản phẩm POS từ máy chủ!"
         );
       } finally {
         this.isLoading = false;
@@ -360,8 +570,10 @@ export const usePosStore = defineStore("posStore", {
         return;
       }
 
-      if (product.stockQuantity <= 0) {
-        this.errorMsg = `Sản phẩm ${product.name} đã hết hàng trong kho!`;
+      const unavailableReason = getProductUnavailableReason(product);
+
+      if (unavailableReason) {
+        this.errorMsg = unavailableReason;
         return;
       }
 
@@ -376,6 +588,7 @@ export const usePosStore = defineStore("posStore", {
         }
 
         existingItem.quantity++;
+        this.clearVoucherLocal(true);
         return;
       }
 
@@ -383,6 +596,8 @@ export const usePosStore = defineStore("posStore", {
         product,
         quantity: 1,
       });
+
+      this.clearVoucherLocal(true);
     },
 
     async handleBarcodeScan(sku: string) {
@@ -421,28 +636,20 @@ export const usePosStore = defineStore("posStore", {
           },
         });
 
-        const mappedProduct: PosProduct = {
-          id: Number(data.variantId || data.productId || data.id),
-          sku: String(data.sku || cleanSku),
-          name: String(data.productName || data.name || "Sản phẩm"),
-          subName: [data.capacityLabel, data.bottleTypeName]
-            .filter(Boolean)
-            .join(" - "),
-          price: Number(data.price || 0),
-          stockQuantity: Number(data.stockQuantity || 0),
-          image:
-            data.imageUrl ||
-            `https://ui-avatars.com/api/?name=${encodeURIComponent(
-              data.productName || "Product"
-            )}&background=random&color=fff`,
-          category: data.brandName || data.categoryName || "Tất cả",
-        };
+        const mappedProduct = mapPosProductFromBackend(
+          {
+            ...data,
+            sku: data.sku || cleanSku,
+          },
+          data,
+          data.imageUrl
+        );
 
         this.addToCart(mappedProduct);
       } catch (error: any) {
         this.errorMsg = getBackendMessage(
           error,
-          `Mã vạch SKU "${cleanSku}" không tồn tại trên hệ thống!`
+          `Mã vạch SKU "${cleanSku}" không tồn tại hoặc không bán được!`
         );
       }
     },
@@ -468,6 +675,13 @@ export const usePosStore = defineStore("posStore", {
         return;
       }
 
+      const unavailableReason = getProductUnavailableReason(item.product);
+
+      if (unavailableReason) {
+        this.errorMsg = unavailableReason;
+        return;
+      }
+
       if (qty <= 0) {
         this.removeFromCart(sku);
         return;
@@ -476,10 +690,12 @@ export const usePosStore = defineStore("posStore", {
       if (qty > item.product.stockQuantity) {
         this.errorMsg = `Không thể chỉnh sửa. Kho chỉ còn tối đa ${item.product.stockQuantity} sản phẩm!`;
         item.quantity = item.product.stockQuantity;
+        this.clearVoucherLocal(true);
         return;
       }
 
       item.quantity = qty;
+      this.clearVoucherLocal(true);
     },
 
     removeFromCart(sku: string) {
@@ -498,6 +714,7 @@ export const usePosStore = defineStore("posStore", {
       }
 
       this.cart = this.cart.filter((item) => item.product.sku !== sku);
+      this.clearVoucherLocal(true);
     },
 
     async searchCustomer(phone: string) {
@@ -623,6 +840,26 @@ export const usePosStore = defineStore("posStore", {
       return true;
     },
 
+    validateCartCanCheckout(): boolean {
+      if (this.cart.length === 0) {
+        this.errorMsg = "Giỏ hàng đang trống.";
+        return false;
+      }
+
+      const invalidItem = this.cart.find((item) =>
+        Boolean(getProductUnavailableReason(item.product))
+      );
+
+      if (invalidItem) {
+        this.errorMsg =
+          getProductUnavailableReason(invalidItem.product) ||
+          "Giỏ hàng có sản phẩm không đủ điều kiện bán.";
+        return false;
+      }
+
+      return true;
+    },
+
     registerPartialCashPayment(amount: number) {
       this.errorMsg = "";
 
@@ -634,8 +871,7 @@ export const usePosStore = defineStore("posStore", {
         return false;
       }
 
-      if (this.cart.length === 0) {
-        this.errorMsg = "Giỏ hàng đang trống.";
+      if (!this.validateCartCanCheckout()) {
         return false;
       }
 
@@ -687,8 +923,8 @@ export const usePosStore = defineStore("posStore", {
           selectedPaymentMethod === "MIXED"
             ? transferAmount
             : selectedPaymentMethod === "VNPAY"
-              ? null
-              : null,
+            ? null
+            : null,
 
         items: this.cart.map((item) => ({
           sku: item.product.sku,
@@ -768,8 +1004,7 @@ export const usePosStore = defineStore("posStore", {
       cashGiven?: number;
       transferAmount?: number;
     }) {
-      if (this.cart.length === 0) {
-        this.errorMsg = "Giỏ hàng đang trống, không thể thanh toán!";
+      if (!this.validateCartCanCheckout()) {
         return false;
       }
 
@@ -819,8 +1054,8 @@ export const usePosStore = defineStore("posStore", {
                 selectedPaymentMethod === "MIXED"
                   ? transferAmount
                   : selectedPaymentMethod === "VNPAY"
-                    ? null
-                    : null,
+                  ? null
+                  : null,
             }
           );
 
@@ -902,8 +1137,7 @@ export const usePosStore = defineStore("posStore", {
         return false;
       }
 
-      if (this.cart.length === 0) {
-        this.errorMsg = "Giỏ hàng đang trống, không thể treo phiếu.";
+      if (!this.validateCartCanCheckout()) {
         return false;
       }
 
@@ -981,6 +1215,14 @@ export const usePosStore = defineStore("posStore", {
             productName
           )}&background=random&color=fff&size=200`,
           category: item.brandName || item.categoryName || "Phiếu treo",
+          manufacturingDate: toDateOnly(item.manufacturingDate),
+          expirationDate: toDateOnly(item.expirationDate),
+          status: item.variantStatus ?? item.status ?? null,
+          expired: Boolean(
+            item.expired ?? isDateBeforeToday(item.expirationDate)
+          ),
+          sellable: item.sellable ?? true,
+          unavailableReason: item.unavailableReason || null,
         },
         quantity: Number(item.quantity || 1),
       };
@@ -1088,6 +1330,51 @@ export const usePosStore = defineStore("posStore", {
         this.errorMsg = getBackendMessage(
           error,
           "Chuyển phiếu thất bại. Bạn chỉ được chuyển phiếu của mình, trừ khi là MANAGER/OWNER."
+        );
+
+        return false;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    async cancelHeldOrder(orderId: number) {
+      if (!orderId) {
+        this.errorMsg = "Mã phiếu treo không hợp lệ.";
+        return false;
+      }
+
+      if (this.cashPaid > 0) {
+        this.errorMsg =
+          "Đơn hiện tại đã nhận tiền mặt một phần, không được hủy phiếu treo.";
+        return false;
+      }
+
+      this.isLoading = true;
+      this.errorMsg = "";
+
+      try {
+        const { data } = await api.patch(
+          `/admin/pos/held-orders/${orderId}/cancel`
+        );
+
+        if (this.activeHeldOrderId === orderId) {
+          this.resetLocalOrderOnly();
+        }
+
+        await this.fetchHeldOrders();
+        await this.fetchProducts();
+
+        this.errorMsg = `Đã hủy phiếu treo #${orderId}.`;
+
+        return {
+          success: true,
+          data,
+        };
+      } catch (error: any) {
+        this.errorMsg = getBackendMessage(
+          error,
+          "Hủy phiếu treo thất bại. Phiếu có thể đã thanh toán, đã bị hủy hoặc không thuộc quyền của bạn."
         );
 
         return false;

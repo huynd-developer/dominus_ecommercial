@@ -1,7 +1,18 @@
 <template>
   <div class="card border-0 shadow-sm">
     <div class="card-header bg-white border-0 py-3">
-      <h5 class="mb-0 fw-bold">Sản phẩm bán chạy nhất</h5>
+      <div class="d-flex align-items-center justify-content-between gap-3">
+        <div>
+          <h5 class="mb-1 fw-bold">Sản phẩm bán chạy nhất</h5>
+          <div class="text-muted small">
+            Chỉ tính các đơn đã hoàn thành trong khoảng thời gian đã chọn
+          </div>
+        </div>
+
+        <span v-if="items.length > 0" class="badge bg-dark-subtle text-dark">
+          {{ items.length }} sản phẩm
+        </span>
+      </div>
     </div>
 
     <div class="card-body p-0">
@@ -22,9 +33,11 @@
           </thead>
 
           <tbody>
-            <tr v-for="(item, index) in items" :key="item.productId">
+            <tr v-for="(item, index) in safeItems" :key="item.productId || index">
               <td>
-                <span class="rank-badge">#{{ index + 1 }}</span>
+                <span class="rank-badge" :class="getRankClass(index)">
+                  #{{ index + 1 }}
+                </span>
               </td>
 
               <td>
@@ -33,28 +46,32 @@
                     v-if="item.imageUrl"
                     :src="item.imageUrl"
                     class="product-img"
-                    alt="product"
+                    alt="Ảnh sản phẩm"
+                    @error="handleImageError"
                   />
 
                   <div v-else class="product-img placeholder-img">
                     No Image
                   </div>
 
-                  <div>
-                    <div class="fw-semibold">
-                      {{ item.productName }}
+                  <div class="min-w-0">
+                    <div class="fw-semibold product-name">
+                      {{ item.productName || "Sản phẩm" }}
                     </div>
+
                     <div class="text-muted small">
-                      ID: {{ item.productId }}
+                      ID: {{ item.productId || "-" }}
                     </div>
                   </div>
                 </div>
               </td>
 
-              <td>{{ item.brandName }}</td>
+              <td>
+                {{ item.brandName || "Không rõ thương hiệu" }}
+              </td>
 
               <td class="text-end fw-semibold">
-                {{ item.totalSold }}
+                {{ formatNumber(item.totalSold) }}
               </td>
 
               <td class="text-end fw-bold">
@@ -62,6 +79,18 @@
               </td>
             </tr>
           </tbody>
+
+          <tfoot class="table-light">
+            <tr>
+              <td colspan="3" class="fw-semibold">Tổng trong bảng</td>
+              <td class="text-end fw-bold">
+                {{ formatNumber(totalSold) }}
+              </td>
+              <td class="text-end fw-bold">
+                {{ formatMoney(totalRevenue) }}
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
@@ -69,17 +98,59 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import type { BestSellingProductResponse } from "../types/report.type";
 
-defineProps<{
+const props = defineProps<{
   items: BestSellingProductResponse[];
 }>();
 
-const formatMoney = (value: number) => {
-  return Number(value || 0).toLocaleString("vi-VN", {
+const toNumber = (value: unknown) => {
+  const numberValue = Number(value ?? 0);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+};
+
+const safeItems = computed(() => {
+  return Array.isArray(props.items) ? props.items : [];
+});
+
+const totalSold = computed(() => {
+  return safeItems.value.reduce((sum, item) => {
+    return sum + toNumber(item.totalSold);
+  }, 0);
+});
+
+const totalRevenue = computed(() => {
+  return safeItems.value.reduce((sum, item) => {
+    return sum + toNumber(item.revenue);
+  }, 0);
+});
+
+const formatMoney = (value: unknown) => {
+  return toNumber(value).toLocaleString("vi-VN", {
     style: "currency",
     currency: "VND",
+    maximumFractionDigits: 0,
   });
+};
+
+const formatNumber = (value: unknown) => {
+  return toNumber(value).toLocaleString("vi-VN");
+};
+
+const getRankClass = (index: number) => {
+  if (index === 0) return "rank-gold";
+  if (index === 1) return "rank-silver";
+  if (index === 2) return "rank-bronze";
+  return "";
+};
+
+const handleImageError = (event: Event) => {
+  const target = event.target as HTMLImageElement | null;
+
+  if (target) {
+    target.style.display = "none";
+  }
 };
 </script>
 
@@ -90,6 +161,7 @@ const formatMoney = (value: number) => {
   object-fit: cover;
   border-radius: 12px;
   border: 1px solid #e5e7eb;
+  flex-shrink: 0;
 }
 
 .placeholder-img {
@@ -99,6 +171,13 @@ const formatMoney = (value: number) => {
   font-size: 11px;
   color: #9ca3af;
   background: #f3f4f6;
+}
+
+.product-name {
+  max-width: 360px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .rank-badge {
@@ -114,10 +193,26 @@ const formatMoney = (value: number) => {
   font-size: 13px;
 }
 
+.rank-gold {
+  background: #92400e;
+}
+
+.rank-silver {
+  background: #4b5563;
+}
+
+.rank-bronze {
+  background: #7c2d12;
+}
+
 .empty-box {
   padding: 50px;
   text-align: center;
   color: #6b7280;
   background: #f9fafb;
+}
+
+.min-w-0 {
+  min-width: 0;
 }
 </style>

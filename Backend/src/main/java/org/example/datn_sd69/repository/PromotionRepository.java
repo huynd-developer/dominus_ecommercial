@@ -19,9 +19,19 @@ public interface PromotionRepository extends JpaRepository<Promotion, Integer> {
           AND (:status IS NULL OR p.status = :status)
         ORDER BY p.id DESC
     """)
-    Page<Promotion> search(String keyword, Integer status, Pageable pageable);
+    Page<Promotion> search(
+            String keyword,
+            Integer status,
+            Pageable pageable
+    );
 
-    @Modifying
+    /**
+     * Background Job dùng method này để tự tắt chiến dịch hết hạn.
+     *
+     * Chỉ đổi Promotion.Status = 0.
+     * Không sửa ProductVariant.Price để tránh sai báo cáo/doanh thu/lịch sử đơn.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         UPDATE Promotion p
         SET p.status = 0

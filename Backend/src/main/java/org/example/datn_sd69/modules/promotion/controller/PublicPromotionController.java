@@ -15,8 +15,7 @@ public class PublicPromotionController {
     private final PromotionService promotionService;
 
     /**
-     * Khung Flash Sale ngoài trang chủ.
-     * Có phân trang.
+     * Public API cho trang chủ / chi tiết sản phẩm lấy Flash Sale đang diễn ra.
      *
      * GET /api/promotions/flash-sale?page=0&size=8
      */

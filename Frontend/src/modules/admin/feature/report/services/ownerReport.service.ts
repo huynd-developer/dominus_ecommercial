@@ -8,7 +8,7 @@ import type {
 
 const buildParams = (params: ReportFilterParams) => {
   const query: Record<string, string> = {
-    filterType: params.filterType,
+    filterType: params.filterType || "MONTH",
   };
 
   if (params.filterType === "CUSTOM") {
@@ -17,6 +17,16 @@ const buildParams = (params: ReportFilterParams) => {
   }
 
   return query;
+};
+
+const normalizeLimit = (limit?: string) => {
+  const cleanLimit = String(limit || "10").replace(/[^\d]/g, "");
+
+  if (!cleanLimit) {
+    return "10";
+  }
+
+  return cleanLimit;
 };
 
 export const ownerReportService = {
@@ -38,7 +48,7 @@ export const ownerReportService = {
       {
         params: {
           ...buildParams(params),
-          limit: params.limit || "10",
+          limit: normalizeLimit(params.limit),
         },
       }
     );

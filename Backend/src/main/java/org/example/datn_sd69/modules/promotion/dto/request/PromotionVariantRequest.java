@@ -11,10 +11,6 @@ import lombok.Setter;
 @Setter
 public class PromotionVariantRequest {
 
-    /**
-     * Admin không nhập ID bằng tay.
-     * FE lấy ID này từ API /api/admin/promotions/product-variants sau khi admin search/tick biến thể.
-     */
     @NotNull(message = "Biến thể sản phẩm không được để trống")
     @Positive(message = "ID biến thể sản phẩm phải lớn hơn 0")
     private Integer productVariantId;

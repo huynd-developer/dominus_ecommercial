@@ -1,6 +1,7 @@
 import api from "@/common/api";
 import type {
   FlashSaleProductResponse,
+  FlashSaleSearchParams,
   PageResponse,
   ProductVariantSearchParams,
   PromotionProductVariantOptionResponse,
@@ -81,7 +82,15 @@ export const promotionService = {
     return api.delete(`/admin/promotions/${id}`);
   },
 
-  getFlashSaleProducts() {
-    return api.get<FlashSaleProductResponse[]>("/promotions/flash-sale");
+  getFlashSaleProducts(params: FlashSaleSearchParams = {}) {
+    return api.get<PageResponse<FlashSaleProductResponse>>(
+      "/promotions/flash-sale",
+      {
+        params: {
+          page: params.page ?? 0,
+          size: params.size ?? 8,
+        },
+      }
+    );
   },
 };
