@@ -98,6 +98,10 @@ function getTodayDateOnly(): Date {
 function getErrorMessage(error: any): string {
   const data = error?.response?.data;
 
+  if (typeof data === "string") {
+    return data;
+  }
+
   if (data?.message) {
     return data.message;
   }
@@ -107,6 +111,10 @@ function getErrorMessage(error: any): string {
 
     if (typeof firstError === "string") {
       return firstError;
+    }
+
+    if (Array.isArray(firstError) && firstError.length > 0) {
+      return String(firstError[0]);
     }
   }
 
@@ -544,8 +552,12 @@ export const useCustomerProfileStore = defineStore("customerProfile", {
         return;
       }
 
-      if (order.status !== 0) {
-        this.setError("Chỉ được hủy đơn hàng khi đơn đang chờ xác nhận");
+      if (order.canCancel !== true) {
+        this.setError(
+          order.statusText
+            ? `Không thể hủy đơn hàng ở trạng thái: ${order.statusText}`
+            : "Chỉ được hủy đơn hàng khi đơn đang chờ xác nhận"
+        );
         return;
       }
 

@@ -5,7 +5,13 @@
     <div class="voucher-row-wrapper position-relative">
       <div class="voucher-row">
         <div class="voucher-input">
-          <svg class="voucher-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            class="voucher-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <rect x="2" y="7" width="20" height="10" rx="2" ry="2" />
             <path d="M2 12a2 2 0 010-4m20 4a2 2 0 000-4M10 7v10m4-10v10" />
           </svg>
@@ -15,8 +21,9 @@
             v-model="voucherCode"
             placeholder="Nhập hoặc chọn mã..."
             @keyup.enter="handleApplyVoucher"
-            @focus="showDropdown = true"
-            @blur="showDropdown = false"
+            @focus="openDropdown"
+            @input="openDropdown"
+            @blur="scheduleCloseDropdown"
             :disabled="isApplying || isVoucherApplied || !canCheckout"
             class="text-uppercase"
           />
@@ -44,27 +51,68 @@
       </div>
 
       <div
-        v-if="showDropdown && availableVouchers.length > 0 && !isVoucherApplied && canCheckout"
+        v-if="showDropdown && filteredVouchers.length > 0 && !isVoucherApplied && canCheckout"
         class="custom-voucher-dropdown"
       >
         <div
-          v-for="v in availableVouchers"
-          :key="v.code"
-          class="voucher-item"
-          @mousedown.prevent="selectVoucher(v.code)"
+          v-for="v in filteredVouchers"
+          :key="getVoucherCode(v)"
+          :class="[
+            'voucher-item',
+            { 'voucher-disabled': !getVoucherEligibility(v).usable },
+          ]"
+          @mousedown.prevent="selectVoucher(v)"
         >
-          <div class="voucher-code-badge">{{ v.code }}</div>
+          <div class="voucher-top">
+            <div class="voucher-code-badge">
+              {{ getVoucherCode(v) }}
+            </div>
+
+            <span
+              v-if="getVoucherEligibility(v).usable"
+              class="voucher-status usable"
+            >
+              Có thể dùng
+            </span>
+
+            <span
+              v-else
+              class="voucher-status unusable"
+            >
+              Không đủ điều kiện
+            </span>
+          </div>
 
           <div class="voucher-desc">
             Giảm
             <strong class="text-danger">
-              {{ v.discountType === "PERCENT" ? v.discountValue + "%" : formatCurrency(v.discountValue) }}
+              {{ formatVoucherDiscount(v) }}
             </strong>
+
+            <span v-if="getMaxDiscount(v) > 0">
+              · tối đa {{ formatCurrency(getMaxDiscount(v)) }}
+            </span>
           </div>
 
           <div class="voucher-min">
-            Đơn tối thiểu: {{ formatCurrency(v.minOrderValue) }}
+            Đơn tối thiểu: {{ formatCurrency(getMinOrderValue(v)) }}
           </div>
+
+          <div
+            v-if="!getVoucherEligibility(v).usable"
+            class="voucher-reason"
+          >
+            {{ getVoucherEligibility(v).reason }}
+          </div>
+        </div>
+      </div>
+
+      <div
+        v-else-if="showDropdown && !isVoucherApplied && canCheckout"
+        class="custom-voucher-dropdown"
+      >
+        <div class="voucher-empty">
+          Không có voucher phù hợp
         </div>
       </div>
     </div>
@@ -112,7 +160,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import api from "@/common/api";
 
 const props = defineProps<{
@@ -134,6 +182,29 @@ const voucherMessage = ref("");
 const messageType = ref("");
 const availableVouchers = ref<any[]>([]);
 const showDropdown = ref(false);
+
+let closeDropdownTimer: ReturnType<typeof setTimeout> | null = null;
+
+const filteredVouchers = computed(() => {
+  const keyword = voucherCode.value.trim().toLowerCase();
+
+  const vouchers = availableVouchers.value.filter((voucher) => {
+    const code = getVoucherCode(voucher).toLowerCase();
+
+    if (!keyword) {
+      return true;
+    }
+
+    return code.includes(keyword);
+  });
+
+  return vouchers.sort((a, b) => {
+    const aUsable = getVoucherEligibility(a).usable ? 1 : 0;
+    const bUsable = getVoucherEligibility(b).usable ? 1 : 0;
+
+    return bUsable - aUsable;
+  });
+});
 
 const getErrorMessage = (error: any) => {
   const data = error?.response?.data;
@@ -175,6 +246,11 @@ const fetchAvailableVouchers = async () => {
       return;
     }
 
+    if (Array.isArray(res.data?.data)) {
+      availableVouchers.value = res.data.data;
+      return;
+    }
+
     availableVouchers.value = [];
   } catch (error) {
     console.error("Lỗi lấy danh sách Voucher:", error);
@@ -182,7 +258,42 @@ const fetchAvailableVouchers = async () => {
   }
 };
 
-const selectVoucher = async (code: string) => {
+const openDropdown = () => {
+  if (isVoucherApplied.value || !props.canCheckout) {
+    return;
+  }
+
+  if (closeDropdownTimer) {
+    clearTimeout(closeDropdownTimer);
+    closeDropdownTimer = null;
+  }
+
+  showDropdown.value = true;
+};
+
+const scheduleCloseDropdown = () => {
+  closeDropdownTimer = setTimeout(() => {
+    showDropdown.value = false;
+  }, 180);
+};
+
+const selectVoucher = async (voucher: any) => {
+  const code = getVoucherCode(voucher);
+
+  if (!code) {
+    return;
+  }
+
+  const eligibility = getVoucherEligibility(voucher);
+
+  if (!eligibility.usable) {
+    voucherCode.value = code;
+    voucherMessage.value = eligibility.reason;
+    messageType.value = "text-danger";
+    showDropdown.value = false;
+    return;
+  }
+
   voucherCode.value = code;
   showDropdown.value = false;
 
@@ -190,7 +301,9 @@ const selectVoucher = async (code: string) => {
 };
 
 const handleApplyVoucher = async () => {
-  if (!voucherCode.value.trim()) return;
+  const cleanCode = voucherCode.value.trim().toUpperCase();
+
+  if (!cleanCode) return;
 
   if (!props.canCheckout) {
     voucherMessage.value =
@@ -205,14 +318,28 @@ const handleApplyVoucher = async () => {
     return;
   }
 
+  const selectedVoucher = availableVouchers.value.find(
+    (voucher) => getVoucherCode(voucher).toUpperCase() === cleanCode
+  );
+
+  if (selectedVoucher) {
+    const eligibility = getVoucherEligibility(selectedVoucher);
+
+    if (!eligibility.usable) {
+      voucherMessage.value = eligibility.reason;
+      messageType.value = "text-danger";
+      isVoucherApplied.value = false;
+      emit("apply-voucher", 0, "");
+      return;
+    }
+  }
+
   isApplying.value = true;
   voucherMessage.value = "";
   messageType.value = "";
   showDropdown.value = false;
 
   try {
-    const cleanCode = voucherCode.value.trim().toUpperCase();
-
     const res = await api.get("/v1/customer/vouchers/apply", {
       params: {
         code: cleanCode,
@@ -220,7 +347,18 @@ const handleApplyVoucher = async () => {
       },
     });
 
-    const discount = Number(res.data?.discountAmount || 0);
+    const discount = Number(
+      res.data?.discountAmount ??
+        res.data?.discount ??
+        res.data?.amount ??
+        0
+    );
+
+    const safeDiscount = Math.min(
+      Math.max(discount, 0),
+      Number(props.totalAmount || 0)
+    );
+
     const message = res.data?.message || "Áp dụng mã thành công!";
 
     voucherCode.value = cleanCode;
@@ -228,11 +366,15 @@ const handleApplyVoucher = async () => {
     messageType.value = "text-success";
     isVoucherApplied.value = true;
 
-    emit("apply-voucher", discount, cleanCode);
+    localStorage.setItem("applied_voucher", cleanCode);
+
+    emit("apply-voucher", safeDiscount, cleanCode);
   } catch (error: any) {
     voucherMessage.value = getErrorMessage(error);
     messageType.value = "text-danger";
     isVoucherApplied.value = false;
+
+    localStorage.removeItem("applied_voucher");
 
     emit("apply-voucher", 0, "");
   } finally {
@@ -246,7 +388,237 @@ const handleCancelVoucher = () => {
   voucherMessage.value = "Đã hủy mã giảm giá.";
   messageType.value = "text-muted";
 
+  localStorage.removeItem("applied_voucher");
+
   emit("apply-voucher", 0, "");
+};
+
+const getVoucherCode = (voucher: any) => {
+  return String(
+    voucher?.code ??
+      voucher?.voucherCode ??
+      voucher?.voucherName ??
+      voucher?.name ??
+      ""
+  ).trim();
+};
+
+const getVoucherDiscountType = (voucher: any) => {
+  return String(
+    voucher?.discountType ??
+      voucher?.type ??
+      voucher?.voucherType ??
+      ""
+  )
+    .toUpperCase()
+    .trim();
+};
+
+const getVoucherDiscountValue = (voucher: any) => {
+  return Number(
+    voucher?.discountValue ??
+      voucher?.value ??
+      voucher?.discount ??
+      voucher?.amount ??
+      0
+  );
+};
+
+const getMinOrderValue = (voucher: any) => {
+  return Number(
+    voucher?.minOrderValue ??
+      voucher?.minimumOrderValue ??
+      voucher?.minOrderAmount ??
+      voucher?.conditionAmount ??
+      0
+  );
+};
+
+const getMaxDiscount = (voucher: any) => {
+  return Number(
+    voucher?.maxDiscountAmount ??
+      voucher?.maximumDiscountAmount ??
+      voucher?.maxDiscount ??
+      0
+  );
+};
+
+const getVoucherStartDate = (voucher: any) => {
+  return voucher?.startDate ?? voucher?.validFrom ?? voucher?.fromDate ?? null;
+};
+
+const getVoucherEndDate = (voucher: any) => {
+  return voucher?.endDate ?? voucher?.validTo ?? voucher?.toDate ?? null;
+};
+
+const isDateAfterNow = (value?: string | null) => {
+  if (!value) return false;
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+
+  return date.getTime() > Date.now();
+};
+
+const isDateBeforeNow = (value?: string | null) => {
+  if (!value) return false;
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+
+  return date.getTime() < Date.now();
+};
+
+const getRemainingQuantity = (voucher: any) => {
+  if (voucher?.remainingQuantity != null) {
+    return Number(voucher.remainingQuantity);
+  }
+
+  if (voucher?.remainingUsage != null) {
+    return Number(voucher.remainingUsage);
+  }
+
+  if (voucher?.quantity != null && voucher?.usedQuantity != null) {
+    return Number(voucher.quantity) - Number(voucher.usedQuantity);
+  }
+
+  if (voucher?.usageLimit != null && voucher?.usedCount != null) {
+    return Number(voucher.usageLimit) - Number(voucher.usedCount);
+  }
+
+  return null;
+};
+
+const isVoucherStatusActive = (voucher: any) => {
+  const status = voucher?.status;
+
+  if (status == null) {
+    return true;
+  }
+
+  if (typeof status === "number") {
+    return status === 1;
+  }
+
+  const normalized = String(status).toUpperCase().trim();
+
+  return ["1", "ACTIVE", "ENABLE", "ENABLED", "VALID", "AVAILABLE"].includes(
+    normalized
+  );
+};
+
+const getVoucherEligibility = (voucher: any) => {
+  const code = getVoucherCode(voucher);
+
+  if (!code) {
+    return {
+      usable: false,
+      reason: "Voucher không hợp lệ.",
+    };
+  }
+
+  if (!props.canCheckout) {
+    return {
+      usable: false,
+      reason: "Giỏ hàng có sản phẩm không đủ điều kiện thanh toán.",
+    };
+  }
+
+  if (props.totalAmount <= 0) {
+    return {
+      usable: false,
+      reason: "Tổng tiền đơn hàng chưa hợp lệ.",
+    };
+  }
+
+  if (voucher?.available === false || voucher?.usable === false) {
+    return {
+      usable: false,
+      reason: voucher?.message || "Voucher hiện không khả dụng.",
+    };
+  }
+
+  if (voucher?.isDeleted === true || voucher?.deleted === true) {
+    return {
+      usable: false,
+      reason: "Voucher đã bị xóa hoặc không còn áp dụng.",
+    };
+  }
+
+  if (!isVoucherStatusActive(voucher)) {
+    return {
+      usable: false,
+      reason: "Voucher đang bị khóa hoặc ngừng hoạt động.",
+    };
+  }
+
+  const startDate = getVoucherStartDate(voucher);
+
+  if (isDateAfterNow(startDate)) {
+    return {
+      usable: false,
+      reason: "Voucher chưa tới thời gian sử dụng.",
+    };
+  }
+
+  const endDate = getVoucherEndDate(voucher);
+
+  if (isDateBeforeNow(endDate)) {
+    return {
+      usable: false,
+      reason: "Voucher đã hết hạn.",
+    };
+  }
+
+  const remainingQuantity = getRemainingQuantity(voucher);
+
+  if (remainingQuantity != null && remainingQuantity <= 0) {
+    return {
+      usable: false,
+      reason: "Voucher đã hết lượt sử dụng.",
+    };
+  }
+
+  const minOrderValue = getMinOrderValue(voucher);
+
+  if (props.totalAmount < minOrderValue) {
+    return {
+      usable: false,
+      reason: `Đơn hàng cần tối thiểu ${formatCurrency(minOrderValue)} để dùng voucher này.`,
+    };
+  }
+
+  return {
+    usable: true,
+    reason: "",
+  };
+};
+
+const formatVoucherDiscount = (voucher: any) => {
+  const type = getVoucherDiscountType(voucher);
+  const value = getVoucherDiscountValue(voucher);
+
+  if (type === "PERCENT" || type === "PERCENTAGE") {
+    return `${formatDiscount(value)}%`;
+  }
+
+  return formatCurrency(value);
+};
+
+const formatDiscount = (value?: number | null) => {
+  const numberValue = Number(value || 0);
+
+  if (Number.isInteger(numberValue)) {
+    return String(numberValue);
+  }
+
+  return numberValue.toFixed(2).replace(/\.?0+$/, "");
 };
 
 const formatCurrency = (val?: number | null) => {
@@ -269,6 +641,37 @@ watch(
 );
 
 watch(
+  () => props.totalAmount,
+  () => {
+    if (!isVoucherApplied.value || !voucherCode.value) {
+      return;
+    }
+
+    const currentVoucher = availableVouchers.value.find(
+      (voucher) =>
+        getVoucherCode(voucher).toUpperCase() ===
+        voucherCode.value.trim().toUpperCase()
+    );
+
+    if (!currentVoucher) {
+      handleCancelVoucher();
+      voucherMessage.value =
+        "Đã hủy mã giảm giá vì không tìm thấy voucher đang áp dụng.";
+      messageType.value = "text-danger";
+      return;
+    }
+
+    const eligibility = getVoucherEligibility(currentVoucher);
+
+    if (!eligibility.usable) {
+      handleCancelVoucher();
+      voucherMessage.value = eligibility.reason;
+      messageType.value = "text-danger";
+    }
+  }
+);
+
+watch(
   () => props.discountAmount,
   (value) => {
     if (Number(value || 0) <= 0 && isVoucherApplied.value) {
@@ -280,16 +683,14 @@ watch(
   }
 );
 
-onMounted(() => {
-  fetchAvailableVouchers();
+onMounted(async () => {
+  await fetchAvailableVouchers();
 
   const savedVoucher = localStorage.getItem("applied_voucher");
 
-  if (savedVoucher && props.discountAmount > 0) {
+  if (savedVoucher && props.totalAmount > 0 && props.canCheckout) {
     voucherCode.value = savedVoucher;
-    isVoucherApplied.value = true;
-    voucherMessage.value = "Áp dụng mã thành công!";
-    messageType.value = "text-success";
+    await handleApplyVoucher();
   }
 });
 </script>
@@ -367,7 +768,7 @@ onMounted(() => {
   border-radius: 8px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
   z-index: 100;
-  max-height: 250px;
+  max-height: 280px;
   overflow-y: auto;
 }
 
@@ -382,8 +783,21 @@ onMounted(() => {
   border-bottom: none;
 }
 
-.voucher-item:hover {
+.voucher-item:hover:not(.voucher-disabled) {
   background: #f8fafc;
+}
+
+.voucher-disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+  background: #f8fafc;
+}
+
+.voucher-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .voucher-code-badge {
@@ -397,6 +811,26 @@ onMounted(() => {
   border-radius: 4px;
 }
 
+.voucher-status {
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.voucher-status.usable {
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+}
+
+.voucher-status.unusable {
+  color: #991b1b;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+}
+
 .voucher-desc {
   font-size: 13px;
   color: #333;
@@ -406,6 +840,20 @@ onMounted(() => {
 .voucher-min {
   font-size: 12px;
   color: #64748b;
+}
+
+.voucher-reason {
+  margin-top: 6px;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.voucher-empty {
+  padding: 14px;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
 }
 
 .btn-apply {

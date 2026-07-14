@@ -57,14 +57,26 @@ export const customerProfileService = {
     );
   },
 
+  /**
+   * BE:
+   * GET /api/customer/orders
+   */
   getOrders() {
     return api.get<CustomerOrderResponse[]>("/customer/orders");
   },
 
+  /**
+   * BE:
+   * GET /api/customer/orders/{orderId}
+   */
   getOrderDetail(orderId: number) {
     return api.get<CustomerOrderResponse>(`/customer/orders/${orderId}`);
   },
 
+  /**
+   * BE:
+   * PATCH /api/customer/orders/{orderId}/cancel
+   */
   cancelOrder(orderId: number) {
     return api.patch<{ message: string }>(
       `/customer/orders/${orderId}/cancel`

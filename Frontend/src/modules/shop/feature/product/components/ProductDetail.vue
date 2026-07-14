@@ -220,7 +220,7 @@
               ]"
               @click="selectVariant(variant)"
             >
-              <span>{{ variant.capacity || "N/A" }}</span>
+             <span>{{ getCapacityText(variant) }}</span>
 
               <span
                 v-if="isVariantFlashSale(variant)"
@@ -590,21 +590,19 @@ const fragranceFamilyText = computed(() => {
 });
 
 const selectedCapacityText = computed(() => {
-  return selectedVariant.value?.capacity || "Chưa chọn";
+  if (!selectedVariant.value) {
+    return "Chưa chọn";
+  }
+
+  return getCapacityText(selectedVariant.value);
 });
 
 const bottleTypeText = computed(() => {
-  if (typeof selectedVariant.value?.bottleType === "object") {
-    return selectedVariant.value?.bottleType?.name || "Đang cập nhật";
+  if (!selectedVariant.value) {
+    return "Đang cập nhật";
   }
 
-  return (
-    selectedVariant.value?.bottleType ||
-    selectedVariant.value?.bottleTypeName ||
-    props.product?.bottleTypeName ||
-    props.product?.bottleType ||
-    "Đang cập nhật"
-  );
+  return getBottleTypeText(selectedVariant.value);
 });
 
 const selectedSkuText = computed(() => {
@@ -657,6 +655,110 @@ const getVariantIdFromVariant = (variant: any) => {
       variant?.Id ??
       0
   );
+};
+
+const isEmptyDisplayValue = (value: any) => {
+  if (value === null || value === undefined) {
+    return true;
+  }
+
+  const text = String(value).trim();
+
+  return (
+    text === "" ||
+    text.toUpperCase() === "N/A" ||
+    text.toUpperCase() === "NULL" ||
+    text.toUpperCase() === "UNDEFINED" ||
+    text === "-"
+  );
+};
+
+const formatCapacityNumber = (value: any) => {
+  const text = String(value || "").trim();
+
+  if (!text) {
+    return "";
+  }
+
+  const lowerText = text.toLowerCase().replace(/\s+/g, "");
+
+  if (lowerText.endsWith("ml")) {
+    const numberPart = lowerText.replace("ml", "");
+    const numberValue = Number(numberPart);
+
+    if (Number.isFinite(numberValue)) {
+      return `${Number.isInteger(numberValue) ? numberValue : numberValue.toString()}ml`;
+    }
+
+    return text;
+  }
+
+  const numberValue = Number(text);
+
+  if (Number.isFinite(numberValue)) {
+    return `${Number.isInteger(numberValue) ? numberValue : numberValue.toString()}ml`;
+  }
+
+  return text.toLowerCase().includes("ml") ? text : `${text}ml`;
+};
+
+const getCapacityText = (variant: any) => {
+  const candidates = [
+    variant?.capacityName,
+    variant?.capacityText,
+    variant?.capacityValue,
+    variant?.volume,
+    variant?.volumeValue,
+    variant?.capacity?.name,
+    variant?.capacity?.value,
+    variant?.capacity,
+  ];
+
+  for (const value of candidates) {
+    if (!isEmptyDisplayValue(value)) {
+      return formatCapacityNumber(value);
+    }
+  }
+
+  const sku = String(variant?.sku || variant?.SKU || "").toUpperCase();
+  const match = sku.match(/-(\d+(?:\.\d+)?)-/);
+
+  if (match?.[1]) {
+    return formatCapacityNumber(match[1]);
+  }
+
+  return "Đang cập nhật";
+};
+
+const getBottleTypeText = (variant: any) => {
+  const candidates = [
+    variant?.bottleTypeName,
+    variant?.bottleTypeText,
+    variant?.variantBottleType,
+    variant?.bottleName,
+    variant?.bottleType?.name,
+    variant?.bottleType,
+    props.product?.bottleTypeName,
+    props.product?.bottleType,
+  ];
+
+  for (const value of candidates) {
+    if (!isEmptyDisplayValue(value)) {
+      return String(value).trim();
+    }
+  }
+
+  const sku = String(variant?.sku || variant?.SKU || "").toUpperCase();
+
+  if (sku.includes("FULL")) {
+    return "Chai gốc Fullbox";
+  }
+
+  if (sku.includes("CHIET") || sku.includes("DECANT")) {
+    return "Chai chiết";
+  }
+
+  return "Đang cập nhật";
 };
 
 const getVariantId = () => {
