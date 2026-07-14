@@ -1,37 +1,143 @@
-import * as api from "../api/productApi";
-import type { Product, ProductPage } from "../types/Product";
+import request from '@/common/services/request'
 
-class ProductService {
+import type {
+  ProductRequestDTO,
+  ProductResponse
+} from '../types/product.type'
 
-    async getAll(
-        keyword = "",
-        page = 0,
-        size = 10
-    ): Promise<ProductPage> {
+export const productService = {
+  // ==========================
+  // PRODUCT
+  // ==========================
 
-        return api.getProducts({
-            keyword,
-            page,
-            size
-        });
+  getProducts: async (
+    page = 0,
+    size = 10
+  ) => {
+    const response = await request.get(
+      `/api/v1/products/admin?page=${page}&size=${size}`
+    )
 
-    }
+    return response.data ?? response
+  },
 
-    async getById(id: number): Promise<Product> {
-        return api.getProductById(id);
-    }
+  getProductById: async (
+    id: number
+  ): Promise<ProductResponse> => {
+    const response = await request.get(
+      `/api/v1/products/${id}`
+    )
 
-    async create(formData: FormData) {
-        return api.createProduct(formData);
-    }
+    return response.data ?? response
+  },
 
-    async update(id: number, formData: FormData) {
-        return api.updateProduct(id, formData);
-    }
+  createProduct: async (
+    payload: ProductRequestDTO
+  ) => {
+    const response = await request.post(
+      '/api/v1/products/admin',
+      payload
+    )
 
-    async delete(id: number) {
-        return api.deleteProduct(id);
-    }
+    return response.data ?? response
+  },
+
+  updateProduct: async (
+    id: number,
+    payload: ProductRequestDTO
+  ) => {
+    const response = await request.put(
+      `/api/v1/products/admin/${id}`,
+      payload
+    )
+
+    return response.data ?? response
+  },
+
+  deleteProduct: async (
+    id: number
+  ) => {
+    const response = await request.delete(
+      `/api/v1/products/admin/${id}`
+    )
+
+    return response.data ?? response
+  },
+
+  // ==========================
+  // IMAGE
+  // ==========================
+
+  uploadImage: async (
+    productId: number,
+    file: File
+  ) => {
+    const formData = new FormData()
+
+    formData.append('file', file)
+
+    const response = await request.post(
+      `/api/v1/products/admin/${productId}/images`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      }
+    )
+
+    return response.data ?? response
+  },
+
+  // ==========================
+  // MASTER DATA
+  // ==========================
+
+  getBrands: async () => {
+    const response = await request.get(
+      '/api/admin/brands'
+    )
+
+    return response.data ?? response
+  },
+
+  getCategories: async () => {
+    const response = await request.get(
+      '/api/admin/categories'
+    )
+
+    return response.data ?? response
+  },
+
+  getConcentrations: async () => {
+    const response = await request.get(
+      '/api/admin/concentrations'
+    )
+
+    return response.data ?? response
+  },
+
+  getCapacities: async () => {
+    const response = await request.get(
+      '/api/admin/capacities'
+    )
+
+    return response.data ?? response
+  },
+
+  getBottleTypes: async () => {
+    const response = await request.get(
+      '/api/admin/bottle-types'
+    )
+
+    return response.data ?? response
+  },
+
+  getFragranceFamilies: async () => {
+    const response = await request.get(
+      '/api/admin/fragrance-families'
+    )
+
+    return response.data ?? response
+  }
 }
-
-export default new ProductService();

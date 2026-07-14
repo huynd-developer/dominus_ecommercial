@@ -1,67 +1,182 @@
 package org.example.datn_sd69.modules.cart.controller;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
+import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.User;
 import org.example.datn_sd69.modules.cart.dto.request.CartAddRequest;
 import org.example.datn_sd69.modules.cart.dto.request.CartUpdateRequest;
 import org.example.datn_sd69.modules.cart.service.CartService;
 import org.example.datn_sd69.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
 import java.security.Principal;
+import java.util.Map;
 
 @RestController
-// Đã sửa đường dẫn để gom vào nhóm API của Customer
 @RequestMapping("/api/v1/customer/cart")
+@RequiredArgsConstructor
 public class CartController {
 
-    @Autowired
-    private CartService cartService;
+    private final CartService cartService;
+    private final UserRepository userRepo;
 
-    @Autowired
-    private UserRepository userRepo;
+    @GetMapping("/my-cart")
+    @PreAuthorize("hasAuthority('USER')")
+    public ResponseEntity<?> getMyCart(Principal principal) {
+        Integer customerId = getCustomerId(principal);
 
-    // Hàm phụ để lấy ID khách hàng từ Principal
+        return ResponseEntity.ok(
+                cartService.getCartByCustomerId(customerId)
+        );
+    }
+
+    @PostMapping("/add")
+    @PreAuthorize("hasAuthority('USER')")
+    public ResponseEntity<?> addToCart(
+            Principal principal,
+            @Valid @RequestBody CartAddRequest request
+    ) {
+        Integer customerId = getCustomerId(principal);
+
+        cartService.addVariantToCart(
+                customerId,
+                request.getProductVariantId(),
+                request.getQuantity(),
+                request.getNote(),
+                request.getThumbnailUrl()
+        );
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Thêm sản phẩm vào giỏ hàng thành công"
+        ));
+    }
+
+    /**
+     * Endpoint cũ.
+     *
+     * PUT /api/v1/customer/cart/update/{cartItemId}
+     * body: { "quantity": 2 }
+     *
+     * quantity = 0 thì xóa dòng giỏ hàng.
+     */
+    @PutMapping("/update/{cartItemId}")
+    @PreAuthorize("hasAuthority('USER')")
+    public ResponseEntity<?> updateQuantity(
+            Principal principal,
+            @PathVariable Integer cartItemId,
+            @Valid @RequestBody CartUpdateRequest request
+    ) {
+        Integer customerId = getCustomerId(principal);
+
+        cartService.updateCartItemQuantity(
+                customerId,
+                cartItemId,
+                request.getQuantity()
+        );
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Cập nhật giỏ hàng thành công"
+        ));
+    }
+
+    /**
+     * Endpoint mới khớp CheckoutView.
+     *
+     * PUT /api/v1/customer/cart/update
+     * body:
+     * {
+     *   "cartItemId": 1,
+     *   "productVariantId": 5,
+     *   "quantity": 2
+     * }
+     *
+     * productVariantId nhận vào để FE gửi không lỗi mapping.
+     * BE update theo cartItemId và tự check chủ giỏ hàng trong service.
+     */
+    @PutMapping("/update")
+    @PreAuthorize("hasAuthority('USER')")
+    public ResponseEntity<?> updateQuantityFromBody(
+            Principal principal,
+            @Valid @RequestBody CartUpdateBodyRequest request
+    ) {
+        Integer customerId = getCustomerId(principal);
+
+        cartService.updateCartItemQuantity(
+                customerId,
+                request.getCartItemId(),
+                request.getQuantity()
+        );
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Cập nhật giỏ hàng thành công"
+        ));
+    }
+
+    @DeleteMapping("/remove/{cartItemId}")
+    @PreAuthorize("hasAuthority('USER')")
+    public ResponseEntity<?> removeItem(
+            Principal principal,
+            @PathVariable Integer cartItemId
+    ) {
+        Integer customerId = getCustomerId(principal);
+
+        cartService.removeCartItem(customerId, cartItemId);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Đã xóa sản phẩm khỏi giỏ"
+        ));
+    }
+
     private Integer getCustomerId(Principal principal) {
-        String email = principal.getName(); // Lấy email từ token
+        if (principal == null
+                || principal.getName() == null
+                || principal.getName().trim().isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Bạn chưa đăng nhập"
+            );
+        }
+
+        String email = principal.getName().trim();
+
         User user = userRepo.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User không tồn tại"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "Không tìm thấy tài khoản đăng nhập"
+                ));
+
+        if (user.getId() == null || user.getId() <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Tài khoản đăng nhập không hợp lệ"
+            );
+        }
+
         return user.getId();
     }
 
-    // 1. Lấy giỏ hàng của user đang đăng nhập
-    @GetMapping("/my-cart")
-    @PreAuthorize("isAuthenticated()") // Tạm hạ quyền xuống để test
-    public ResponseEntity<?> getMyCart(Principal principal) {
-        Integer customerId = getCustomerId(principal);
-        return ResponseEntity.ok(cartService.getCartByCustomerId(customerId));
-    }
+    @Data
+    public static class CartUpdateBodyRequest {
 
-    // 2. Thêm biến thể vào giỏ
-    @PostMapping("/add")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<?> addToCart(Principal principal, @RequestBody CartAddRequest request) {
-        Integer customerId = getCustomerId(principal);
-        cartService.addVariantToCart(customerId, request.getProductVariantId(), request.getQuantity());
-        return ResponseEntity.ok("Thêm sản phẩm vào giỏ hàng thành công");
-    }
+        @NotNull(message = "Mã sản phẩm trong giỏ không được để trống")
+        @Min(value = 1, message = "Mã sản phẩm trong giỏ không hợp lệ")
+        private Integer cartItemId;
 
-    // 3. Cập nhật số lượng
-    @PutMapping("/update/{cartItemId}")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<?> updateQuantity(Principal principal, @PathVariable Integer cartItemId, @RequestBody CartUpdateRequest request) {
-        Integer customerId = getCustomerId(principal);
-        cartService.updateCartItemQuantity(customerId, cartItemId, request.getQuantity());
-        return ResponseEntity.ok("Cập nhật số lượng thành công");
-    }
+        /**
+         * Không bắt buộc dùng ở BE vì cartItemId đã đủ xác định dòng giỏ hàng.
+         * Giữ field này để FE gửi lên không bị lỗi mapping.
+         */
+        private Integer productVariantId;
 
-    // 4. Xóa item khỏi giỏ
-    @DeleteMapping("/remove/{cartItemId}")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<?> removeItem(Principal principal, @PathVariable Integer cartItemId) {
-        Integer customerId = getCustomerId(principal);
-        cartService.removeCartItem(customerId, cartItemId);
-        return ResponseEntity.ok("Đã xóa sản phẩm khỏi giỏ");
+        @NotNull(message = "Số lượng không được để trống")
+        @Min(value = 0, message = "Số lượng không được âm")
+        private Integer quantity;
     }
 }

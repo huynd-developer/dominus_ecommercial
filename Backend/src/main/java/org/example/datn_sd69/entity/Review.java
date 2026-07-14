@@ -1,9 +1,11 @@
 package org.example.datn_sd69.entity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -16,8 +18,12 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "Review")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class Review extends BaseEntity {
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "UserId", nullable = false)
     private User user;
@@ -38,4 +44,15 @@ public class Review extends BaseEntity {
 
     @Column(name = "IsDeleted")
     private Boolean isDeleted = false;
+
+    @PrePersist
+    public void prePersist() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+
+        if (isDeleted == null) {
+            isDeleted = false;
+        }
+    }
 }

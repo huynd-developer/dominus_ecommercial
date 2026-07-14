@@ -22,9 +22,89 @@
 </template>
 
 <script setup lang="ts">
-const hours = '02';
-const minutes = '15';
-const seconds = '40';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+
+const props = defineProps<{
+  targetDate?: string | null;
+}>();
+
+const emit = defineEmits<{
+  (e: "expired"): void;
+}>();
+
+const remainingMs = ref(0);
+let timer: ReturnType<typeof window.setInterval> | null = null;
+let expiredEmitted = false;
+
+const pad = (value: number) => {
+  return String(Math.max(0, value)).padStart(2, "0");
+};
+
+const updateRemaining = () => {
+  if (!props.targetDate) {
+    remainingMs.value = 0;
+    return;
+  }
+
+  const targetTime = new Date(props.targetDate).getTime();
+  const now = Date.now();
+  const diff = Math.max(0, targetTime - now);
+
+  remainingMs.value = diff;
+
+  if (diff <= 0 && !expiredEmitted) {
+    expiredEmitted = true;
+    emit("expired");
+  }
+};
+
+const totalSeconds = computed(() => {
+  return Math.floor(remainingMs.value / 1000);
+});
+
+const hours = computed(() => {
+  return pad(Math.floor(totalSeconds.value / 3600));
+});
+
+const minutes = computed(() => {
+  return pad(Math.floor((totalSeconds.value % 3600) / 60));
+});
+
+const seconds = computed(() => {
+  return pad(totalSeconds.value % 60);
+});
+
+const startTimer = () => {
+  stopTimer();
+  expiredEmitted = false;
+  updateRemaining();
+
+  timer = window.setInterval(() => {
+    updateRemaining();
+  }, 1000);
+};
+
+const stopTimer = () => {
+  if (timer) {
+    window.clearInterval(timer);
+    timer = null;
+  }
+};
+
+watch(
+  () => props.targetDate,
+  () => {
+    startTimer();
+  }
+);
+
+onMounted(() => {
+  startTimer();
+});
+
+onBeforeUnmount(() => {
+  stopTimer();
+});
 </script>
 
 <style scoped>

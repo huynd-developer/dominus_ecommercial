@@ -1,0 +1,149 @@
+[33ma775b1b[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfeature/hoangtrung[m[33m)[m Tach order be
+[33m2f2f7e2[m xong phan quan ly don hang
+[33m3f7ac99[m xong phan quan ly don hang
+[33m3a20691[m xong san pham
+[33m65c27d9[m xong san pham
+[33m21c8b4f[m xong code san pham
+[33m0bed3e8[m[33m ([m[1;31morigin/feature/hoangtrung[m[33m)[m Lỗi router và thư viện fixx
+[33mee20e88[m Merge pull request #39 from huynd-developer/feature/huy
+[33m35a8d79[m Sua loi khi pull ve
+[33m22e6244[m Đã hoàn thành be fe dashboard và profile
+[33m5d371db[m Merge pull request #38 from huynd-developer/feature/duc
+[33m9515b1f[m Fix loi khi pull ve phan catestore
+[33mdf95ed4[m Merge pull request #37 from huynd-developer/feature/hieu
+[33mfb76f97[m Merge branch 'main' of https://github.com/huynd-developer/dominus_ecommercial into feature/hieu
+[33m9b2b86a[m Merge pull request #36 from huynd-developer/feature/huy
+[33m054ea0f[m hoan thien 70% fe cua product
+[33md5e7c77[m sua lai 1 so cho de phan trang cac module tren admin
+[33m5f4dee1[m Hoàn thành be fe khách hàng
+[33mb4e0f88[m Hoàn thiện be fe của nhân viên
+[33m2330b5b[m Update lại fe pos thêm biển thể
+[33mc0bb5d2[m Hoàn thành pos fe và be
+[33mccb83d9[m update logic product
+[33m6411a50[m update api cho thanh toan
+[33m0653cb4[m Merge branch 'main' of https://github.com/huynd-developer/dominus_ecommercial into feature/duc
+[33m3623874[m sua lai phan bottletyperequest
+[33m6706900[m cap nhat bien the
+[33m1f98e24[m cap nhat phan bien the
+[33m2936366[m Merge branch 'main' of https://github.com/huynd-developer/dominus_ecommercial into feature/huy
+[33m6332c8d[m hoan thanh pos 90%
+[33ma57d956[m Merge pull request #35 from huynd-developer/feature/hieu
+[33m9b944c4[m hien thi san pham cho giao dien trang chu & product
+[33ma22cd82[m update be
+[33m244da95[m Merge branch 'main' of https://github.com/huynd-developer/dominus_ecommercial into feature/hieu
+[33m0713344[m entity productImage
+[33m84ff36a[m Merge pull request #34 from huynd-developer/feature/huy
+[33mf9a09a4[m Sủa lại baseentity xóa isdeleted
+[33m61438b9[m Merge branch 'main' of https://github.com/huynd-developer/dominus_ecommercial into feature/huy
+[33m2936f61[m Sua lại baseentity xoa isdeleted
+[33m4c220b9[m update entity của productImage
+[33m69160a8[m cap nhat giao dien cho product
+[33m2b1bc93[m Merge pull request #33 from huynd-developer/feature/huy
+[33mb4087e9[m "Sua lại api product xóa isdeleted trong productimg"
+[33mfc31aa3[m Sua lại api product xóa isdeleted trong productimg
+[33mb7fa213[m code mới pull
+[33m053ccdb[m update api & fe product
+[33m7a8e275[m Merge branch 'main' of https://github.com/huynd-developer/dominus_ecommercial into feature/huy
+[33m91bfaf1[m Khong co j
+[33m3595739[m Merge pull request #32 from huynd-developer/feature/hoangtrung
+[33m0e67957[m xong phan api full san pham voi bien the
+[33m3ff2b2d[m xong phan api full san phan voi bien the
+[33m6428fc5[m xong phan api bien the
+[33m8b8a787[m Merge branch 'main' of https://github.com/huynd-developer/dominus_ecommercial into feature/hoangtrung
+[33mdc619eb[m api bien the
+[33m17b6f9f[m cap nhat phan bo loc cua product
+[33mda821f0[m Merge branch 'main' of https://github.com/huynd-developer/dominus_ecommercial into feature/hieu
+[33m5cccd6c[m tam fe product
+[33me5463b5[m Merge pull request #31 from huynd-developer/feature/duc
+[33ma48b14f[m Pull tren main ve
+[33m1b29350[m hoan thanh be test phần capacity
+[33mae569dd[m Merge pull request #30 from huynd-developer/feature/huy
+[33mde0f445[m Hoan thanh be fragrancefamily
+[33meeb87ee[m Merge pull request #29 from huynd-developer/feature/huy
+[33mc2d1232[m Hoan thanh phan concentration be
+[33m4326a2c[m đang làm fe product tạm ổn
+[33m604a616[m dang do tay
+[33mee21d11[m Merge pull request #28 from huynd-developer/feature/duc
+[33m932381f[m pull tu main ve phan brand cua duc
+[33mf6835c6[m commit brand
+[33m0ece339[m Sua xong router khi pull ve
+[33mc72c30a[m Pull loi router
+[33ma74da4e[m update fe product
+[33m1537866[m Merge branch 'main' of https://github.com/huynd-developer/dominus_ecommercial into feature/hoangtrung
+[33m21640fb[m Merge pull request #27 from huynd-developer/feature/huy
+[33m4c316be[m Hoàn thành be và fe của category
+[33mb72f99e[m Merge pull request #26 from huynd-developer/feature/huy
+[33m54ce107[m Them cot isdeleted
+[33m9df277d[m pull lai tu main ve luc 4h2
+[33m5a741d6[m update be san pham
+[33m403d7fa[m fe product
+[33mcba92c3[m Sua phan hien thi ten sau khi dang nhap
+[33mfbd0999[m Merge pull request #25 from huynd-developer/feature/huy
+[33m1e4f63f[m Update be public của brand và cate
+[33m9bb5596[m Hoàn thành public của brand và cate
+[33m53582bf[m Update pull
+[33m81d059b[m phat trien be phan san pham
+[33mc61e180[m Merge pull request #24 from huynd-developer/feature/huy
+[33m41b06f8[m "Hoan thanh 90% be cua brand"
+[33ma1ee741[m Update phan brand be
+[33m2e79eee[m Merge pull request #23 from huynd-developer/feature/duc
+[33m721b869[m Update be va fe
+[33md70ed35[m Merge pull request #22 from huynd-developer/feature/huy
+[33m660919a[m Update be va fe category
+[33mf5de428[m update be phần brand
+[33m2bf8a0c[m "Hoàn thành be phần category"
+[33ma7d77ef[m Merge pull request #21 from huynd-developer/feature/huy
+[33mced4577[m "Hoàn thành be phần category"
+[33md0fd889[m Merge branch 'main' of https://github.com/huynd-developer/dominus_ecommercial into feature/huy
+[33m9acc46f[m "update be repo cate"
+[33mf5f2348[m Update pull cua duc
+[33me5ac8b4[m commit phan brand
+[33mb6fafb8[m Merge pull request #20 from huynd-developer/feature/huy
+[33mf99dc57[m Them cot logo brand
+[33m20a2f0f[m Merge pull request #19 from huynd-developer/feature/huy
+[33me38511a[m :wq Merge branch 'main' of https://github.com/huynd-developer/dominus_ecommercial into feature/huy
+[33mf364d41[m Them cloudinary vao config
+[33m826513b[m hoan thien fornend
+[33m371180e[m Merge pull request #18 from huynd-developer/feature/huy
+[33m3e5f169[m Update fe va be phan pos
+[33m687b250[m Merge pull request #17 from huynd-developer/feature/dan
+[33mb640a9d[m keo tu main ve luc 12:38
+[33m5761990[m Loi router
+[33m9542545[m Merge pull request #16 from huynd-developer/feature/huy
+[33m5393e3f[m Merge branch 'main' of https://github.com/huynd-developer/dominus_ecommercial into feature/huy
+[33m299ef5a[m Nơi lưu giữ kỉ niệm
+[33m45cd10d[m Merge pull request #15 from huynd-developer/feature/hieu
+[33m12413e6[m bo sung 2 phan oder repository
+[33md2eb45d[m check be keo tu main ve phan gio hang
+[33m226d43f[m update api gio hang & fe gio hang
+[33mc2858d4[m Merge pull request #14 from huynd-developer/feature/dan
+[33m800e917[m Update fe
+[33m8af02a5[m Update fe
+[33m77da38f[m Update fe
+[33m9837a11[m Update fe
+[33m09cadbc[m Update fe
+[33mef70418[m update fe pos
+[33ma3f9d27[m complete fe pos
+[33m199075e[m Merge pull request #13 from huynd-developer/feature/huy
+[33m7983b18[m  Sua lai front chu o homeview
+[33m319109e[m Hoan thien task 6.2 cua thz trung tao lam ho
+[33me6548dd[m update fe gio hang
+[33mc088a01[m update api thanh toan vnpay
+[33me87928f[m Sua pham api san pham
+[33me9c75b2[m Resolved merge conflict in router
+[33m211db80[m update api phan thanh toan
+[33m0086d36[m Sua api phan sam pham
+[33mf8f153a[m Merge pull request #12 from huynd-developer/feature/huy
+[33m24b5aa0[m chore: dua gitignore ra goc va xoa sach .idea
+[33m4bd437e[m Day lai len nhanh
+[33m3dca967[m Sua pham api san pham
+[33m118eb32[m update fe gio hang
+[33m2d818d7[m update lai api cho dat hang online
+[33me073ca4[m update giao dien gio hang
+[33m42ea7de[m hoanh thanh api gio hang & thanh toan
+[33m5a4044b[m Hoàn thiện giao diên người dùng và login, chưa fix lỗi rank
+[33m98c5f93[m  Hoàn thiện be phần authen athor
+[33m2714597[m da co khung web chinh
+[33m7ba7765[m hoan thanh lai thuong hieu
+[33me3ef942[m Hoàn thiện giao diện người dùng với giao diện và dữ liệu giả
+[33m2df

@@ -14,10 +14,49 @@ import java.util.Optional;
 @Repository
 public interface CustomerRepository extends JpaRepository<Customer, Integer> {
 
+    /*
+     * Dùng cho POS tìm khách theo SĐT.
+     * Chỉ lấy khách đang hoạt động, chưa bị xóa mềm.
+     */
+    @EntityGraph(attributePaths = {"user", "user.role"})
     @Query("""
-            SELECT c FROM Customer c
-            JOIN FETCH c.user u
-            WHERE u.phone = :phone AND u.status = 1
+            SELECT c
+            FROM Customer c
+            JOIN c.user u
+            WHERE u.phone = :phone
+            AND u.status = 1
+            AND (u.isDeleted = false OR u.isDeleted IS NULL)
+            """)
+    Optional<Customer> findByUserPhone(@Param("phone") String phone);
+
+    /*
+     * Dùng cho POS xử lý case:
+     * - Không tìm thấy theo SĐT
+     * - Nhưng email đã thuộc khách hàng cũ
+     * => dùng lại customer đó thay vì báo Email đã tồn tại.
+     */
+    @EntityGraph(attributePaths = {"user", "user.role"})
+    @Query("""
+            SELECT c
+            FROM Customer c
+            JOIN c.user u
+            WHERE LOWER(u.email) = LOWER(:email)
+            AND u.status = 1
+            AND (u.isDeleted = false OR u.isDeleted IS NULL)
+            """)
+    Optional<Customer> findByUserEmailIgnoreCase(@Param("email") String email);
+
+    /*
+     * Giữ lại cho code cũ nếu còn gọi findByPhone().
+     */
+    @EntityGraph(attributePaths = {"user", "user.role"})
+    @Query("""
+            SELECT c
+            FROM Customer c
+            JOIN c.user u
+            WHERE u.phone = :phone
+            AND u.status = 1
+            AND (u.isDeleted = false OR u.isDeleted IS NULL)
             """)
     Optional<Customer> findByPhone(@Param("phone") String phone);
 
@@ -49,4 +88,7 @@ public interface CustomerRepository extends JpaRepository<Customer, Integer> {
             AND (c.user.isDeleted = false OR c.user.isDeleted IS NULL)
             """)
     Optional<Customer> findActiveByUserId(@Param("userId") Integer userId);
+
+    @EntityGraph(attributePaths = {"user", "user.role"})
+    Optional<Customer> findByUserId(Integer userId);
 }

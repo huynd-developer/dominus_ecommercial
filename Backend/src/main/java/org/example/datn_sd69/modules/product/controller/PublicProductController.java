@@ -1,10 +1,13 @@
 package org.example.datn_sd69.modules.product.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.example.datn_sd69.modules.product.dto.response.ProductResponse;
 import org.example.datn_sd69.modules.product.service.ProductService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -14,70 +17,55 @@ public class PublicProductController {
 
     private final ProductService productService;
 
-    /* ================= PRODUCT ================= */
-
+    /**
+     * Danh sách sản phẩm đang hoạt động.
+     *
+     * GET /api/products?page=0&size=12
+     */
     @GetMapping
-    public ResponseEntity<?> getProducts(
-            @RequestParam(required = false) String keyword,
+    public ResponseEntity<Map<String, Object>> getProducts(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
+            @RequestParam(defaultValue = "12") int size
     ) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 100);
 
-        return ResponseEntity.ok(Map.of(
-                "status", "SUCCESS",
-                "message", "Danh sách sản phẩm",
-                "data", productService.getActiveProducts(keyword, page, size)
-        ));
+        return ResponseEntity.ok(
+                productService.getAllProducts(safePage, safeSize)
+        );
     }
 
-    @GetMapping("/{productId}")
-    public ResponseEntity<?> getProduct(
-            @PathVariable Integer productId
+    /**
+     * Chi tiết sản phẩm.
+     *
+     * GET /api/products/2
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<ProductResponse> getProductDetail(
+            @PathVariable Integer id
     ) {
-
-        return ResponseEntity.ok(Map.of(
-                "status", "SUCCESS",
-                "message", "Chi tiết sản phẩm",
-                "data", productService.getById(productId)
-        ));
+        return ResponseEntity.ok(
+                productService.getProductById(id)
+        );
     }
 
-    /* ================= PRODUCT VARIANTS ================= */
-
-    @GetMapping("/{productId}/variants")
-    public ResponseEntity<?> getVariants(
-            @PathVariable Integer productId
+    /**
+     * Danh sách biến thể của sản phẩm.
+     *
+     * GET /api/products/2/variants
+     */
+    @GetMapping("/{id}/variants")
+    public ResponseEntity<List<ProductResponse.VariantDTO>> getProductVariants(
+            @PathVariable Integer id
     ) {
+        ProductResponse product =
+                productService.getProductById(id);
 
-        return ResponseEntity.ok(Map.of(
-                "status", "SUCCESS",
-                "message", "Danh sách biến thể",
-                "data", productService.getActiveVariantsByProduct(productId)
-        ));
-    }
+        List<ProductResponse.VariantDTO> variants =
+                product.getVariants() == null
+                        ? Collections.emptyList()
+                        : product.getVariants();
 
-    @GetMapping("/{productId}/variants/{variantId}")
-    public ResponseEntity<?> getVariant(
-            @PathVariable Integer productId,
-            @PathVariable Integer variantId
-    ) {
-
-        return ResponseEntity.ok(Map.of(
-                "status", "SUCCESS",
-                "message", "Chi tiết biến thể",
-                "data", productService.getVariantById(variantId)
-        ));
-    }
-
-    @GetMapping("/variants/sku/{sku}")
-    public ResponseEntity<?> getVariantBySku(
-            @PathVariable String sku
-    ) {
-
-        return ResponseEntity.ok(Map.of(
-                "status", "SUCCESS",
-                "message", "Thông tin biến thể",
-                "data", productService.getVariantBySku(sku)
-        ));
+        return ResponseEntity.ok(variants);
     }
 }

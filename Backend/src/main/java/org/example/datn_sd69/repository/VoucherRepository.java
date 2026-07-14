@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -21,4 +22,9 @@ public interface VoucherRepository extends JpaRepository<Voucher, Integer> {
               AND v.usedCount  < v.usageLimit
             """)
     Optional<Voucher> findValidByCode(@Param("code") String code, @Param("now") LocalDateTime now);
+    Optional<Voucher> findByCode(String code);
+
+    List<Voucher> findByIsDeletedFalseOrderByIdDesc();
+
+    boolean existsByCode(String code);
 }

@@ -13,6 +13,7 @@ import org.example.datn_sd69.entity.base.BaseEntity;
 import org.hibernate.annotations.Nationalized;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Entity
 @Table(name = "ProductVariant")
@@ -38,6 +39,19 @@ public class ProductVariant extends BaseEntity {
 
     @Column(name = "StockQuantity")
     private Integer stockQuantity = 0;
+
+    /**
+     * Ngày sản xuất.
+     * SQL Server: DATE NOT NULL.
+     */
+    @Column(name = "ManufacturingDate", nullable = false)
+    private LocalDate manufacturingDate;
+    /**
+     * Hạn sử dụng.
+     * SQL Server: DATE NOT NULL.
+     */
+    @Column(name = "ExpirationDate", nullable = false)
+    private LocalDate expirationDate;
 
     @Column(name = "Status")
     private Integer status = 1;

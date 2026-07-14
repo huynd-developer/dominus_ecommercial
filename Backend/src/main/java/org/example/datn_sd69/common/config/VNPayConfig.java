@@ -3,12 +3,10 @@ package org.example.datn_sd69.common.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.text.SimpleDateFormat;
-import java.util.*;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 
 @Configuration
 public class VNPayConfig {
@@ -22,51 +20,102 @@ public class VNPayConfig {
     @Value("${vnpay.url}")
     private String vnp_PayUrl;
 
+    /**
+     * Return URL cũ, giữ lại cho POS hoặc code cũ.
+     * Hiện tại route này là /payment/result.
+     */
     @Value("${vnpay.returnUrl}")
     private String vnp_ReturnUrl;
+
+    /**
+     * Return URL riêng cho POS.
+     */
+    @Value("${vnpay.posReturnUrl:${vnpay.returnUrl}}")
+    private String vnp_PosReturnUrl;
+
+    /**
+     * Return URL riêng cho online checkout của khách.
+     */
+    @Value("${vnpay.onlineReturnUrl}")
+    private String vnp_OnlineReturnUrl;
 
     @Value("${vnpay.version}")
     private String vnp_Version;
 
-    // Các hàm getter để Service gọi ra sử dụng
-    public String getVnp_TmnCode() { return vnp_TmnCode; }
-    public String getSecretKey() { return secretKey; }
-    public String getVnp_PayUrl() { return vnp_PayUrl; }
-    public String getVnp_ReturnUrl() { return vnp_ReturnUrl; }
-    public String getVnp_Version() { return vnp_Version; }
+    private final SecureRandom secureRandom = new SecureRandom();
 
-    // --- Các hàm tiện ích dùng chung cho VNPay (Băm chuỗi, tạo ID) ---
+    public String getVnp_TmnCode() {
+        return vnp_TmnCode;
+    }
 
-    // Hàm mã hóa thuật toán SHA512 (Chuẩn bảo mật của VNPay)
+    public String getSecretKey() {
+        return secretKey;
+    }
+
+    public String getVnp_PayUrl() {
+        return vnp_PayUrl;
+    }
+
+    /**
+     * Getter cũ, không xóa để tránh vỡ POS.
+     */
+    public String getVnp_ReturnUrl() {
+        return vnp_ReturnUrl;
+    }
+
+    public String getVnp_PosReturnUrl() {
+        return vnp_PosReturnUrl;
+    }
+
+    public String getVnp_OnlineReturnUrl() {
+        return vnp_OnlineReturnUrl;
+    }
+
+    public String getVnp_Version() {
+        return vnp_Version;
+    }
+
     public String hmacSHA512(final String key, final String data) {
         try {
             if (key == null || data == null) {
-                throw new NullPointerException();
+                return "";
             }
-            final Mac hmac512 = Mac.getInstance("HmacSHA512");
-            byte[] hmacKeyBytes = key.getBytes();
-            final SecretKeySpec secretKey = new SecretKeySpec(hmacKeyBytes, "HmacSHA512");
-            hmac512.init(secretKey);
-            byte[] dataBytes = data.getBytes(StandardCharsets.UTF_8);
-            byte[] result = hmac512.doFinal(dataBytes);
-            StringBuilder sb = new StringBuilder(2 * result.length);
+
+            Mac hmac512 = Mac.getInstance("HmacSHA512");
+
+            SecretKeySpec secretKeySpec = new SecretKeySpec(
+                    key.getBytes(StandardCharsets.UTF_8),
+                    "HmacSHA512"
+            );
+
+            hmac512.init(secretKeySpec);
+
+            byte[] result = hmac512.doFinal(data.getBytes(StandardCharsets.UTF_8));
+
+            StringBuilder sb = new StringBuilder(result.length * 2);
+
             for (byte b : result) {
                 sb.append(String.format("%02x", b & 0xff));
             }
+
             return sb.toString();
         } catch (Exception ex) {
             return "";
         }
     }
 
-    // Hàm tạo mã giao dịch ngẫu nhiên
     public String getRandomNumber(int len) {
-        Random rnd = new Random();
+        if (len <= 0) {
+            return "";
+        }
+
         String chars = "0123456789";
         StringBuilder sb = new StringBuilder(len);
+
         for (int i = 0; i < len; i++) {
-            sb.append(chars.charAt(rnd.nextInt(chars.length())));
+            sb.append(chars.charAt(secureRandom.nextInt(chars.length())));
         }
+
         return sb.toString();
     }
 }

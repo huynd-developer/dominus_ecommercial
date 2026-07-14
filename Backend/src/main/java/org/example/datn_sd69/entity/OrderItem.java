@@ -23,7 +23,10 @@ public class OrderItem extends BaseEntity {
     private Order order;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "ProductVariantId")
+    @JoinColumn(
+            name = "ProductVariantId",
+            nullable = false
+    )
     private ProductVariant productVariant;
 
     @Column(name = "Quantity", nullable = false)

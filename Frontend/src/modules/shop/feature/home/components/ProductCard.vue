@@ -4,10 +4,23 @@
       -{{ product.discountPercent }}%
     </span>
 
+    <button
+      type="button"
+      class="btn-favorite"
+      :class="{ active: isFavorited }"
+      :disabled="favoriteLoading"
+      @click.stop="handleToggleFavorite"
+      :title="isFavorited ? 'Bỏ yêu thích' : 'Thêm vào yêu thích'"
+    >
+      <i v-if="favoriteLoading" class="spinner-border spinner-border-sm"></i>
+      <i v-else class="bi" :class="isFavorited ? 'bi-heart-fill' : 'bi-heart'"></i>
+    </button>
+
     <div class="product-image-wrapper">
       <div class="product-bottle" :style="getBottleStyle(product.color)">
         <div class="product-bottle-cap"></div>
         <div class="product-bottle-neck"></div>
+
         <div class="product-bottle-body">
           <div class="product-bottle-label">
             <strong>{{ shortBrand }}</strong>
@@ -28,7 +41,9 @@
 
       <div class="rating-row d-flex align-items-center gap-2 mb-2">
         <span class="stars">★★★★★</span>
-        <span class="review-count">{{ product.rating }} | {{ product.reviewCount }} đánh giá</span>
+        <span class="review-count">
+          {{ product.rating }} | {{ product.reviewCount }} đánh giá
+        </span>
       </div>
 
       <div class="price-row d-flex align-items-end gap-2 mb-3 flex-wrap">
@@ -36,28 +51,63 @@
           {{ formatCurrency(product.salePrice) }}
         </span>
 
-        <span v-if="product.discountPercent > 0" class="original-price text-decoration-line-through">
+        <span
+          v-if="product.discountPercent > 0"
+          class="original-price text-decoration-line-through"
+        >
           {{ formatCurrency(product.originalPrice) }}
         </span>
       </div>
 
-      <button type="button" class="btn add-cart-btn w-100" @click.stop="handleAddToCart">
-        <i class="bi bi-bag-plus me-2"></i>
-        Thêm vào giỏ
-      </button>
+      <div class="product-actions">
+        <button
+          type="button"
+          class="btn buy-now-btn"
+          :disabled="buyNowLoading || addCartLoading"
+          @click.stop="handleBuyNow"
+        >
+          <i v-if="buyNowLoading" class="spinner-border spinner-border-sm me-2"></i>
+          <i v-else class="bi bi-lightning-charge me-2"></i>
+          {{ buyNowLoading ? "Đang xử lý..." : "Mua ngay" }}
+        </button>
+
+        <button
+          type="button"
+          class="btn add-cart-btn"
+          :disabled="addCartLoading || buyNowLoading"
+          @click.stop="handleAddToCart"
+        >
+          <i v-if="addCartLoading" class="spinner-border spinner-border-sm me-2"></i>
+          <i v-else class="bi bi-bag-plus me-2"></i>
+          {{ addCartLoading ? "Đang thêm..." : "Thêm vào giỏ" }}
+        </button>
+      </div>
     </div>
 
     <Teleport to="body">
       <Transition name="toast-slide">
-        <div v-if="showToast" class="custom-cart-toast">
+        <div v-if="toast.show" class="custom-cart-toast" :class="toast.type">
           <div class="toast-icon">
-            <i class="bi bi-check2"></i>
+            <i
+              class="bi"
+              :class="{
+                'bi-check2': toast.type === 'success',
+                'bi-exclamation-triangle': toast.type === 'warning',
+                'bi-x-lg': toast.type === 'error',
+              }"
+            ></i>
           </div>
+
           <div class="toast-info">
-            <h4>Thêm thành công</h4>
-            <p>Đã thêm 1 sản phẩm vào giỏ.</p>
+            <h4>{{ toast.title }}</h4>
+            <p>{{ toast.message }}</p>
           </div>
-          <RouterLink to="/cart" class="toast-view-cart">
+
+          <RouterLink
+            v-if="toast.showCartLink"
+            to="/cart"
+            class="toast-view-cart"
+          >
             XEM GIỎ HÀNG <i class="bi bi-arrow-right ms-1"></i>
           </RouterLink>
         </div>
@@ -67,12 +117,29 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import axios from 'axios';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
+import api from "@/common/api";
+import { favoriteService } from "@/modules/shop/feature/product/services/favorite.service";
+
+interface ProductVariant {
+  id?: number;
+  Id?: number;
+  variantId?: number;
+  productVariantId?: number;
+  price?: number;
+  stock?: number;
+  stockQuantity?: number;
+  availableQuantity?: number;
+  quantity?: number;
+  status?: number;
+}
 
 interface Product {
   id: number;
+  productId?: number;
+  productVariantId?: number;
+  variantId?: number;
   name: string;
   brand: string;
   color?: string;
@@ -81,7 +148,12 @@ interface Product {
   discountPercent: number;
   rating: number;
   reviewCount: number;
-  imageUrl?: string; 
+  imageUrl?: string;
+  stock?: number;
+  stockQuantity?: number;
+  availableQuantity?: number;
+  status?: number;
+  variants?: ProductVariant[];
 }
 
 const props = defineProps<{
@@ -89,76 +161,475 @@ const props = defineProps<{
 }>();
 
 const router = useRouter();
-const showToast = ref(false);
+
+const addCartLoading = ref(false);
+const buyNowLoading = ref(false);
+const favoriteLoading = ref(false);
+const isFavorited = ref(false);
+
+const toast = ref({
+  show: false,
+  type: "success" as "success" | "warning" | "error",
+  title: "",
+  message: "",
+  showCartLink: false,
+});
+
+let toastTimer: ReturnType<typeof window.setTimeout> | undefined;
 
 const brandMap: Record<string, string> = {
-  Chanel: 'CHANEL',
-  Dior: 'DIOR',
-  'Yves Saint Laurent': 'YSL',
-  'Giorgio Armani': 'ARMANI',
-  Givenchy: 'GIVENCHY',
-  Creed: 'CREED',
-  Byredo: 'BYREDO',
-  'Tom Ford': 'TOM FORD',
-  'Maison Francis Kurkdjian': 'MFK',
-  'Le Labo': 'LE LABO',
-  'Paco Rabanne': 'PACO'
+  Chanel: "CHANEL",
+  Dior: "DIOR",
+  "Yves Saint Laurent": "YSL",
+  "Giorgio Armani": "ARMANI",
+  Givenchy: "GIVENCHY",
+  Creed: "CREED",
+  Byredo: "BYREDO",
+  "Tom Ford": "TOM FORD",
+  "Maison Francis Kurkdjian": "MFK",
+  "Le Labo": "LE LABO",
+  "Paco Rabanne": "PACO",
 };
 
 const shortBrand = computed(() => {
-  return brandMap[props.product.brand] || props.product.brand.slice(0, 8).toUpperCase();
+  return (
+    brandMap[props.product.brand] ||
+    String(props.product.brand || "AURA").slice(0, 8).toUpperCase()
+  );
 });
 
 const getBottleStyle = (color?: string): Record<string, string> => {
   return {
-    '--bottle-color': color || '#0a192f'
+    "--bottle-color": color || "#0a192f",
   };
 };
 
 const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('vi-VN').format(value) + ' đ';
+  return new Intl.NumberFormat("vi-VN").format(Number(value || 0)) + " đ";
 };
 
-// CHUYỂN HƯỚNG TĨNH ĐẾN TRANG PRODUCT
+const showToast = (
+  type: "success" | "warning" | "error",
+  title: string,
+  message: string,
+  showCartLink = false
+) => {
+  toast.value = {
+    show: true,
+    type,
+    title,
+    message,
+    showCartLink,
+  };
+
+  if (toastTimer) {
+    window.clearTimeout(toastTimer);
+  }
+
+  toastTimer = window.setTimeout(() => {
+    toast.value.show = false;
+  }, 2800);
+};
+
+const getCurrentRole = () => {
+  return String(
+    localStorage.getItem("role") ||
+      localStorage.getItem("userRole") ||
+      ""
+  )
+    .replace("ROLE_", "")
+    .toUpperCase()
+    .trim();
+};
+
+const hasToken = () => {
+  return Boolean(localStorage.getItem("token"));
+};
+
+const isCustomerLoggedIn = () => {
+  return hasToken() && getCurrentRole() === "USER";
+};
+
+const getPrimaryVariant = () => {
+  if (Array.isArray(props.product.variants) && props.product.variants.length > 0) {
+    const availableVariant =
+      props.product.variants.find((variant) => {
+        const stock = Number(
+          variant.stockQuantity ??
+            variant.stock ??
+            variant.availableQuantity ??
+            variant.quantity ??
+            0
+        );
+
+        const price = Number(variant.price ?? props.product.salePrice ?? 0);
+        const status = Number(variant.status ?? 1);
+
+        return status === 1 && stock > 0 && price > 0;
+      }) || props.product.variants[0];
+
+    return availableVariant;
+  }
+
+  return props.product;
+};
+
+const getProductVariantId = () => {
+  const variant: any = getPrimaryVariant();
+
+  return Number(
+    variant?.productVariantId ??
+      variant?.variantId ??
+      variant?.id ??
+      variant?.Id ??
+      props.product.productVariantId ??
+      props.product.variantId ??
+      props.product.id ??
+      0
+  );
+};
+
+const getProductId = () => {
+  return Number(props.product.productId || props.product.id || 0);
+};
+
+const getStock = () => {
+  const variant: any = getPrimaryVariant();
+
+  return Number(
+    variant?.stockQuantity ??
+      variant?.stock ??
+      variant?.availableQuantity ??
+      variant?.quantity ??
+      props.product.stockQuantity ??
+      props.product.stock ??
+      props.product.availableQuantity ??
+      1
+  );
+};
+
+const getPrice = () => {
+  const variant: any = getPrimaryVariant();
+
+  return Number(
+    variant?.price ??
+      props.product.salePrice ??
+      props.product.originalPrice ??
+      0
+  );
+};
+
+const getProductDetailPath = () => {
+  const productId = getProductId();
+
+  if (productId > 0) {
+    const resolved = router.resolve({
+      name: "SingleProduct",
+      params: {
+        id: productId,
+      },
+    });
+
+    return resolved.fullPath;
+  }
+
+  return "/product";
+};
+
 const goToDetail = () => {
-  router.push('/product');
+  const productId = getProductId();
+
+  if (productId > 0) {
+    router.push({
+      name: "SingleProduct",
+      params: {
+        id: productId,
+      },
+    });
+
+    return;
+  }
+
+  router.push("/product");
 };
 
-// THÊM VÀO GIỎ HÀNG THỰC TẾ (GỌI API BACKEND) & HIỂN THỊ TOAST
-// THÊM VÀO GIỎ HÀNG THỰC TẾ (GỌI API BACKEND) & HIỂN THỊ TOAST
+const redirectToLogin = (redirectPath?: string) => {
+  router.push({
+    name: "Login",
+    query: {
+      redirect: redirectPath || router.currentRoute.value.fullPath,
+    },
+  });
+};
+
+const validateProductInfo = () => {
+  const variantId = getProductVariantId();
+
+  if (!variantId || Number.isNaN(variantId)) {
+    showToast(
+      "warning",
+      "Không xác định được biến thể",
+      "Sản phẩm này chưa có biến thể hợp lệ."
+    );
+    return false;
+  }
+
+  if (getPrice() <= 0) {
+    showToast(
+      "warning",
+      "Sản phẩm chưa có giá",
+      "Vui lòng xem chi tiết hoặc liên hệ cửa hàng."
+    );
+    return false;
+  }
+
+  if (getStock() <= 0) {
+    showToast(
+      "warning",
+      "Tạm hết hàng",
+      "Sản phẩm này hiện đã hết hàng."
+    );
+    return false;
+  }
+
+  return true;
+};
+
+const requireCustomerLoginForCart = () => {
+  if (!hasToken()) {
+    redirectToLogin(router.currentRoute.value.fullPath);
+    return false;
+  }
+
+  if (!isCustomerLoggedIn()) {
+    showToast(
+      "warning",
+      "Không thể mua hàng",
+      "Chỉ tài khoản khách hàng mới được mua hàng."
+    );
+    return false;
+  }
+
+  return true;
+};
+
+const requireCustomerLoginForBuyNow = () => {
+  if (!hasToken()) {
+    redirectToLogin(getProductDetailPath());
+    return false;
+  }
+
+  if (!isCustomerLoggedIn()) {
+    showToast(
+      "warning",
+      "Không thể mua hàng",
+      "Chỉ tài khoản khách hàng mới được mua hàng."
+    );
+    return false;
+  }
+
+  return true;
+};
+
+const requireCustomerLoginForFavorite = () => {
+  if (!hasToken()) {
+    redirectToLogin(router.currentRoute.value.fullPath);
+    return false;
+  }
+
+  if (!isCustomerLoggedIn()) {
+    showToast(
+      "warning",
+      "Không thể yêu thích",
+      "Chỉ tài khoản khách hàng mới được thêm sản phẩm yêu thích."
+    );
+    return false;
+  }
+
+  return true;
+};
+
+const addProductToCart = async () => {
+  await api.post("/v1/customer/cart/add", {
+    productVariantId: getProductVariantId(),
+    quantity: 1,
+  });
+
+  window.dispatchEvent(new Event("cart-updated"));
+};
+
 const handleAddToCart = async () => {
-  const token = localStorage.getItem('token');
-  
-  if (!token) {
-    alert('Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng!');
+  if (!validateProductInfo()) {
+    return;
+  }
+
+  if (!requireCustomerLoginForCart()) {
     return;
   }
 
   try {
-    // Gọi API POST lên đúng đường dẫn của bạn
-    await axios.post(
-      'http://localhost:8080/api/v1/customer/cart/add', 
-      {
-        // ĐỔI THÀNH productVariantId cho khớp hoàn toàn với RequestBody của Java
-        productVariantId: props.product.id, 
-        quantity: 1
-      },
-      {
-        headers: { Authorization: `Bearer ${token}` }
-      }
+    addCartLoading.value = true;
+
+    await addProductToCart();
+
+    showToast(
+      "success",
+      "Thêm thành công",
+      "Đã thêm 1 sản phẩm vào giỏ.",
+      true
     );
+  } catch (error: any) {
+    console.error("Lỗi khi gọi API thêm giỏ hàng:", error);
 
-    // Nếu Backend trả về thành công, hiển thị Toast thông báo đẹp mắt
-    showToast.value = true;
-    setTimeout(() => {
-      showToast.value = false;
-    }, 3000);
-
-  } catch (error) {
-    console.error('Lỗi khi gọi API thêm giỏ hàng:', error);
-    alert('Không thể thêm vào giỏ hàng! Hãy bật F12 kiểm tra tab Network xem Backend báo lỗi gì nhé.');
+    showToast(
+      "error",
+      "Không thể thêm vào giỏ",
+      error?.response?.data?.message ||
+        error?.response?.data ||
+        "Vui lòng thử lại sau."
+    );
+  } finally {
+    addCartLoading.value = false;
   }
 };
+
+const handleBuyNow = async () => {
+  if (!validateProductInfo()) {
+    return;
+  }
+
+  if (!requireCustomerLoginForBuyNow()) {
+    return;
+  }
+
+  try {
+    buyNowLoading.value = true;
+
+    await addProductToCart();
+
+    router.push({
+      name: "Checkout",
+    });
+  } catch (error: any) {
+    console.error("Lỗi khi mua ngay:", error);
+
+    showToast(
+      "error",
+      "Không thể mua ngay",
+      error?.response?.data?.message ||
+        error?.response?.data ||
+        "Vui lòng thử lại sau."
+    );
+  } finally {
+    buyNowLoading.value = false;
+  }
+};
+
+const loadFavoriteStatus = async () => {
+  const variantId = getProductVariantId();
+
+  if (!variantId || !isCustomerLoggedIn()) {
+    isFavorited.value = false;
+    return;
+  }
+
+  try {
+    const res = await favoriteService.checkFavorite(variantId);
+    isFavorited.value = Boolean(res.data?.favorited);
+  } catch (error) {
+    console.error("Lỗi kiểm tra yêu thích:", error);
+    isFavorited.value = false;
+  }
+};
+
+const handleToggleFavorite = async () => {
+  const variantId = getProductVariantId();
+
+  if (!variantId || Number.isNaN(variantId)) {
+    showToast(
+      "warning",
+      "Không xác định được biến thể",
+      "Sản phẩm này chưa có biến thể hợp lệ để thêm yêu thích."
+    );
+    return;
+  }
+
+  if (!requireCustomerLoginForFavorite()) {
+    return;
+  }
+
+  try {
+    favoriteLoading.value = true;
+
+    const res = await favoriteService.toggleFavorite(variantId);
+    isFavorited.value = Boolean(res.data?.favorited);
+
+    window.dispatchEvent(
+      new CustomEvent("favorite-updated", {
+        detail: {
+          productVariantId: variantId,
+          favorited: isFavorited.value,
+        },
+      })
+    );
+
+    showToast(
+      isFavorited.value ? "success" : "warning",
+      isFavorited.value ? "Đã thêm yêu thích" : "Đã bỏ yêu thích",
+      res.data?.message ||
+        (isFavorited.value
+          ? "Sản phẩm đã được thêm vào danh sách yêu thích."
+          : "Sản phẩm đã được bỏ khỏi danh sách yêu thích.")
+    );
+  } catch (error: any) {
+    console.error("Lỗi xử lý yêu thích:", error);
+
+    showToast(
+      "error",
+      "Không thể xử lý yêu thích",
+      error?.response?.data?.message ||
+        error?.response?.data ||
+        "Vui lòng thử lại sau."
+    );
+  } finally {
+    favoriteLoading.value = false;
+  }
+};
+
+const handleFavoriteUpdated = (event: Event) => {
+  const customEvent = event as CustomEvent<{
+    productVariantId?: number;
+    favorited?: boolean;
+  }>;
+
+  const variantId = Number(customEvent.detail?.productVariantId || 0);
+
+  if (!variantId || variantId !== getProductVariantId()) {
+    return;
+  }
+
+  isFavorited.value = Boolean(customEvent.detail?.favorited);
+};
+
+onMounted(() => {
+  window.addEventListener("favorite-updated", handleFavoriteUpdated);
+  loadFavoriteStatus();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("favorite-updated", handleFavoriteUpdated);
+
+  if (toastTimer) {
+    window.clearTimeout(toastTimer);
+  }
+});
+
+watch(
+  () => getProductVariantId(),
+  () => {
+    loadFavoriteStatus();
+  }
+);
 </script>
 
 <style scoped>
@@ -187,6 +658,42 @@ const handleAddToCart = async () => {
   padding: 5px 10px;
   font-size: 12px;
   font-weight: 800;
+}
+
+.btn-favorite {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid rgba(189, 154, 95, 0.35);
+  background: rgba(255, 255, 255, 0.94);
+  color: #8c8c8c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  box-shadow: 0 8px 18px rgba(5, 16, 36, 0.08);
+}
+
+.btn-favorite:hover:not(:disabled) {
+  color: #dc2626;
+  border-color: #dc2626;
+  transform: scale(1.05);
+}
+
+.btn-favorite.active {
+  color: #dc2626;
+  border-color: #dc2626;
+  background: #fff5f5;
+}
+
+.btn-favorite:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .product-image-wrapper {
@@ -313,20 +820,49 @@ const handleAddToCart = async () => {
   font-weight: 500;
 }
 
+.product-actions {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 10px;
+  width: 100%;
+}
+
+.buy-now-btn,
+.add-cart-btn {
+  font-size: 13px;
+  font-weight: 800;
+  border-radius: 7px;
+  padding: 10px 10px;
+  transition: all 0.22s ease;
+  min-height: 42px;
+}
+
+.buy-now-btn {
+  border: none;
+  background: var(--aura-gold);
+  color: #ffffff;
+}
+
+.buy-now-btn:hover:not(:disabled) {
+  background: #a3824d;
+  color: #ffffff;
+}
+
 .add-cart-btn {
   border: 1px solid var(--aura-gold);
   color: var(--aura-gold);
   background: #ffffff;
-  font-size: 13px;
-  font-weight: 700;
-  border-radius: 6px;
-  padding: 10px 12px;
-  transition: all 0.22s ease;
 }
 
-.add-cart-btn:hover {
+.add-cart-btn:hover:not(:disabled) {
   background: var(--aura-gold);
   color: #ffffff;
+}
+
+.buy-now-btn:disabled,
+.add-cart-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 </style>
 
@@ -344,6 +880,22 @@ const handleAddToCart = async () => {
   gap: 16px;
   z-index: 99999;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  max-width: 520px;
+}
+
+.custom-cart-toast.success .toast-icon {
+  background-color: rgba(34, 197, 94, 0.16);
+  color: #86efac;
+}
+
+.custom-cart-toast.warning .toast-icon {
+  background-color: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+}
+
+.custom-cart-toast.error .toast-icon {
+  background-color: rgba(239, 68, 68, 0.16);
+  color: #fca5a5;
 }
 
 .toast-icon {
@@ -356,6 +908,7 @@ const handleAddToCart = async () => {
   justify-content: center;
   color: white;
   font-size: 18px;
+  flex-shrink: 0;
 }
 
 .toast-info h4 {
@@ -380,6 +933,7 @@ const handleAddToCart = async () => {
   display: flex;
   align-items: center;
   transition: color 0.25s ease;
+  white-space: nowrap;
 }
 
 .toast-view-cart:hover {

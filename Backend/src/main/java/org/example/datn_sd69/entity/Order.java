@@ -18,8 +18,12 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "Orders")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class Order extends BaseEntity {
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CustomerId")
     private Customer customer;
@@ -59,9 +63,37 @@ public class Order extends BaseEntity {
     @Column(name = "PaymentMethod", length = 50, nullable = false)
     private String paymentMethod;
 
+    /**
+     0 = Chờ xác nhận
+     1 = Đã xác nhận / Đang chuẩn bị hàng
+     2 = Đang giao hàng
+     3 = Hoàn thành
+     4 = Đã hủy
+     5 = Giao hàng thất bại
+     6 = Yêu cầu hoàn hàng / đổi trả
+     7 = Hoàn hàng / đổi trả hoàn tất
+     */
     @Column(name = "Status")
     private Integer status = 0;
 
     @Column(name = "CreatedAt")
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    /**
+     * Chống cộng điểm nhiều lần khi đơn đã hoàn thành.
+     */
+    @Column(name = "LoyaltyPointsApplied", nullable = false)
+    private Boolean loyaltyPointsApplied = false;
+
+    /**
+     * Lưu số điểm đơn hàng này đã cộng cho khách.
+     */
+    @Column(name = "LoyaltyPointsEarned", nullable = false)
+    private Integer loyaltyPointsEarned = 0;
+
+    /**
+     * Thời điểm đơn chuyển sang hoàn thành.
+     */
+    @Column(name = "CompletedAt")
+    private LocalDateTime completedAt;
 }

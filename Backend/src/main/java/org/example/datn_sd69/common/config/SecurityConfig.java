@@ -56,6 +56,7 @@ public class SecurityConfig {
 
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/vnpay/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/orders/payment/vnpay-return").permitAll()
 
                         .requestMatchers(
                                 HttpMethod.GET,
@@ -65,28 +66,37 @@ public class SecurityConfig {
                                 "/api/fragrance-families/**",
                                 "/api/capacities/**",
                                 "/api/products/**",
-                                "/api/bottle-types/**"
+                                "/api/shop/products/**",
+                                "/api/bottle-types/**",
+                                "/api/promotions/flash-sale"
                         ).permitAll()
 
-                        // Nhân viên: chỉ OWNER được CRUD
-                        .requestMatchers("/api/admin/employees/**").hasAuthority("OWNER")
+                        .requestMatchers("/api/owner/reports/**")
+                        .hasAuthority("OWNER")
 
-                        // Khách hàng: OWNER, MANAGER, CASHIER chỉ xem/tìm kiếm
+                        .requestMatchers("/api/admin/employees/**")
+                        .hasAuthority("OWNER")
+
+                        .requestMatchers("/api/admin/promotions/**")
+                        .hasAnyAuthority("OWNER", "MANAGER")
+
                         .requestMatchers(HttpMethod.GET, "/api/admin/customers/**")
                         .hasAnyAuthority("OWNER", "MANAGER", "CASHIER")
 
-                        // Khách hàng: khóa/mở tài khoản chỉ OWNER, MANAGER
                         .requestMatchers(HttpMethod.PATCH, "/api/admin/customers/*/status")
                         .hasAnyAuthority("OWNER", "MANAGER")
 
-                        // Không cho thêm/sửa/xóa customer ở admin
-                        .requestMatchers("/api/admin/customers/**").denyAll()
+                        .requestMatchers("/api/admin/customers/**")
+                        .denyAll()
 
-                        // Các API admin khác
                         .requestMatchers("/api/admin/**")
                         .hasAnyAuthority("OWNER", "MANAGER", "CASHIER")
 
-                        .requestMatchers("/api/customer/**").hasAuthority("USER")
+                        .requestMatchers("/api/customer/**")
+                        .hasAuthority("USER")
+
+                        .requestMatchers("/api/v1/customer/**")
+                        .hasAuthority("USER")
 
                         .anyRequest().authenticated()
                 )

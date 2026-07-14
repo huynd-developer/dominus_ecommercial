@@ -1,67 +1,33 @@
 package org.example.datn_sd69.modules.product.service;
 
-import org.example.datn_sd69.modules.product.dto.ProductRequest;
-import org.example.datn_sd69.modules.product.dto.ProductResponse;
-import org.example.datn_sd69.modules.product.dto.ProductVariantRequest;
-import org.example.datn_sd69.modules.product.dto.ProductVariantResponse;
-import org.springframework.data.domain.Page;
+import org.example.datn_sd69.modules.product.dto.request.ProductRequest;
+import org.example.datn_sd69.modules.product.dto.response.ProductResponse;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
+import java.util.Map;
 
 public interface ProductService {
 
-    /* ================= PRODUCT ================= */
+    ProductResponse getProductById(Integer id);
 
-    Page<ProductResponse> getAll(
-            String keyword,
-            int page,
-            int size
-    );
+    ProductResponse createProduct(ProductRequest request);
 
-    Page<ProductResponse> getActiveProducts(
-            String keyword,
-            int page,
-            int size
-    );
+    ProductResponse updateProduct(Integer id,
+                                  ProductRequest request);
 
-    ProductResponse getById(Integer id);
+    void deleteProduct(Integer id);
 
-    ProductResponse create(
-            ProductRequest request,
-            MultipartFile primaryImage,
-            List<MultipartFile> images
-    );
+    Map<String, Object> getAllProducts(int page,
+                                       int size);
 
-    ProductResponse update(
-            Integer id,
-            ProductRequest request,
-            MultipartFile primaryImage,
-            List<MultipartFile> images
-    );
+    Map<String, Object> getAllProductsAdmin(int page,
+                                            int size);
 
-    void delete(Integer id);
+    String uploadImage(Integer productId,
+                       MultipartFile file) throws Exception;
 
-    /* ================= VARIANT ================= */
+    void deleteProductImage(Integer imageId);
 
-    ProductVariantResponse getVariantById(Integer variantId);
-
-    List<ProductVariantResponse> getVariantsByProduct(Integer productId);
-
-    List<ProductVariantResponse> getActiveVariantsByProduct(Integer productId);
-
-    ProductVariantResponse createVariant(
-            Integer productId,
-            ProductVariantRequest request
-    );
-
-    ProductVariantResponse updateVariant(
-            Integer variantId,
-            ProductVariantRequest request
-    );
-
-    void deleteVariant(Integer variantId);
-
-    ProductVariantResponse getVariantBySku(String sku);
-
+    void setPrimaryImage(Integer productId,
+                         Integer imageId);
 }
