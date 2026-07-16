@@ -30,18 +30,25 @@ public class VoucherServiceImpl implements VoucherService {
 
     @Override
     public void createVoucher(VoucherRequest request) {
-        // Validate Ngày bắt đầu - Ngày kết thúc
+        String code = request.getCode();
+
+        // 1. Tự sinh mã nếu để trống
+        if (code == null || code.trim().isEmpty()) {
+            code = "SALE" + java.util.UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+        } else {
+            // Check trùng mã nếu khách tự nhập
+            if (voucherRepository.existsByCode(code)) {
+                throw new IllegalArgumentException("Mã Voucher này đã tồn tại!");
+            }
+        }
+
+        // 2. Validate Ngày bắt đầu - Ngày kết thúc
         if (request.getStartDate().isAfter(request.getEndDate())) {
             throw new IllegalArgumentException("Ngày bắt đầu không được lớn hơn ngày kết thúc!");
         }
 
-        // Validate Trùng mã
-        if (voucherRepository.existsByCode(request.getCode())) {
-            throw new IllegalArgumentException("Mã Voucher này đã tồn tại!");
-        }
-
         Voucher voucher = new Voucher();
-        voucher.setCode(request.getCode());
+        voucher.setCode(code); // Dùng mã đã xử lý
         voucher.setDiscountType(request.getDiscountType());
         voucher.setDiscountValue(request.getDiscountValue());
         voucher.setMinOrderValue(request.getMinOrderValue() != null ? request.getMinOrderValue() : java.math.BigDecimal.ZERO);

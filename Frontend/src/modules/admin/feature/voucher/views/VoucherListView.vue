@@ -125,35 +125,78 @@
             
             <form @submit.prevent="handleSubmit">
               <div class="row g-4">
+                
+                <!-- MÃ VOUCHER -->
                 <div class="col-md-12">
-                  <label class="form-label fw-bold">Mã Voucher <span class="text-danger">*</span></label>
+                  <label class="form-label fw-bold">Mã Voucher</label>
                   <div class="input-group">
-                    <input type="text" class="form-control form-control-lg text-uppercase" v-model="form.code" required maxlength="20" placeholder="VD: SUMMER24" />
+                    <input 
+                      type="text" 
+                      class="form-control form-control-lg text-uppercase" 
+                      v-model="form.code" 
+                      @input="handleCodeInput"
+                      maxlength="20" 
+                      placeholder="Vui lòng nhập hoặc chọn mã" 
+                    />
                     <button class="btn btn-outline-secondary px-4 fw-bold" type="button" @click="generateRandomCode">
                       <i class="bi bi-magic me-1"></i> Tạo ngẫu nhiên
                     </button>
                   </div>
+                  <small class="text-muted">Chỉ chứa ký tự chữ cái và số, tối đa 20 ký tự.</small>
                 </div>
                 
                 <div class="col-md-6">
                   <label class="form-label fw-bold">Kiểu giảm <span class="text-danger">*</span></label>
-                  <select class="form-select form-select-lg" v-model="form.discountType">
+                  <select class="form-select form-select-lg" v-model="form.discountType" @change="resetDiscountValue">
                     <option value="PERCENT">Phần trăm (%)</option>
                     <option value="FIXED">Cố định (VNĐ)</option>
                   </select>
                 </div>
+
                 <div class="col-md-6">
                   <label class="form-label fw-bold">Mức giảm <span class="text-danger">*</span></label>
-                  <input type="number" class="form-control form-control-lg" v-model="form.discountValue" required min="1" :max="form.discountType === 'PERCENT' ? 100 : 100000000" placeholder="Tối đa 100 triệu..." />
+                  <div class="input-group">
+                    <input 
+                      v-if="form.discountType === 'FIXED'"
+                      type="text" 
+                      class="form-control form-control-lg" 
+                      :value="formatNumber(form.discountValue)" 
+                      @input="handleCurrencyInput('discountValue', $event)" 
+                      required
+                    />
+                    <input 
+                      v-else
+                      type="text" 
+                      class="form-control form-control-lg" 
+                      :value="form.discountValue" 
+                      @input="handlePercentInput" 
+                      required
+                    />
+                    <span class="input-group-text">{{ form.discountType === 'PERCENT' ? '%' : 'VNĐ' }}</span>
+                  </div>
                 </div>
 
                 <div class="col-md-6">
                   <label class="form-label fw-bold">Đơn tối thiểu (VNĐ) <span class="text-danger">*</span></label>
-                  <input type="number" class="form-control form-control-lg" v-model="form.minOrderValue" required min="0" max="100000000" />
+                  <input 
+                    type="text" 
+                    class="form-control form-control-lg" 
+                    :value="formatNumber(form.minOrderValue)" 
+                    @input="handleCurrencyInput('minOrderValue', $event)" 
+                    required 
+                  />
                 </div>
+
                 <div class="col-md-6">
-                  <label class="form-label fw-bold">Mức giảm tối đa (VNĐ)</label>
-                  <input type="number" class="form-control form-control-lg" v-model="form.maxDiscount" min="0" max="100000000" :disabled="form.discountType === 'FIXED'" />
+                  <label class="form-label fw-bold">Mức giảm tối đa (VNĐ) <span class="text-danger">*</span></label>
+                  <input 
+                    type="text" 
+                    class="form-control form-control-lg" 
+                    :value="formatNumber(form.maxDiscount)" 
+                    @input="handleCurrencyInput('maxDiscount', $event)" 
+                    :disabled="form.discountType === 'FIXED'" 
+                  />
+                  <small class="text-muted d-block mt-1" v-if="form.discountType === 'FIXED'">Không áp dụng cho giảm tiền mặt</small>
                 </div>
 
                 <div class="col-md-6">
@@ -168,8 +211,16 @@
 
                 <div class="col-md-6">
                   <label class="form-label fw-bold">Giới hạn số lượt dùng <span class="text-danger">*</span></label>
-                  <input type="number" class="form-control form-control-lg" v-model="form.usageLimit" required min="1" max="1000000" />
+                  <input 
+                    type="text" 
+                    class="form-control form-control-lg" 
+                    :value="form.usageLimit" 
+                    @input="handleUsageLimitInput"
+                    required 
+                  />
+                  <small class="text-muted">Tối đa 1.000 lượt.</small>
                 </div>
+                
                 <div class="col-md-6">
                   <label class="form-label fw-bold">Trạng thái</label>
                   <select class="form-select form-select-lg" v-model="form.status">
@@ -220,7 +271,100 @@ const initialForm = {
 };
 const form = ref({ ...initialForm });
 
-// Lấy danh sách Voucher (có Phân trang & Filter)
+// ================= CÁC HÀM VALIDATE VÀ FORMAT GIAO DIỆN =================
+
+// Hàm gõ mã: Lọc bỏ ký tự đặc biệt, khoảng trắng, chỉ lấy chữ và số, tự in hoa
+const handleCodeInput = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  let rawVal = target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 20);
+  form.value.code = rawVal;
+  target.value = rawVal;
+};
+
+// Hàm định dạng hiển thị tiền VNĐ (VD: 50000 -> 50.000)
+const formatNumber = (value: any) => {
+  if (value === null || value === undefined || value === '') return '';
+  return String(value).replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
+// Reset ô Mức giảm về 0 khi đổi Kiểu giảm để tránh lỗi logic
+const resetDiscountValue = () => {
+  form.value.discountValue = 0;
+  if (form.value.discountType === 'FIXED') {
+    form.value.maxDiscount = 0; // Vô hiệu hóa maxDiscount khi dùng giảm tiền mặt
+  }
+};
+
+// Hàm Validate ô nhập Tiền tệ (Mức giảm VNĐ, Đơn tối thiểu, Giảm tối đa)
+const handleCurrencyInput = (field: string, event: Event) => {
+  const target = event.target as HTMLInputElement;
+  let rawValue = target.value.replace(/\D/g, ''); // Bỏ hết chữ, ký tự lạ, giữ lại số
+  let numValue = Number(rawValue);
+
+  // Giới hạn max 100.000.000 VNĐ
+  if (numValue > 100000000) {
+    Swal.fire({
+      toast: true, position: 'top-end', icon: 'warning', 
+      title: 'Số tiền tối đa là 100.000.000 VNĐ', 
+      showConfirmButton: false, timer: 2000
+    });
+    numValue = 100000000;
+  }
+
+  (form.value as any)[field] = numValue;
+  target.value = formatNumber(numValue);
+};
+
+// Hàm Validate ô nhập Mức giảm (%)
+const handlePercentInput = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  let rawValue = target.value.replace(/\D/g, ''); // Chỉ lấy số
+  let numValue = Number(rawValue);
+
+  if (numValue > 100) {
+    Swal.fire({
+      toast: true, position: 'top-end', icon: 'warning', 
+      title: 'Mức giảm phần trăm không vượt quá 100%', 
+      showConfirmButton: false, timer: 2000
+    });
+    numValue = 100;
+  }
+
+  form.value.discountValue = numValue;
+  target.value = String(numValue);
+};
+
+// Hàm Validate giới hạn lượt dùng
+const handleUsageLimitInput = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  let rawValue = target.value.replace(/\D/g, ''); // Chỉ lấy số
+  let numValue = Number(rawValue);
+
+  if (numValue > 1000) {
+    Swal.fire({
+      toast: true, position: 'top-end', icon: 'warning', 
+      title: 'Giới hạn tối đa là 1.000 lượt', 
+      showConfirmButton: false, timer: 20000
+    });
+    numValue = 1000;
+  }
+
+  form.value.usageLimit = numValue;
+  target.value = String(numValue);
+};
+
+// Hàm tạo mã ngẫu nhiên 8 ký tự
+const generateRandomCode = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = 'SALE'; 
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  form.value.code = code;
+};
+
+
+// ================= CALL API VÀ XỬ LÝ DỮ LIỆU BẢNG =================
 const fetchVouchers = async () => {
   isLoading.value = true;
   try {
@@ -235,7 +379,6 @@ const fetchVouchers = async () => {
       headers: { Authorization: `Bearer ${token}` }
     });
     
-    // Vì backend trả về Page object nên dữ liệu thực nằm trong content
     vouchers.value = res.data.content || [];
     totalPages.value = res.data.totalPages || 0;
   } catch (error) {
@@ -245,29 +388,18 @@ const fetchVouchers = async () => {
   }
 };
 
-// Xử lý Phân trang & Tìm kiếm
 const changePage = (page: number) => {
   if (page >= 0 && page < totalPages.value) {
     currentPage.value = page;
     fetchVouchers();
   }
 };
+
 const handleSearch = () => {
-  currentPage.value = 0; // Reset về trang 1 khi search
+  currentPage.value = 0; 
   fetchVouchers();
 };
 
-// Hàm tạo mã ngẫu nhiên 8 ký tự
-const generateRandomCode = () => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = 'SALE'; // Tiền tố
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  form.value.code = code;
-};
-
-// ================= CÁC HÀM XỬ LÝ MODAL =================
 const openCreateModal = () => {
   isEditing.value = false;
   editId.value = null;
@@ -280,7 +412,6 @@ const openEditModal = (voucher: any) => {
   isEditing.value = true;
   editId.value = voucher.id;
   
-  // Format lại ngày để nhét vừa thẻ input datetime-local
   const sDate = voucher.startDate ? voucher.startDate.substring(0, 16) : '';
   const eDate = voucher.endDate ? voucher.endDate.substring(0, 16) : '';
   
@@ -295,8 +426,8 @@ const closeModal = () => {
 
 const validateDates = () => {
   if (form.value.startDate && form.value.endDate) {
-    if (new Date(form.value.startDate) > new Date(form.value.endDate)) {
-      dateError.value = 'Ngày bắt đầu không được lớn hơn ngày kết thúc!';
+    if (new Date(form.value.startDate) >= new Date(form.value.endDate)) {
+      dateError.value = 'Ngày kết thúc phải sau ngày bắt đầu!';
       return false;
     }
   }
@@ -304,7 +435,19 @@ const validateDates = () => {
 };
 
 const handleSubmit = async () => {
+  // Validate kiểm tra Submit lần cuối
+  if (!form.value.discountType || !form.value.startDate || !form.value.endDate || !form.value.usageLimit) {
+    Swal.fire('Lỗi', 'Vui lòng nhập đầy đủ các trường bắt buộc có dấu (*)!', 'error');
+    return;
+  }
+
+  if (form.value.discountValue <= 0) {
+    Swal.fire('Lỗi', 'Mức giảm giá phải lớn hơn 0!', 'error');
+    return;
+  }
+
   if (!validateDates()) return;
+
   isSaving.value = true;
   try {
     const token = localStorage.getItem('token');
@@ -320,7 +463,7 @@ const handleSubmit = async () => {
       Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Thêm mới thành công', showConfirmButton: false, timer: 1500 });
     }
     closeModal();
-    fetchVouchers(); // Refresh bảng
+    fetchVouchers();
   } catch (error: any) {
     Swal.fire('Lỗi', error.response?.data || 'Có lỗi xảy ra!', 'error');
   } finally {
@@ -328,7 +471,6 @@ const handleSubmit = async () => {
   }
 };
 
-// Xóa Voucher
 const handleDelete = async (id: number) => {
   const result = await Swal.fire({
     title: 'Xác nhận xóa?',
