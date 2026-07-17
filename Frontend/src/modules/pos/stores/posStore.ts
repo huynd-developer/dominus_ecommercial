@@ -10,7 +10,6 @@ export interface PosProduct {
   stockQuantity: number;
   image: string;
   category: string;
-
   manufacturingDate?: string | null;
   expirationDate?: string | null;
   status?: number | null;
@@ -49,6 +48,24 @@ export interface PosHeldOrder {
   customerEmail?: string;
 }
 
+export interface PosVoucher {
+  id?: number;
+  code: string;
+  name: string;
+  description?: string;
+  discountType: string;
+  discountValue: number;
+  discountPercent?: number;
+  maxDiscountAmount?: number;
+  minOrderAmount?: number;
+  discountAmount: number;
+  startDate?: string | null;
+  endDate?: string | null;
+  remainingQuantity?: number | null;
+  eligible: boolean;
+  ineligibleReason?: string | null;
+}
+
 export interface PosTransferTarget {
   employeeId: number;
   employeeCode?: string;
@@ -67,9 +84,11 @@ export interface PosStoreState {
   categories: string[];
   selectedCategory: string;
   searchQuery: string;
-
+  availableVouchers: PosVoucher[];
+  voucherLoading: boolean;
   cart: CartItem[];
   customer: PosCustomer | null;
+  customerSavedKey: string;
 
   voucherCode: string;
   discountAmount: number;
@@ -106,6 +125,16 @@ const normalizeEmail = (value?: string | null): string => {
   return (value || "").trim().toLowerCase();
 };
 
+const buildCustomerSavedKey = (customer?: PosCustomer | null): string => {
+  if (!customer) return "";
+
+  return [
+    normalizePhone(customer.phone),
+    normalizeText(customer.name),
+    normalizeEmail(customer.email),
+  ].join("|");
+};
+
 const isValidEmail = (email: string): boolean => {
   return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(email);
 };
@@ -117,25 +146,11 @@ const formatMoney = (value: number): string => {
 const getBackendMessage = (error: any, fallback: string): string => {
   const data = error?.response?.data;
 
-  if (!data) {
-    return fallback;
-  }
-
-  if (typeof data === "string") {
-    return data;
-  }
-
-  if (data.message) {
-    return String(data.message);
-  }
-
-  if (data.detail) {
-    return String(data.detail);
-  }
-
-  if (data.error) {
-    return String(data.error);
-  }
+  if (!data) return fallback;
+  if (typeof data === "string") return data;
+  if (data.message) return String(data.message);
+  if (data.detail) return String(data.detail);
+  if (data.error) return String(data.error);
 
   if (data.errors && typeof data.errors === "object") {
     const firstError = Object.values(data.errors)[0];
@@ -153,40 +168,29 @@ const getBackendMessage = (error: any, fallback: string): string => {
 };
 
 const toDateOnly = (value?: string | null): string | null => {
-  if (!value) {
-    return null;
-  }
-
+  if (!value) return null;
   return String(value).substring(0, 10);
 };
 
 const isDateBeforeToday = (value?: string | null): boolean => {
   const dateOnly = toDateOnly(value);
-
-  if (!dateOnly) {
-    return false;
-  }
+  if (!dateOnly) return false;
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const date = new Date(`${dateOnly}T00:00:00`);
-
   return !Number.isNaN(date.getTime()) && date.getTime() < today.getTime();
 };
 
 const isDateAfterToday = (value?: string | null): boolean => {
   const dateOnly = toDateOnly(value);
-
-  if (!dateOnly) {
-    return false;
-  }
+  if (!dateOnly) return false;
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const date = new Date(`${dateOnly}T00:00:00`);
-
   return !Number.isNaN(date.getTime()) && date.getTime() > today.getTime();
 };
 
@@ -203,17 +207,9 @@ const buildVariantText = (variant: any): string => {
 const getProductUnavailableReason = (
   product?: PosProduct | null
 ): string | null => {
-  if (!product) {
-    return "Sản phẩm không hợp lệ.";
-  }
-
-  if (product.unavailableReason) {
-    return product.unavailableReason;
-  }
-
-  if (product.sellable === false) {
-    return "Sản phẩm hiện không được bán.";
-  }
+  if (!product) return "Sản phẩm không hợp lệ.";
+  if (product.unavailableReason) return product.unavailableReason;
+  if (product.sellable === false) return "Sản phẩm hiện không được bán.";
 
   if (product.status != null && Number(product.status) !== 1) {
     return "Sản phẩm đang ngừng bán.";
@@ -297,15 +293,169 @@ const mapPosProductFromBackend = (
   };
 };
 
+const numberValue = (...values: any[]): number => {
+  for (const value of values) {
+    if (value !== undefined && value !== null && value !== "") {
+      const number = Number(value);
+
+      if (!Number.isNaN(number)) {
+        return number;
+      }
+    }
+  }
+
+  return 0;
+};
+
+const getVoucherCode = (raw: any): string => {
+  return String(raw?.code || raw?.voucherCode || raw?.voucher_code || "")
+    .trim()
+    .toUpperCase();
+};
+
+const calculateVoucherDiscountAmount = (
+  raw: any,
+  orderTotal: number
+): number => {
+  const total = Math.max(Number(orderTotal || 0), 0);
+  const responseDiscountAmount = numberValue(raw?.discountAmount);
+
+  if (responseDiscountAmount > 0) {
+    return Math.min(responseDiscountAmount, total);
+  }
+
+  const discountType = String(raw?.discountType || raw?.type || "")
+    .trim()
+    .toUpperCase();
+
+  const discountValue = numberValue(
+    raw?.discountValue,
+    raw?.value,
+    raw?.discount,
+    raw?.discountPercent
+  );
+
+  const maxDiscountAmount = numberValue(
+    raw?.maxDiscountAmount,
+    raw?.maxDiscount,
+    raw?.maximumDiscountAmount
+  );
+
+  let discountAmount = 0;
+
+  if (discountType === "PERCENT" || discountType === "PERCENTAGE") {
+    discountAmount = Math.round((total * discountValue) / 100);
+  } else {
+    discountAmount = discountValue;
+  }
+
+  if (maxDiscountAmount > 0) {
+    discountAmount = Math.min(discountAmount, maxDiscountAmount);
+  }
+
+  return Math.max(Math.min(discountAmount, total), 0);
+};
+
+const mapPosVoucherFromBackend = (
+  raw: any,
+  orderTotal: number
+): PosVoucher => {
+  const code = getVoucherCode(raw);
+  const discountType = String(raw?.discountType || raw?.type || "")
+    .trim()
+    .toUpperCase();
+
+  const discountValue = numberValue(raw?.discountValue, raw?.value, raw?.discount);
+  const discountPercent = numberValue(raw?.discountPercent);
+
+  const maxDiscountAmount = numberValue(
+    raw?.maxDiscountAmount,
+    raw?.maxDiscount,
+    raw?.maximumDiscountAmount
+  );
+
+  const minOrderAmount = numberValue(
+    raw?.minOrderAmount,
+    raw?.minOrderValue,
+    raw?.minimumOrderValue
+  );
+
+  const discountAmount = calculateVoucherDiscountAmount(raw, orderTotal);
+  const remainingQuantityRaw =
+    raw?.remainingQuantity ?? raw?.quantityLeft ?? raw?.remaining;
+
+  const eligible =
+    raw?.eligible === undefined || raw?.eligible === null
+      ? Number(orderTotal || 0) >= minOrderAmount && discountAmount > 0
+      : Boolean(raw.eligible);
+
+  return {
+    id: raw?.id ?? raw?.voucherId,
+    code,
+    name: String(raw?.name || raw?.voucherName || code || "Voucher"),
+    description: raw?.description || raw?.note || undefined,
+    discountType,
+    discountValue,
+    discountPercent:
+      discountPercent > 0
+        ? discountPercent
+        : discountType === "PERCENT" || discountType === "PERCENTAGE"
+        ? discountValue
+        : 0,
+    maxDiscountAmount,
+    minOrderAmount,
+    discountAmount: eligible ? discountAmount : 0,
+    startDate: raw?.startDate || raw?.startAt || null,
+    endDate: raw?.endDate || raw?.endAt || null,
+    remainingQuantity:
+      remainingQuantityRaw === undefined || remainingQuantityRaw === null
+        ? null
+        : Number(remainingQuantityRaw),
+    eligible,
+    ineligibleReason:
+      raw?.ineligibleReason ||
+      raw?.reason ||
+      (!eligible && minOrderAmount > Number(orderTotal || 0)
+        ? `Đơn tối thiểu ${formatMoney(minOrderAmount)} ₫ để dùng voucher này.`
+        : null),
+  };
+};
+
+const sortVouchersByBest = (vouchers: PosVoucher[]): PosVoucher[] => {
+  return [...vouchers].sort((a, b) => {
+    if (a.eligible !== b.eligible) {
+      return a.eligible ? -1 : 1;
+    }
+
+    const discountDiff =
+      Number(b.discountAmount || 0) - Number(a.discountAmount || 0);
+
+    if (discountDiff !== 0) {
+      return discountDiff;
+    }
+
+    const minOrderDiff =
+      Number(a.minOrderAmount || 0) - Number(b.minOrderAmount || 0);
+
+    if (minOrderDiff !== 0) {
+      return minOrderDiff;
+    }
+
+    return String(a.code || "").localeCompare(String(b.code || ""));
+  });
+};
+
 export const usePosStore = defineStore("posStore", {
   state: (): PosStoreState => ({
     allProducts: [],
     categories: ["Tất cả"],
     selectedCategory: "Tất cả",
     searchQuery: "",
-
+    availableVouchers: [],
+    voucherLoading: false,
     cart: [],
     customer: null,
+    customerSavedKey: "",
 
     voucherCode: "",
     discountAmount: 0,
@@ -373,6 +523,15 @@ export const usePosStore = defineStore("posStore", {
     isOrderLocked(state): boolean {
       return state.cashPaid > 0 || state.activeHeldOrderId !== null;
     },
+
+    isCustomerSavedForCurrentInfo(state): boolean {
+      if (!state.customer) return false;
+
+      return (
+        !!state.customerSavedKey &&
+        state.customerSavedKey === buildCustomerSavedKey(state.customer)
+      );
+    },
   },
 
   actions: {
@@ -408,6 +567,46 @@ export const usePosStore = defineStore("posStore", {
       }
     },
 
+    async fetchAvailableVouchers() {
+      const total = Number(this.totalAmount || 0);
+
+      if (this.cart.length === 0 || total <= 0 || this.activeHeldOrderId) {
+        this.availableVouchers = [];
+        return [];
+      }
+
+      this.voucherLoading = true;
+
+      try {
+        const { data } = await api.get("/admin/vouchers/available", {
+          params: {
+            orderTotal: total,
+          },
+        });
+
+        const rawVouchers = Array.isArray(data)
+          ? data
+          : data?.data || data?.content || data?.vouchers || data?.items || [];
+
+        const mappedVouchers = rawVouchers
+          .map((item: any) => mapPosVoucherFromBackend(item, total))
+          .filter((item: PosVoucher) => !!item.code);
+
+        this.availableVouchers = sortVouchersByBest(mappedVouchers);
+
+        return this.availableVouchers;
+      } catch (error: any) {
+        this.availableVouchers = [];
+        this.errorMsg = getBackendMessage(
+          error,
+          "Không thể tải danh sách voucher khả dụng."
+        );
+        return false;
+      } finally {
+        this.voucherLoading = false;
+      }
+    },
+
     async applyVoucher() {
       this.errorMsg = "";
 
@@ -438,18 +637,19 @@ export const usePosStore = defineStore("posStore", {
       this.errorMsg = "";
 
       try {
-        const { data } = await api.get("/admin/pos/voucher/apply", {
+        const { data } = await api.get("/admin/vouchers/apply", {
           params: {
             code: cleanCode,
-            totalAmount: this.totalAmount,
+            orderTotal: this.totalAmount,
           },
         });
 
-        this.voucherCode = String(data?.voucherCode || cleanCode)
+        this.voucherCode = String(data?.voucherCode || data?.code || cleanCode)
           .trim()
           .toUpperCase();
+
         this.discountAmount = Number(data?.discountAmount || 0);
-        this.errorMsg = "";
+        this.errorMsg = "Áp voucher thành công.";
 
         return {
           success: true,
@@ -457,12 +657,10 @@ export const usePosStore = defineStore("posStore", {
         };
       } catch (error: any) {
         this.discountAmount = 0;
-
         this.errorMsg = getBackendMessage(
           error,
           "Mã giảm giá không hợp lệ hoặc không đủ điều kiện áp dụng."
         );
-
         return false;
       } finally {
         this.isLoading = false;
@@ -472,8 +670,11 @@ export const usePosStore = defineStore("posStore", {
     resetLocalOrderOnly() {
       this.cart = [];
       this.customer = null;
+      this.customerSavedKey = "";
       this.voucherCode = "";
       this.discountAmount = 0;
+      this.availableVouchers = [];
+      this.voucherLoading = false;
       this.paymentMethod = "CASH";
       this.cashPaid = 0;
       this.vnpayUrl = "";
@@ -616,9 +817,7 @@ export const usePosStore = defineStore("posStore", {
 
       const cleanSku = normalizeText(sku);
 
-      if (!cleanSku) {
-        return;
-      }
+      if (!cleanSku) return;
 
       const localProduct = this.allProducts.find(
         (p) => p.sku.toLowerCase() === cleanSku.toLowerCase()
@@ -671,9 +870,7 @@ export const usePosStore = defineStore("posStore", {
 
       const item = this.cart.find((i) => i.product.sku === sku);
 
-      if (!item) {
-        return;
-      }
+      if (!item) return;
 
       const unavailableReason = getProductUnavailableReason(item.product);
 
@@ -717,6 +914,22 @@ export const usePosStore = defineStore("posStore", {
       this.clearVoucherLocal(true);
     },
 
+    markCustomerUnsaved() {
+      if (this.activeHeldOrderId) return;
+      this.customerSavedKey = "";
+    },
+
+    markCustomerSaved(customer?: PosCustomer | null) {
+      const targetCustomer = customer || this.customer;
+
+      if (!targetCustomer) {
+        this.customerSavedKey = "";
+        return;
+      }
+
+      this.customerSavedKey = buildCustomerSavedKey(targetCustomer);
+    },
+
     async searchCustomer(phone: string) {
       const cleanPhone = normalizePhone(phone);
 
@@ -733,12 +946,14 @@ export const usePosStore = defineStore("posStore", {
 
       if (!cleanPhone) {
         this.customer = null;
+        this.customerSavedKey = "";
         this.errorMsg = "Vui lòng nhập số điện thoại khách hàng.";
         return;
       }
 
       if (!isValidVietnamPhone(cleanPhone)) {
         this.customer = null;
+        this.customerSavedKey = "";
         this.errorMsg =
           "Số điện thoại không hợp lệ. Vui lòng nhập 10 số, bắt đầu bằng 03, 05, 07, 08 hoặc 09.";
         return;
@@ -764,6 +979,7 @@ export const usePosStore = defineStore("posStore", {
             loyaltyPoints: Number(data.customer.loyaltyPoints || 0),
           };
 
+          this.markCustomerSaved();
           this.errorMsg = "";
           return;
         }
@@ -776,15 +992,112 @@ export const usePosStore = defineStore("posStore", {
           loyaltyPoints: 0,
         };
 
+        this.customerSavedKey = "";
         this.errorMsg =
           data?.message ||
-          "Không tìm thấy khách hàng. Vui lòng nhập họ tên và email để tạo khách mới.";
+          "Không tìm thấy khách hàng. Vui lòng nhập họ tên và email. Hệ thống sẽ lưu khách khi treo phiếu hoặc thanh toán.";
       } catch (error: any) {
         this.customer = null;
+        this.customerSavedKey = "";
         this.errorMsg = getBackendMessage(
           error,
           "Không thể kiểm tra số điện thoại khách hàng."
         );
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    async saveCustomerForPos() {
+      this.errorMsg = "";
+
+      if (this.activeHeldOrderId) {
+        this.errorMsg = "Đang mở phiếu treo, không được đổi/lưu khách hàng.";
+        return false;
+      }
+
+      if (this.cashPaid > 0) {
+        this.errorMsg =
+          "Đơn đã nhận tiền mặt một phần, không được đổi/lưu khách hàng.";
+        return false;
+      }
+
+      if (!this.customer) {
+        this.errorMsg = "Vui lòng nhập thông tin khách hàng.";
+        return false;
+      }
+
+      const cleanPhone = normalizePhone(this.customer.phone);
+      const customerName = normalizeText(this.customer.name);
+      const customerEmail = normalizeEmail(this.customer.email);
+
+      if (!cleanPhone) {
+        this.errorMsg = "Số điện thoại khách hàng không được để trống.";
+        return false;
+      }
+
+      if (!isValidVietnamPhone(cleanPhone)) {
+        this.errorMsg =
+          "Số điện thoại khách hàng không hợp lệ. Vui lòng kiểm tra lại.";
+        return false;
+      }
+
+      if (!customerName) {
+        this.errorMsg = "Họ tên khách hàng không được để trống.";
+        return false;
+      }
+
+      if (customerName.length < 2 || customerName.length > 100) {
+        this.errorMsg = "Họ tên khách hàng phải từ 2 đến 100 ký tự.";
+        return false;
+      }
+
+      if (!customerEmail) {
+        this.errorMsg = "Email khách hàng không được để trống.";
+        return false;
+      }
+
+      if (!isValidEmail(customerEmail)) {
+        this.errorMsg = "Email khách hàng không đúng định dạng.";
+        return false;
+      }
+
+      this.isLoading = true;
+      this.errorMsg = "";
+
+      try {
+        const { data } = await api.post("/admin/pos/customer", {
+          phone: cleanPhone,
+          name: customerName,
+          email: customerEmail,
+        });
+
+        const savedCustomer = data?.customer;
+
+        this.customer = {
+          customerId: savedCustomer?.customerId,
+          name: savedCustomer?.name || customerName,
+          phone: savedCustomer?.phone || cleanPhone,
+          email: savedCustomer?.email || customerEmail,
+          customerRank: savedCustomer?.customerRank || "BRONZE",
+          loyaltyPoints: Number(savedCustomer?.loyaltyPoints || 0),
+        };
+
+        this.markCustomerSaved();
+        this.errorMsg = data?.message || "Đã lưu thông tin khách hàng.";
+
+        return {
+          success: true,
+          data,
+        };
+      } catch (error: any) {
+        this.customerSavedKey = "";
+        this.errorMsg = getBackendMessage(
+          error,
+          "Lưu khách hàng thất bại. Vui lòng kiểm tra lại thông tin."
+        );
+
+        return false;
       } finally {
         this.isLoading = false;
       }
@@ -835,6 +1148,7 @@ export const usePosStore = defineStore("posStore", {
       this.customer.phone = cleanPhone;
       this.customer.name = customerName;
       this.customer.email = customerEmail;
+
       this.errorMsg = "";
 
       return true;
@@ -871,13 +1185,8 @@ export const usePosStore = defineStore("posStore", {
         return false;
       }
 
-      if (!this.validateCartCanCheckout()) {
-        return false;
-      }
-
-      if (!this.validateCustomerForCheckout()) {
-        return false;
-      }
+      if (!this.validateCartCanCheckout()) return false;
+      if (!this.validateCustomerForCheckout()) return false;
 
       if (money <= 0) {
         this.errorMsg = "Tiền khách đưa phải lớn hơn 0.";
@@ -1004,9 +1313,7 @@ export const usePosStore = defineStore("posStore", {
       cashGiven?: number;
       transferAmount?: number;
     }) {
-      if (!this.validateCartCanCheckout()) {
-        return false;
-      }
+      if (!this.validateCartCanCheckout()) return false;
 
       let selectedPaymentMethod: PosCheckoutPaymentMethod =
         extra?.paymentMethod || this.paymentMethod;
@@ -1061,9 +1368,7 @@ export const usePosStore = defineStore("posStore", {
 
           data = response.data;
         } else {
-          if (!this.validateCustomerForCheckout()) {
-            return false;
-          }
+          if (!this.validateCustomerForCheckout()) return false;
 
           const payload = this.buildCheckoutPayload(
             selectedPaymentMethod,
@@ -1137,13 +1442,8 @@ export const usePosStore = defineStore("posStore", {
         return false;
       }
 
-      if (!this.validateCartCanCheckout()) {
-        return false;
-      }
-
-      if (!this.validateCustomerForCheckout()) {
-        return false;
-      }
+      if (!this.validateCartCanCheckout()) return false;
+      if (!this.validateCustomerForCheckout()) return false;
 
       this.isLoading = true;
       this.errorMsg = "";
@@ -1258,6 +1558,8 @@ export const usePosStore = defineStore("posStore", {
           customerRank: data.customerRank || "BRONZE",
           loyaltyPoints: Number(data.customerLoyaltyPointsAfter || 0),
         };
+
+        this.markCustomerSaved();
 
         this.voucherCode = data.voucherCode || "";
         this.discountAmount = Number(data.discountAmount || 0);

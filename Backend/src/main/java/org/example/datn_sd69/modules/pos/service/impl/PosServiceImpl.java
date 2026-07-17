@@ -20,6 +20,7 @@ import org.example.datn_sd69.modules.pos.dto.request.PosItemRequest;
 import org.example.datn_sd69.modules.pos.dto.response.PosHeldOrderResponse;
 import org.example.datn_sd69.modules.pos.dto.response.PosOrderResponse;
 import org.example.datn_sd69.modules.pos.dto.response.ProductVariantPosResponse;
+import org.example.datn_sd69.modules.pos.dto.request.PosSaveCustomerRequest;
 import org.example.datn_sd69.modules.pos.service.PosService;
 import org.example.datn_sd69.modules.vnpay.service.VNPayService;
 import org.example.datn_sd69.repository.CustomerRepository;
@@ -127,6 +128,22 @@ public class PosServiceImpl implements PosService {
         return customerRepository.findByUserPhone(cleanPhone)
                 .map(this::toCustomerPosResponse)
                 .orElse(null);
+    }
+
+    @Override
+    @Transactional
+    public CustomerPosResponse saveCustomerForPos(PosSaveCustomerRequest request) {
+        if (request == null) {
+            throw new RuntimeException("Thông tin khách hàng không được để trống.");
+        }
+
+        Customer customer = resolveOrCreateCustomer(
+                request.getPhone(),
+                request.getName(),
+                request.getEmail()
+        );
+
+        return toCustomerPosResponse(customer);
     }
 
     @Override
@@ -300,9 +317,25 @@ public class PosServiceImpl implements PosService {
      * 4. Không tạo email giả.
      */
     private Customer resolveOrCreateCustomer(PosCheckoutRequest request) {
-        String phone = normalizeRequiredPhone(request.getCustomerPhone());
-        String name = normalizeRequiredName(request.getCustomerName());
-        String email = normalizeRequiredEmail(request.getCustomerEmail());
+        if (request == null) {
+            throw new RuntimeException("Thông tin khách hàng không được để trống.");
+        }
+
+        return resolveOrCreateCustomer(
+                request.getCustomerPhone(),
+                request.getCustomerName(),
+                request.getCustomerEmail()
+        );
+    }
+
+    private Customer resolveOrCreateCustomer(
+            String rawPhone,
+            String rawName,
+            String rawEmail
+    ) {
+        String phone = normalizeRequiredPhone(rawPhone);
+        String name = normalizeRequiredName(rawName);
+        String email = normalizeRequiredEmail(rawEmail);
 
         Customer customerByPhone = customerRepository.findByUserPhone(phone)
                 .orElse(null);
@@ -1333,14 +1366,15 @@ public class PosServiceImpl implements PosService {
     }
 
     private Customer resolveOrCreateCustomerFromHold(PosHoldRequest request) {
-        PosCheckoutRequest checkoutRequest = new PosCheckoutRequest();
-        checkoutRequest.setCustomerPhone(request.getCustomerPhone());
-        checkoutRequest.setCustomerName(request.getCustomerName());
-        checkoutRequest.setCustomerEmail(request.getCustomerEmail());
-        checkoutRequest.setPaymentMethod(PAYMENT_CASH);
-        checkoutRequest.setItems(request.getItems());
+        if (request == null) {
+            throw new RuntimeException("Thông tin khách hàng không được để trống.");
+        }
 
-        return resolveOrCreateCustomer(checkoutRequest);
+        return resolveOrCreateCustomer(
+                request.getCustomerPhone(),
+                request.getCustomerName(),
+                request.getCustomerEmail()
+        );
     }
 
     private Order getHeldOrderOrThrow(Integer orderId) {

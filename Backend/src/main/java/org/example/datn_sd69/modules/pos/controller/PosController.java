@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.modules.pos.dto.request.PosCheckoutRequest;
 import org.example.datn_sd69.modules.pos.dto.request.PosHeldOrderCheckoutRequest;
 import org.example.datn_sd69.modules.pos.dto.request.PosHoldRequest;
+import org.example.datn_sd69.modules.pos.dto.request.PosSaveCustomerRequest;
 import org.example.datn_sd69.modules.pos.dto.request.PosTransferHeldOrderRequest;
 import org.example.datn_sd69.modules.pos.dto.response.CustomerPosResponse;
 import org.example.datn_sd69.modules.pos.dto.response.PosHeldOrderResponse;
@@ -42,6 +43,7 @@ public class PosController {
 
     /**
      * Quét SKU/barcode tại POS.
+     *
      * Nếu sản phẩm không bán được, BE trả lỗi luôn.
      */
     @GetMapping("/product")
@@ -54,11 +56,15 @@ public class PosController {
     /**
      * Tìm khách hàng theo SĐT.
      *
-     * POS bắt buộc có SĐT, họ tên, email.
-     * Nếu chưa có khách thì FE cho nhập thông tin và BE sẽ tạo Customer khi checkout/hold.
+     * API này chỉ tìm, không tạo khách.
+     *
+     * Luồng đúng:
+     * - Nếu tìm thấy: FE đổ thông tin khách vào form.
+     * - Nếu chưa thấy: FE cho nhập họ tên + email.
+     * - Sau đó FE gọi POST /api/admin/pos/customer để lưu khách trước khi thanh toán/treo phiếu.
      */
     @GetMapping("/customer")
-    public ResponseEntity<?> findCustomerByPhone(
+    public ResponseEntity<Map<String, Object>> findCustomerByPhone(
             @RequestParam String phone
     ) {
         CustomerPosResponse customer = posService.findCustomerByPhone(phone);
@@ -66,7 +72,7 @@ public class PosController {
         if (customer == null) {
             return ResponseEntity.ok(Map.of(
                     "found", false,
-                    "message", "Không tìm thấy khách hàng. Vui lòng nhập họ tên, số điện thoại và email để tạo khách mới."
+                    "message", "Không tìm thấy khách hàng. Vui lòng nhập họ tên, số điện thoại và email rồi bấm Lưu khách hàng."
             ));
         }
 
@@ -77,10 +83,58 @@ public class PosController {
     }
 
     /**
+     * Lưu khách hàng tại POS trước khi thanh toán/treo phiếu.
+     *
+     * Đúng nghiệp vụ thực tế:
+     * - Thu ngân nhập SĐT, họ tên, email.
+     * - Bấm "Lưu khách hàng".
+     * - BE tạo/cập nhật Customer ngay.
+     * - FE nhận lại customerId rồi mới cho thanh toán hoặc treo phiếu.
+     *
+     * Lưu ý:
+     * DB hiện tại Customer.UserId là PK/FK tới Users.Id,
+     * nên nếu khách mới hoàn toàn thì BE vẫn tạo Users role USER trước,
+     * sau đó tạo Customer.
+     */
+    @PostMapping("/customer")
+    public ResponseEntity<Map<String, Object>> saveCustomerForPos(
+            @Valid @RequestBody PosSaveCustomerRequest request
+    ) {
+        CustomerPosResponse customer = posService.saveCustomerForPos(request);
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Đã lưu thông tin khách hàng.",
+                "customer", customer
+        ));
+    }
+
+    /**
+     * Áp mã giảm giá tại POS.
+     *
+     * Chỉ kiểm tra điều kiện mã và tính số tiền giảm.
+     * Chưa tăng usedCount voucher ở bước này.
+     */
+    @GetMapping("/voucher/apply")
+    public ResponseEntity<Map<String, Object>> applyVoucher(
+            @RequestParam String code,
+            @RequestParam BigDecimal totalAmount
+    ) {
+        return ResponseEntity.ok(
+                posService.applyVoucher(code, totalAmount)
+        );
+    }
+
+    /**
      * Thanh toán đơn POS bình thường.
      *
      * CASH: hoàn thành ngay.
      * VNPAY/MIXED: tạo đơn chờ thanh toán VNPay.
+     *
+     * Về khách hàng:
+     * FE nên bắt buộc lưu khách trước khi gọi checkout.
+     * BE vẫn giữ kiểm tra/tạo-cập nhật khách trong service để chống dữ liệu lỗi
+     * nếu FE reload, bỏ qua bước lưu, hoặc client khác gọi API trực tiếp.
      */
     @PostMapping("/checkout")
     public ResponseEntity<PosOrderResponse> checkout(
@@ -104,6 +158,9 @@ public class PosController {
      * - PaymentMethod = HOLD
      * - Chưa trừ kho
      * - Khi thanh toán phiếu treo mới re-check tồn kho và trừ kho
+     *
+     * FE nên bắt buộc lưu khách trước khi treo phiếu.
+     * BE vẫn giữ kiểm tra/tạo-cập nhật khách trong service để tránh lỗi dữ liệu.
      */
     @PostMapping("/hold")
     public ResponseEntity<PosOrderResponse> holdOrder(
@@ -248,14 +305,5 @@ public class PosController {
         }
 
         return request.getRemoteAddr();
-    }
-    @GetMapping("/voucher/apply")
-    public ResponseEntity<Map<String, Object>> applyVoucher(
-            @RequestParam String code,
-            @RequestParam BigDecimal totalAmount
-    ) {
-        return ResponseEntity.ok(
-                posService.applyVoucher(code, totalAmount)
-        );
     }
 }
