@@ -29,14 +29,14 @@ public interface PosService {
 
     /**
      * Tìm khách hàng theo số điện thoại.
-     *
+     * <p>
      * API này chỉ tìm, không tạo khách.
      */
     CustomerPosResponse findCustomerByPhone(String phone);
 
     /**
      * Lưu khách hàng tại POS trước khi thanh toán/treo phiếu.
-     *
+     * <p>
      * Dùng cho nút "Lưu khách hàng" ở FE.
      */
     CustomerPosResponse saveCustomerForPos(PosSaveCustomerRequest request);
@@ -92,7 +92,7 @@ public interface PosService {
 
     /**
      * Danh sách nhân viên có thể nhận phiếu treo.
-     *
+     * <p>
      * FE dùng API này để hiển thị modal chọn nhân viên,
      * không bắt thu ngân nhập UserId/EmployeeId thủ công.
      */
@@ -113,4 +113,7 @@ public interface PosService {
             String voucherCode,
             BigDecimal totalAmount
     );
+
+    PosOrderResponse updateHeldOrder(Integer orderId, PosHoldRequest request, String cashierEmail);
+    PosOrderResponse confirmVietQrPayment(Integer orderId, String cashierEmail);
 }

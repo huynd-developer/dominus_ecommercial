@@ -1,12 +1,13 @@
 <template>
   <div class="product-panel d-flex flex-column h-100 select-none">
     <div class="filter-search-section mb-2 shrink-0">
-      <div class="category-slider d-flex gap-2 overflow-auto pb-2 no-scrollbar">
+      <div class="category-slider d-flex gap-2 overflow-auto pb-1 no-scrollbar">
         <button
           v-for="cat in posStore.categories"
           :key="cat"
           type="button"
           :class="['luxury-pill', { active: posStore.selectedCategory === cat }]"
+          :disabled="posStore.cashPaid > 0"
           @click="posStore.selectedCategory = cat"
         >
           {{ cat }}
@@ -29,13 +30,15 @@
       Không tìm thấy sản phẩm phù hợp.
     </div>
 
-    <div v-else class="product-table-wrapper flex-grow-1 overflow-auto rounded-3">
+    <div
+      v-else
+      class="product-table-wrapper flex-grow-1 overflow-auto rounded-3 custom-scrollbar"
+    >
       <table class="table table-dark-custom align-middle mb-0">
         <thead>
           <tr>
             <th class="col-product">Sản phẩm</th>
             <th class="col-variant">Biến thể</th>
-            <th class="col-sku">SKU</th>
             <th class="text-end col-price">Giá</th>
             <th class="text-center col-stock">Kho</th>
             <th class="text-end col-action">Thao tác</th>
@@ -49,23 +52,36 @@
             :class="{
               'row-disabled': isProductDisabled(product),
               'row-expired': isExpired(product),
+              'row-edit-held': posStore.activeHeldOrderId && !posStore.cashPaid,
             }"
             :title="getDisabledReason(product) || getProductTitle(product)"
           >
             <td>
-              <div class="d-flex align-items-center gap-2 min-w-0">
+              <div class="product-cell d-flex align-items-center gap-2 min-w-0">
                 <img
                   :src="product.image || placeholderImage(product.name)"
                   :alt="getProductTitle(product)"
                   class="product-thumb shrink-0"
                 />
 
-                <div class="min-w-0">
-                  <div class="product-name text-truncate" :title="product.name">
-                    {{ product.name }}
+                <div class="min-w-0 product-info">
+                  <div
+                    class="product-name-row d-flex align-items-center gap-2 min-w-0"
+                    :title="`${product.name} - SKU: ${product.sku}`"
+                  >
+                    <span class="product-name text-truncate">
+                      {{ product.name }}
+                    </span>
+
+                    <span class="sku-inline shrink-0" :title="product.sku">
+                      {{ product.sku }}
+                    </span>
                   </div>
 
-                  <div class="product-category text-truncate" :title="product.category">
+                  <div
+                    class="product-category text-truncate"
+                    :title="product.category"
+                  >
                     {{ product.category || "Chưa phân loại" }}
                   </div>
                 </div>
@@ -73,16 +89,13 @@
             </td>
 
             <td>
-              <div class="variant-text text-truncate" :title="getVariantText(product)">
+              <div
+                class="variant-text text-truncate"
+                :title="getVariantText(product)"
+              >
                 <i class="bi bi-droplet-half me-1"></i>
                 {{ getVariantText(product) }}
               </div>
-            </td>
-
-            <td>
-              <span class="sku-text text-truncate d-inline-block" :title="product.sku">
-                {{ product.sku }}
-              </span>
             </td>
 
             <td class="text-end">
@@ -105,11 +118,11 @@
                 type="button"
                 class="btn-add-product"
                 :disabled="isProductDisabled(product)"
-                :title="getDisabledReason(product) || 'Chọn sản phẩm'"
+                :title="getDisabledReason(product) || buttonTitle"
                 @click.stop="handleAddToCart(product)"
               >
                 <i class="bi bi-plus-lg"></i>
-                Chọn
+                {{ posStore.activeHeldOrderId ? "Chọn" : "Chọn" }}
               </button>
             </td>
           </tr>
@@ -119,15 +132,39 @@
 
     <div class="table-hint mt-2 font-xs text-muted-custom">
       <i class="bi bi-info-circle me-1"></i>
-      POS chỉ cho chọn sản phẩm còn hàng, đang hoạt động và đủ điều kiện bán.
+
+      <template v-if="posStore.cashPaid > 0">
+        Đơn đã nhận tiền mặt một phần: không được thêm sản phẩm, sửa số lượng hoặc đổi voucher.
+      </template>
+
+      <template v-else-if="posStore.activeHeldOrderId">
+        Đang sửa phiếu treo: được thêm sản phẩm, sửa số lượng, đổi voucher; không được đổi khách hàng.
+      </template>
+
+      <template v-else>
+        POS chỉ cho chọn sản phẩm còn hàng, đang hoạt động và đủ điều kiện bán.
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { usePosStore } from "@/modules/pos/stores/posStore";
 
 const posStore = usePosStore();
+
+const buttonTitle = computed(() => {
+  if (posStore.cashPaid > 0) {
+    return "Đơn đã nhận tiền mặt một phần, không được thêm sản phẩm";
+  }
+
+  if (posStore.activeHeldOrderId) {
+    return "Thêm sản phẩm vào phiếu treo đang sửa";
+  }
+
+  return "Chọn sản phẩm";
+});
 
 const formatPrice = (val?: number | null) => {
   return new Intl.NumberFormat("vi-VN").format(Number(val || 0));
@@ -166,7 +203,7 @@ const getVariantText = (product: any) => {
 };
 
 const getProductTitle = (product: any) => {
-  return `${product.name} - ${getVariantText(product)} - ${product.sku}`;
+  return `${product.name} - SKU: ${product.sku} - ${getVariantText(product)}`;
 };
 
 const isExpired = (product: any) => {
@@ -174,12 +211,22 @@ const isExpired = (product: any) => {
 };
 
 const getDisabledReason = (product: any) => {
-  if (posStore.isOrderLocked) {
-    return "Đơn đang bị khóa";
+  /*
+   * QUAN TRỌNG:
+   * Không khóa sản phẩm bằng activeHeldOrderId.
+   * Mở phiếu treo vẫn phải thêm được sản phẩm.
+   * Chỉ khóa khi đã nhận tiền mặt tạm.
+   */
+  if (posStore.cashPaid > 0) {
+    return "Đơn đã nhận tiền mặt một phần, không được thêm sản phẩm";
   }
 
   if (!product) {
     return "Sản phẩm không hợp lệ";
+  }
+
+  if (!product.sku) {
+    return "Sản phẩm thiếu SKU";
   }
 
   if (product.unavailableReason) {
@@ -242,6 +289,14 @@ const handleAddToCart = (product: any) => {
   font-size: 0.75rem;
 }
 
+.shrink-0 {
+  flex-shrink: 0;
+}
+
+.min-w-0 {
+  min-width: 0;
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -251,22 +306,60 @@ const handleAddToCart = (product: any) => {
   scrollbar-width: none;
 }
 
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(243, 198, 63, 0.55) rgba(15, 23, 42, 0.45);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.72);
+  border-radius: 999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(243, 198, 63, 0.85),
+    rgba(147, 197, 253, 0.5)
+  );
+  border-radius: 999px;
+  border: 2px solid rgba(15, 23, 42, 0.82);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(243, 198, 63, 1),
+    rgba(147, 197, 253, 0.78)
+  );
+}
+
 .luxury-pill {
   background-color: #131c31;
   border: 1px solid #222f4f;
   color: #9fb0d3;
-  padding: 7px 16px;
+  padding: 6px 14px;
   border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: 0.76rem;
+  font-weight: 800;
   white-space: nowrap;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.luxury-pill:hover {
+.luxury-pill:hover:not(:disabled) {
   border-color: #384f80;
   color: #f1f5f9;
+}
+
+.luxury-pill:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .luxury-pill.active {
@@ -283,196 +376,198 @@ const handleAddToCart = (product: any) => {
 }
 
 .table-dark-custom {
-  width: 100%;
   color: #dbeafe;
   background: #0b1120;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 0.78rem;
+  table-layout: fixed;
+  font-size: 0.75rem;
 }
 
 .table-dark-custom thead th {
   position: sticky;
   top: 0;
   z-index: 5;
-  background: #111a2f;
-  color: #94a3b8;
+  background: #10182a;
+  color: #9fb0d3;
   border-bottom: 1px solid #263654;
-  padding: 9px 10px;
-  font-size: 0.72rem;
+  padding: 7px 9px;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  font-size: 0.67rem;
   white-space: nowrap;
+  letter-spacing: 0.02em;
 }
 
 .table-dark-custom tbody td {
   background: #0b1120;
   border-bottom: 1px solid #18243c;
-  padding: 8px 10px;
+  padding: 6px 9px;
   vertical-align: middle;
-}
-
-.table-dark-custom tbody tr {
-  cursor: default;
-  transition: all 0.12s ease;
 }
 
 .table-dark-custom tbody tr:hover td {
   background: #121c31;
 }
 
-.row-disabled {
-  opacity: 0.52;
+.table-dark-custom tbody tr.row-edit-held:hover td {
+  background: rgba(243, 198, 63, 0.06);
 }
 
-.row-expired td {
-  background: rgba(127, 29, 29, 0.16) !important;
+.col-product {
+  width: 48%;
+}
+
+.col-variant {
+  width: 23%;
+}
+
+.col-price {
+  width: 12%;
+}
+
+.col-stock {
+  width: 7%;
+}
+
+.col-action {
+  width: 10%;
+}
+
+.product-cell {
+  min-height: 38px;
 }
 
 .product-thumb {
-  width: 42px;
-  height: 42px;
-  border-radius: 8px;
+  width: 34px;
+  height: 34px;
   object-fit: cover;
-  background: #070c18;
-  border: 1px solid #253553;
+  border-radius: 8px;
+  border: 1px solid #263654;
+  background: #111827;
+}
+
+.product-info {
+  max-width: 100%;
+}
+
+.product-name-row {
+  max-width: 100%;
+  line-height: 1.1;
 }
 
 .product-name {
   color: #f8fafc;
-  font-weight: 800;
-  max-width: 260px;
+  font-weight: 900;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 0.78rem;
+}
+
+.sku-inline {
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(147, 197, 253, 0.22);
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 0.62rem;
+  font-weight: 900;
+  line-height: 1.15;
+  max-width: 112px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .product-category {
   color: #64748b;
-  font-size: 0.7rem;
-  max-width: 260px;
+  font-size: 0.68rem;
+  max-width: 100%;
+  margin-top: 2px;
+  line-height: 1.1;
 }
 
 .variant-text {
   color: #f3c63f;
-  font-weight: 800;
-  max-width: 190px;
-}
-
-.sku-text {
-  color: #94a3b8;
-  font-size: 0.72rem;
-  max-width: 150px;
+  font-weight: 900;
+  max-width: 100%;
+  font-size: 0.76rem;
 }
 
 .price-text {
   color: #f8fafc;
   white-space: nowrap;
+  font-size: 0.76rem;
 }
 
 .stock-badge {
   display: inline-flex;
-  min-width: 34px;
+  min-width: 30px;
   justify-content: center;
   padding: 3px 7px;
   border-radius: 999px;
   font-weight: 900;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
 }
 
 .stock-ok {
-  background: rgba(34, 197, 94, 0.1);
   color: #86efac;
-  border: 1px solid rgba(34, 197, 94, 0.22);
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.2);
 }
 
 .stock-empty {
-  background: rgba(239, 68, 68, 0.12);
   color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .btn-add-product {
-  border: 1px solid rgba(243, 198, 63, 0.35);
-  background: rgba(243, 198, 63, 0.08);
+  background: rgba(243, 198, 63, 0.1);
   color: #f3c63f;
+  border: 1px solid rgba(243, 198, 63, 0.35);
   border-radius: 8px;
   padding: 5px 9px;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 900;
   white-space: nowrap;
-  transition: all 0.15s ease;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .btn-add-product:hover:not(:disabled) {
   background: #f3c63f;
   color: #0b1120;
+  border-color: #f3c63f;
 }
 
 .btn-add-product:disabled {
-  opacity: 0.45;
+  opacity: 0.55;
   cursor: not-allowed;
 }
 
-.min-w-0 {
-  min-width: 0;
+.row-disabled {
+  opacity: 0.58;
 }
 
-.shrink-0 {
-  flex-shrink: 0;
+.row-expired td {
+  background: rgba(127, 29, 29, 0.08) !important;
 }
 
-.col-product {
-  min-width: 300px;
-}
-
-.col-variant {
-  min-width: 190px;
-}
-
-.col-sku {
-  min-width: 150px;
-}
-
-.col-price {
-  min-width: 120px;
-}
-
-.col-stock {
-  min-width: 70px;
-}
-
-.col-action {
-  min-width: 90px;
+.row-edit-held td {
+  border-bottom-color: rgba(243, 198, 63, 0.16);
 }
 
 .table-hint {
-  padding-left: 2px;
-}
-
-.product-table-wrapper::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.product-table-wrapper::-webkit-scrollbar-track {
-  background: #070c18;
-}
-
-.product-table-wrapper::-webkit-scrollbar-thumb {
-  background: #1d2740;
-  border-radius: 4px;
-}
-
-.product-table-wrapper::-webkit-scrollbar-thumb:hover {
-  background: #384f80;
+  flex-shrink: 0;
+  line-height: 1.25;
 }
 
 .spin {
-  animation: spin 1s linear infinite;
-  display: inline-block;
+  animation: spin 0.85s linear infinite;
 }
 
 @keyframes spin {
-  100% {
+  to {
     transform: rotate(360deg);
   }
 }

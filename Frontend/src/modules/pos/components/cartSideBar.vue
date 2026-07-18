@@ -3,6 +3,7 @@
     class="cart-premium-panel rounded-3 d-flex flex-column h-100 p-3 select-none position-relative"
   >
     <div class="pos-ui-container d-flex flex-column h-100 min-h-0">
+      <!-- HEADER -->
       <div
         class="cart-header d-flex align-items-center justify-content-between border-bottom border-dark-custom pb-2 mb-2 shrink-0"
       >
@@ -15,6 +16,7 @@
 
           <div class="min-w-0">
             <h6 class="mb-0 text-light fw-bold text-truncate">Giỏ hàng</h6>
+
             <span class="text-muted-custom font-xs">
               {{ posStore.cart.length }} dòng sản phẩm
             </span>
@@ -33,55 +35,6 @@
       </div>
 
       <div class="cart-content-scroll flex-grow-1 min-h-0 pe-1">
-        <div
-          v-if="posStore.activeHeldOrderId"
-          class="active-held-box rounded-3 p-2 mb-2"
-        >
-          <div class="d-flex justify-content-between align-items-start gap-2">
-            <div class="min-w-0">
-              <div class="text-warning fw-bold font-xs text-truncate">
-                <i class="bi bi-pause-circle me-1"></i>
-                Đang mở phiếu treo #{{ posStore.activeHeldOrderId }}
-              </div>
-
-              <div class="text-muted-custom font-xs mt-1 text-truncate">
-                Nhân viên giữ phiếu:
-                <strong class="text-light">
-                  {{
-                    posStore.activeHeldOrderCashierName ||
-                    "Theo dữ liệu hệ thống"
-                  }}
-                </strong>
-              </div>
-
-              <div class="text-muted-custom font-xs mt-1">
-                Không được sửa sản phẩm/khách/voucher. Chỉ thanh toán hoặc
-                chuyển phiếu.
-              </div>
-            </div>
-
-            <div class="d-flex flex-column gap-1 shrink-0">
-              <button
-                type="button"
-                class="btn-held-outline"
-                :disabled="posStore.isLoading"
-                @click="handleTransferActiveHeldOrder"
-              >
-                Chuyển
-              </button>
-
-              <button
-                type="button"
-                class="btn-held-danger"
-                :disabled="posStore.isLoading"
-                @click="handleCancelActiveHeldOrder"
-              >
-                Hủy phiếu
-              </button>
-            </div>
-          </div>
-        </div>
-
         <div class="customer-section mb-2">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <span class="text-light fw-bold font-xs">
@@ -103,7 +56,7 @@
                 placeholder="SĐT khách hàng"
                 class="form-input ps-4"
                 maxlength="12"
-                :disabled="lockedOrder"
+                :disabled="customerLocked"
                 @input="handleCustomerPhoneTyping"
                 @keydown.enter="handleSearchCustomer"
               />
@@ -112,7 +65,7 @@
             <button
               type="button"
               class="btn-mini shrink-0"
-              :disabled="posStore.isLoading || lockedOrder"
+              :disabled="posStore.isLoading || customerLocked"
               @click="handleSearchCustomer"
             >
               <i v-if="posStore.isLoading" class="bi bi-arrow-repeat spin"></i>
@@ -133,7 +86,7 @@
                   placeholder="Nguyễn Văn An"
                   class="form-input"
                   maxlength="100"
-                  :disabled="lockedOrder"
+                  :disabled="customerLocked"
                   @input="handleCustomerChanged"
                 />
               </div>
@@ -149,7 +102,7 @@
                   placeholder="email@gmail.com"
                   class="form-input"
                   maxlength="255"
-                  :disabled="lockedOrder"
+                  :disabled="customerLocked"
                   @input="handleCustomerChanged"
                 />
               </div>
@@ -169,54 +122,28 @@
                 </span>
               </div>
 
-              <div class="d-flex align-items-center gap-2">
-                <button
-                  type="button"
-                  class="btn-save-customer"
-                  :disabled="
-                    lockedOrder ||
-                    posStore.isLoading ||
-                    posStore.isCustomerSavedForCurrentInfo
-                  "
-                  @click="handleSaveCustomer"
-                >
-                  <i
-                    v-if="posStore.isLoading"
-                    class="bi bi-arrow-repeat spin me-1"
-                  ></i>
-                  <i v-else class="bi bi-save me-1"></i>
-                  Lưu khách
-                </button>
-
-                <button
-                  type="button"
-                  class="btn-clear-customer border-0 bg-transparent p-0 font-xs"
-                  :disabled="lockedOrder"
-                  @click="handleClearCustomer"
-                >
-                  <i class="bi bi-x-circle"></i>
-                  Xóa khách
-                </button>
-              </div>
-            </div>
-
-            <div
-              v-else
-              class="d-flex justify-content-end align-items-center mt-2"
-            >
               <button
                 type="button"
-                class="btn-clear-customer border-0 bg-transparent p-0 font-xs"
-                :disabled="lockedOrder"
-                @click="handleClearCustomer"
+                class="btn-save-customer"
+                :disabled="
+                  customerLocked ||
+                  posStore.isLoading ||
+                  posStore.isCustomerSavedForCurrentInfo
+                "
+                @click="handleSaveCustomer"
               >
-                <i class="bi bi-x-circle"></i>
-                Xóa khách
+                <i
+                  v-if="posStore.isLoading"
+                  class="bi bi-arrow-repeat spin me-1"
+                ></i>
+                <i v-else class="bi bi-save me-1"></i>
+                Lưu khách
               </button>
             </div>
           </div>
         </div>
 
+        <!-- CART -->
         <div
           v-if="posStore.cart.length === 0"
           class="empty-cart d-flex flex-column align-items-center justify-content-center text-center rounded-3 mb-2"
@@ -332,7 +259,9 @@
           </table>
         </div>
 
+        <!-- CHECKOUT -->
         <div class="checkout-section pt-2 border-top border-dark-custom mt-2">
+          <!-- VOUCHER -->
           <div class="voucher-wrapper position-relative mb-2">
             <div class="voucher-row d-flex align-items-center gap-2">
               <div
@@ -345,10 +274,11 @@
                 <input
                   type="text"
                   v-model.trim="posStore.voucherCode"
-                  placeholder="Nhập hoặc chọn mã giảm giá"
+                  placeholder="Chọn mã giảm giá"
                   class="form-input ps-4 text-uppercase"
                   maxlength="50"
                   autocomplete="off"
+                  readonly
                   :disabled="
                     posStore.cart.length === 0 ||
                     lockedOrder ||
@@ -356,8 +286,6 @@
                   "
                   @focus="openVoucherDropdown"
                   @click="openVoucherDropdown"
-                  @input="handleVoucherTyping"
-                  @keydown.enter="handleApplyVoucher"
                   @blur="scheduleCloseVoucherDropdown"
                 />
               </div>
@@ -379,21 +307,6 @@
                     showVoucherDropdown ? 'bi-chevron-up' : 'bi-chevron-down'
                   "
                 ></i>
-              </button>
-
-              <button
-                type="button"
-                class="btn-apply-voucher shrink-0"
-                :disabled="
-                  posStore.cart.length === 0 ||
-                  lockedOrder ||
-                  posStore.isLoading ||
-                  !posStore.voucherCode
-                "
-                @mousedown.prevent
-                @click="handleApplyVoucher"
-              >
-                Áp
               </button>
 
               <button
@@ -508,6 +421,7 @@
             </div>
           </div>
 
+          <!-- MONEY DETAIL -->
           <div class="money-detail-box rounded-3 p-2 mb-2">
             <div class="money-detail-title mb-2">
               <i class="bi bi-receipt-cutoff me-1"></i>
@@ -523,9 +437,7 @@
               v-if="posStore.discountAmount > 0"
               class="money-detail-row text-success"
             >
-              <span>
-                Giảm giá mã voucher
-              </span>
+              <span> Giảm mã </span>
 
               <strong>-{{ formatPrice(posStore.discountAmount) }} ₫</strong>
             </div>
@@ -587,6 +499,7 @@
             </div>
           </div>
 
+          <!-- HELD ACTIONS -->
           <div class="held-actions mb-2">
             <div class="d-grid held-grid gap-2">
               <button
@@ -595,13 +508,12 @@
                 :disabled="
                   posStore.cart.length === 0 ||
                   posStore.isLoading ||
-                  posStore.hasPartialCashPayment ||
-                  !!posStore.activeHeldOrderId
+                  posStore.hasPartialCashPayment
                 "
                 @click="handleHoldOrder"
               >
                 <i class="bi bi-pause-circle"></i>
-                Treo phiếu
+                Lưu tạm
               </button>
 
               <button
@@ -700,6 +612,7 @@
             </div>
           </div>
 
+          <!-- PAYMENT -->
           <div
             class="total-row d-flex justify-content-between align-items-center mb-2"
           >
@@ -727,10 +640,18 @@
               :class="{ active: posStore.paymentMethod === 'VNPAY' }"
               @click="posStore.paymentMethod = 'VNPAY'"
             >
-              <i class="bi bi-qr-code-scan text-info"></i>
-              {{
-                posStore.hasPartialCashPayment ? "VNPay phần còn lại" : "VNPay"
-              }}
+              <i class="bi bi-credit-card-2-front text-info"></i>
+              {{ posStore.hasPartialCashPayment ? "VNPay" : "VNPay" }}
+            </button>
+
+            <button
+              type="button"
+              class="payment-method-btn"
+              :class="{ active: posStore.paymentMethod === 'VIETQR' }"
+              @click="posStore.paymentMethod = 'VIETQR'"
+            >
+              <i class="bi bi-qr-code-scan text-success"></i>
+              {{ posStore.hasPartialCashPayment ? "VietQR" : "VietQR" }}
             </button>
           </div>
 
@@ -757,6 +678,7 @@
       </div>
     </div>
 
+    <!-- CASH MODAL -->
     <div v-if="showCashModal" class="modal-overlay">
       <div class="modal-content">
         <div class="modal-header">
@@ -859,6 +781,7 @@
             class="payment-row"
           >
             <span>Tiền thừa dự kiến:</span>
+
             <span class="text-success">
               {{ formatPrice(cashAfterThisPayment - posStore.finalAmount) }} ₫
             </span>
@@ -895,7 +818,81 @@
         </div>
       </div>
     </div>
+    <!-- VIETQR MODAL -->
+    <div v-if="showVietQrModal" class="modal-overlay">
+      <div class="modal-content vietqr-modal">
+        <div class="modal-header">
+          <h3>Thanh toán VietQR</h3>
 
+          <button class="close-btn" type="button" @click="closeVietQrModal">
+            ✕
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="vietqr-summary rounded-3 p-2 mb-3">
+            <div class="payment-row mb-1">
+              <span>Mã hóa đơn:</span>
+              <strong class="text-light">#{{ vietQrOrderId }}</strong>
+            </div>
+
+            <div class="payment-row mb-1">
+              <span>Số tiền cần chuyển:</span>
+              <strong class="text-highlight">
+                {{ formatPrice(posStore.pendingVietQrAmount) }} ₫
+              </strong>
+            </div>
+
+            <div class="payment-row mb-0">
+              <span>Nội dung CK:</span>
+              <strong class="text-gold">{{ posStore.vietQrContent }}</strong>
+            </div>
+          </div>
+
+          <div class="vietqr-box">
+            <img
+              v-if="posStore.vietQrImageUrl"
+              :src="posStore.vietQrImageUrl"
+              alt="VietQR"
+              class="vietqr-image"
+            />
+
+            <div v-else class="text-muted-custom font-xs py-4 text-center">
+              Không có ảnh VietQR.
+            </div>
+          </div>
+
+          <p class="text-muted-custom font-xs mt-3 mb-0 text-center">
+            Khách quét QR bằng app ngân hàng. Sau khi thấy tiền vào tài khoản,
+            nhân viên bấm xác nhận để hoàn tất hóa đơn.
+          </p>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-cancel" type="button" @click="closeVietQrModal">
+            Đổi phương thức
+          </button>
+
+          <button
+            class="btn-confirm"
+            type="button"
+            :disabled="posStore.isLoading || !vietQrOrderId"
+            @click="confirmVietQrPayment"
+          >
+            <span v-if="posStore.isLoading">
+              <i class="bi bi-arrow-repeat spin"></i>
+              Đang xác nhận...
+            </span>
+
+            <span v-else>
+              <i class="bi bi-check-circle me-1"></i>
+              Đã nhận chuyển khoản
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- TRANSFER MODAL -->
     <div v-if="showTransferModal" class="modal-overlay">
       <div class="modal-content transfer-modal">
         <div class="modal-header">
@@ -1000,7 +997,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import Swal, { type SweetAlertIcon } from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
 import { useRouter } from "vue-router";
@@ -1008,23 +1005,39 @@ import { usePosStore } from "@/modules/pos/stores/posStore";
 
 const posStore = usePosStore();
 const router = useRouter();
+onMounted(() => {
+  posStore.restorePendingCheckoutDraft();
 
+  if (posStore.customer?.phone) {
+    customerPhoneInput.value = posStore.customer.phone;
+  }
+});
 const customerPhoneInput = ref("");
 const showCashModal = ref(false);
 const displayCash = ref("");
-
+const showVietQrModal = ref(false);
+const vietQrOrderId = ref<number | string | null>(null);
+const pendingVietQrInvoiceSnapshot = ref<any | null>(null);
 const showTransferModal = ref(false);
 const transferOrderId = ref<number | null>(null);
 const transferKeyword = ref("");
 const selectedTransferEmployeeId = ref<number | null>(null);
+
 const showVoucherDropdown = ref(false);
 let voucherCloseTimer: ReturnType<typeof setTimeout> | null = null;
+
 const lockedOrder = computed(() => {
   return posStore.isOrderLocked;
 });
+
+const customerLocked = computed(() => {
+  return posStore.isCustomerLocked;
+});
+
 const availableVoucherList = computed(() => {
   return posStore.availableVouchers || [];
 });
+
 const posToast = Swal.mixin({
   toast: true,
   position: "top-end",
@@ -1043,7 +1056,8 @@ const getSwalIcon = (message: string): SweetAlertIcon => {
     lowerMessage.includes("đã lưu") ||
     lowerMessage.includes("đã hủy") ||
     lowerMessage.includes("đã chuyển") ||
-    lowerMessage.includes("đã treo")
+    lowerMessage.includes("đã treo") ||
+    lowerMessage.includes("đã cập nhật")
   ) {
     return "success";
   }
@@ -1172,6 +1186,42 @@ const filteredTransferTargets = computed(() => {
 const formatPrice = (val?: number | null) => {
   return new Intl.NumberFormat("vi-VN").format(Number(val || 0));
 };
+
+const normalizePhone = (phone?: string | null) => {
+  return (phone || "").replace(/\D/g, "").trim();
+};
+
+const normalizeText = (value?: string | null) => {
+  return (value || "").trim().replace(/\s+/g, " ");
+};
+
+const normalizeEmail = (value?: string | null) => {
+  return (value || "").trim().toLowerCase();
+};
+
+const isValidVietnamPhone = (phone: string) => {
+  return /^(03|05|07|08|09)\d{8}$/.test(phone);
+};
+
+const isValidEmail = (email: string) => {
+  return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(email);
+};
+
+const getVariantText = (product: any) => {
+  return product?.subName && String(product.subName).trim()
+    ? product.subName
+    : "Biến thể mặc định";
+};
+
+const rawCashGiven = computed(() => {
+  const raw = displayCash.value.replace(/\D/g, "");
+  return raw ? Number(raw) : 0;
+});
+
+const cashAfterThisPayment = computed(() => {
+  return posStore.cashPaid + rawCashGiven.value;
+});
+
 const getVoucherDisplayTitle = (voucher: any) => {
   const name = String(voucher?.name || "").trim();
 
@@ -1228,11 +1278,7 @@ const isVoucherSelected = (voucher: any) => {
 };
 
 const openVoucherDropdown = async () => {
-  if (
-    posStore.cart.length === 0 ||
-    lockedOrder.value ||
-    posStore.isLoading
-  ) {
+  if (posStore.cart.length === 0 || lockedOrder.value || posStore.isLoading) {
     return;
   }
 
@@ -1259,11 +1305,7 @@ const scheduleCloseVoucherDropdown = () => {
 };
 
 const toggleVoucherDropdown = async () => {
-  if (
-    posStore.cart.length === 0 ||
-    lockedOrder.value ||
-    posStore.isLoading
-  ) {
+  if (posStore.cart.length === 0 || lockedOrder.value || posStore.isLoading) {
     return;
   }
 
@@ -1285,7 +1327,9 @@ const handleSelectVoucher = async (voucher: any) => {
     return;
   }
 
-  posStore.voucherCode = String(voucher.code || "").trim().toUpperCase();
+  posStore.voucherCode = String(voucher.code || "")
+    .trim()
+    .toUpperCase();
 
   const result = await posStore.applyVoucher();
 
@@ -1294,40 +1338,6 @@ const handleSelectVoucher = async (voucher: any) => {
     await posStore.fetchAvailableVouchers();
   }
 };
-const normalizePhone = (phone?: string | null) => {
-  return (phone || "").replace(/[\s.-]/g, "").trim();
-};
-
-const normalizeText = (value?: string | null) => {
-  return (value || "").trim().replace(/\s+/g, " ");
-};
-
-const normalizeEmail = (value?: string | null) => {
-  return (value || "").trim().toLowerCase();
-};
-
-const isValidVietnamPhone = (phone: string) => {
-  return /^(03|05|07|08|09)\d{8}$/.test(phone);
-};
-
-const isValidEmail = (email: string) => {
-  return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(email);
-};
-
-const getVariantText = (product: any) => {
-  return product?.subName && String(product.subName).trim()
-    ? product.subName
-    : "Biến thể mặc định";
-};
-
-const rawCashGiven = computed(() => {
-  const raw = displayCash.value.replace(/\D/g, "");
-  return raw ? Number(raw) : 0;
-});
-
-const cashAfterThisPayment = computed(() => {
-  return posStore.cashPaid + rawCashGiven.value;
-});
 
 const ensureCustomerDraftFromPhoneInput = () => {
   const phone = normalizePhone(
@@ -1408,7 +1418,9 @@ const validateCustomerBeforeCheckout = () => {
 };
 
 const handleCustomerChanged = () => {
-  if (lockedOrder.value) {
+  if (customerLocked.value) {
+    posStore.errorMsg =
+      "Không được sửa thông tin khách hàng của phiếu treo. Muốn đổi khách thì hủy phiếu cũ và tạo phiếu mới.";
     return;
   }
 
@@ -1416,12 +1428,13 @@ const handleCustomerChanged = () => {
 };
 
 const handleCustomerPhoneTyping = () => {
-  if (lockedOrder.value) {
+  if (customerLocked.value) {
+    posStore.errorMsg =
+      "Không được sửa số điện thoại khách hàng của phiếu treo.";
     return;
   }
 
   const phone = customerPhoneInput.value.replace(/\D/g, "").slice(0, 10);
-
   customerPhoneInput.value = phone;
 
   if (posStore.customer) {
@@ -1433,9 +1446,9 @@ const handleCustomerPhoneTyping = () => {
 };
 
 const handleSaveCustomer = async () => {
-  if (lockedOrder.value) {
+  if (customerLocked.value) {
     posStore.errorMsg =
-      "Đơn đang bị khóa do đã nhận tiền hoặc đang mở phiếu treo.";
+      "Không được lưu/sửa khách hàng khi đang mở phiếu treo hoặc đơn đã nhận tiền.";
     return;
   }
 
@@ -1449,9 +1462,9 @@ const handleSaveCustomer = async () => {
 };
 
 const handleSearchCustomer = async () => {
-  if (lockedOrder.value) {
+  if (customerLocked.value) {
     posStore.errorMsg =
-      "Đơn đang bị khóa do đã nhận tiền hoặc đang mở phiếu treo.";
+      "Không được đổi khách hàng của phiếu treo. Muốn đổi khách thì hủy phiếu cũ và tạo phiếu mới.";
     return;
   }
 
@@ -1480,57 +1493,14 @@ const handleSearchCustomer = async () => {
   }
 };
 
-const handleClearCustomer = () => {
-  if (lockedOrder.value) {
-    posStore.errorMsg =
-      "Đơn đang bị khóa do đã nhận tiền hoặc đang mở phiếu treo.";
-    return;
-  }
-
-  posStore.customer = null;
-  posStore.customerSavedKey = "";
-  customerPhoneInput.value = "";
-  posStore.errorMsg = "";
-};
-
-const handleVoucherTyping = async () => {
-  posStore.voucherCode = String(posStore.voucherCode || "").toUpperCase();
-  posStore.handleVoucherTyping();
-
-  if (
-    posStore.cart.length > 0 &&
-    !lockedOrder.value &&
-    !posStore.isLoading
-  ) {
-    showVoucherDropdown.value = true;
-
-    if (!posStore.availableVouchers || posStore.availableVouchers.length === 0) {
-      await posStore.fetchAvailableVouchers();
-    }
-  }
-};
-
-const handleApplyVoucher = async () => {
-  const result = await posStore.applyVoucher();
-
-  if (result) {
-    showVoucherDropdown.value = false;
-    await posStore.fetchAvailableVouchers();
-  }
-};
-
 const handleClearVoucher = async () => {
   posStore.clearVoucher();
   showVoucherDropdown.value = true;
   await posStore.fetchAvailableVouchers();
 };
+
 watch(
-  () => [
-    posStore.cart.length,
-    posStore.totalAmount,
-    posStore.activeHeldOrderId,
-    posStore.cashPaid,
-  ],
+  () => [posStore.cart.length, posStore.totalAmount, posStore.cashPaid],
   async () => {
     if (
       posStore.cart.length === 0 ||
@@ -1606,12 +1576,57 @@ const handleHoldOrder = async () => {
     return;
   }
 
+  /*
+   * Nếu đang mở phiếu treo thì cho cập nhật phiếu hiện tại.
+   * Không check trùng SĐT ở đây, vì cập nhật phiếu cũ là đúng nghiệp vụ.
+   */
+  if (!posStore.activeHeldOrderId) {
+    const currentPhone = normalizePhone(
+      posStore.customer?.phone || customerPhoneInput.value
+    );
+
+    await posStore.fetchHeldOrders();
+
+    const duplicatedHeldOrder = posStore.heldOrders.find((held: any) => {
+      return normalizePhone(held.customerPhone) === currentPhone;
+    });
+
+    if (duplicatedHeldOrder) {
+      const message = `Khách hàng này đang có phiếu treo #${duplicatedHeldOrder.orderId} chưa thanh toán. Vui lòng mở phiếu treo đó để cập nhật sản phẩm.`;
+
+      setPosError(message);
+
+      posStore.showHeldOrdersPanel = true;
+
+      return;
+    }
+  }
+
   const result = await posStore.holdCurrentOrder();
 
   if (result) {
     customerPhoneInput.value = "";
     displayCash.value = "";
     showCashModal.value = false;
+
+    showPosToast(
+      posStore.activeHeldOrderId
+        ? "Đã cập nhật phiếu treo thành công."
+        : "Đã treo phiếu thành công."
+    );
+
+    return;
+  }
+
+  const message =
+    posStore.errorMsg ||
+    "Treo phiếu thất bại. Vui lòng kiểm tra lại thông tin.";
+
+  setPosError(message);
+
+  if (message.includes("đang có phiếu treo")) {
+    posStore.showHeldOrdersPanel = true;
+    await posStore.fetchHeldOrders();
   }
 };
 
@@ -1621,10 +1636,26 @@ const handleOpenHeldOrder = async (orderId: number) => {
   if (result && posStore.customer?.phone) {
     customerPhoneInput.value = normalizePhone(posStore.customer.phone);
   }
+
+  if (result && posStore.voucherCode) {
+    await posStore.fetchAvailableVouchers();
+  }
 };
 
 const openTransferModal = async (orderId: number) => {
-  transferOrderId.value = orderId;
+  if (!orderId) {
+    setPosError("Mã phiếu treo không hợp lệ.");
+    return;
+  }
+
+  if (posStore.cashPaid > 0) {
+    setPosError(
+      "Đơn đã nhận tiền mặt một phần, không được chuyển phiếu cho nhân viên khác."
+    );
+    return;
+  }
+
+  transferOrderId.value = Number(orderId);
   transferKeyword.value = "";
   selectedTransferEmployeeId.value = null;
   showTransferModal.value = true;
@@ -1641,23 +1672,51 @@ const closeTransferModal = () => {
 
 const confirmTransferOrder = async () => {
   if (!transferOrderId.value) {
-    posStore.errorMsg = "Mã phiếu treo không hợp lệ.";
+    setPosError("Mã phiếu treo không hợp lệ.");
     return;
   }
 
   if (!selectedTransferEmployeeId.value) {
-    posStore.errorMsg = "Vui lòng chọn nhân viên nhận phiếu.";
+    setPosError("Vui lòng chọn nhân viên nhận phiếu.");
     return;
   }
 
+  const currentTransferOrderId = Number(transferOrderId.value);
+  const isTransferringActiveHeldOrder =
+    Number(posStore.activeHeldOrderId || 0) === currentTransferOrderId;
+
   const result = await posStore.transferHeldOrder(
-    transferOrderId.value,
+    currentTransferOrderId,
     selectedTransferEmployeeId.value
   );
 
-  if (result) {
-    closeTransferModal();
+  if (!result) {
+    setPosError(
+      posStore.errorMsg ||
+        "Chuyển phiếu thất bại. Vui lòng kiểm tra nhân viên nhận phiếu."
+    );
+    return;
   }
+
+  closeTransferModal();
+
+  /*
+   * Nếu đang mở chính phiếu vừa chuyển,
+   * phải dọn form hiện tại để cashier không thao tác tiếp trên phiếu đã chuyển.
+   */
+  if (isTransferringActiveHeldOrder) {
+    customerPhoneInput.value = "";
+    displayCash.value = "";
+    showCashModal.value = false;
+    showVietQrModal.value = false;
+    vietQrOrderId.value = null;
+    pendingVietQrInvoiceSnapshot.value = null;
+  }
+
+  posStore.showHeldOrdersPanel = true;
+  await posStore.fetchHeldOrders();
+
+  showPosToast(posStore.errorMsg || "Đã chuyển phiếu thành công.");
 };
 
 const handleTransferHeldOrder = async (orderId: number) => {
@@ -1679,7 +1738,6 @@ const handleCancelHeldOrder = async (orderId: number) => {
   }
 
   const isCancellingActiveHeldOrder = posStore.activeHeldOrderId === orderId;
-
   const result = await posStore.cancelHeldOrder(orderId);
 
   if (result && isCancellingActiveHeldOrder) {
@@ -1698,6 +1756,99 @@ const handleCancelActiveHeldOrder = async () => {
 
   await handleCancelHeldOrder(posStore.activeHeldOrderId);
 };
+const openVietQrModalFromCheckout = (checkoutResult: any) => {
+  const backendData = getCheckoutData(checkoutResult);
+
+  const orderId =
+    backendData.orderId ||
+    backendData.id ||
+    backendData.orderCode ||
+    posStore.pendingVietQrOrderId ||
+    posStore.lastOrderId;
+
+  if (!orderId || !backendData.vietQrImageUrl) {
+    setPosError("Không nhận được mã VietQR từ máy chủ.");
+    return false;
+  }
+
+  vietQrOrderId.value = orderId;
+  pendingVietQrInvoiceSnapshot.value = buildInvoiceSnapshot({
+    ...backendData,
+    paymentMethod: backendData.paymentMethod || posStore.paymentMethod,
+    transferProvider:
+      backendData.transferProvider ||
+      (backendData.paymentMethod === "MIXED" ? "VIETQR" : "VIETQR"),
+  });
+  showVietQrModal.value = true;
+
+  return true;
+};
+
+const closeVietQrModal = () => {
+  showVietQrModal.value = false;
+  vietQrOrderId.value = null;
+};
+
+const confirmVietQrPayment = async () => {
+  if (!vietQrOrderId.value) {
+    setPosError("Không xác định được hóa đơn VietQR cần xác nhận.");
+    return;
+  }
+
+  const result = await posStore.confirmVietQrPayment(vietQrOrderId.value);
+
+  if (!result) {
+    return;
+  }
+
+  const backendData = getCheckoutData(result);
+  const pendingSnapshot = pendingVietQrInvoiceSnapshot.value || {};
+
+  /*
+   * BE không có bảng PaymentTransaction nên response confirm VietQR
+   * không luôn nhớ được cashGiven/transferAmount của MIXED.
+   * FE giữ snapshot lúc tạo QR để hóa đơn vẫn đúng CASH + VIETQR.
+   */
+  const invoiceSnapshot = buildInvoiceSnapshot({
+    ...pendingSnapshot,
+    ...backendData,
+    paymentMethod:
+      pendingSnapshot.paymentMethod || backendData.paymentMethod || "VIETQR",
+    transferProvider:
+      pendingSnapshot.transferProvider ||
+      backendData.transferProvider ||
+      "VIETQR",
+    cashGiven:
+      pendingSnapshot.cashGiven !== undefined
+        ? pendingSnapshot.cashGiven
+        : backendData.cashGiven,
+    transferAmount:
+      pendingSnapshot.transferAmount !== undefined
+        ? pendingSnapshot.transferAmount
+        : backendData.transferAmount,
+    paidAmount: backendData.paidAmount ?? pendingSnapshot.amount,
+    remainingAmount: backendData.remainingAmount ?? 0,
+  });
+
+  sessionStorage.setItem("pos_latest_invoice", JSON.stringify(invoiceSnapshot));
+
+  showVietQrModal.value = false;
+  vietQrOrderId.value = null;
+  pendingVietQrInvoiceSnapshot.value = null;
+  showCashModal.value = false;
+  displayCash.value = "";
+  customerPhoneInput.value = "";
+  closeTransferModal();
+
+  router.push({
+    name: "PosPaymentResult",
+    query: {
+      orderId: invoiceSnapshot.orderId,
+      paymentMethod: invoiceSnapshot.paymentMethod || "VIETQR",
+      transferProvider: invoiceSnapshot.transferProvider || "VIETQR",
+    },
+  });
+};
 
 const handleCheckoutAction = async () => {
   if (!validateCustomerBeforeCheckout()) {
@@ -1712,13 +1863,38 @@ const handleCheckoutAction = async () => {
     return;
   }
 
-  await posStore.processCheckout({
-    paymentMethod: posStore.hasPartialCashPayment ? "MIXED" : "VNPAY",
-    cashGiven: posStore.hasPartialCashPayment ? posStore.cashPaid : 0,
-    transferAmount: posStore.hasPartialCashPayment
-      ? posStore.remainingAmount
-      : 0,
+  const selectedPaymentMethod = posStore.hasPartialCashPayment
+    ? "MIXED"
+    : posStore.paymentMethod;
+
+  const transferProvider =
+    selectedPaymentMethod === "MIXED"
+      ? posStore.paymentMethod === "VNPAY"
+        ? "VNPAY"
+        : "VIETQR"
+      : posStore.paymentMethod === "VNPAY"
+      ? "VNPAY"
+      : "VIETQR";
+
+  const checkoutResult = await posStore.processCheckout({
+    paymentMethod: selectedPaymentMethod as any,
+    transferProvider: transferProvider as any,
+    cashGiven: selectedPaymentMethod === "MIXED" ? posStore.cashPaid : 0,
+    transferAmount:
+      selectedPaymentMethod === "MIXED" || selectedPaymentMethod === "VIETQR"
+        ? posStore.remainingAmount
+        : 0,
   });
+
+  if (!checkoutResult) {
+    return;
+  }
+
+  const backendData = getCheckoutData(checkoutResult);
+
+  if (backendData.vietQrImageUrl) {
+    openVietQrModalFromCheckout(checkoutResult);
+  }
 };
 
 const getCheckoutData = (checkoutResult: any) => {
@@ -1741,10 +1917,12 @@ const buildInvoiceSnapshot = (backendData: any = {}) => {
       ? itemsFromBackend.map((item: any) => ({
           sku: item.sku,
           productName: item.productName,
-          variantName: [item.capacityLabel, item.bottleTypeName]
-            .filter(Boolean)
-            .join(" - "),
-          price: Number(item.unitPrice || 0),
+          variantName:
+            item.variantName ||
+            [item.capacityLabel, item.bottleTypeName]
+              .filter(Boolean)
+              .join(" - "),
+          price: Number(item.unitPrice || item.price || 0),
           quantity: Number(item.quantity || 1),
           lineTotal: Number(item.lineTotal || 0),
         }))
@@ -1757,9 +1935,21 @@ const buildInvoiceSnapshot = (backendData: any = {}) => {
           lineTotal: item.product.price * item.quantity,
         }));
 
+  const paymentMethod =
+    backendData.paymentMethod || posStore.paymentMethod || "CASH";
+
+  const transferProvider =
+    backendData.transferProvider ||
+    (paymentMethod === "VNPAY"
+      ? "VNPAY"
+      : paymentMethod === "VIETQR"
+      ? "VIETQR"
+      : "");
+
   return {
     orderId: backendData.orderId || posStore.lastOrderId || "TM" + Date.now(),
-    paymentMethod: backendData.paymentMethod || "CASH",
+    paymentMethod,
+    transferProvider,
 
     customerName: backendData.customerName || posStore.customer?.name || "",
     customerPhone: backendData.customerPhone || posStore.customer?.phone || "",
@@ -1777,14 +1967,15 @@ const buildInvoiceSnapshot = (backendData: any = {}) => {
     paidAmount: Number(backendData.paidAmount ?? posStore.finalAmount),
     remainingAmount: Number(backendData.remainingAmount ?? 0),
 
-    cashGiven: Number(backendData.cashGiven ?? cashAfterThisPayment.value),
+    cashGiven: Number(backendData.cashGiven ?? cashAfterThisPayment.value ?? 0),
     transferAmount: Number(backendData.transferAmount ?? 0),
     changeAmount: Number(
       backendData.changeAmount ??
         Math.max(cashAfterThisPayment.value - posStore.finalAmount, 0)
     ),
 
-    voucherCode: posStore.voucherCode || "",
+    voucherCode: backendData.voucherCode || posStore.voucherCode || "",
+    vietQrContent: backendData.vietQrContent || posStore.vietQrContent || "",
     items,
   };
 };
@@ -1799,24 +1990,15 @@ const processCashPayment = async () => {
     return;
   }
 
-  if (
-    !posStore.activeHeldOrderId &&
-    cashAfterThisPayment.value < posStore.finalAmount
-  ) {
+  if (cashAfterThisPayment.value < posStore.finalAmount) {
     const ok = posStore.registerPartialCashPayment(rawCashGiven.value);
 
     if (ok) {
       showCashModal.value = false;
       displayCash.value = "";
-      posStore.paymentMethod = "VNPAY";
+      posStore.paymentMethod = "VIETQR";
     }
 
-    return;
-  }
-
-  if (posStore.activeHeldOrderId && rawCashGiven.value < posStore.finalAmount) {
-    posStore.errorMsg =
-      "Tiền khách đưa chưa đủ. Phiếu treo phải thanh toán đủ bằng CASH hoặc chọn VNPay/MIXED.";
     return;
   }
 
@@ -1885,10 +2067,6 @@ const processCashPayment = async () => {
   color: #f3c63f !important;
 }
 
-.text-light-custom {
-  color: #f1f5f9;
-}
-
 .text-muted-custom {
   color: #64748b;
 }
@@ -1937,7 +2115,6 @@ const processCashPayment = async () => {
 .form-input:disabled,
 .qty-btn:disabled,
 .btn-delete-item:disabled,
-.btn-clear-customer:disabled,
 .btn-save-customer:disabled,
 .btn-mini:disabled,
 .payment-method-btn:disabled,
@@ -1947,8 +2124,9 @@ const processCashPayment = async () => {
 .btn-open-held:disabled,
 .btn-transfer-held:disabled,
 .btn-cancel-held:disabled,
-.btn-apply-voucher:disabled,
-.btn-clear-voucher:disabled {
+.btn-clear-voucher:disabled,
+.btn-toggle-voucher:disabled,
+.btn-refresh-voucher:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -2007,14 +2185,6 @@ const processCashPayment = async () => {
   color: #052e16;
 }
 
-.btn-clear-customer {
-  color: #94a3b8;
-}
-
-.btn-clear-customer:hover:not(:disabled) {
-  color: #ef4444;
-}
-
 .empty-cart {
   min-height: 130px;
   border: 1px dashed #263654;
@@ -2062,11 +2232,6 @@ const processCashPayment = async () => {
 
 .table-cart-custom tbody tr:hover td {
   background: #121c31;
-}
-
-.cart-product-cell {
-  width: auto;
-  min-width: 0;
 }
 
 .qty-cell {
@@ -2152,34 +2317,34 @@ const processCashPayment = async () => {
   background: rgba(239, 68, 68, 0.16);
 }
 
-.btn-apply-voucher {
-  border: 1px solid rgba(243, 198, 63, 0.42);
-  background: rgba(243, 198, 63, 0.12);
-  color: #f3c63f;
-  border-radius: 8px;
-  padding: 7px 11px;
-  font-size: 0.75rem;
-  font-weight: 900;
-  cursor: pointer;
-  white-space: nowrap;
+.voucher-wrapper {
+  position: relative;
+  z-index: 60;
 }
 
-.btn-apply-voucher:hover:not(:disabled) {
-  background: #f3c63f;
-  color: #0b1120;
-}
-
+.btn-toggle-voucher,
 .btn-clear-voucher {
   width: 31px;
   height: 31px;
   border-radius: 8px;
-  border: 1px solid rgba(239, 68, 68, 0.28);
-  background: rgba(239, 68, 68, 0.08);
-  color: #fca5a5;
+  border: 1px solid #334155;
+  background: #111827;
+  color: #cbd5e1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+}
+
+.btn-toggle-voucher:hover:not(:disabled) {
+  border-color: #f3c63f;
+  color: #f3c63f;
+}
+
+.btn-clear-voucher {
+  border-color: rgba(239, 68, 68, 0.28);
+  background: rgba(239, 68, 68, 0.08);
+  color: #fca5a5;
 }
 
 .btn-clear-voucher:hover:not(:disabled) {
@@ -2187,9 +2352,144 @@ const processCashPayment = async () => {
   color: #fecaca;
 }
 
-.voucher-applied-box {
+.voucher-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  right: 0;
+  z-index: 999;
+  background: #0f172a;
+  border: 1px solid #263654;
+  border-radius: 12px;
+  padding: 9px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+}
+
+.voucher-dropdown-header {
+  border-bottom: 1px solid #263654;
+  padding-bottom: 7px;
+  margin-bottom: 7px;
+}
+
+.voucher-dropdown-title {
+  color: #f8fafc;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.voucher-dropdown-subtitle {
+  color: #64748b;
+  font-size: 0.66rem;
+}
+
+.btn-refresh-voucher {
+  border: 1px solid #334155;
+  background: #111827;
+  color: #cbd5e1;
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.btn-refresh-voucher:hover:not(:disabled) {
+  border-color: #f3c63f;
+  color: #f3c63f;
+}
+
+.voucher-dropdown-empty {
+  color: #94a3b8;
+  font-size: 0.75rem;
+}
+
+.voucher-dropdown-list {
+  max-height: 230px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-right: 2px;
+}
+
+.voucher-option {
+  width: 100%;
+  border: 1px solid #263654;
+  background: #0b1120;
+  color: #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 9px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.voucher-option:hover:not(:disabled) {
+  border-color: rgba(243, 198, 63, 0.55);
+  background: #111c32;
+}
+
+.voucher-option.best {
+  border-color: rgba(243, 198, 63, 0.55);
+  background: rgba(243, 198, 63, 0.08);
+}
+
+.voucher-option.active {
+  border-color: #22c55e;
   background: rgba(34, 197, 94, 0.08);
-  border: 1px solid rgba(34, 197, 94, 0.22);
+}
+
+.voucher-option.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.voucher-code {
+  color: #f3c63f;
+  font-size: 0.76rem;
+  font-weight: 900;
+  max-width: 130px;
+}
+
+.voucher-best-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 6px;
+  background: rgba(243, 198, 63, 0.16);
+  border: 1px solid rgba(243, 198, 63, 0.32);
+  color: #f3c63f;
+  font-size: 0.62rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.voucher-name {
+  color: #cbd5e1;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.voucher-condition {
+  color: #64748b;
+  font-size: 0.65rem;
+  margin-top: 2px;
+}
+
+.voucher-discount {
+  color: #4ade80;
+  font-size: 0.74rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.voucher-discount small {
+  display: block;
+  color: #64748b;
+  font-size: 0.62rem;
+  font-weight: 700;
 }
 
 .money-detail-box {
@@ -2242,19 +2542,14 @@ const processCashPayment = async () => {
   color: #4ade80 !important;
 }
 
-.money-detail-row.text-muted-custom span,
-.money-detail-row.text-muted-custom strong {
-  color: #64748b !important;
-}
-
 .partial-payment-box {
   background-color: rgba(245, 158, 11, 0.08);
   border: 1px solid rgba(245, 158, 11, 0.28);
 }
 
 .active-held-box {
-  background: rgba(14, 165, 233, 0.08);
-  border: 1px solid rgba(14, 165, 233, 0.28);
+  background: rgba(243, 198, 63, 0.08);
+  border: 1px solid rgba(243, 198, 63, 0.28);
 }
 
 .held-grid {
@@ -2315,8 +2610,8 @@ const processCashPayment = async () => {
 
 .btn-open-held,
 .btn-transfer-held,
-.btn-cancel-held {
-  border: none;
+.btn-cancel-held,
+.btn-held-danger {
   border-radius: 7px;
   padding: 5px 8px;
   font-size: 0.68rem;
@@ -2343,21 +2638,13 @@ const processCashPayment = async () => {
   border: 1px solid rgba(239, 68, 68, 0.28);
 }
 
-.btn-held-danger {
-  border-radius: 7px;
-  padding: 5px 8px;
-  font-size: 0.68rem;
-  font-weight: 900;
-  cursor: pointer;
-}
-
 .total-row {
   border-top: 1px solid #263654;
   padding-top: 8px;
 }
 
 .payment-row-btns {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .payment-method-btn {
@@ -2522,20 +2809,6 @@ const processCashPayment = async () => {
   cursor: not-allowed;
 }
 
-.spin {
-  animation: spin 0.85s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.tracking-wider {
-  letter-spacing: 0.04em;
-}
-
 .transfer-search-input {
   height: 40px;
 }
@@ -2599,166 +2872,106 @@ const processCashPayment = async () => {
   font-size: 0.7rem;
   font-weight: 800;
 }
-.voucher-wrapper {
-  position: relative;
-  z-index: 60;
+
+.spin {
+  animation: spin 0.85s linear infinite;
 }
 
-.btn-toggle-voucher {
-  width: 31px;
-  height: 31px;
-  border-radius: 8px;
-  border: 1px solid #334155;
-  background: #111827;
-  color: #cbd5e1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-.btn-toggle-voucher:hover:not(:disabled) {
-  border-color: #f3c63f;
-  color: #f3c63f;
+.tracking-wider {
+  letter-spacing: 0.04em;
+}
+.cart-content-scroll,
+.cart-table-wrapper,
+.voucher-dropdown-list,
+.held-list,
+.transfer-list {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(243, 198, 63, 0.72) rgba(15, 23, 42, 0.35);
+  scrollbar-gutter: stable;
 }
 
-.voucher-dropdown-panel {
-  position: absolute;
-  top: calc(100% + 7px);
-  left: 0;
-  right: 0;
-  z-index: 999;
-  background: #0f172a;
-  border: 1px solid #263654;
-  border-radius: 12px;
-  padding: 9px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+.cart-content-scroll::-webkit-scrollbar,
+.cart-table-wrapper::-webkit-scrollbar,
+.voucher-dropdown-list::-webkit-scrollbar,
+.held-list::-webkit-scrollbar,
+.transfer-list::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-.voucher-dropdown-header {
-  border-bottom: 1px solid #263654;
-  padding-bottom: 7px;
-  margin-bottom: 7px;
-}
-
-.voucher-dropdown-title {
-  color: #f8fafc;
-  font-size: 0.76rem;
-  font-weight: 900;
-}
-
-.voucher-dropdown-subtitle {
-  color: #64748b;
-  font-size: 0.66rem;
-}
-
-.btn-refresh-voucher {
-  border: 1px solid #334155;
-  background: #111827;
-  color: #cbd5e1;
-  border-radius: 8px;
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.btn-refresh-voucher:hover:not(:disabled) {
-  border-color: #f3c63f;
-  color: #f3c63f;
-}
-
-.voucher-dropdown-empty {
-  color: #94a3b8;
-  font-size: 0.75rem;
-}
-
-.voucher-dropdown-list {
-  max-height: 230px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding-right: 2px;
-}
-
-.voucher-option {
-  width: 100%;
-  border: 1px solid #263654;
-  background: #0b1120;
-  color: #e2e8f0;
-  border-radius: 10px;
-  padding: 8px 9px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.voucher-option:hover:not(:disabled) {
-  border-color: rgba(243, 198, 63, 0.55);
-  background: #111c32;
-}
-
-.voucher-option.best {
-  border-color: rgba(243, 198, 63, 0.55);
-  background: rgba(243, 198, 63, 0.08);
-}
-
-.voucher-option.active {
-  border-color: #22c55e;
-  background: rgba(34, 197, 94, 0.08);
-}
-
-.voucher-option.disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.voucher-code {
-  color: #f3c63f;
-  font-size: 0.76rem;
-  font-weight: 900;
-  max-width: 130px;
-}
-
-.voucher-best-badge {
-  display: inline-flex;
-  align-items: center;
+.cart-content-scroll::-webkit-scrollbar-track,
+.cart-table-wrapper::-webkit-scrollbar-track,
+.voucher-dropdown-list::-webkit-scrollbar-track,
+.held-list::-webkit-scrollbar-track,
+.transfer-list::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.45);
   border-radius: 999px;
-  padding: 2px 6px;
-  background: rgba(243, 198, 63, 0.16);
-  border: 1px solid rgba(243, 198, 63, 0.32);
-  color: #f3c63f;
-  font-size: 0.62rem;
-  font-weight: 900;
-  white-space: nowrap;
+  margin: 4px 0;
 }
 
-.voucher-name {
-  color: #cbd5e1;
-  font-size: 0.7rem;
-  font-weight: 700;
-  margin-top: 2px;
+.cart-content-scroll::-webkit-scrollbar-thumb,
+.cart-table-wrapper::-webkit-scrollbar-thumb,
+.voucher-dropdown-list::-webkit-scrollbar-thumb,
+.held-list::-webkit-scrollbar-thumb,
+.transfer-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(243, 198, 63, 0.95),
+    rgba(147, 197, 253, 0.62)
+  );
+  border-radius: 999px;
+  border: 2px solid rgba(11, 17, 32, 0.95);
 }
 
-.voucher-condition {
-  color: #64748b;
-  font-size: 0.65rem;
-  margin-top: 2px;
+.cart-content-scroll::-webkit-scrollbar-thumb:hover,
+.cart-table-wrapper::-webkit-scrollbar-thumb:hover,
+.voucher-dropdown-list::-webkit-scrollbar-thumb:hover,
+.held-list::-webkit-scrollbar-thumb:hover,
+.transfer-list::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(243, 198, 63, 1),
+    rgba(147, 197, 253, 0.9)
+  );
 }
 
-.voucher-discount {
-  color: #4ade80;
-  font-size: 0.74rem;
-  font-weight: 900;
-  white-space: nowrap;
+.cart-content-scroll::-webkit-scrollbar-corner,
+.cart-table-wrapper::-webkit-scrollbar-corner,
+.voucher-dropdown-list::-webkit-scrollbar-corner,
+.held-list::-webkit-scrollbar-corner,
+.transfer-list::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
-.voucher-discount small {
+.vietqr-modal {
+  width: min(430px, 100%);
+}
+
+.vietqr-summary {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid #263654;
+}
+
+.vietqr-box {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 260px;
+}
+
+.vietqr-image {
+  width: 100%;
+  max-width: 260px;
   display: block;
-  color: #64748b;
-  font-size: 0.62rem;
-  font-weight: 700;
+  object-fit: contain;
 }
 </style>

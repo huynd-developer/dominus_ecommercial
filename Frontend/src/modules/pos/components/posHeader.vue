@@ -12,7 +12,7 @@
           v-model="scanInput"
           placeholder="Dùng súng quét mã vạch (SKU) hoặc gõ tìm kiếm (F4)..."
           class="search-premium-input w-100 rounded-3 font-xs text-light transition-all"
-          :disabled="posStore.isOrderLocked"
+          :disabled="posStore.cashPaid > 0"
           @input="handleSearch"
           @keydown.enter="handleScanSku"
         />
@@ -22,17 +22,26 @@
           @click="clearSearch"
           class="btn-clear-search position-absolute end-0 me-2 border-0 bg-transparent p-1 d-flex align-items-center"
           type="button"
+          :disabled="posStore.cashPaid > 0"
         >
           <i class="bi bi-x-circle-fill text-muted-custom opacity-50 font-xs"></i>
         </button>
       </div>
 
       <div
-        v-if="posStore.isOrderLocked"
+        v-if="posStore.cashPaid > 0"
         class="font-xs text-muted-custom mt-1 px-1"
       >
         <i class="bi bi-lock-fill me-1"></i>
-        Đơn đang bị khóa do đã nhận tiền hoặc đang mở phiếu treo, không quét thêm sản phẩm.
+        Đơn đã nhận tiền mặt một phần, không được quét thêm sản phẩm.
+      </div>
+
+      <div
+        v-else-if="posStore.activeHeldOrderId"
+        class="font-xs text-warning mt-1 px-1"
+      >
+        <i class="bi bi-pencil-square me-1"></i>
+        Đang sửa phiếu treo #{{ posStore.activeHeldOrderId }}. Có thể thêm sản phẩm và đổi voucher, nhưng không được đổi khách hàng.
       </div>
     </div>
   </header>
@@ -56,9 +65,9 @@ const handleScanSku = async () => {
 
   if (!sku) return;
 
-  if (posStore.isOrderLocked) {
+  if (posStore.cashPaid > 0) {
     posStore.errorMsg =
-      "Đơn đang bị khóa do đã nhận tiền hoặc đang mở phiếu treo.";
+      "Đơn đã nhận tiền mặt một phần, không được quét/thêm sản phẩm.";
     return;
   }
 
@@ -77,6 +86,13 @@ const clearSearch = () => {
 const handleGlobalKeydown = (e: KeyboardEvent) => {
   if (e.key === "F4") {
     e.preventDefault();
+
+    if (posStore.cashPaid > 0) {
+      posStore.errorMsg =
+        "Đơn đã nhận tiền mặt một phần, không được quét/thêm sản phẩm.";
+      return;
+    }
+
     searchInputRef.value?.focus();
   }
 };
@@ -105,7 +121,7 @@ onUnmounted(() => {
 }
 
 .max-w-search {
-  max-width: 480px;
+  max-width: 520px;
 }
 
 .search-premium-input {
