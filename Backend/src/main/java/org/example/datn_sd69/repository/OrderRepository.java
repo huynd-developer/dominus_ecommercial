@@ -132,4 +132,29 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
             Integer status,
             LocalDateTime createdAt
     );
+
+    /**
+     * Check trùng phiếu treo theo SĐT.
+     *
+     * Quan trọng:
+     * - Phải dùng cùng điều kiện với findHeldOrders()
+     * - Phiếu treo hiện tại trong code của mày là status = 0 + paymentMethod = HOLD
+     * - Dùng o.customerPhone thay vì JOIN customer để không bị miss khách vãng lai/customer null
+     */
+    @EntityGraph(attributePaths = {
+            "customer",
+            "customer.user",
+            "cashier",
+            "cashier.user",
+            "voucher"
+    })
+    @Query("""
+        SELECT o
+        FROM Order o
+        WHERE o.status = 0
+          AND UPPER(o.paymentMethod) = 'HOLD'
+          AND o.customerPhone = :phone
+        ORDER BY o.createdAt DESC
+    """)
+    List<Order> findActiveHeldOrdersByCustomerPhone(@Param("phone") String phone);
 }

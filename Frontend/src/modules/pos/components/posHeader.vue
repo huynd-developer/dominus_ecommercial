@@ -1,89 +1,207 @@
 <template>
   <header
-    class="d-flex justify-content-between align-items-center mb-2 px-0 pt-1 pb-1 select-none header-premium w-100 overflow-hidden gap-3"
+    class="pos-held-header d-flex align-items-stretch justify-content-between gap-3 mb-2 select-none"
   >
-    <div class="flex-grow-1 max-w-search mx-md-4 mx-2">
-      <div class="search-premium-box position-relative d-flex align-items-center w-100">
-        <i class="bi bi-search text-muted-custom position-absolute start-0 ms-3 font-xs"></i>
+    <section class="held-processing-panel flex-grow-1 min-w-0">
+      <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+        <div class="d-flex align-items-center gap-2 min-w-0">
+          <i class="bi bi-clock-history text-gold"></i>
 
-        <input
-          ref="searchInputRef"
-          type="text"
-          v-model="scanInput"
-          placeholder="Dùng súng quét mã vạch (SKU) hoặc gõ tìm kiếm (F4)..."
-          class="search-premium-input w-100 rounded-3 font-xs text-light transition-all"
-          :disabled="posStore.isOrderLocked"
-          @input="handleSearch"
-          @keydown.enter="handleScanSku"
-        />
+          <div class="min-w-0">
+            <div class="held-title text-truncate">
+              Đơn hàng đang xử lý ({{ posStore.heldOrders.length }})
+            </div>
 
-        <button
-          v-if="scanInput"
-          @click="clearSearch"
-          class="btn-clear-search position-absolute end-0 me-2 border-0 bg-transparent p-1 d-flex align-items-center"
-          type="button"
-        >
-          <i class="bi bi-x-circle-fill text-muted-custom opacity-50 font-xs"></i>
-        </button>
+            <div class="held-subtitle text-truncate">
+              Phiếu treo được hiển thị tại đây để mở lại nhanh.
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2 shrink-0">
+          <button
+            type="button"
+            class="btn-header-action"
+            :disabled="posStore.isLoading"
+            title="Tải lại phiếu treo"
+            @click="posStore.fetchHeldOrders()"
+          >
+            <i
+              class="bi bi-arrow-clockwise"
+              :class="{ spin: posStore.isLoading }"
+            ></i>
+            Làm mới
+          </button>
+        </div>
       </div>
 
       <div
-        v-if="posStore.isOrderLocked"
-        class="font-xs text-muted-custom mt-1 px-1"
+        v-if="posStore.heldOrders.length === 0"
+        class="held-empty-card d-flex align-items-center justify-content-center"
       >
-        <i class="bi bi-lock-fill me-1"></i>
-        Đơn đang bị khóa do đã nhận tiền hoặc đang mở phiếu treo, không quét thêm sản phẩm.
+        <i class="bi bi-inbox me-2"></i>
+        Chưa có phiếu treo.
       </div>
-    </div>
+
+      <div v-else class="held-card-list custom-scrollbar">
+        <div
+          v-for="held in visibleHeldOrders"
+          :key="held.orderId"
+          class="held-card"
+          :class="{
+            active:
+              Number(posStore.activeHeldOrderId || 0) === Number(held.orderId),
+            disabled: posStore.isLoading || posStore.cashPaid > 0,
+          }"
+          :title="`Bấm để mở phiếu #${held.orderId}`"
+          @click="openHeldOrderFromHeader(held.orderId)"
+        >
+          <div class="held-card-main">
+            <div class="held-card-info min-w-0">
+              <div class="held-code text-truncate">
+                #{{ held.orderId }} -
+                {{ held.customerName || "Khách tại quầy" }}
+              </div>
+
+              <div class="held-phone text-truncate">
+                {{ held.customerPhone || "Không có SĐT" }}
+              </div>
+
+              <div class="held-cashier text-truncate">
+                NV: {{ held.cashierName || "Không rõ" }}
+              </div>
+
+              <div class="held-money">
+                {{ formatPrice(held.finalAmount) }} ₫
+              </div>
+            </div>
+
+            <div class="held-card-actions shrink-0">
+              <button
+                type="button"
+                class="btn-held-action btn-transfer-mini"
+                title="Chuyển phiếu cho nhân viên khác"
+                :disabled="posStore.isLoading || posStore.cashPaid > 0"
+                @click.stop="transferHeldOrderFromHeader(held.orderId)"
+              >
+                <i class="bi bi-arrow-left-right"></i>
+                Chuyển
+              </button>
+
+              <button
+                type="button"
+                class="btn-held-action btn-cancel-mini"
+                title="Hủy phiếu treo"
+                :disabled="posStore.isLoading || posStore.cashPaid > 0"
+                @click.stop="cancelHeldOrderFromHeader(held.orderId)"
+              >
+                <i class="bi bi-x-circle"></i>
+                Hủy
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="posStore.cashPaid > 0" class="header-warning mt-2">
+        <i class="bi bi-lock-fill me-1"></i>
+        Đơn đã nhận tiền mặt một phần, không được mở/chuyển sang phiếu khác.
+      </div>
+    </section>
   </header>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted } from "vue";
 import { usePosStore } from "../stores/posStore";
 
 const posStore = usePosStore();
 
-const scanInput = ref("");
-const searchInputRef = ref<HTMLInputElement | null>(null);
+const visibleHeldOrders = computed(() => {
+  return (posStore.heldOrders || []).slice(0, 5);
+});
 
-const handleSearch = () => {
-  posStore.searchQuery = scanInput.value;
+const formatPrice = (val?: number | null) => {
+  return new Intl.NumberFormat("vi-VN").format(Number(val || 0));
 };
 
-const handleScanSku = async () => {
-  const sku = scanInput.value.trim();
+const focusProductSearch = () => {
+  window.dispatchEvent(new CustomEvent("pos-focus-product-search"));
+};
 
-  if (!sku) return;
-
-  if (posStore.isOrderLocked) {
-    posStore.errorMsg =
-      "Đơn đang bị khóa do đã nhận tiền hoặc đang mở phiếu treo.";
+const openHeldOrderFromHeader = async (orderId: number) => {
+  if (!orderId) {
+    posStore.errorMsg = "Mã phiếu treo không hợp lệ.";
     return;
   }
 
-  await posStore.handleBarcodeScan(sku);
+  if (posStore.cashPaid > 0) {
+    posStore.errorMsg =
+      "Đơn đã nhận tiền mặt một phần, không được mở phiếu treo khác.";
+    return;
+  }
 
-  scanInput.value = "";
-  posStore.searchQuery = "";
+  await posStore.openHeldOrder(orderId);
 };
 
-const clearSearch = () => {
-  scanInput.value = "";
-  posStore.searchQuery = "";
-  searchInputRef.value?.focus();
+const transferHeldOrderFromHeader = (orderId: number) => {
+  if (!orderId) {
+    posStore.errorMsg = "Mã phiếu treo không hợp lệ.";
+    return;
+  }
+
+  if (posStore.cashPaid > 0) {
+    posStore.errorMsg =
+      "Đơn đã nhận tiền mặt một phần, không được chuyển phiếu.";
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent("pos-transfer-held-order", {
+      detail: {
+        orderId,
+      },
+    })
+  );
+};
+
+const cancelHeldOrderFromHeader = (orderId: number) => {
+  if (!orderId) {
+    posStore.errorMsg = "Mã phiếu treo không hợp lệ.";
+    return;
+  }
+
+  if (posStore.cashPaid > 0) {
+    posStore.errorMsg = "Đơn đã nhận tiền mặt một phần, không được hủy phiếu.";
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent("pos-cancel-held-order", {
+      detail: {
+        orderId,
+      },
+    })
+  );
 };
 
 const handleGlobalKeydown = (e: KeyboardEvent) => {
   if (e.key === "F4") {
     e.preventDefault();
-    searchInputRef.value?.focus();
+
+    if (posStore.cashPaid > 0) {
+      posStore.errorMsg =
+        "Đơn đã nhận tiền mặt một phần, không được quét/thêm sản phẩm.";
+      return;
+    }
+
+    focusProductSearch();
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener("keydown", handleGlobalKeydown);
-  searchInputRef.value?.focus();
+  await posStore.fetchHeldOrders();
 });
 
 onUnmounted(() => {
@@ -92,49 +210,235 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.pos-held-header {
+  width: 100%;
+  min-height: 104px;
+  flex-shrink: 0;
+}
+
+.held-processing-panel {
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid #1d2740;
+  border-radius: 14px;
+  padding: 10px 12px;
+  min-width: 0;
+}
+
 .text-gold {
   color: #f3c63f !important;
 }
 
-.text-muted-custom {
+.held-title {
+  color: #f8fafc;
+  font-weight: 900;
+  font-size: 0.86rem;
+  line-height: 1.2;
+}
+
+.held-subtitle {
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.btn-header-action {
+  height: 30px;
+  border-radius: 9px;
+  border: 1px solid #263654;
+  background: #10182a;
   color: #9fb0d3;
+  padding: 0 10px;
+  font-size: 0.7rem;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
 }
 
-.font-xs {
-  font-size: 0.75rem;
+.btn-header-action:hover:not(:disabled) {
+  border-color: #f3c63f;
+  color: #f3c63f;
 }
 
-.max-w-search {
-  max-width: 480px;
-}
-
-.search-premium-input {
-  background-color: #131c31;
-  border: 1px solid #222f4f;
-  padding: 8px 32px 8px 36px;
-  outline: none;
-}
-
-.search-premium-input:focus {
-  border-color: #384f80;
-  background-color: #17223b;
-  box-shadow: 0 0 10px rgba(56, 79, 128, 0.2);
-}
-
-.search-premium-input::placeholder {
-  color: #4b5e84;
-}
-
-.search-premium-input:disabled {
+.btn-header-action:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 
-.btn-clear-search:hover i {
-  color: #ef4444 !important;
+.held-empty-card {
+  height: 54px;
+  border: 1px dashed #263654;
+  border-radius: 12px;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 800;
+  background: rgba(15, 23, 42, 0.35);
 }
 
-.transition-all {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+.held-card-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+
+/* CARD PHIẾU TREO */
+.held-card {
+  width: 280px;
+  min-width: 280px;
+  border-radius: 12px;
+  border: 1px solid #263654;
+  background: #10182a;
+  color: #dbeafe;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.held-card:hover,
+.held-card.active {
+  border-color: rgba(243, 198, 63, 0.72);
+  background: rgba(243, 198, 63, 0.08);
+}
+
+.held-card.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.held-card-main {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.held-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.held-code {
+  color: #93c5fd;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.held-phone,
+.held-cashier {
+  color: #64748b;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+.held-money {
+  color: #22c55e;
+  font-size: 0.76rem;
+  font-weight: 900;
+  margin-top: 5px;
+  text-align: left;
+}
+
+/* NÚT CHUYỂN / HỦY BÊN PHẢI */
+.held-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  justify-content: center;
+  align-items: stretch;
+  flex-shrink: 0;
+}
+
+.btn-held-action {
+  height: 24px;
+  min-width: 70px;
+  padding: 0 7px;
+  border-radius: 7px;
+  font-size: 0.62rem;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  border: 1px solid #263654;
+  background: rgba(15, 23, 42, 0.88);
+  transition: all 0.15s ease;
+}
+
+.btn-held-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-transfer-mini {
+  color: #f3c63f;
+  border-color: rgba(243, 198, 63, 0.35);
+}
+
+.btn-cancel-mini {
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.btn-transfer-mini:hover:not(:disabled) {
+  background: rgba(243, 198, 63, 0.14);
+  border-color: rgba(243, 198, 63, 0.72);
+}
+
+.btn-cancel-mini:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.72);
+}
+
+.header-warning,
+.header-editing {
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.header-warning {
+  color: #fca5a5;
+}
+
+.header-editing {
+  color: #f3c63f;
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(243, 198, 63, 0.55) rgba(15, 23, 42, 0.45);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.72);
+  border-radius: 999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(243, 198, 63, 0.72);
+  border-radius: 999px;
+}
+
+.spin {
+  animation: spin 0.85s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
