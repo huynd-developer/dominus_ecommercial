@@ -8,7 +8,7 @@ import org.example.datn_sd69.entity.Customer;
 import org.example.datn_sd69.entity.Order;
 import org.example.datn_sd69.entity.OrderItem;
 import org.example.datn_sd69.entity.ProductVariant;
-import org.example.datn_sd69.entity.Voucher; // IMPORT THÊM VOUCHER
+import org.example.datn_sd69.entity.Voucher;
 import org.example.datn_sd69.modules.order.dto.request.OrderRequest;
 import org.example.datn_sd69.repository.CartItemRepository;
 import org.example.datn_sd69.repository.CartRepository;
@@ -16,22 +16,14 @@ import org.example.datn_sd69.repository.CustomerRepository;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
 import org.example.datn_sd69.repository.ProductVariantRepository;
-import org.example.datn_sd69.repository.VoucherRepository; // IMPORT THÊM VOUCHER REPO
-import org.springframework.beans.factory.annotation.Value;
+import org.example.datn_sd69.repository.VoucherRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import java.math.BigDecimal;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,7 +38,9 @@ public class OrderService {
     private static final int PRODUCT_VARIANT_ACTIVE = 1;
     private static final int ORDER_STATUS_COMPLETED = 3;
     private static final BigDecimal POINT_RATE_AMOUNT = BigDecimal.valueOf(10_000);
+
     private static final String PAYMENT_METHOD_COD = "COD";
+    private static final String PAYMENT_METHOD_VIETQR = "VIETQR";
     private static final String PAYMENT_METHOD_VNPAY = "VNPAY";
 
     private final CartRepository cartRepo;
@@ -55,67 +49,51 @@ public class OrderService {
     private final ProductVariantRepository variantRepo;
     private final CartItemRepository cartItemRepository;
     private final CustomerRepository customerRepo;
-    private final VoucherRepository voucherRepo; // INJECT THÊM THẰNG NÀY
+    private final VoucherRepository voucherRepo;
 
-    @Value("${vnpay.tmnCode}")
-    private String vnpTmnCode;
+    // ----- CẤU HÌNH VNPAY -----
+    @org.springframework.beans.factory.annotation.Value("${vnpay.tmnCode}")
+    private String vnp_TmnCode;
 
-    @Value("${vnpay.hashSecret}")
-    private String vnpHashSecret;
+    @org.springframework.beans.factory.annotation.Value("${vnpay.hashSecret}")
+    private String secretKey;
 
-    @Value("${vnpay.url}")
-    private String vnpUrl;
+    @org.springframework.beans.factory.annotation.Value("${vnpay.url}")
+    private String vnp_PayUrl;
 
-    @Value("${vnpay.onlineReturnUrl}")
-    private String vnpReturnUrl;
-
-    @Value("${vnpay.version}")
-    private String vnpVersion;
+    @org.springframework.beans.factory.annotation.Value("${vnpay.onlineReturnUrl}")
+    private String vnp_ReturnUrl;
+    // --------------------------
 
     @Transactional
     public Map<String, Object> placeOrder(Integer customerId, OrderRequest request) {
         validateCheckoutRequest(customerId, request);
 
         Customer customer = customerRepo.findById(customerId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy khách hàng"
-                ));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy khách hàng"));
 
         Cart cart = cartRepo.findByCustomerUserId(customerId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Giỏ hàng trống"
-                ));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Giỏ hàng trống"));
 
         if (cart.getCartItems() == null || cart.getCartItems().isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Giỏ hàng không có sản phẩm nào"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Giỏ hàng không có sản phẩm nào");
         }
 
         String paymentMethod = normalizePaymentMethod(request.getPaymentMethod());
-
         BigDecimal totalAmount = BigDecimal.ZERO;
         List<CartItem> cartItems = new ArrayList<>(cart.getCartItems());
 
-        // 1. TÍNH TỔNG TIỀN GỐC TRƯỚC
         for (CartItem item : cartItems) {
             validateCartItem(item);
             ProductVariant variant = item.getProductVariant();
 
             if (variant.getStockQuantity() < item.getQuantity()) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Sản phẩm " + variant.getSku() + " chỉ còn " + variant.getStockQuantity() + " trong kho"
-                );
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sản phẩm " + variant.getSku() + " chỉ còn " + variant.getStockQuantity() + " trong kho");
             }
             BigDecimal lineTotal = variant.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
             totalAmount = totalAmount.add(lineTotal);
         }
 
-        // 2. XỬ LÝ VOUCHER (NẾU CÓ)
         BigDecimal discountAmount = BigDecimal.ZERO;
         Voucher appliedVoucher = null;
 
@@ -123,14 +101,12 @@ public class OrderService {
             appliedVoucher = voucherRepo.findByCode(request.getVoucherCode().trim())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã giảm giá không tồn tại!"));
 
-            // Validate lại lần cuối xem mã còn hợp lệ không
             if (appliedVoucher.getStatus() != 1
                     || appliedVoucher.getUsedCount() >= appliedVoucher.getUsageLimit()
                     || totalAmount.compareTo(appliedVoucher.getMinOrderValue()) < 0) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã giảm giá không đủ điều kiện áp dụng!");
             }
 
-            // Tính tiền giảm
             if ("PERCENT".equalsIgnoreCase(appliedVoucher.getDiscountType())) {
                 BigDecimal percent = appliedVoucher.getDiscountValue().divide(BigDecimal.valueOf(100));
                 discountAmount = totalAmount.multiply(percent);
@@ -138,7 +114,6 @@ public class OrderService {
                 discountAmount = appliedVoucher.getDiscountValue();
             }
 
-            // Ép giới hạn giảm tối đa
             if (appliedVoucher.getMaxDiscount() != null && appliedVoucher.getMaxDiscount().compareTo(BigDecimal.ZERO) > 0) {
                 if (discountAmount.compareTo(appliedVoucher.getMaxDiscount()) > 0) {
                     discountAmount = appliedVoucher.getMaxDiscount();
@@ -151,13 +126,34 @@ public class OrderService {
             finalAmount = BigDecimal.ZERO;
         }
 
-        // 3. TẠO ĐƠN HÀNG
         Order order = new Order();
         order.setCustomer(customer);
         order.setOrderType("ONLINE");
         order.setCustomerName(normalizeText(request.getCustomerName(), "Tên người nhận"));
         order.setCustomerPhone(normalizeNoWhitespace(request.getCustomerPhone(), "Số điện thoại"));
-        order.setShippingAddress(normalizeText(request.getShippingAddress(), "Địa chỉ giao hàng"));
+
+        // --- ĐOẠN CHỮA CHÁY GỘP THÔNG TIN VAT VÀO ĐỊA CHỈ GIAO HÀNG ---
+        String finalShippingAddress = normalizeText(request.getShippingAddress(), "Địa chỉ giao hàng");
+
+        if (Boolean.TRUE.equals(request.getIsVatRequired())) {
+            // Nối chuỗi thông tin VAT
+            String vatInfo = String.format(" | [YÊU CẦU XUẤT VAT] MST: %s - Email: %s - Cty: %s - ĐC: %s",
+                    request.getTaxCode().trim(),
+                    request.getVatEmail().trim(),
+                    request.getCompanyName().trim(),
+                    request.getCompanyAddress().trim());
+
+            // Check an toàn tránh tràn 500 ký tự của DB
+            if ((finalShippingAddress + vatInfo).length() > 500) {
+                finalShippingAddress = (finalShippingAddress + vatInfo).substring(0, 500);
+            } else {
+                finalShippingAddress += vatInfo;
+            }
+        }
+
+        order.setShippingAddress(finalShippingAddress); // Lưu cục text đã gộp vào DB
+        // -------------------------------------------------------------
+
         order.setTotalAmount(totalAmount);
         order.setDiscountAmount(discountAmount);
         order.setFinalAmount(finalAmount);
@@ -166,26 +162,21 @@ public class OrderService {
         order.setCreatedAt(LocalDateTime.now());
         order.setLoyaltyPointsApplied(false);
         order.setLoyaltyPointsEarned(0);
-        order.setCompletedAt(null);
 
-        // NẾU CÓ DÙNG VOUCHER THÌ LƯU VÀO ĐƠN HÀNG VÀ CẬP NHẬT LƯỢT DÙNG
+
         if (appliedVoucher != null) {
-            order.setVoucher(appliedVoucher); // Cần chắc chắn Entity Order đã có field private Voucher voucher;
-
-            // Cập nhật lượt dùng
+            order.setVoucher(appliedVoucher);
             appliedVoucher.setUsedCount(appliedVoucher.getUsedCount() + 1);
             if (appliedVoucher.getUsedCount() >= appliedVoucher.getUsageLimit()) {
-                appliedVoucher.setStatus(0); // Tự động khóa nếu hết lượt
+                appliedVoucher.setStatus(0);
             }
             voucherRepo.save(appliedVoucher);
         }
 
         Order savedOrder = orderRepo.save(order);
 
-        // 4. LƯU CHI TIẾT ĐƠN VÀ TRỪ TỒN KHO
         for (CartItem item : cartItems) {
             ProductVariant variant = item.getProductVariant();
-
             variant.setStockQuantity(variant.getStockQuantity() - item.getQuantity());
             variantRepo.save(variant);
 
@@ -194,14 +185,10 @@ public class OrderService {
             orderItem.setProductVariant(variant);
             orderItem.setQuantity(item.getQuantity());
             orderItem.setOriginalPrice(variant.getPrice());
-            orderItem.setDiscountAmount(BigDecimal.ZERO); // Tạm set 0 ở mức Item
-
-            BigDecimal finalPrice = variant.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
-
-            orderItem.setFinalPrice(finalPrice);
+            orderItem.setDiscountAmount(BigDecimal.ZERO);
+            orderItem.setFinalPrice(variant.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
             orderItem.setNote(normalizeOptionalNote(request.getNote()));
             orderItem.setImage(item.getThumbnailUrl());
-
             orderItemRepo.save(orderItem);
         }
 
@@ -217,9 +204,60 @@ public class OrderService {
         response.put("discountAmount", savedOrder.getDiscountAmount());
         response.put("finalAmount", savedOrder.getFinalAmount());
 
-        if (PAYMENT_METHOD_VNPAY.equalsIgnoreCase(savedOrder.getPaymentMethod())) {
-            response.put("message", "Đơn hàng đã được tạo. Vui lòng hoàn tất thanh toán VNPay.");
-            response.put("paymentUrl", buildVnPayPaymentUrl(savedOrder));
+        // PHÂN LUỒNG TRẢ VỀ CHO TỪNG PHƯƠNG THỨC
+        if (PAYMENT_METHOD_VNPAY.equals(savedOrder.getPaymentMethod())) {
+            try {
+                long amount = savedOrder.getFinalAmount().longValue() * 100;
+                Map<String, String> vnp_Params = new java.util.HashMap<>();
+                vnp_Params.put("vnp_Version", "2.1.0");
+                vnp_Params.put("vnp_Command", "pay");
+                vnp_Params.put("vnp_TmnCode", vnp_TmnCode);
+                vnp_Params.put("vnp_Amount", String.valueOf(amount));
+                vnp_Params.put("vnp_CurrCode", "VND");
+                vnp_Params.put("vnp_TxnRef", String.valueOf(savedOrder.getId()));
+                vnp_Params.put("vnp_OrderInfo", "Thanh toan don hang " + savedOrder.getId());
+                vnp_Params.put("vnp_OrderType", "other");
+                vnp_Params.put("vnp_Locale", "vn");
+                vnp_Params.put("vnp_ReturnUrl", vnp_ReturnUrl);
+
+                jakarta.servlet.http.HttpServletRequest httpRequest = ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.currentRequestAttributes()).getRequest();
+                vnp_Params.put("vnp_IpAddr", org.example.datn_sd69.common.config.VNPayConfig.getIpAddress(httpRequest));
+
+                java.util.Calendar cld = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Etc/GMT+7"));
+                java.text.SimpleDateFormat formatter = new java.text.SimpleDateFormat("yyyyMMddHHmmss");
+                vnp_Params.put("vnp_CreateDate", formatter.format(cld.getTime()));
+                cld.add(java.util.Calendar.MINUTE, 15);
+                vnp_Params.put("vnp_ExpireDate", formatter.format(cld.getTime()));
+
+                java.util.List<String> fieldNames = new java.util.ArrayList<>(vnp_Params.keySet());
+                java.util.Collections.sort(fieldNames);
+                StringBuilder hashData = new StringBuilder();
+                StringBuilder query = new StringBuilder();
+                java.util.Iterator<String> itr = fieldNames.iterator();
+                while (itr.hasNext()) {
+                    String fieldName = itr.next();
+                    String fieldValue = vnp_Params.get(fieldName);
+                    if ((fieldValue != null) && (fieldValue.length() > 0)) {
+                        hashData.append(fieldName).append('=').append(java.net.URLEncoder.encode(fieldValue, java.nio.charset.StandardCharsets.US_ASCII));
+                        query.append(java.net.URLEncoder.encode(fieldName, java.nio.charset.StandardCharsets.US_ASCII)).append('=').append(java.net.URLEncoder.encode(fieldValue, java.nio.charset.StandardCharsets.US_ASCII));
+                        if (itr.hasNext()) {
+                            query.append('&');
+                            hashData.append('&');
+                        }
+                    }
+                }
+                String queryUrl = query.toString();
+                String vnp_SecureHash = org.example.datn_sd69.common.config.VNPayConfig.hmacSHA512(secretKey, hashData.toString());
+                queryUrl += "&vnp_SecureHash=" + vnp_SecureHash;
+
+                response.put("paymentUrl", vnp_PayUrl + "?" + queryUrl);
+                response.put("message", "Chuyển hướng đến cổng thanh toán VNPay...");
+            } catch (Exception e) {
+                e.printStackTrace();
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Lỗi khi tạo link thanh toán VNPay");
+            }
+        } else if (PAYMENT_METHOD_VIETQR.equals(savedOrder.getPaymentMethod())) {
+            response.put("message", "Đơn hàng đã được tạo. Vui lòng quét mã QR để hoàn tất thanh toán.");
         } else {
             response.put("message", "Đặt hàng thành công. Đơn hàng đang chờ xác nhận.");
         }
@@ -227,612 +265,180 @@ public class OrderService {
         return response;
     }
 
-    // =========================================================================
-    // CÁC HÀM BÊN DƯỚI GIỮ NGUYÊN HOÀN TOÀN NHƯ CŨ CỦA M
-    // =========================================================================
-
+    /**
+     * HÀM NHẬN CALLBACK TỪ VNPAY ĐÃ UPDATE XỬ LÝ HỦY ĐƠN HÀNG
+     */
     @Transactional
     public Map<String, Object> verifyVnPayReturn(Map<String, String> params) {
-        if (params == null || params.isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Dữ liệu VNPay trả về không hợp lệ"
-            );
-        }
-
-        String txnRef = params.get("vnp_TxnRef");
-        String responseCode = params.get("vnp_ResponseCode");
-        String transactionStatus = params.get("vnp_TransactionStatus");
-        String vnpAmount = params.get("vnp_Amount");
-
-        if (txnRef == null || txnRef.trim().isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Thiếu mã giao dịch VNPay"
-            );
-        }
-
-        if (!isValidVnPaySignature(params)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Chữ ký VNPay không hợp lệ"
-            );
-        }
-
-        Integer orderId = extractOrderIdFromTxnRef(txnRef);
-
-        Order order = orderRepo.findById(orderId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy đơn hàng"
-                ));
-
-        if (!PAYMENT_METHOD_VNPAY.equalsIgnoreCase(order.getPaymentMethod())) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Đơn hàng này không sử dụng phương thức VNPay"
-            );
-        }
-
-        if (!isValidVnPayAmount(order, vnpAmount)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Số tiền VNPay trả về không khớp với đơn hàng"
-            );
-        }
-
-        if (order.getStatus() != null && order.getStatus() == ORDER_STATUS_CONFIRMED) {
-            return buildPaymentResponse(
-                    true,
-                    order,
-                    "Đơn hàng đã được xác nhận thanh toán trước đó"
-            );
-        }
-
-        if (order.getStatus() != null && order.getStatus() == ORDER_STATUS_CANCELLED) {
-            return buildPaymentResponse(
-                    false,
-                    order,
-                    "Đơn hàng đã bị hủy trước đó"
-            );
-        }
-
-        boolean paymentSuccess =
-                "00".equals(responseCode)
-                        && ("00".equals(transactionStatus)
-                        || transactionStatus == null
-                        || transactionStatus.isBlank());
-
-        if (paymentSuccess) {
-            return buildPaymentResponse(
-                    true,
-                    order,
-                    "Thanh toán VNPay thành công. Đơn hàng đang chờ cửa hàng xác nhận."
-            );
-        }
-
-        restoreStockForOrder(order);
-
-        order.setStatus(ORDER_STATUS_CANCELLED);
-        orderRepo.save(order);
-
-        return buildPaymentResponse(
-                false,
-                order,
-                "Thanh toán VNPay thất bại hoặc bị hủy"
-        );
-    }
-
-    private void restoreStockForOrder(Order order) {
-        List<OrderItem> orderItems = orderItemRepo.findByOrderId(order.getId());
-
-        for (OrderItem item : orderItems) {
-            if (item == null || item.getProductVariant() == null || item.getQuantity() == null) {
-                continue;
-            }
-
-            ProductVariant variant = item.getProductVariant();
-
-            int currentStock = variant.getStockQuantity() != null
-                    ? variant.getStockQuantity()
-                    : 0;
-
-            variant.setStockQuantity(currentStock + item.getQuantity());
-            variantRepo.save(variant);
-        }
-    }
-
-    private Map<String, Object> buildPaymentResponse(
-            boolean success,
-            Order order,
-            String message
-    ) {
         Map<String, Object> response = new LinkedHashMap<>();
-        response.put("success", success);
-        response.put("orderId", order.getId());
-        response.put("orderStatus", order.getStatus());
-        response.put("paymentMethod", order.getPaymentMethod());
-        response.put("totalAmount", order.getTotalAmount());
-        response.put("discountAmount", order.getDiscountAmount());
-        response.put("finalAmount", order.getFinalAmount());
-        response.put("message", message);
-        return response;
-    }
-
-    private Integer extractOrderIdFromTxnRef(String txnRef) {
         try {
-            String rawOrderId = txnRef.contains("_")
-                    ? txnRef.substring(0, txnRef.indexOf("_"))
-                    : txnRef;
+            String vnp_SecureHash = params.get("vnp_SecureHash");
+            params.remove("vnp_SecureHash");
+            params.remove("vnp_SecureHashType");
 
-            return Integer.parseInt(rawOrderId);
-        } catch (Exception ex) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Mã đơn hàng trong giao dịch VNPay không hợp lệ"
-            );
-        }
-    }
-
-    private boolean isValidVnPayAmount(Order order, String vnpAmount) {
-        try {
-            if (order == null || order.getFinalAmount() == null) {
-                return false;
-            }
-
-            if (vnpAmount == null || vnpAmount.trim().isEmpty()) {
-                return false;
-            }
-
-            BigDecimal expectedAmount = order.getFinalAmount()
-                    .multiply(BigDecimal.valueOf(100));
-
-            BigDecimal actualAmount = new BigDecimal(vnpAmount);
-
-            return expectedAmount.compareTo(actualAmount) == 0;
-        } catch (Exception ex) {
-            return false;
-        }
-    }
-
-    private boolean isValidVnPaySignature(Map<String, String> params) {
-        try {
-            String receivedHash = params.get("vnp_SecureHash");
-
-            if (receivedHash == null || receivedHash.trim().isEmpty()) {
-                return false;
-            }
-
-            Map<String, String> fields = new HashMap<>(params);
-            fields.remove("vnp_SecureHash");
-            fields.remove("vnp_SecureHashType");
-
-            List<String> fieldNames = new ArrayList<>(fields.keySet());
-            Collections.sort(fieldNames);
-
+            java.util.List<String> fieldNames = new java.util.ArrayList<>(params.keySet());
+            java.util.Collections.sort(fieldNames);
             StringBuilder hashData = new StringBuilder();
-
-            for (String fieldName : fieldNames) {
-                String fieldValue = fields.get(fieldName);
-
-                if (fieldValue == null || fieldValue.isEmpty()) {
-                    continue;
+            java.util.Iterator<String> itr = fieldNames.iterator();
+            while (itr.hasNext()) {
+                String fieldName = itr.next();
+                String fieldValue = params.get(fieldName);
+                if ((fieldValue != null) && (fieldValue.length() > 0)) {
+                    hashData.append(fieldName).append('=').append(java.net.URLEncoder.encode(fieldValue, java.nio.charset.StandardCharsets.US_ASCII));
+                    if (itr.hasNext()) {
+                        hashData.append('&');
+                    }
                 }
-
-                if (hashData.length() > 0) {
-                    hashData.append("&");
-                }
-
-                hashData.append(fieldName)
-                        .append("=")
-                        .append(urlEncode(fieldValue));
             }
 
-            String calculatedHash = hmacSHA512(vnpHashSecret, hashData.toString());
+            String signValue = org.example.datn_sd69.common.config.VNPayConfig.hmacSHA512(secretKey, hashData.toString());
 
-            return calculatedHash.equalsIgnoreCase(receivedHash);
-        } catch (Exception ex) {
-            return false;
+            if (signValue.equals(vnp_SecureHash)) {
+                String responseCode = params.get("vnp_ResponseCode");
+                Integer orderId = Integer.parseInt(params.get("vnp_TxnRef"));
+                Order order = orderRepo.findById(orderId).orElse(null);
+
+                if (order != null) {
+                    if ("00".equals(responseCode)) {
+                        // Khách thanh toán thành công
+                        order.setStatus(ORDER_STATUS_CONFIRMED); // 1: Đã xác nhận
+                        orderRepo.save(order);
+                        response.put("success", true);
+                        response.put("message", "Thanh toán VNPay thành công");
+
+                    } else if ("24".equals(responseCode)) {
+                        // Khách bấm nút Hủy trên giao diện VNPay
+                        order.setStatus(ORDER_STATUS_CANCELLED); // 4: Đã hủy
+                        orderRepo.save(order);
+                        response.put("success", false);
+                        response.put("message", "Khách hàng đã hủy giao dịch");
+
+                    } else {
+                        // Khách thanh toán lỗi (thẻ hết tiền, ngân hàng lỗi...)
+                        order.setStatus(ORDER_STATUS_CANCELLED); // 4: Đã hủy
+                        orderRepo.save(order);
+                        response.put("success", false);
+                        response.put("message", "Giao dịch không thành công (Mã lỗi: " + responseCode + ")");
+                    }
+                } else {
+                    response.put("success", false);
+                    response.put("message", "Không tìm thấy đơn hàng");
+                }
+            } else {
+                response.put("success", false);
+                response.put("message", "Chữ ký không hợp lệ");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.put("success", false);
+            response.put("message", "Lỗi xác thực VNPay");
         }
+        return response;
     }
 
     private void validateCheckoutRequest(Integer customerId, OrderRequest request) {
         if (customerId == null || customerId <= 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED,
-                    "Tài khoản khách hàng không hợp lệ"
-            );
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Tài khoản khách hàng không hợp lệ");
         }
-
         if (request == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Dữ liệu đặt hàng không được để trống"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dữ liệu đặt hàng không được để trống");
         }
 
-        normalizeText(request.getCustomerName(), "Tên người nhận");
-        normalizeNoWhitespace(request.getCustomerPhone(), "Số điện thoại");
-        normalizeText(request.getShippingAddress(), "Địa chỉ giao hàng");
-        normalizePaymentMethod(request.getPaymentMethod());
-        normalizeOptionalNote(request.getNote());
+        // --- BẮT LỖI PHẦN HÓA ĐƠN VAT ---
+        if (Boolean.TRUE.equals(request.getIsVatRequired())) {
+            // Check Mã số thuế (Thường từ 10-14 số)
+            if (request.getTaxCode() == null || request.getTaxCode().trim().isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã số thuế không được để trống khi yêu cầu xuất VAT");
+            }
+            if (!request.getTaxCode().trim().matches("^[0-9-]{10,14}$")) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã số thuế không hợp lệ");
+            }
+
+            // Check Email nhận hóa đơn
+            if (request.getVatEmail() == null || request.getVatEmail().trim().isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email nhận hóa đơn không được để trống");
+            }
+            if (!request.getVatEmail().trim().matches("^[A-Za-z0-9+_.-]+@(.+)$")) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Định dạng email nhận hóa đơn không đúng");
+            }
+
+            // Check Tên công ty
+            if (request.getCompanyName() == null || request.getCompanyName().trim().isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tên công ty không được để trống");
+            }
+
+            // Check Địa chỉ công ty
+            if (request.getCompanyAddress() == null || request.getCompanyAddress().trim().isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Địa chỉ công ty không được để trống");
+            }
+        }
     }
 
     private void validateCartItem(CartItem item) {
-        if (item == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Dữ liệu giỏ hàng không hợp lệ"
-            );
-        }
-
-        ProductVariant variant = item.getProductVariant();
-
-        if (variant == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Sản phẩm trong giỏ hàng không tồn tại"
-            );
-        }
-
-        if (variant.getStatus() == null || variant.getStatus() != PRODUCT_VARIANT_ACTIVE) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Sản phẩm " + variant.getSku() + " hiện không còn kinh doanh"
-            );
-        }
-
-        if (variant.getPrice() == null || variant.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Giá sản phẩm không hợp lệ"
-            );
-        }
-
-        if (item.getQuantity() == null || item.getQuantity() <= 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Số lượng sản phẩm trong giỏ hàng không hợp lệ"
-            );
-        }
-
-        if (variant.getStockQuantity() == null || variant.getStockQuantity() < 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Tồn kho sản phẩm không hợp lệ"
-            );
+        if (item == null || item.getProductVariant() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dữ liệu giỏ hàng không hợp lệ");
         }
     }
 
     private String normalizeText(String value, String fieldName) {
-        if (value == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    fieldName + " không được để trống"
-            );
+        if (value == null || value.trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " không được để trống");
         }
-
-        String trimmed = value.trim();
-
-        if (trimmed.isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    fieldName + " không được để trống"
-            );
-        }
-
-        if (!trimmed.equals(value)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    fieldName + " không được có khoảng trắng ở đầu hoặc cuối"
-            );
-        }
-
-        if (trimmed.contains("  ")) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    fieldName + " không được chứa nhiều khoảng trắng liên tiếp"
-            );
-        }
-
-        if (trimmed.length() > 500) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    fieldName + " quá dài"
-            );
-        }
-
-        return trimmed;
+        return value.trim();
     }
 
     private String normalizeNoWhitespace(String value, String fieldName) {
-        if (value == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    fieldName + " không được để trống"
-            );
+        if (value == null || value.trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " không được để trống");
         }
-
-        String trimmed = value.trim();
-
-        if (trimmed.isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    fieldName + " không được để trống"
-            );
-        }
-
-        if (!trimmed.equals(value)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    fieldName + " không được có khoảng trắng ở đầu hoặc cuối"
-            );
-        }
-
-        if (trimmed.chars().anyMatch(Character::isWhitespace)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    fieldName + " không được chứa khoảng trắng"
-            );
-        }
-
-        if ("Số điện thoại".equals(fieldName) && !trimmed.matches("^0\\d{9}$")) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Số điện thoại phải gồm 10 số và bắt đầu bằng 0"
-            );
-        }
-
-        return trimmed;
+        return value.trim();
     }
 
     private String normalizePaymentMethod(String paymentMethod) {
-        String value = normalizeNoWhitespace(paymentMethod, "Phương thức thanh toán")
-                .toUpperCase();
-
-        if (!value.equals(PAYMENT_METHOD_COD) && !value.equals(PAYMENT_METHOD_VNPAY)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Phương thức thanh toán chỉ hỗ trợ COD hoặc VNPAY"
-            );
+        String value = normalizeNoWhitespace(paymentMethod, "Phương thức thanh toán").toUpperCase();
+        if (!value.equals(PAYMENT_METHOD_COD) && !value.equals(PAYMENT_METHOD_VIETQR) && !value.equals(PAYMENT_METHOD_VNPAY)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phương thức thanh toán không hợp lệ");
         }
-
         return value;
     }
 
     private String normalizeOptionalNote(String note) {
-        if (note == null) {
-            return null;
-        }
-
-        String trimmed = note.trim();
-
-        if (trimmed.isEmpty()) {
-            return null;
-        }
-
-        if (!trimmed.equals(note)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Ghi chú không được có khoảng trắng ở đầu hoặc cuối"
-            );
-        }
-
-        if (trimmed.length() > 255) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Ghi chú tối đa 255 ký tự"
-            );
-        }
-
-        return trimmed;
+        return note == null ? null : note.trim();
     }
 
-    private String buildVnPayPaymentUrl(Order order) {
-        try {
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
-            String vnpCreateDate = LocalDateTime.now().format(formatter);
-
-            Map<String, String> vnpParams = new HashMap<>();
-            vnpParams.put("vnp_Version", vnpVersion);
-            vnpParams.put("vnp_Command", "pay");
-            vnpParams.put("vnp_TmnCode", vnpTmnCode);
-            vnpParams.put("vnp_Amount", String.valueOf(order.getFinalAmount().longValue() * 100));
-            vnpParams.put("vnp_CurrCode", "VND");
-            vnpParams.put("vnp_TxnRef", order.getId() + "_" + vnpCreateDate);
-            vnpParams.put("vnp_OrderInfo", "Thanh toan don hang " + order.getId());
-            vnpParams.put("vnp_OrderType", "other");
-            vnpParams.put("vnp_Locale", "vn");
-            vnpParams.put("vnp_ReturnUrl", vnpReturnUrl);
-            vnpParams.put("vnp_IpAddr", "127.0.0.1");
-            vnpParams.put("vnp_CreateDate", vnpCreateDate);
-
-            List<String> fieldNames = new ArrayList<>(vnpParams.keySet());
-            Collections.sort(fieldNames);
-
-            StringBuilder hashData = new StringBuilder();
-            StringBuilder query = new StringBuilder();
-
-            for (String fieldName : fieldNames) {
-                String fieldValue = vnpParams.get(fieldName);
-
-                if (fieldValue == null || fieldValue.isEmpty()) {
-                    continue;
-                }
-
-                if (hashData.length() > 0) {
-                    hashData.append("&");
-                }
-
-                if (query.length() > 0) {
-                    query.append("&");
-                }
-
-                hashData.append(fieldName)
-                        .append("=")
-                        .append(urlEncode(fieldValue));
-
-                query.append(urlEncode(fieldName))
-                        .append("=")
-                        .append(urlEncode(fieldValue));
-            }
-
-            String secureHash = hmacSHA512(vnpHashSecret, hashData.toString());
-
-            return vnpUrl + "?" + query + "&vnp_SecureHash=" + secureHash;
-        } catch (Exception ex) {
-            throw new ResponseStatusException(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Không tạo được URL thanh toán VNPay"
-            );
-        }
-    }
-
-    private String urlEncode(String value) throws Exception {
-        return URLEncoder.encode(value, StandardCharsets.US_ASCII.toString());
-    }
-
-    private String hmacSHA512(String key, String data) throws Exception {
-        Mac hmac512 = Mac.getInstance("HmacSHA512");
-        SecretKeySpec secretKey = new SecretKeySpec(
-                key.getBytes(StandardCharsets.UTF_8),
-                "HmacSHA512"
-        );
-
-        hmac512.init(secretKey);
-
-        byte[] result = hmac512.doFinal(data.getBytes(StandardCharsets.UTF_8));
-
-        StringBuilder sb = new StringBuilder(result.length * 2);
-
-        for (byte b : result) {
-            sb.append(String.format("%02x", b & 0xff));
-        }
-
-        return sb.toString();
-    }
-
+    /**
+     * HÀM CHẠY NGẦM: TỰ ĐỘNG HỦY ĐƠN HÀNG "TREO" (Khách ấn Back hoặc tắt trình duyệt)
+     * Chạy mỗi 15 phút (900000 milliseconds)
+     */
+    @org.springframework.scheduling.annotation.Scheduled(fixedRate = 900000)
     @Transactional
-    public Map<String, Object> completeOrderAndApplyLoyalty(Integer orderId) {
-        if (orderId == null || orderId <= 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Mã đơn hàng không hợp lệ"
-            );
-        }
+    public void autoCancelAbandonedOrders() {
+        // Lấy thời điểm 15 phút trước
+        LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(15);
 
-        Order order = orderRepo.findById(orderId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy đơn hàng"
-                ));
+        // Tìm tất cả đơn hàng đang PENDING (0) và tạo trước thời điểm cutoffTime
+        List<Order> abandonedOrders = orderRepo.findAll().stream()
+                .filter(o -> o.getStatus() == ORDER_STATUS_PENDING
+                        && o.getCreatedAt() != null
+                        && o.getCreatedAt().isBefore(cutoffTime))
+                .toList();
 
-        if (order.getStatus() != null && order.getStatus() == ORDER_STATUS_CANCELLED) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Đơn hàng đã hủy, không thể hoàn thành"
-            );
-        }
+        if (!abandonedOrders.isEmpty()) {
+            for (Order order : abandonedOrders) {
+                order.setStatus(ORDER_STATUS_CANCELLED); // Đổi thành trạng thái Hủy
 
-        if (order.getStatus() != null && order.getStatus() == ORDER_STATUS_COMPLETED) {
-            return buildCompleteOrderResponse(order, "Đơn hàng đã hoàn thành trước đó");
-        }
-
-        order.setStatus(ORDER_STATUS_COMPLETED);
-
-        int pointsEarned = applyLoyaltyPointsIfNeeded(order);
-
-        Order savedOrder = orderRepo.save(order);
-
-        Map<String, Object> response = buildCompleteOrderResponse(
-                savedOrder,
-                "Đơn hàng đã hoàn thành"
-        );
-
-        response.put("loyaltyPointsEarned", pointsEarned);
-
-        if (savedOrder.getCustomer() != null) {
-            response.put("customerLoyaltyPointsAfter", savedOrder.getCustomer().getLoyaltyPoints());
-            response.put("customerRank", savedOrder.getCustomer().getCustomerRank());
-        }
-
-        return response;
-    }
-
-    private int applyLoyaltyPointsIfNeeded(Order order) {
-        if (order == null || order.getCustomer() == null) {
-            if (order != null) {
-                order.setLoyaltyPointsApplied(true);
-                order.setLoyaltyPointsEarned(0);
-                order.setCompletedAt(LocalDateTime.now());
+                // MỞ RỘNG (Tuỳ chọn): Nếu m muốn hoàn lại số lượng tồn kho khi đơn bị hủy
+                /*
+                List<OrderItem> items = orderItemRepo.findByOrder(order);
+                for (OrderItem item : items) {
+                    ProductVariant variant = item.getProductVariant();
+                    variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
+                    variantRepo.save(variant);
+                }
+                */
             }
-            return 0;
+            orderRepo.saveAll(abandonedOrders);
+            System.out.println("[HỆ THỐNG] Đã tự động hủy " + abandonedOrders.size() + " đơn hàng quá hạn thanh toán.");
         }
-
-        if (order.getStatus() == null || order.getStatus() != ORDER_STATUS_COMPLETED) {
-            return 0;
-        }
-
-        if (Boolean.TRUE.equals(order.getLoyaltyPointsApplied())) {
-            return order.getLoyaltyPointsEarned() != null ? order.getLoyaltyPointsEarned() : 0;
-        }
-
-        BigDecimal finalAmount = order.getFinalAmount() != null
-                ? order.getFinalAmount()
-                : BigDecimal.ZERO;
-
-        int pointsEarned = finalAmount
-                .divide(POINT_RATE_AMOUNT, 0, java.math.RoundingMode.DOWN)
-                .intValue();
-
-        Customer customer = order.getCustomer();
-
-        if (pointsEarned > 0) {
-            int currentPoints = customer.getLoyaltyPoints() != null
-                    ? customer.getLoyaltyPoints()
-                    : 0;
-
-            customer.setLoyaltyPoints(currentPoints + pointsEarned);
-            updateCustomerRank(customer);
-
-            customerRepo.save(customer);
-        }
-
-        order.setLoyaltyPointsApplied(true);
-        order.setLoyaltyPointsEarned(pointsEarned);
-        order.setCompletedAt(LocalDateTime.now());
-
-        return pointsEarned;
-    }
-
-    private void updateCustomerRank(Customer customer) {
-        int points = customer.getLoyaltyPoints() != null
-                ? customer.getLoyaltyPoints()
-                : 0;
-
-        if (points >= 5000) {
-            customer.setCustomerRank("DIAMOND");
-        } else if (points >= 2000) {
-            customer.setCustomerRank("GOLD");
-        } else if (points >= 500) {
-            customer.setCustomerRank("SILVER");
-        } else {
-            customer.setCustomerRank("BRONZE");
-        }
-    }
-
-    private Map<String, Object> buildCompleteOrderResponse(Order order, String message) {
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("orderId", order.getId());
-        response.put("status", order.getStatus());
-        response.put("paymentMethod", order.getPaymentMethod());
-        response.put("totalAmount", order.getTotalAmount());
-        response.put("discountAmount", order.getDiscountAmount());
-        response.put("finalAmount", order.getFinalAmount());
-        response.put("loyaltyPointsApplied", order.getLoyaltyPointsApplied());
-        response.put("loyaltyPointsEarned", order.getLoyaltyPointsEarned());
-        response.put("completedAt", order.getCompletedAt());
-        response.put("message", message);
-        return response;
     }
 }

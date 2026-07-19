@@ -23,11 +23,6 @@ public class OrderController {
     private final OrderService orderService;
     private final UserRepository userRepo;
 
-    /**
-     * Khách hàng đặt đơn online.
-     *
-     * POST /api/v1/orders/checkout
-     */
     @PostMapping("/checkout")
     @PreAuthorize("hasAuthority('USER')")
     public ResponseEntity<?> checkout(
@@ -35,45 +30,26 @@ public class OrderController {
             @Valid @RequestBody OrderRequest request
     ) {
         Integer customerId = getCustomerId(principal);
-
         Map<String, Object> result = orderService.placeOrder(customerId, request);
-
         return ResponseEntity.ok(result);
     }
 
-    // Đã xóa API verifyVnPayReturn ở đây vì hệ thống đã chuyển sang dùng VietQR
     /**
-     * VNPay redirect về FE /payment-return.
-     * FE gọi API này để BE xác minh chữ ký VNPay.
-     *
-     * Không bắt đăng nhập vì VNPay redirect từ ngoài hệ thống về.
+     * API để VNPay gọi về sau khi khách thanh toán xong
      */
     @GetMapping("/payment/vnpay-return")
-    public ResponseEntity<?> verifyVnPayReturn(
-            @RequestParam Map<String, String> params
-    ) {
+    public ResponseEntity<?> verifyVnPayReturn(@RequestParam Map<String, String> params) {
         Map<String, Object> result = orderService.verifyVnPayReturn(params);
         return ResponseEntity.ok(result);
     }
 
     private Integer getCustomerId(Principal principal) {
-        if (principal == null
-                || principal.getName() == null
-                || principal.getName().trim().isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED,
-                    "Bạn chưa đăng nhập"
-            );
+        if (principal == null || principal.getName() == null || principal.getName().trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Bạn chưa đăng nhập");
         }
-
         String email = principal.getName().trim();
-
         User user = userRepo.findByEmail(email)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.UNAUTHORIZED,
-                        "Không tìm thấy tài khoản đăng nhập"
-                ));
-
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Không tìm thấy tài khoản đăng nhập"));
         return user.getId();
     }
 }

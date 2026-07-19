@@ -19,4 +19,7 @@ public interface VoucherService {
     Voucher getVoucherById(Integer id);
     void updateVoucher(Integer id, VoucherRequest request);
     void deleteVoucher(Integer id);
+
+    // Hàm chạy ngầm tự động khóa voucher
+    void autoDeactivateExpiredVouchers();
 }

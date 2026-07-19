@@ -16,6 +16,7 @@
       </div>
 
       <div class="form-row">
+        <!-- Đã gắn sao đỏ cho Họ và tên -->
         <div class="form-group half">
           <label>Họ và tên <span class="text-danger">*</span></label>
           <div class="input-box">
@@ -23,18 +24,22 @@
               <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
               <circle cx="12" cy="7" r="4" />
             </svg>
-            <input type="text" v-model="form.customerName" @input="validateName" maxlength="100" placeholder="Ví dụ: Nguyễn Văn An" autocomplete="name" />
+            <input type="text" v-model="form.customerName" @input="validateName" maxlength="100"
+              placeholder="Ví dụ: Nguyễn Văn An" autocomplete="name" />
           </div>
           <small class="field-hint">Từ 2 đến 100 ký tự, chỉ nhập chữ và khoảng trắng.</small>
         </div>
 
+        <!-- Đã gắn sao đỏ cho Số điện thoại -->
         <div class="form-group half">
           <label>Số điện thoại <span class="text-danger">*</span></label>
           <div class="input-box">
             <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" />
+              <path
+                d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" />
             </svg>
-            <input type="tel" v-model="form.customerPhone" @input="validatePhone" maxlength="10" placeholder="Ví dụ: 0987654321" autocomplete="tel" />
+            <input type="tel" v-model="form.customerPhone" @input="validatePhone" maxlength="10"
+              placeholder="Ví dụ: 0987654321" autocomplete="tel" />
           </div>
           <small class="field-hint">Đúng 10 số và bắt đầu bằng 0.</small>
         </div>
@@ -42,6 +47,7 @@
 
       <div class="address-box">
         <div class="address-title">
+          <!-- Đã gắn sao đỏ cho phần Địa chỉ -->
           <strong>Địa chỉ nhận hàng <span class="text-danger">*</span></strong>
           <span>Có thể dùng địa chỉ tài khoản hoặc đổi địa chỉ nhận hàng riêng cho đơn này.</span>
         </div>
@@ -59,17 +65,14 @@
 
         <!-- FORM SỬA / CHỌN ĐỊA CHỈ -->
         <div v-if="showAddressEditor" class="address-editor">
-          
+
           <!-- DROPDOWN CHỌN TỪ SỔ ĐỊA CHỈ -->
           <div v-if="hasAccountAddress" class="account-address-box flex-column align-items-stretch">
             <div class="w-100">
               <span class="d-block mb-1" style="color: #718096; font-size: 12px;">Địa chỉ trong Sổ địa chỉ</span>
-              <select 
-                v-model="selectedProfileAddressIndex" 
-                @change="applySelectedProfileAddress"
-                class="form-select border-0 fw-bold px-0" 
-                style="outline: none; box-shadow: none; cursor: pointer; color: #06132b; font-size: 14px; background: transparent;"
-              >
+              <select v-model="selectedProfileAddressIndex" @change="applySelectedProfileAddress"
+                class="form-select border-0 fw-bold px-0"
+                style="outline: none; box-shadow: none; cursor: pointer; color: #06132b; font-size: 14px; background: transparent;">
                 <option value="">-- Chọn để sử dụng địa chỉ đã lưu --</option>
                 <option v-for="(addr, index) in parsedProfileAddresses" :key="index" :value="index">
                   {{ addr.fullAddress }}
@@ -79,21 +82,25 @@
           </div>
 
           <div class="form-row">
+            <!-- Đã gắn sao đỏ cho Tỉnh/Thành phố -->
             <div class="form-group half">
               <label>Tỉnh / Thành phố <span class="text-danger">*</span></label>
               <div class="select-box">
                 <select v-model="selectedProvinceCode" @change="handleProvinceChange" :disabled="loadingProvinces">
                   <option value="">{{ loadingProvinces ? "Đang tải tỉnh/thành..." : "Chọn tỉnh/thành phố" }}</option>
-                  <option v-for="province in provinces" :key="province.code" :value="province.code">{{ province.name }}</option>
+                  <option v-for="province in provinces" :key="province.code" :value="province.code">{{ province.name }}
+                  </option>
                 </select>
               </div>
             </div>
 
+            <!-- Đã gắn sao đỏ cho Phường/Xã -->
             <div class="form-group half">
               <label>Phường / Xã / Đặc khu <span class="text-danger">*</span></label>
               <div class="select-box">
-                <select v-model="selectedWardCode" @change="syncFullAddress" :disabled="!selectedProvinceCode || loadingWards">
-                  <option value="">{{ !selectedProvinceCode ? "Chọn tỉnh/thành trước" : loadingWards ? "Đang tải phường/xã..." : "Chọn phường/xã/đặc khu" }}</option>
+                <select v-model="selectedWardCode" @change="syncFullAddress"
+                  :disabled="!selectedProvinceCode || loadingWards">
+                  <option value="">{{ !selectedProvinceCode ? "Chọn tỉnh/thành trước" : loadingWards ? "Đang tải phường / xã..." : "Chọn phường/xã/đặc khu" }}</option>
                   <option v-for="ward in wards" :key="ward.code" :value="ward.code">{{ ward.name }}</option>
                 </select>
               </div>
@@ -104,6 +111,7 @@
             {{ addressLoadError }}
           </div>
 
+          <!-- Đã gắn sao đỏ cho Địa chỉ cụ thể -->
           <div class="form-group">
             <label>Địa chỉ cụ thể <span class="text-danger">*</span></label>
             <div class="input-box textarea-box">
@@ -111,9 +119,11 @@
                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
                 <circle cx="12" cy="10" r="3" />
               </svg>
-              <textarea v-model="specificAddress" @input="validateSpecificAddress" maxlength="255" placeholder="Ví dụ: Số 12/5, ngõ 36-A, đường Trần Phú" autocomplete="street-address"></textarea>
+              <textarea v-model="specificAddress" @input="validateSpecificAddress" maxlength="255"
+                placeholder="Ví dụ: Số 12/5, ngõ 36-A, đường Trần Phú" autocomplete="street-address"></textarea>
             </div>
-            <small class="field-hint">Nhập số nhà, ngõ, đường, tòa nhà. Không cần nhập lại phường/xã và tỉnh/thành.</small>
+            <small class="field-hint">Nhập số nhà, ngõ, đường, tòa nhà. Không cần nhập lại phường/xã và
+              tỉnh/thành.</small>
           </div>
 
           <div class="address-editor-actions">
@@ -124,10 +134,11 @@
               Dùng địa chỉ nhập tay
             </button>
           </div>
-          
+
         </div>
       </div>
 
+      <!-- Ghi chú KHÔNG bắt buộc -->
       <div class="form-group">
         <label>Ghi chú đơn hàng</label>
         <div class="input-box textarea-box">
@@ -135,7 +146,8 @@
             <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
             <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
           </svg>
-          <textarea v-model="form.note" @input="validateNote" maxlength="255" placeholder="Ví dụ: Giao hàng trong giờ hành chính..."></textarea>
+          <textarea v-model="form.note" @input="validateNote" maxlength="255"
+            placeholder="Ví dụ: Giao hàng trong giờ hành chính..."></textarea>
         </div>
         <small class="field-hint">Không bắt buộc, tối đa 255 ký tự.</small>
       </div>
@@ -164,22 +176,31 @@
         <div class="vat-form-box" v-if="form.requireVat">
           <h4 class="vat-form-title">Thông tin xuất hóa đơn</h4>
           <div class="form-row">
+            <!-- Đã gắn sao đỏ cho Mã số thuế -->
             <div class="form-group half">
               <label>Mã số thuế <span class="text-danger">*</span></label>
-              <div class="input-box"><input type="text" v-model="form.vatTaxCode" @input="validateVatTaxCode" maxlength="14" placeholder="Ví dụ: 0101234567" /></div>
+              <div class="input-box"><input type="text" v-model="form.vatTaxCode" @input="validateVatTaxCode"
+                  maxlength="14" placeholder="Ví dụ: 0101234567" /></div>
             </div>
+            <!-- Đã gắn sao đỏ cho Email -->
             <div class="form-group half">
               <label>Email nhận hóa đơn <span class="text-danger">*</span></label>
-              <div class="input-box"><input type="email" v-model="form.vatEmail" @input="validateVatEmail" maxlength="255" placeholder="accounting@company.com" /></div>
+              <div class="input-box"><input type="email" v-model="form.vatEmail" @input="validateVatEmail"
+                  maxlength="255" placeholder="accounting@company.com" /></div>
             </div>
           </div>
+          <!-- Đã gắn sao đỏ cho Tên công ty -->
           <div class="form-group">
             <label>Tên công ty / đơn vị <span class="text-danger">*</span></label>
-            <div class="input-box"><input type="text" v-model="form.vatCompanyName" @input="validateVatCompanyName" maxlength="255" placeholder="Ví dụ: Công ty TNHH ABC" /></div>
+            <div class="input-box"><input type="text" v-model="form.vatCompanyName" @input="validateVatCompanyName"
+                maxlength="255" placeholder="Ví dụ: Công ty TNHH ABC" /></div>
           </div>
+          <!-- Đã gắn sao đỏ cho Địa chỉ công ty -->
           <div class="form-group mb-0">
             <label>Địa chỉ công ty <span class="text-danger">*</span></label>
-            <div class="input-box"><input type="text" v-model="form.vatCompanyAddress" @input="validateVatCompanyAddress" maxlength="500" placeholder="Địa chỉ theo giấy đăng ký kinh doanh" /></div>
+            <div class="input-box"><input type="text" v-model="form.vatCompanyAddress"
+                @input="validateVatCompanyAddress" maxlength="500" placeholder="Địa chỉ theo giấy đăng ký kinh doanh" />
+            </div>
           </div>
         </div>
       </div>
@@ -209,7 +230,7 @@
         </svg>
       </label>
 
-      <!-- GIỮ LẠI VIETQR ĐÃ THAY CHO VNPAY -->
+      <!-- THANH TOÁN BẰNG VIETQR  -->
       <label class="payment-option">
         <div class="radio-wrapper">
           <input type="radio" name="payment" value="VIETQR" v-model="form.paymentMethod" />
@@ -219,8 +240,27 @@
           <strong>Chuyển khoản VietQR</strong>
           <span>Quét mã QR qua ứng dụng ngân hàng (Miễn phí)</span>
         </div>
-        <img src="https://vietqr.net/portal/v1.0.0/assets/img/logo-vietqr.png" alt="VietQR" style="height: 24px; object-fit: contain;" />
+        <img src="https://vietqr.net/portal/v1.0.0/assets/img/logo-vietqr.png" alt="VietQR"
+          style="height: 24px; object-fit: contain;" />
       </label>
+
+      <!--  THANH TOÁN VNPAY  -->
+      <div class="payment-method-card border rounded p-3 mb-3">
+        <div class="form-check d-flex align-items-center w-100">
+          <input class="form-check-input me-3" type="radio" name="paymentMethod" id="payment-vnpay" value="VNPAY"
+            v-model="form.paymentMethod">
+          <label class="form-check-label w-100 d-flex justify-content-between align-items-center"
+            style="cursor: pointer;" for="payment-vnpay">
+            <div>
+              <div class="fw-bold" style="color: #06132b;">Thanh toán qua VNPay</div>
+              <div class="text-muted small">Thanh toán an toàn bằng thẻ ATM/Nội địa hoặc Internet Banking</div>
+            </div>
+            <!-- Nếu m có logo VNPay thì đổi src đường dẫn ảnh vào đây -->
+            <img src="https://vnpay.vn/s1/statics.vnpay.vn/2023/9/06ncktiwd6dc1694418189387.png" alt="VNPay"
+              height="24">
+          </label>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -325,20 +365,20 @@ const applySelectedProfileAddress = () => {
   if (addr) {
     if (addr.name) props.form.customerName = addr.name;
     if (addr.phone) props.form.customerPhone = addr.phone;
-    
+
     // Đẩy nguyên đoạn text địa chỉ đầy đủ vào form
     props.form.shippingAddress = addr.fullAddress || "";
 
     // Gập form nhập liệu tay lại (Chuyển sang view thẻ chốt)
     isEditingAddress.value = false;
-    
+
     // Reset các trường nhập tay
     selectedProvinceCode.value = "";
     selectedWardCode.value = "";
     specificAddress.value = "";
     wards.value = [];
   }
-  
+
   // Reset lại dropdown
   selectedProfileAddressIndex.value = "";
 };
@@ -443,7 +483,7 @@ onMounted(async () => {
 
   // SỬA LỖI HIỂN THỊ CHUỖI JSON RA MÀN HÌNH (Hình ảnh m gửi)
   if (props.form.shippingAddress && props.form.shippingAddress.startsWith('[')) {
-    props.form.shippingAddress = ""; 
+    props.form.shippingAddress = "";
   }
 
   // Lấy dữ liệu Sổ địa chỉ (JSON) từ Profile
@@ -473,80 +513,552 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.checkout-left { flex: 2; background: white; border: 1px solid #eaeaea; border-radius: 8px; padding: 40px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03); }
-.step-section { margin-bottom: 10px; }
-.step-header { display: flex; align-items: center; gap: 12px; margin-bottom: 25px; }
-.step-num { background: #06132b; color: white; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; }
-.step-header h2 { font-size: 20px; color: #06132b; margin: 0; position: relative; }
-.step-header h2::after { content: ""; position: absolute; bottom: -6px; left: 0; width: 30px; height: 2px; background: #b78d52; }
-.profile-filled-box { display: flex; padding: 14px 16px; border: 1px solid #bbf7d0; background: #f0fdf4; border-radius: 10px; margin-bottom: 22px; }
-.profile-filled-box strong { display: block; color: #166534; font-size: 14px; margin-bottom: 4px; }
-.profile-filled-box span { color: #15803d; font-size: 13px; }
-.form-row { display: flex; gap: 20px; }
-.form-group { margin-bottom: 20px; width: 100%; }
-.form-group.half { flex: 1; }
-.form-group.mb-0 { margin-bottom: 0; }
-.form-group label { display: block; font-size: 14px; color: #333; margin-bottom: 8px; font-weight: 500; }
-.field-hint { display: block; margin-top: 6px; color: #718096; font-size: 12px; }
-.input-box, .select-box { display: flex; align-items: center; border: 1px solid #ddd; border-radius: 6px; padding: 0 15px; background: white; transition: 0.2s; }
-.input-box:focus-within, .select-box:focus-within { border-color: #06132b; }
-.select-box select { width: 100%; border: none; outline: none; padding: 14px 0; font-size: 14px; background: transparent; color: #333; cursor: pointer; }
-.select-box select:disabled { color: #a0aec0; cursor: not-allowed; }
-.textarea-box { align-items: flex-start; padding-top: 12px; }
-.input-icon { width: 18px; height: 18px; color: #a0aec0; margin-right: 10px; flex-shrink: 0; }
-.input-box input { flex: 1; border: none; padding: 14px 0; outline: none; font-size: 14px; color: #333; }
-.input-box textarea { flex: 1; border: none; padding: 0 0 14px 0; outline: none; font-size: 14px; color: #333; min-height: 80px; resize: none; font-family: inherit; }
-.address-box { border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 20px; background: #fcfcfd; }
-.address-title { display: flex; flex-direction: column; gap: 4px; margin-bottom: 18px; }
-.address-title strong { color: #06132b; font-size: 15px; }
-.address-title span { color: #718096; font-size: 13px; }
-.saved-address-card, .account-address-box { border: 1px solid #e5e7eb; background: #ffffff; border-radius: 10px; padding: 14px; display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 16px; }
-.saved-address-content, .account-address-box div { display: flex; flex-direction: column; gap: 4px; }
-.saved-address-content span, .account-address-box span { color: #718096; font-size: 12px; }
-.saved-address-content strong, .account-address-box strong { color: #06132b; font-size: 14px; line-height: 1.5; }
-.btn-change-address, .btn-use-profile-address, .btn-save-address, .btn-cancel-address { border-radius: 8px; padding: 9px 12px; font-size: 13px; font-weight: 700; cursor: pointer; transition: 0.2s; white-space: nowrap; }
-.btn-change-address, .btn-save-address { border: none; background: #06132b; color: #ffffff; }
-.btn-change-address:hover, .btn-save-address:hover { background: #b78d52; }
-.btn-use-profile-address { border: 1px solid #b78d52; background: #ffffff; color: #b78d52; }
-.btn-use-profile-address:hover { background: #b78d52; color: #ffffff; }
-.btn-cancel-address { border: 1px solid #cbd5e0; background: #ffffff; color: #4a5568; }
-.btn-cancel-address:hover { background: #f8fafc; }
-.address-editor-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: -4px; margin-bottom: 12px; }
-.address-error { margin-bottom: 16px; padding: 10px 12px; background: #fff1f2; color: #b91c1c; border: 1px solid #fecdd3; border-radius: 8px; font-size: 13px; }
-.full-address-preview { margin-top: 12px; padding: 12px 14px; border-radius: 8px; background: #f8fafc; border: 1px dashed #cbd5e0; color: #4a5568; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
-.full-address-preview strong { color: #06132b; line-height: 1.5; }
-.vat-section-wrapper { margin-top: 25px; margin-bottom: 20px; }
-.vat-toggle-box { display: flex; justify-content: space-between; align-items: center; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px 20px; background: white; }
-.vat-toggle-info { display: flex; flex-direction: column; gap: 4px; }
-.vat-toggle-title { display: flex; align-items: center; gap: 8px; color: #1a202c; }
-.icon-receipt { width: 18px; height: 18px; color: #4a5568; }
-.vat-sub { font-size: 13px; color: #718096; }
-.switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
-.switch input { opacity: 0; width: 0; height: 0; }
-.slider { position: absolute; cursor: pointer; inset: 0; background-color: #cbd5e0; transition: 0.4s; }
-.slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: 0.4s; }
-input:checked + .slider { background-color: #3182ce; }
-input:checked + .slider:before { transform: translateX(20px); }
-.slider.round { border-radius: 24px; }
-.slider.round:before { border-radius: 50%; }
-.vat-form-box { background: #ebf8ff; border: 1px solid #bee3f8; border-radius: 8px; padding: 20px; margin-top: 15px; }
-.vat-form-title { margin: 0 0 15px 0; color: #2b6cb0; font-size: 15px; font-weight: 600; }
-.vat-form-box .form-group label { color: #2d3748; }
-.vat-form-box .input-box { border-color: #bee3f8; }
-.vat-form-box .input-box:focus-within { border-color: #3182ce; box-shadow: 0 0 0 1px #3182ce; }
-.vat-warning { margin-top: 14px; padding: 10px 12px; background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; border-radius: 8px; font-size: 12px; line-height: 1.5; }
-.divider { height: 1px; background: #f0f0f0; margin: 30px 0; }
-.payment-option { display: flex; align-items: center; gap: 15px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px; cursor: pointer; transition: 0.2s; }
-.payment-option:hover, .payment-option:has(input:checked) { border-color: #b78d52; background: #fdfaf6; }
-.radio-wrapper { position: relative; width: 20px; height: 20px; }
-.radio-wrapper input { opacity: 0; position: absolute; cursor: pointer; }
-.custom-radio { position: absolute; top: 0; left: 0; height: 20px; width: 20px; background: #fff; border: 2px solid #ddd; border-radius: 50%; }
-.radio-wrapper input:checked ~ .custom-radio { border-color: #06132b; }
-.custom-radio:after { content: ""; position: absolute; display: none; top: 4px; left: 4px; width: 8px; height: 8px; border-radius: 50%; background: #06132b; }
-.radio-wrapper input:checked ~ .custom-radio:after { display: block; }
-.option-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-.option-info strong { color: #333; font-size: 15px; }
-.option-info span { color: #777; font-size: 13px; }
-.option-icon { width: 32px; height: 32px; color: #b78d52; }
-@media (max-width: 768px) { .checkout-left { padding: 24px; } .form-row { flex-direction: column; gap: 0; } .vat-toggle-box, .saved-address-card, .account-address-box { align-items: stretch; flex-direction: column; } .address-editor-actions { flex-direction: column; } }
+.checkout-left {
+  flex: 2;
+  background: white;
+  border: 1px solid #eaeaea;
+  border-radius: 8px;
+  padding: 40px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+}
+
+.step-section {
+  margin-bottom: 10px;
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 25px;
+}
+
+.step-num {
+  background: #06132b;
+  color: white;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.step-header h2 {
+  font-size: 20px;
+  color: #06132b;
+  margin: 0;
+  position: relative;
+}
+
+.step-header h2::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 0;
+  width: 30px;
+  height: 2px;
+  background: #b78d52;
+}
+
+.profile-filled-box {
+  display: flex;
+  padding: 14px 16px;
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  border-radius: 10px;
+  margin-bottom: 22px;
+}
+
+.profile-filled-box strong {
+  display: block;
+  color: #166534;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.profile-filled-box span {
+  color: #15803d;
+  font-size: 13px;
+}
+
+.form-row {
+  display: flex;
+  gap: 20px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.form-group.half {
+  flex: 1;
+}
+
+.form-group.mb-0 {
+  margin-bottom: 0;
+}
+
+.form-group label {
+  display: block;
+  font-size: 14px;
+  color: #333;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 6px;
+  color: #718096;
+  font-size: 12px;
+}
+
+.input-box,
+.select-box {
+  display: flex;
+  align-items: center;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 0 15px;
+  background: white;
+  transition: 0.2s;
+}
+
+.input-box:focus-within,
+.select-box:focus-within {
+  border-color: #06132b;
+}
+
+.select-box select {
+  width: 100%;
+  border: none;
+  outline: none;
+  padding: 14px 0;
+  font-size: 14px;
+  background: transparent;
+  color: #333;
+  cursor: pointer;
+}
+
+.select-box select:disabled {
+  color: #a0aec0;
+  cursor: not-allowed;
+}
+
+.textarea-box {
+  align-items: flex-start;
+  padding-top: 12px;
+}
+
+.input-icon {
+  width: 18px;
+  height: 18px;
+  color: #a0aec0;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.input-box input {
+  flex: 1;
+  border: none;
+  padding: 14px 0;
+  outline: none;
+  font-size: 14px;
+  color: #333;
+}
+
+.input-box textarea {
+  flex: 1;
+  border: none;
+  padding: 0 0 14px 0;
+  outline: none;
+  font-size: 14px;
+  color: #333;
+  min-height: 80px;
+  resize: none;
+  font-family: inherit;
+}
+
+.address-box {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+  background: #fcfcfd;
+}
+
+.address-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 18px;
+}
+
+.address-title strong {
+  color: #06132b;
+  font-size: 15px;
+}
+
+.address-title span {
+  color: #718096;
+  font-size: 13px;
+}
+
+.saved-address-card,
+.account-address-box {
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.saved-address-content,
+.account-address-box div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.saved-address-content span,
+.account-address-box span {
+  color: #718096;
+  font-size: 12px;
+}
+
+.saved-address-content strong,
+.account-address-box strong {
+  color: #06132b;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.btn-change-address,
+.btn-use-profile-address,
+.btn-save-address,
+.btn-cancel-address {
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s;
+  white-space: nowrap;
+}
+
+.btn-change-address,
+.btn-save-address {
+  border: none;
+  background: #06132b;
+  color: #ffffff;
+}
+
+.btn-change-address:hover,
+.btn-save-address:hover {
+  background: #b78d52;
+}
+
+.btn-use-profile-address {
+  border: 1px solid #b78d52;
+  background: #ffffff;
+  color: #b78d52;
+}
+
+.btn-use-profile-address:hover {
+  background: #b78d52;
+  color: #ffffff;
+}
+
+.btn-cancel-address {
+  border: 1px solid #cbd5e0;
+  background: #ffffff;
+  color: #4a5568;
+}
+
+.btn-cancel-address:hover {
+  background: #f8fafc;
+}
+
+.address-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: -4px;
+  margin-bottom: 12px;
+}
+
+.address-error {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background: #fff1f2;
+  color: #b91c1c;
+  border: 1px solid #fecdd3;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.full-address-preview {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e0;
+  color: #4a5568;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.full-address-preview strong {
+  color: #06132b;
+  line-height: 1.5;
+}
+
+.vat-section-wrapper {
+  margin-top: 25px;
+  margin-bottom: 20px;
+}
+
+.vat-toggle-box {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 15px 20px;
+  background: white;
+}
+
+.vat-toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vat-toggle-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #1a202c;
+}
+
+.icon-receipt {
+  width: 18px;
+  height: 18px;
+  color: #4a5568;
+}
+
+.vat-sub {
+  font-size: 13px;
+  color: #718096;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #cbd5e0;
+  transition: 0.4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.4s;
+}
+
+input:checked+.slider {
+  background-color: #3182ce;
+}
+
+input:checked+.slider:before {
+  transform: translateX(20px);
+}
+
+.slider.round {
+  border-radius: 24px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+
+.vat-form-box {
+  background: #ebf8ff;
+  border: 1px solid #bee3f8;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 15px;
+}
+
+.vat-form-title {
+  margin: 0 0 15px 0;
+  color: #2b6cb0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.vat-form-box .form-group label {
+  color: #2d3748;
+}
+
+.vat-form-box .input-box {
+  border-color: #bee3f8;
+}
+
+.vat-form-box .input-box:focus-within {
+  border-color: #3182ce;
+  box-shadow: 0 0 0 1px #3182ce;
+}
+
+.vat-warning {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.divider {
+  height: 1px;
+  background: #f0f0f0;
+  margin: 30px 0;
+}
+
+.payment-option {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.payment-option:hover,
+.payment-option:has(input:checked) {
+  border-color: #b78d52;
+  background: #fdfaf6;
+}
+
+.radio-wrapper {
+  position: relative;
+  width: 20px;
+  height: 20px;
+}
+
+.radio-wrapper input {
+  opacity: 0;
+  position: absolute;
+  cursor: pointer;
+}
+
+.custom-radio {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 20px;
+  width: 20px;
+  background: #fff;
+  border: 2px solid #ddd;
+  border-radius: 50%;
+}
+
+.radio-wrapper input:checked~.custom-radio {
+  border-color: #06132b;
+}
+
+.custom-radio:after {
+  content: "";
+  position: absolute;
+  display: none;
+  top: 4px;
+  left: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #06132b;
+}
+
+.radio-wrapper input:checked~.custom-radio:after {
+  display: block;
+}
+
+.option-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.option-info strong {
+  color: #333;
+  font-size: 15px;
+}
+
+.option-info span {
+  color: #777;
+  font-size: 13px;
+}
+
+.option-icon {
+  width: 32px;
+  height: 32px;
+  color: #b78d52;
+}
+
+@media (max-width: 768px) {
+  .checkout-left {
+    padding: 24px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .vat-toggle-box,
+  .saved-address-card,
+  .account-address-box {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .address-editor-actions {
+    flex-direction: column;
+  }
+}
 </style>

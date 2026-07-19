@@ -16,7 +16,6 @@ public class VoucherServiceImpl implements VoucherService {
 
     private final VoucherRepository voucherRepository;
 
-
     @Override
     public org.springframework.data.domain.Page<Voucher> getVouchers(String keyword, Integer status, int page, int size) {
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
@@ -134,5 +133,34 @@ public class VoucherServiceImpl implements VoucherService {
         // Xóa mềm (Soft Delete) theo đúng chuẩn DB của m
         voucher.setIsDeleted(true);
         voucherRepository.save(voucher);
+    }
+
+    /**
+     * HÀM CHẠY NGẦM: TỰ ĐỘNG KHÓA VOUCHER HẾT HẠN
+     * Chạy mỗi 10 phút (600000 milliseconds)
+     */
+    @Override
+    @org.springframework.scheduling.annotation.Scheduled(fixedRate = 600000)
+    @jakarta.transaction.Transactional
+    public void autoDeactivateExpiredVouchers() {
+        // Lấy thời gian hiện tại
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+
+        // Tìm tất cả các voucher đang hoạt động (Status = 1) nhưng EndDate đã qua
+        java.util.List<org.example.datn_sd69.entity.Voucher> expiredVouchers = voucherRepository.findAll().stream()
+                .filter(v -> v.getStatus() != null
+                        && v.getStatus() == 1
+                        && v.getEndDate() != null
+                        && v.getEndDate().isBefore(now))
+                .toList();
+
+        // Nếu có voucher hết hạn thì đổi trạng thái về 0
+        if (!expiredVouchers.isEmpty()) {
+            for (org.example.datn_sd69.entity.Voucher v : expiredVouchers) {
+                v.setStatus(0); // 0: Tạm dừng / Hết hạn
+            }
+            voucherRepository.saveAll(expiredVouchers);
+            System.out.println("[HỆ THỐNG] Đã tự động ngưng hoạt động " + expiredVouchers.size() + " voucher hết hạn.");
+        }
     }
 }
