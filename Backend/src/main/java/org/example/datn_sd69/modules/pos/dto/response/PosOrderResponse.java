@@ -100,6 +100,12 @@ public class PosOrderResponse {
 
     private String cashierName;
 
+    private Boolean ownOrder;
+    private Boolean canOpen;
+    private Boolean canCheckout;
+    private Boolean canTransfer;
+    private Boolean canCancel;
+
     private Integer loyaltyPointsEarned;
     private Integer customerLoyaltyPointsAfter;
 

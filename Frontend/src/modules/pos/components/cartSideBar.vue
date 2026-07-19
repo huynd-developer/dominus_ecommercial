@@ -1,6 +1,6 @@
 <template>
   <div
-    class="cart-premium-panel rounded-3 d-flex flex-column h-100 p-3 select-none position-relative"
+    class="cart-premium-panel rounded-3 d-flex flex-column h-100 p-2 select-none position-relative"
   >
     <div class="pos-ui-container d-flex flex-column h-100 min-h-0">
       <!-- HEADER -->
@@ -15,10 +15,10 @@
           </div>
 
           <div class="min-w-0">
-            <h6 class="mb-0 text-light fw-bold text-truncate">Giỏ hàng</h6>
+            <h6 class="mb-0 text-light fw-bold text-truncate">Thanh toán</h6>
 
             <span class="text-muted-custom font-xs">
-              {{ posStore.cart.length }} dòng sản phẩm
+              {{ posStore.cart.length }} sản phẩm đã chọn
             </span>
           </div>
         </div>
@@ -142,123 +142,6 @@
             </div>
           </div>
         </div>
-
-        <!-- CART -->
-        <div
-          v-if="posStore.cart.length === 0"
-          class="empty-cart d-flex flex-column align-items-center justify-content-center text-center rounded-3 mb-2"
-        >
-          <i class="bi bi-bag-x display-6 text-muted-custom opacity-25"></i>
-
-          <p class="text-light opacity-75 mb-1 fw-bold font-sm">
-            Giỏ hàng trống
-          </p>
-
-          <p class="text-muted-custom font-xs mb-0">
-            Chọn sản phẩm hoặc quét SKU để thêm vào giỏ.
-          </p>
-        </div>
-
-        <div v-else class="cart-table-wrapper rounded-3 mb-2">
-          <table class="table table-cart-custom align-middle mb-0">
-            <thead>
-              <tr>
-                <th>Sản phẩm trong giỏ</th>
-                <th class="text-center">SL</th>
-                <th class="text-end">Tiền</th>
-                <th class="text-end"></th>
-              </tr>
-            </thead>
-
-            <tbody>
-              <tr v-for="item in posStore.cart" :key="item.product.sku">
-                <td class="cart-product-cell">
-                  <div
-                    class="cart-product-name text-truncate"
-                    :title="item.product.name"
-                  >
-                    {{ item.product.name }}
-                  </div>
-
-                  <div
-                    class="cart-variant text-truncate"
-                    :title="getVariantText(item.product)"
-                  >
-                    <i class="bi bi-droplet-half me-1"></i>
-                    {{ getVariantText(item.product) }}
-                  </div>
-
-                  <div
-                    class="cart-meta text-truncate"
-                    :title="item.product.sku"
-                  >
-                    SKU: {{ item.product.sku }}
-                  </div>
-
-                  <div class="cart-meta">
-                    Đơn giá: {{ formatPrice(item.product.price) }} ₫
-                  </div>
-                </td>
-
-                <td class="text-center qty-cell">
-                  <div
-                    class="qty-box d-inline-flex align-items-center rounded-2"
-                  >
-                    <button
-                      class="qty-btn"
-                      type="button"
-                      :disabled="lockedOrder"
-                      @click.stop="
-                        posStore.updateQuantity(
-                          item.product.sku,
-                          item.quantity - 1
-                        )
-                      "
-                    >
-                      <i class="bi bi-dash"></i>
-                    </button>
-
-                    <span class="qty-number">
-                      {{ item.quantity }}
-                    </span>
-
-                    <button
-                      class="qty-btn"
-                      type="button"
-                      :disabled="lockedOrder"
-                      @click.stop="
-                        posStore.updateQuantity(
-                          item.product.sku,
-                          item.quantity + 1
-                        )
-                      "
-                    >
-                      <i class="bi bi-plus"></i>
-                    </button>
-                  </div>
-                </td>
-
-                <td class="text-end money-cell">
-                  <strong class="line-total">
-                    {{ formatPrice(item.product.price * item.quantity) }} ₫
-                  </strong>
-                </td>
-
-                <td class="text-end action-cell">
-                  <button
-                    class="btn-delete-item"
-                    type="button"
-                    :disabled="lockedOrder"
-                    @click.stop="posStore.removeFromCart(item.product.sku)"
-                  >
-                    <i class="bi bi-trash3"></i>
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
         <!-- CHECKOUT -->
         <div class="checkout-section pt-2 border-top border-dark-custom mt-2">
           <!-- VOUCHER -->
@@ -501,115 +384,29 @@
 
           <!-- HELD ACTIONS -->
           <div class="held-actions mb-2">
-            <div class="d-grid held-grid gap-2">
-              <button
-                type="button"
-                class="btn-held"
-                :disabled="
-                  posStore.cart.length === 0 ||
-                  posStore.isLoading ||
-                  posStore.hasPartialCashPayment
-                "
-                @click="handleHoldOrder"
-              >
-                <i class="bi bi-pause-circle"></i>
-                Lưu tạm
-              </button>
-
-              <button
-                type="button"
-                class="btn-held-outline"
-                :disabled="posStore.isLoading"
-                @click="toggleHeldOrdersPanel"
-              >
-                <i class="bi bi-list-check"></i>
-                Phiếu treo ({{ posStore.heldOrders.length }})
-              </button>
-            </div>
-
-            <div
-              v-if="posStore.showHeldOrdersPanel"
-              class="held-list rounded-3 mt-2"
+            <button
+              type="button"
+              class="btn-held w-100"
+              :disabled="
+                posStore.cart.length === 0 ||
+                posStore.isLoading ||
+                posStore.hasPartialCashPayment
+              "
+              @click="handleHoldOrder"
             >
-              <div
-                class="d-flex justify-content-between align-items-center px-2 py-2 border-bottom border-dark-custom"
-              >
-                <span class="text-light fw-bold font-xs">
-                  Danh sách phiếu treo
-                </span>
+              <i
+                class="bi"
+                :class="
+                  posStore.activeHeldOrderId
+                    ? 'bi-check2-circle'
+                    : 'bi-pause-circle'
+                "
+              ></i>
 
-                <button
-                  type="button"
-                  class="btn-refresh-held"
-                  @click="posStore.fetchHeldOrders()"
-                >
-                  <i class="bi bi-arrow-clockwise"></i>
-                </button>
-              </div>
+              {{ posStore.activeHeldOrderId ? "Cập nhật phiếu" : "Lưu tạm" }}
+            </button>
 
-              <div
-                v-if="posStore.heldOrders.length === 0"
-                class="text-muted-custom font-xs text-center py-3"
-              >
-                Không có phiếu treo.
-              </div>
-
-              <div
-                v-for="held in posStore.heldOrders"
-                :key="held.orderId"
-                class="held-item px-2 py-2 border-bottom border-dark-custom"
-              >
-                <div class="d-flex justify-content-between gap-2">
-                  <div class="min-w-0">
-                    <div class="text-light fw-bold font-xs text-truncate">
-                      #{{ held.orderId }} -
-                      {{ held.customerName || "Khách tại quầy" }}
-                    </div>
-
-                    <div class="text-muted-custom font-xs text-truncate">
-                      {{ held.customerPhone || "Không có SĐT" }}
-                    </div>
-
-                    <div class="text-muted-custom font-xs text-truncate">
-                      NV: {{ held.cashierName || "Không rõ" }}
-                    </div>
-
-                    <div class="text-gold font-xs fw-bold">
-                      {{ formatPrice(held.finalAmount) }} ₫
-                    </div>
-                  </div>
-
-                  <div class="d-flex flex-column gap-1 shrink-0">
-                    <button
-                      type="button"
-                      class="btn-open-held"
-                      :disabled="posStore.isLoading"
-                      @click="handleOpenHeldOrder(held.orderId)"
-                    >
-                      Mở
-                    </button>
-
-                    <button
-                      type="button"
-                      class="btn-transfer-held"
-                      :disabled="posStore.isLoading"
-                      @click="handleTransferHeldOrder(held.orderId)"
-                    >
-                      Chuyển
-                    </button>
-
-                    <button
-                      type="button"
-                      class="btn-cancel-held"
-                      :disabled="posStore.isLoading"
-                      @click="handleCancelHeldOrder(held.orderId)"
-                    >
-                      Hủy
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+           
           </div>
 
           <!-- PAYMENT -->
@@ -654,7 +451,6 @@
               {{ posStore.hasPartialCashPayment ? "VietQR" : "VietQR" }}
             </button>
           </div>
-
           <button
             class="submit-pay-btn w-100 py-2 rounded-3 text-dark fw-black font-sm tracking-wider"
             type="button"
@@ -997,7 +793,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import Swal, { type SweetAlertIcon } from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
 import { useRouter } from "vue-router";
@@ -1005,13 +801,57 @@ import { usePosStore } from "@/modules/pos/stores/posStore";
 
 const posStore = usePosStore();
 const router = useRouter();
+const handleTransferHeldOrderEvent = async (event: Event) => {
+  const customEvent = event as CustomEvent;
+  const orderId = Number(customEvent.detail?.orderId || 0);
+
+  if (!orderId) {
+    setPosError("Mã phiếu treo không hợp lệ.");
+    return;
+  }
+
+  await openTransferModal(orderId);
+};
+
+const handleCancelHeldOrderEvent = async (event: Event) => {
+  const customEvent = event as CustomEvent;
+  const orderId = Number(customEvent.detail?.orderId || 0);
+
+  if (!orderId) {
+    setPosError("Mã phiếu treo không hợp lệ.");
+    return;
+  }
+
+  await handleCancelHeldOrder(orderId);
+};
+
 onMounted(() => {
   posStore.restorePendingCheckoutDraft();
 
   if (posStore.customer?.phone) {
     customerPhoneInput.value = posStore.customer.phone;
   }
+
+  window.addEventListener(
+    "pos-transfer-held-order",
+    handleTransferHeldOrderEvent
+  );
+
+  window.addEventListener("pos-cancel-held-order", handleCancelHeldOrderEvent);
 });
+
+onUnmounted(() => {
+  window.removeEventListener(
+    "pos-transfer-held-order",
+    handleTransferHeldOrderEvent
+  );
+
+  window.removeEventListener(
+    "pos-cancel-held-order",
+    handleCancelHeldOrderEvent
+  );
+});
+
 const customerPhoneInput = ref("");
 const showCashModal = ref(false);
 const displayCash = ref("");
@@ -1032,6 +872,14 @@ const lockedOrder = computed(() => {
 
 const customerLocked = computed(() => {
   return posStore.isCustomerLocked;
+});
+const heldOrderCannotCheckoutMessage =
+  "Phiếu này đang thuộc nhân viên khác. Vui lòng chuyển phiếu trước khi thanh toán.";
+
+const heldOrderCannotCheckout = computed(() => {
+  return Boolean(
+    posStore.activeHeldOrderId && posStore.activeHeldOrderCanCheckout === false
+  );
 });
 
 const availableVoucherList = computed(() => {
@@ -1190,6 +1038,19 @@ const formatPrice = (val?: number | null) => {
 const normalizePhone = (phone?: string | null) => {
   return (phone || "").replace(/\D/g, "").trim();
 };
+
+watch(
+  () => [posStore.activeHeldOrderId, posStore.customer?.phone],
+  () => {
+    /*
+     * Khi mở phiếu treo từ header,
+     * cartSideBar phải tự đồng bộ lại SĐT khách hàng vào input.
+     */
+    if (posStore.activeHeldOrderId && posStore.customer?.phone) {
+      customerPhoneInput.value = normalizePhone(posStore.customer.phone);
+    }
+  }
+);
 
 const normalizeText = (value?: string | null) => {
   return (value || "").trim().replace(/\s+/g, " ");
@@ -1563,22 +1424,16 @@ const addAmount = (amount: number) => {
   displayCash.value = new Intl.NumberFormat("vi-VN").format(current + amount);
 };
 
-const toggleHeldOrdersPanel = async () => {
-  posStore.showHeldOrdersPanel = !posStore.showHeldOrdersPanel;
-
-  if (posStore.showHeldOrdersPanel) {
-    await posStore.fetchHeldOrders();
-  }
-};
-
 const handleHoldOrder = async () => {
   if (!validateCustomerBeforeCheckout()) {
     return;
   }
 
+  const wasUpdatingHeldOrder = Boolean(posStore.activeHeldOrderId);
+
   /*
-   * Nếu đang mở phiếu treo thì cho cập nhật phiếu hiện tại.
-   * Không check trùng SĐT ở đây, vì cập nhật phiếu cũ là đúng nghiệp vụ.
+   * Nếu chưa mở phiếu treo thì check trùng SĐT trước khi tạo phiếu mới.
+   * Nếu đang mở phiếu treo thì cho cập nhật chính phiếu đó.
    */
   if (!posStore.activeHeldOrderId) {
     const currentPhone = normalizePhone(
@@ -1592,11 +1447,15 @@ const handleHoldOrder = async () => {
     });
 
     if (duplicatedHeldOrder) {
-      const message = `Khách hàng này đang có phiếu treo #${duplicatedHeldOrder.orderId} chưa thanh toán. Vui lòng mở phiếu treo đó để cập nhật sản phẩm.`;
+      const message = `Khách hàng này đang có phiếu treo #${duplicatedHeldOrder.orderId} chưa thanh toán. Vui lòng mở phiếu treo đó ở khu Đơn hàng đang xử lý để cập nhật sản phẩm.`;
 
       setPosError(message);
 
-      posStore.showHeldOrdersPanel = true;
+      /*
+       * Header đang là nơi hiển thị phiếu treo,
+       * nên chỉ cần reload danh sách, không mở panel bên cart nữa.
+       */
+      await posStore.fetchHeldOrders();
 
       return;
     }
@@ -1604,30 +1463,35 @@ const handleHoldOrder = async () => {
 
   const result = await posStore.holdCurrentOrder();
 
-  if (result) {
-    customerPhoneInput.value = "";
-    displayCash.value = "";
-    showCashModal.value = false;
+  if (!result) {
+    const message =
+      posStore.errorMsg ||
+      "Treo phiếu thất bại. Vui lòng kiểm tra lại thông tin.";
 
-    showPosToast(
-      posStore.activeHeldOrderId
-        ? "Đã cập nhật phiếu treo thành công."
-        : "Đã treo phiếu thành công."
-    );
+    setPosError(message);
+
+    if (message.includes("đang có phiếu treo")) {
+      await posStore.fetchHeldOrders();
+    }
 
     return;
   }
 
-  const message =
-    posStore.errorMsg ||
-    "Treo phiếu thất bại. Vui lòng kiểm tra lại thông tin.";
+  customerPhoneInput.value = "";
+  displayCash.value = "";
+  showCashModal.value = false;
+  closeTransferModal();
 
-  setPosError(message);
+  /*
+   * Sau khi lưu/cập nhật, reload header phiếu treo.
+   */
+  await posStore.fetchHeldOrders();
 
-  if (message.includes("đang có phiếu treo")) {
-    posStore.showHeldOrdersPanel = true;
-    await posStore.fetchHeldOrders();
-  }
+  showPosToast(
+    wasUpdatingHeldOrder
+      ? "Đã cập nhật phiếu treo thành công."
+      : "Đã lưu tạm phiếu thành công. Phiếu đã hiển thị ở phía trên."
+  );
 };
 
 const handleOpenHeldOrder = async (orderId: number) => {
@@ -1851,6 +1715,11 @@ const confirmVietQrPayment = async () => {
 };
 
 const handleCheckoutAction = async () => {
+  if (heldOrderCannotCheckout.value) {
+    setPosError(heldOrderCannotCheckoutMessage);
+    return;
+  }
+
   if (!validateCustomerBeforeCheckout()) {
     return;
   }
@@ -1981,6 +1850,11 @@ const buildInvoiceSnapshot = (backendData: any = {}) => {
 };
 
 const processCashPayment = async () => {
+  if (heldOrderCannotCheckout.value) {
+    setPosError(heldOrderCannotCheckoutMessage);
+    return;
+  }
+
   if (!validateCustomerBeforeCheckout()) {
     return;
   }
@@ -2973,5 +2847,226 @@ const processCashPayment = async () => {
   max-width: 260px;
   display: block;
   object-fit: contain;
+}
+.held-note {
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.cart-premium-panel {
+  padding: 10px !important;
+}
+
+.cart-header {
+  padding-bottom: 6px !important;
+  margin-bottom: 6px !important;
+}
+
+.cart-header .icon-wrap {
+  width: 36px;
+  height: 36px;
+  padding: 0 !important;
+}
+
+.cart-header h6 {
+  font-size: 0.92rem;
+  line-height: 1.15;
+}
+
+.cart-header .font-xs {
+  font-size: 0.68rem;
+}
+
+.cart-content-scroll {
+  overflow-y: auto;
+  padding-right: 4px !important;
+}
+
+.customer-section {
+  margin-bottom: 6px !important;
+}
+
+.customer-section .mb-1 {
+  margin-bottom: 4px !important;
+}
+
+.customer-section .mb-2 {
+  margin-bottom: 6px !important;
+}
+
+.customer-box {
+  padding: 8px !important;
+}
+
+.customer-box .row {
+  --bs-gutter-x: 8px;
+  --bs-gutter-y: 6px;
+}
+
+.field-label {
+  font-size: 0.68rem;
+  margin-bottom: 3px;
+  line-height: 1.1;
+}
+
+.form-input {
+  min-height: 36px;
+  height: 36px;
+  font-size: 0.78rem;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.btn-mini {
+  min-height: 36px;
+  height: 36px;
+  padding: 0 14px;
+}
+
+.checkout-section {
+  padding-top: 6px !important;
+  margin-top: 6px !important;
+}
+
+.voucher-wrapper {
+  margin-bottom: 6px !important;
+}
+
+.btn-toggle-voucher,
+.btn-clear-voucher {
+  width: 36px;
+  height: 36px;
+}
+
+.money-detail-box {
+  padding: 8px !important;
+  margin-bottom: 6px !important;
+}
+
+.money-detail-title {
+  margin-bottom: 6px !important;
+  font-size: 0.78rem;
+  line-height: 1.1;
+}
+
+.money-detail-row {
+  font-size: 0.74rem;
+  line-height: 1.15;
+  margin-bottom: 5px;
+}
+
+.money-detail-final,
+.money-detail-payable {
+  font-size: 0.78rem;
+}
+
+.money-detail-divider {
+  margin: 6px 0 !important;
+}
+
+.partial-payment-box {
+  padding: 7px !important;
+  margin-bottom: 6px !important;
+}
+
+.held-actions {
+  margin-bottom: 6px !important;
+}
+
+.btn-held {
+  min-height: 38px;
+  height: 38px;
+  padding: 0 10px;
+  font-size: 0.78rem;
+}
+
+.held-note {
+  font-size: 0.64rem;
+  line-height: 1.15;
+  margin-top: 4px !important;
+}
+
+.total-row {
+  margin-bottom: 6px !important;
+}
+
+.total-row span {
+  font-size: 0.82rem;
+}
+
+.total-row strong {
+  font-size: 1.05rem !important;
+}
+
+.payment-row-btns {
+  gap: 6px !important;
+  margin-bottom: 6px !important;
+}
+
+.payment-method-btn {
+  min-height: 38px;
+  height: 38px;
+  padding: 0 8px;
+  font-size: 0.76rem;
+}
+
+.submit-pay-btn {
+  min-height: 42px;
+  height: 42px;
+  padding: 0 !important;
+  font-size: 0.82rem !important;
+}
+
+@media (max-height: 760px) {
+  .cart-premium-panel {
+    padding: 8px !important;
+  }
+
+  .cart-header .icon-wrap {
+    width: 32px;
+    height: 32px;
+  }
+
+  .customer-box {
+    padding: 6px !important;
+  }
+
+  .form-input,
+  .btn-mini,
+  .btn-toggle-voucher,
+  .btn-clear-voucher {
+    min-height: 34px;
+    height: 34px;
+  }
+
+  .money-detail-box {
+    padding: 7px !important;
+  }
+
+  .money-detail-row {
+    margin-bottom: 4px;
+  }
+
+  .btn-held,
+  .payment-method-btn {
+    height: 36px;
+    min-height: 36px;
+  }
+
+  .submit-pay-btn {
+    height: 40px;
+    min-height: 40px;
+  }
+}
+.held-checkout-warning {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  border-radius: 10px;
+  padding: 7px 9px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1.25;
 }
 </style>

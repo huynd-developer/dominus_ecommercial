@@ -801,9 +801,18 @@ public class PosServiceImpl implements PosService {
     public List<PosHeldOrderResponse> getHeldOrders(String cashierEmail) {
         Employee currentEmployee = resolveCashier(cashierEmail);
 
-        Integer cashierIdFilter = isManagerOrOwner(currentEmployee) ? null : currentEmployee.getUserId();
+        /*
+         * CASHIER chỉ thấy phiếu của chính mình.
+         * MANAGER/OWNER thấy tất cả để có thể chuyển/hủy khi cần.
+         */
+        Integer cashierIdFilter = isManagerOrOwner(currentEmployee)
+                ? null
+                : currentEmployee.getUserId();
 
-        return orderRepository.findHeldOrders(cashierIdFilter).stream().map(this::toHeldOrderResponse).toList();
+        return orderRepository.findHeldOrders(cashierIdFilter)
+                .stream()
+                .map(order -> toHeldOrderResponse(order, currentEmployee))
+                .toList();
     }
 
     @Override
@@ -817,7 +826,22 @@ public class PosServiceImpl implements PosService {
 
         List<OrderItem> items = orderItemRepository.findByOrderIdWithVariant(order.getId());
 
-        return buildResponseFromOrder(order, items, "HELD", BigDecimal.ZERO, order.getFinalAmount() != null ? order.getFinalAmount() : BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, null, 0);
+        PosOrderResponse response = buildResponseFromOrder(
+                order,
+                items,
+                "HELD",
+                BigDecimal.ZERO,
+                order.getFinalAmount() != null ? order.getFinalAmount() : BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                null,
+                0
+        );
+
+        applyHeldOrderPermissions(response, order, currentEmployee);
+
+        return response;
     }
 
     @Override
@@ -943,7 +967,7 @@ public class PosServiceImpl implements PosService {
 
         Order savedOrder = orderRepository.save(order);
 
-        return toHeldOrderResponse(savedOrder);
+        return toHeldOrderResponse(savedOrder, currentEmployee);
     }
 
     @Override
@@ -1430,14 +1454,66 @@ public class PosServiceImpl implements PosService {
         }
     }
 
-    private PosHeldOrderResponse toHeldOrderResponse(Order order) {
+    private PosHeldOrderResponse toHeldOrderResponse(Order order, Employee currentEmployee) {
         Customer customer = order.getCustomer();
         User customerUser = customer != null ? customer.getUser() : null;
 
         Employee cashier = order.getCashier();
         User cashierUser = cashier != null ? cashier.getUser() : null;
 
-        return PosHeldOrderResponse.builder().orderId(order.getId()).status("HELD").paymentMethod(order.getPaymentMethod()).totalAmount(order.getTotalAmount()).discountAmount(order.getDiscountAmount()).finalAmount(order.getFinalAmount()).createdAt(order.getCreatedAt()).cashierId(cashier != null ? cashier.getUserId() : null).cashierName(cashierUser != null ? cashierUser.getName() : null).customerId(customer != null ? customer.getUserId() : null).customerName(order.getCustomerName()).customerPhone(order.getCustomerPhone()).customerEmail(customerUser != null ? customerUser.getEmail() : null).build();
+        boolean ownOrder = isSameCashier(order, currentEmployee);
+        boolean managerOrOwner = isManagerOrOwner(currentEmployee);
+
+        /*
+         * Nghiệp vụ:
+         * - Chỉ nhân viên đang giữ phiếu mới được mở để sửa/thanh toán.
+         * - MANAGER/OWNER được nhìn thấy tất cả, được chuyển/hủy,
+         *   nhưng không thanh toán thay nếu chưa chuyển phiếu.
+         */
+        boolean canOpen = ownOrder;
+        boolean canCheckout = ownOrder;
+        boolean canTransfer = ownOrder || managerOrOwner;
+        boolean canCancel = ownOrder || managerOrOwner;
+
+        return PosHeldOrderResponse.builder()
+                .orderId(order.getId())
+                .status("HELD")
+                .paymentMethod(order.getPaymentMethod())
+                .totalAmount(order.getTotalAmount())
+                .discountAmount(order.getDiscountAmount())
+                .finalAmount(order.getFinalAmount())
+                .createdAt(order.getCreatedAt())
+                .cashierId(cashier != null ? cashier.getUserId() : null)
+                .cashierName(cashierUser != null ? cashierUser.getName() : null)
+                .customerId(customer != null ? customer.getUserId() : null)
+                .customerName(order.getCustomerName())
+                .customerPhone(order.getCustomerPhone())
+                .customerEmail(customerUser != null ? customerUser.getEmail() : null)
+                .ownOrder(ownOrder)
+                .canOpen(canOpen)
+                .canCheckout(canCheckout)
+                .canTransfer(canTransfer)
+                .canCancel(canCancel)
+                .build();
+    }
+
+    private void applyHeldOrderPermissions(
+            PosOrderResponse response,
+            Order order,
+            Employee currentEmployee
+    ) {
+        if (response == null) {
+            return;
+        }
+
+        boolean ownOrder = isSameCashier(order, currentEmployee);
+        boolean managerOrOwner = isManagerOrOwner(currentEmployee);
+
+        response.setOwnOrder(ownOrder);
+        response.setCanOpen(ownOrder);
+        response.setCanCheckout(ownOrder);
+        response.setCanTransfer(ownOrder || managerOrOwner);
+        response.setCanCancel(ownOrder || managerOrOwner);
     }
 
     private PosOrderResponse buildResponseFromOrder(Order order, List<OrderItem> orderItems, String status, BigDecimal paidAmount, BigDecimal remainingAmount, BigDecimal cashGiven, BigDecimal transferAmount, BigDecimal changeAmount, String vnpayUrl, int loyaltyPointsEarned) {

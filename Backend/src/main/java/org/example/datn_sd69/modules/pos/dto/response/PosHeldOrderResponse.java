@@ -27,4 +27,10 @@ public class PosHeldOrderResponse {
     private String customerName;
     private String customerPhone;
     private String customerEmail;
+
+    private Boolean ownOrder;
+    private Boolean canOpen;
+    private Boolean canCheckout;
+    private Boolean canTransfer;
+    private Boolean canCancel;
 }

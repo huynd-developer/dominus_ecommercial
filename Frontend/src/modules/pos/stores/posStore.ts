@@ -46,6 +46,12 @@ export interface PosHeldOrder {
   customerName?: string;
   customerPhone?: string;
   customerEmail?: string;
+  ownOrder?: boolean;
+  isOwnOrder?: boolean;
+  canOpen?: boolean;
+  canCheckout?: boolean;
+  canTransfer?: boolean;
+  canCancel?: boolean;
 }
 
 export interface PosVoucher {
@@ -112,6 +118,11 @@ export interface PosStoreState {
 
   activeHeldOrderId: number | null;
   activeHeldOrderCashierName: string;
+  activeHeldOrderOwnOrder: boolean;
+  activeHeldOrderCanOpen: boolean;
+  activeHeldOrderCanCheckout: boolean;
+  activeHeldOrderCanTransfer: boolean;
+  activeHeldOrderCanCancel: boolean;
   showHeldOrdersPanel: boolean;
 }
 
@@ -485,6 +496,11 @@ export const usePosStore = defineStore("posStore", {
 
     activeHeldOrderId: null,
     activeHeldOrderCashierName: "",
+    activeHeldOrderOwnOrder: true,
+    activeHeldOrderCanOpen: true,
+    activeHeldOrderCanCheckout: true,
+    activeHeldOrderCanTransfer: true,
+    activeHeldOrderCanCancel: true,
     showHeldOrdersPanel: false,
   }),
 
@@ -765,6 +781,11 @@ export const usePosStore = defineStore("posStore", {
       this.lastOrderId = null;
       this.activeHeldOrderId = null;
       this.activeHeldOrderCashierName = "";
+      this.activeHeldOrderOwnOrder = true;
+      this.activeHeldOrderCanOpen = true;
+      this.activeHeldOrderCanCheckout = true;
+      this.activeHeldOrderCanTransfer = true;
+      this.activeHeldOrderCanCancel = true;
 
       this.clearPendingCheckoutDraft();
     },
@@ -832,6 +853,50 @@ export const usePosStore = defineStore("posStore", {
       } finally {
         this.isLoading = false;
       }
+    },
+
+    getCartItemBySku(sku?: string | null): CartItem | null {
+      const cleanSku = normalizeText(sku);
+
+      if (!cleanSku) {
+        return null;
+      }
+
+      return (
+        this.cart.find(
+          (item) =>
+            String(item.product?.sku || "").toLowerCase() ===
+            cleanSku.toLowerCase()
+        ) || null
+      );
+    },
+
+    isProductInCart(sku?: string | null): boolean {
+      return this.getCartItemBySku(sku) !== null;
+    },
+
+    toggleProductSelection(product: PosProduct) {
+      this.errorMsg = "";
+
+      if (this.cashPaid > 0) {
+        this.errorMsg =
+          "Đơn đã nhận tiền mặt một phần, không được thêm/xóa sản phẩm.";
+        return;
+      }
+
+      if (!product || !product.sku) {
+        this.errorMsg = "Sản phẩm không hợp lệ.";
+        return;
+      }
+
+      const existingItem = this.getCartItemBySku(product.sku);
+
+      if (existingItem) {
+        this.removeFromCart(product.sku);
+        return;
+      }
+
+      this.addToCart(product);
     },
 
     addToCart(product: PosProduct) {
@@ -1876,7 +1941,13 @@ export const usePosStore = defineStore("posStore", {
         this.activeHeldOrderId = Number(data.orderId || orderId);
         this.activeHeldOrderCashierName = data.cashierName || "";
         this.showHeldOrdersPanel = false;
+        this.activeHeldOrderOwnOrder =
+          data.ownOrder !== false && data.isOwnOrder !== false;
 
+        this.activeHeldOrderCanOpen = data.canOpen !== false;
+        this.activeHeldOrderCanCheckout = data.canCheckout !== false;
+        this.activeHeldOrderCanTransfer = data.canTransfer !== false;
+        this.activeHeldOrderCanCancel = data.canCancel !== false;
         if (this.cart.length > 0) {
           await this.fetchAvailableVouchers();
         }
