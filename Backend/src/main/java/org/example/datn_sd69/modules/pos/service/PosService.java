@@ -116,4 +116,10 @@ public interface PosService {
 
     PosOrderResponse updateHeldOrder(Integer orderId, PosHoldRequest request, String cashierEmail);
     PosOrderResponse confirmVietQrPayment(Integer orderId, String cashierEmail);
+    PosOrderResponse retryPendingPayment(
+            Integer orderId,
+            PosHeldOrderCheckoutRequest request,
+            String cashierEmail,
+            String clientIp
+    );
 }

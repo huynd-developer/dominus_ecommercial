@@ -157,4 +157,25 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
         ORDER BY o.createdAt DESC
     """)
     List<Order> findActiveHeldOrdersByCustomerPhone(@Param("phone") String phone);
+    @EntityGraph(attributePaths = {
+            "customer",
+            "customer.user",
+            "cashier",
+            "cashier.user",
+            "voucher"
+    })
+    @Query("""
+    SELECT o
+    FROM Order o
+    WHERE o.id = :orderId
+      AND o.status = 0
+      AND UPPER(o.paymentMethod) IN (
+          'VNPAY',
+          'VIETQR',
+          'MIXED',
+          'MIXED_VNPAY',
+          'MIXED_VIETQR'
+      )
+""")
+    Optional<Order> findPendingPaymentOrderById(@Param("orderId") Integer orderId);
 }

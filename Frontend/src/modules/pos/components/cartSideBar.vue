@@ -405,8 +405,6 @@
 
               {{ posStore.activeHeldOrderId ? "Cập nhật phiếu" : "Lưu tạm" }}
             </button>
-
-           
           </div>
 
           <!-- PAYMENT -->
@@ -862,6 +860,8 @@ const showTransferModal = ref(false);
 const transferOrderId = ref<number | null>(null);
 const transferKeyword = ref("");
 const selectedTransferEmployeeId = ref<number | null>(null);
+const customerNameError = ref("");
+const customerEmailError = ref("");
 
 const showVoucherDropdown = ref(false);
 let voucherCloseTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1065,7 +1065,48 @@ const isValidVietnamPhone = (phone: string) => {
 };
 
 const isValidEmail = (email: string) => {
-  return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(email);
+  const value = normalizeEmail(email);
+
+  if (!value) return false;
+  if (value.length > 255) return false;
+
+  const parts = value.split("@");
+
+  if (parts.length !== 2) return false;
+
+  const [localPart, domain] = parts;
+
+  if (!localPart || !domain) return false;
+  if (localPart.startsWith(".") || localPart.endsWith(".")) return false;
+  if (domain.startsWith(".") || domain.endsWith(".")) return false;
+  if (value.includes("..")) return false;
+  if (!/^[A-Za-z0-9._%+-]+$/.test(localPart)) return false;
+
+  const domainParts = domain.split(".");
+
+  if (domainParts.length < 2) return false;
+
+  for (const label of domainParts) {
+    if (!label) return false;
+    if (!/^[A-Za-z0-9-]+$/.test(label)) return false;
+    if (label.startsWith("-") || label.endsWith("-")) return false;
+  }
+
+  const tld = domainParts[domainParts.length - 1];
+
+  if (!tld) return false;
+  if (!/^[A-Za-z]{2,}$/.test(tld)) return false;
+
+  return true;
+};
+
+const isValidCustomerName = (name: string) => {
+  const value = normalizeText(name).normalize("NFC");
+
+  if (!value) return false;
+  if (value.length < 2 || value.length > 100) return false;
+
+  return /^\p{L}+(?:\s+\p{L}+)*$/u.test(value);
 };
 
 const getVariantText = (product: any) => {
@@ -1221,6 +1262,50 @@ const ensureCustomerDraftFromPhoneInput = () => {
   }
 };
 
+const validateCustomerNameField = (showRequired = false) => {
+  const name = normalizeText(posStore.customer?.name);
+
+  if (!name) {
+    customerNameError.value = showRequired
+      ? "Họ tên khách hàng không được để trống."
+      : "";
+    return !showRequired;
+  }
+
+  if (name.length < 2 || name.length > 100) {
+    customerNameError.value = "Họ tên khách hàng phải từ 2 đến 100 ký tự.";
+    return false;
+  }
+
+  if (!isValidCustomerName(name)) {
+    customerNameError.value =
+      "Họ tên chỉ được chứa chữ cái và khoảng trắng, không được chứa số hoặc ký tự đặc biệt.";
+    return false;
+  }
+
+  customerNameError.value = "";
+  return true;
+};
+
+const validateCustomerEmailField = (showRequired = false) => {
+  const email = normalizeEmail(posStore.customer?.email);
+
+  if (!email) {
+    customerEmailError.value = showRequired
+      ? "Email khách hàng không được để trống."
+      : "";
+    return !showRequired;
+  }
+
+  if (!isValidEmail(email)) {
+    customerEmailError.value = "Email khách hàng không đúng định dạng.";
+    return false;
+  }
+
+  customerEmailError.value = "";
+  return true;
+};
+
 const validateCustomerBeforeCheckout = () => {
   if (posStore.activeHeldOrderId) {
     return true;
@@ -1249,23 +1334,13 @@ const validateCustomerBeforeCheckout = () => {
     return false;
   }
 
-  if (!name) {
-    setPosError("Vui lòng nhập họ tên khách hàng trước khi thanh toán.");
+  if (!validateCustomerNameField(true)) {
+    setPosError(customerNameError.value);
     return false;
   }
 
-  if (name.length < 2 || name.length > 100) {
-    setPosError("Họ tên khách hàng phải từ 2 đến 100 ký tự.");
-    return false;
-  }
-
-  if (!email) {
-    setPosError("Vui lòng nhập email khách hàng trước khi thanh toán.");
-    return false;
-  }
-
-  if (!isValidEmail(email)) {
-    setPosError("Email khách hàng không đúng định dạng.");
+  if (!validateCustomerEmailField(true)) {
+    setPosError(customerEmailError.value);
     return false;
   }
 
@@ -1288,6 +1363,16 @@ const handleCustomerChanged = () => {
   posStore.markCustomerUnsaved();
 };
 
+const handleCustomerNameInput = () => {
+  handleCustomerChanged();
+  validateCustomerNameField(false);
+};
+
+const handleCustomerEmailInput = () => {
+  handleCustomerChanged();
+  validateCustomerEmailField(false);
+};
+
 const handleCustomerPhoneTyping = () => {
   if (customerLocked.value) {
     posStore.errorMsg =
@@ -1308,18 +1393,33 @@ const handleCustomerPhoneTyping = () => {
 
 const handleSaveCustomer = async () => {
   if (customerLocked.value) {
-    posStore.errorMsg =
-      "Không được lưu/sửa khách hàng khi đang mở phiếu treo hoặc đơn đã nhận tiền.";
+    setPosError(
+      "Không được lưu/sửa khách hàng khi đang mở phiếu treo hoặc đơn đã nhận tiền."
+    );
     return;
   }
 
   ensureCustomerDraftFromPhoneInput();
 
+  if (!validateCustomerBeforeCheckout()) {
+    return;
+  }
+
   const result = await posStore.saveCustomerForPos();
 
-  if (result && posStore.customer?.phone) {
+  if (!result) {
+    setPosError(
+      posStore.errorMsg ||
+        "Lưu khách hàng thất bại. Vui lòng kiểm tra lại thông tin."
+    );
+    return;
+  }
+
+  if (posStore.customer?.phone) {
     customerPhoneInput.value = normalizePhone(posStore.customer.phone);
   }
+
+  showPosToast("Đã lưu thông tin khách hàng.");
 };
 
 const handleSearchCustomer = async () => {

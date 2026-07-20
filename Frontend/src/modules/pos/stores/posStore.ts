@@ -82,6 +82,13 @@ export interface PosTransferTarget {
   jobTitle?: string;
 }
 
+export interface PosFilterOption {
+  id?: number;
+  name: string;
+  label?: string;
+  value?: string | number;
+}
+
 export type PosPaymentMethod = "CASH" | "VNPAY" | "VIETQR";
 export type PosCheckoutPaymentMethod = "CASH" | "VNPAY" | "VIETQR" | "MIXED";
 export type PosTransferProvider = "" | "VNPAY" | "VIETQR";
@@ -89,6 +96,9 @@ export type PosTransferProvider = "" | "VNPAY" | "VIETQR";
 export interface PosStoreState {
   allProducts: PosProduct[];
   categories: string[];
+  brandOptions: PosFilterOption[];
+  capacityOptions: PosFilterOption[];
+  bottleTypeOptions: PosFilterOption[];
   selectedCategory: string;
   searchQuery: string;
   availableVouchers: PosVoucher[];
@@ -109,6 +119,8 @@ export interface PosStoreState {
   vietQrContent: string;
   pendingVietQrOrderId: number | string | null;
   pendingVietQrAmount: number;
+  activePendingPaymentOrderId: number | string | null;
+  activePendingPaymentTransferProvider: PosTransferProvider;
   isLoading: boolean;
   errorMsg: string;
   lastOrderId: string | number | null;
@@ -153,9 +165,51 @@ const buildCustomerSavedKey = (customer?: PosCustomer | null): string => {
 };
 
 const isValidEmail = (email: string): boolean => {
-  return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(email);
-};
+  const value = normalizeEmail(email);
 
+  if (!value) return false;
+  if (value.length > 255) return false;
+
+  const parts = value.split("@");
+
+  if (parts.length !== 2) return false;
+
+  const [localPart, domain] = parts;
+
+  if (!localPart || !domain) return false;
+
+  if (localPart.startsWith(".") || localPart.endsWith(".")) return false;
+  if (domain.startsWith(".") || domain.endsWith(".")) return false;
+  if (value.includes("..")) return false;
+
+  if (!/^[A-Za-z0-9._%+-]+$/.test(localPart)) return false;
+
+  const domainParts = domain.split(".");
+
+  if (domainParts.length < 2) return false;
+
+  for (const label of domainParts) {
+    if (!label) return false;
+    if (!/^[A-Za-z0-9-]+$/.test(label)) return false;
+    if (label.startsWith("-") || label.endsWith("-")) return false;
+  }
+
+  const tld = domainParts[domainParts.length - 1];
+
+  if (!tld) return false;
+
+  if (!/^[A-Za-z]{2,}$/.test(tld)) return false;
+
+  return true;
+};
+const isValidCustomerName = (name: string): boolean => {
+  const value = normalizeText(name).normalize("NFC");
+
+  if (!value) return false;
+  if (value.length < 2 || value.length > 100) return false;
+
+  return /^\p{L}+(?:\s+\p{L}+)*$/u.test(value);
+};
 const formatMoney = (value: number): string => {
   return new Intl.NumberFormat("vi-VN").format(Number(value || 0));
 };
@@ -439,6 +493,75 @@ const mapPosVoucherFromBackend = (raw: any, orderTotal: number): PosVoucher => {
   };
 };
 
+const getOptionName = (raw: any): string => {
+  return String(
+    raw?.name ||
+      raw?.label ||
+      raw?.capacityLabel ||
+      raw?.bottleTypeName ||
+      raw?.brandName ||
+      raw?.value ||
+      ""
+  ).trim();
+};
+
+const mapFilterOption = (raw: any): PosFilterOption | null => {
+  const name = getOptionName(raw);
+
+  if (!name) {
+    return null;
+  }
+
+  return {
+    id: raw?.id ?? raw?.brandId ?? raw?.capacityId ?? raw?.bottleTypeId,
+    name,
+    label: raw?.label || name,
+    value: raw?.value ?? name,
+  };
+};
+
+const extractArrayFromResponse = (payload: any): any[] => {
+  const candidates = [
+    payload,
+    payload?.data,
+    payload?.content,
+    payload?.items,
+    payload?.data?.content,
+    payload?.data?.items,
+    payload?.result,
+    payload?.result?.content,
+    payload?.result?.items,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
+  return [];
+};
+
+const mapFilterOptions = (payload: any): PosFilterOption[] => {
+  return extractArrayFromResponse(payload)
+    .map(mapFilterOption)
+    .filter((item: PosFilterOption | null): item is PosFilterOption => !!item);
+};
+
+const fetchFirstAvailable = async (urls: string[]) => {
+  let lastError: any = null;
+
+  for (const url of urls) {
+    try {
+      return await api.get(url);
+    } catch (error: any) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
+};
+
 const sortVouchersByBest = (vouchers: PosVoucher[]): PosVoucher[] => {
   return [...vouchers].sort((a, b) => {
     if (a.eligible !== b.eligible) {
@@ -467,6 +590,9 @@ export const usePosStore = defineStore("posStore", {
   state: (): PosStoreState => ({
     allProducts: [],
     categories: ["Tất cả"],
+    brandOptions: [],
+    capacityOptions: [],
+    bottleTypeOptions: [],
     selectedCategory: "Tất cả",
     searchQuery: "",
     availableVouchers: [],
@@ -487,6 +613,8 @@ export const usePosStore = defineStore("posStore", {
     vietQrContent: "",
     pendingVietQrOrderId: null,
     pendingVietQrAmount: 0,
+    activePendingPaymentOrderId: null,
+    activePendingPaymentTransferProvider: "",
     isLoading: false,
     errorMsg: "",
     lastOrderId: null,
@@ -549,11 +677,15 @@ export const usePosStore = defineStore("posStore", {
     },
 
     isOrderLocked(state): boolean {
-      return state.cashPaid > 0;
+      return state.cashPaid > 0 || state.activePendingPaymentOrderId !== null;
     },
 
     isCustomerLocked(state): boolean {
-      return state.cashPaid > 0 || state.activeHeldOrderId !== null;
+      return (
+        state.cashPaid > 0 ||
+        state.activeHeldOrderId !== null ||
+        state.activePendingPaymentOrderId !== null
+      );
     },
 
     isCustomerSavedForCurrentInfo(state): boolean {
@@ -579,9 +711,9 @@ export const usePosStore = defineStore("posStore", {
     },
 
     clearVoucher() {
-      if (this.cashPaid > 0) {
+      if (this.cashPaid > 0 || this.activePendingPaymentOrderId) {
         this.errorMsg =
-          "Đơn đã nhận tiền mặt một phần, không được đổi mã giảm giá.";
+          "Đơn đã nhận tiền/tạo thanh toán online, không được đổi mã giảm giá.";
         return;
       }
 
@@ -597,7 +729,12 @@ export const usePosStore = defineStore("posStore", {
     async fetchAvailableVouchers() {
       const total = Number(this.totalAmount || 0);
 
-      if (this.cart.length === 0 || total <= 0 || this.cashPaid > 0) {
+      if (
+        this.cart.length === 0 ||
+        total <= 0 ||
+        this.cashPaid > 0 ||
+        this.activePendingPaymentOrderId
+      ) {
         this.availableVouchers = [];
         return [];
       }
@@ -637,9 +774,9 @@ export const usePosStore = defineStore("posStore", {
     async applyVoucher() {
       this.errorMsg = "";
 
-      if (this.cashPaid > 0) {
+      if (this.cashPaid > 0 || this.activePendingPaymentOrderId) {
         this.errorMsg =
-          "Đơn đã nhận tiền mặt một phần, không được áp mã giảm giá.";
+          "Đơn đã nhận tiền/tạo thanh toán online, không được áp mã giảm giá.";
         return false;
       }
 
@@ -699,6 +836,11 @@ export const usePosStore = defineStore("posStore", {
         paymentMethod: this.paymentMethod,
         transferProvider: this.transferProvider,
         cashPaid: this.cashPaid,
+        pendingVietQrOrderId: this.pendingVietQrOrderId,
+        pendingVietQrAmount: this.pendingVietQrAmount,
+        activePendingPaymentOrderId: this.activePendingPaymentOrderId,
+        activePendingPaymentTransferProvider:
+          this.activePendingPaymentTransferProvider,
         lastOrderId: this.lastOrderId,
         activeHeldOrderId: this.activeHeldOrderId,
         activeHeldOrderCashierName: this.activeHeldOrderCashierName,
@@ -713,8 +855,8 @@ export const usePosStore = defineStore("posStore", {
 
     restorePendingCheckoutDraft() {
       /*
-       * Không khôi phục draft VNPay đè lên phiếu treo đang mở.
-       * Draft chỉ dùng khi redirect sang VNPay rồi bấm Back về POS.
+       * Draft dùng cho đơn đang chờ thanh toán online.
+       * Không để đơn pending payment bị hiểu nhầm là phiếu treo HOLD.
        */
       if (this.activeHeldOrderId) {
         return false;
@@ -742,14 +884,29 @@ export const usePosStore = defineStore("posStore", {
         this.paymentMethod = draft.paymentMethod || "CASH";
         this.transferProvider = draft.transferProvider || "";
         this.cashPaid = Number(draft.cashPaid || 0);
+        this.pendingVietQrOrderId = draft.pendingVietQrOrderId || null;
+        this.pendingVietQrAmount = Number(draft.pendingVietQrAmount || 0);
 
         this.lastOrderId = draft.lastOrderId || null;
-        this.activeHeldOrderId = draft.activeHeldOrderId || null;
-        this.activeHeldOrderCashierName =
-          draft.activeHeldOrderCashierName || "";
+        this.activePendingPaymentOrderId =
+          draft.activePendingPaymentOrderId ||
+          draft.pendingVietQrOrderId ||
+          draft.lastOrderId ||
+          null;
+        this.activePendingPaymentTransferProvider =
+          draft.activePendingPaymentTransferProvider ||
+          draft.transferProvider ||
+          (draft.paymentMethod === "VNPAY" ? "VNPAY" : "");
+
+        this.activeHeldOrderId = this.activePendingPaymentOrderId
+          ? null
+          : draft.activeHeldOrderId || null;
+        this.activeHeldOrderCashierName = this.activePendingPaymentOrderId
+          ? ""
+          : draft.activeHeldOrderCashierName || "";
 
         this.errorMsg =
-          "Đã khôi phục đơn đang thanh toán VNPay. Nếu khách chưa thanh toán, có thể chọn lại phương thức hoặc thanh toán lại.";
+          "Đã khôi phục hóa đơn đang chờ thanh toán. Nếu khách chưa thanh toán, có thể chọn lại phương thức hoặc thanh toán lại.";
 
         return true;
       } catch (error) {
@@ -777,6 +934,8 @@ export const usePosStore = defineStore("posStore", {
       this.vietQrContent = "";
       this.pendingVietQrOrderId = null;
       this.pendingVietQrAmount = 0;
+      this.activePendingPaymentOrderId = null;
+      this.activePendingPaymentTransferProvider = "";
       this.errorMsg = "";
       this.lastOrderId = null;
       this.activeHeldOrderId = null;
@@ -788,6 +947,43 @@ export const usePosStore = defineStore("posStore", {
       this.activeHeldOrderCanCancel = true;
 
       this.clearPendingCheckoutDraft();
+    },
+
+    async fetchPosFilters() {
+      /*
+       * Bộ lọc lấy từ API danh mục thật.
+       * Nếu API trả format khác nhau thì vẫn parse được.
+       * Nếu lỗi thì im lặng fallback sang dữ liệu lấy từ /admin/pos/products.
+       */
+      const [brandRes, capacityRes, bottleTypeRes] = await Promise.allSettled([
+        fetchFirstAvailable(["/brands", "/admin/brands"]),
+        fetchFirstAvailable(["/capacities", "/admin/capacities"]),
+        fetchFirstAvailable(["/bottle-types", "/admin/bottle-types"]),
+      ]);
+
+      if (brandRes.status === "fulfilled") {
+        this.brandOptions = mapFilterOptions(brandRes.value.data);
+
+        if (this.brandOptions.length > 0) {
+          this.categories = [
+            "Tất cả",
+            ...this.brandOptions.map((item) => item.name),
+          ];
+        }
+      }
+
+      if (capacityRes.status === "fulfilled") {
+        this.capacityOptions = mapFilterOptions(capacityRes.value.data);
+      }
+
+      if (bottleTypeRes.status === "fulfilled") {
+        this.bottleTypeOptions = mapFilterOptions(bottleTypeRes.value.data);
+      }
+
+      /*
+       * Không set errorMsg ở đây.
+       * Vì nếu filter API fail hoặc parse ra rỗng, ProductGrid vẫn fallback từ sản phẩm.
+       */
     },
 
     async fetchProducts() {
@@ -807,12 +1003,20 @@ export const usePosStore = defineStore("posStore", {
 
         this.allProducts = flatProducts;
 
-        this.categories = [
-          "Tất cả",
-          ...new Set(
-            flatProducts.map((p) => p.category).filter((category) => !!category)
-          ),
-        ];
+        /*
+         * Nếu đã tải brand từ API thật thì giữ nguyên danh sách brand API.
+         * Nếu API filter lỗi/chưa có thì fallback như logic cũ: build brand từ sản phẩm POS.
+         */
+        if (this.brandOptions.length === 0) {
+          this.categories = [
+            "Tất cả",
+            ...new Set(
+              flatProducts
+                .map((p) => p.category)
+                .filter((category) => !!category)
+            ),
+          ];
+        }
       } catch (error: any) {
         this.allProducts = [];
         this.categories = ["Tất cả"];
@@ -878,9 +1082,9 @@ export const usePosStore = defineStore("posStore", {
     toggleProductSelection(product: PosProduct) {
       this.errorMsg = "";
 
-      if (this.cashPaid > 0) {
+      if (this.cashPaid > 0 || this.activePendingPaymentOrderId) {
         this.errorMsg =
-          "Đơn đã nhận tiền mặt một phần, không được thêm/xóa sản phẩm.";
+          "Đơn đã nhận tiền/tạo thanh toán online, không được thêm/xóa sản phẩm.";
         return;
       }
 
@@ -902,9 +1106,9 @@ export const usePosStore = defineStore("posStore", {
     addToCart(product: PosProduct) {
       this.errorMsg = "";
 
-      if (this.cashPaid > 0) {
+      if (this.cashPaid > 0 || this.activePendingPaymentOrderId) {
         this.errorMsg =
-          "Đơn đã nhận tiền mặt một phần, không được thêm sản phẩm.";
+          "Đơn đã nhận tiền/tạo thanh toán online, không được thêm sản phẩm.";
         return;
       }
 
@@ -946,9 +1150,9 @@ export const usePosStore = defineStore("posStore", {
     async handleBarcodeScan(sku: string) {
       this.errorMsg = "";
 
-      if (this.cashPaid > 0) {
+      if (this.cashPaid > 0 || this.activePendingPaymentOrderId) {
         this.errorMsg =
-          "Đơn đã nhận tiền mặt một phần, không được quét thêm sản phẩm.";
+          "Đơn đã nhận tiền/tạo thanh toán online, không được quét thêm sản phẩm.";
         return;
       }
 
@@ -993,9 +1197,9 @@ export const usePosStore = defineStore("posStore", {
     updateQuantity(sku: string, qty: number) {
       this.errorMsg = "";
 
-      if (this.cashPaid > 0) {
+      if (this.cashPaid > 0 || this.activePendingPaymentOrderId) {
         this.errorMsg =
-          "Đơn đã nhận tiền mặt một phần, không được sửa số lượng.";
+          "Đơn đã nhận tiền/tạo thanh toán online, không được sửa số lượng.";
         return;
       }
 
@@ -1029,9 +1233,9 @@ export const usePosStore = defineStore("posStore", {
     removeFromCart(sku: string) {
       this.errorMsg = "";
 
-      if (this.cashPaid > 0) {
+      if (this.cashPaid > 0 || this.activePendingPaymentOrderId) {
         this.errorMsg =
-          "Đơn đã nhận tiền mặt một phần, không được xóa sản phẩm.";
+          "Đơn đã nhận tiền/tạo thanh toán online, không được xóa sản phẩm.";
         return;
       }
 
@@ -1040,7 +1244,7 @@ export const usePosStore = defineStore("posStore", {
     },
 
     markCustomerUnsaved() {
-      if (this.activeHeldOrderId) return;
+      if (this.activeHeldOrderId || this.activePendingPaymentOrderId) return;
       this.customerSavedKey = "";
     },
 
@@ -1058,14 +1262,16 @@ export const usePosStore = defineStore("posStore", {
     async searchCustomer(phone: string) {
       const cleanPhone = normalizePhone(phone);
 
-      if (this.activeHeldOrderId) {
-        this.errorMsg = "Đang mở phiếu treo, không được đổi khách hàng.";
+      if (this.activeHeldOrderId || this.activePendingPaymentOrderId) {
+        this.errorMsg = this.activePendingPaymentOrderId
+          ? "Hóa đơn đang chờ thanh toán, không được đổi khách hàng."
+          : "Đang mở phiếu treo, không được đổi khách hàng.";
         return;
       }
 
-      if (this.cashPaid > 0) {
+      if (this.cashPaid > 0 || this.activePendingPaymentOrderId) {
         this.errorMsg =
-          "Đơn đã nhận tiền mặt một phần, không được đổi khách hàng.";
+          "Đơn đã nhận tiền/tạo thanh toán online, không được đổi khách hàng.";
         return;
       }
 
@@ -1136,14 +1342,16 @@ export const usePosStore = defineStore("posStore", {
     async saveCustomerForPos() {
       this.errorMsg = "";
 
-      if (this.activeHeldOrderId) {
-        this.errorMsg = "Đang mở phiếu treo, không được đổi/lưu khách hàng.";
+      if (this.activeHeldOrderId || this.activePendingPaymentOrderId) {
+        this.errorMsg = this.activePendingPaymentOrderId
+          ? "Hóa đơn đang chờ thanh toán, không được đổi/lưu khách hàng."
+          : "Đang mở phiếu treo, không được đổi/lưu khách hàng.";
         return false;
       }
 
-      if (this.cashPaid > 0) {
+      if (this.cashPaid > 0 || this.activePendingPaymentOrderId) {
         this.errorMsg =
-          "Đơn đã nhận tiền mặt một phần, không được đổi/lưu khách hàng.";
+          "Đơn đã nhận tiền/tạo thanh toán online, không được đổi/lưu khách hàng.";
         return false;
       }
 
@@ -1174,6 +1382,12 @@ export const usePosStore = defineStore("posStore", {
 
       if (customerName.length < 2 || customerName.length > 100) {
         this.errorMsg = "Họ tên khách hàng phải từ 2 đến 100 ký tự.";
+        return false;
+      }
+
+      if (!isValidCustomerName(customerName)) {
+        this.errorMsg =
+          "Họ tên chỉ được chứa chữ cái và khoảng trắng, không được chứa số hoặc ký tự đặc biệt.";
         return false;
       }
 
@@ -1257,6 +1471,12 @@ export const usePosStore = defineStore("posStore", {
 
       if (customerName.length < 2 || customerName.length > 100) {
         this.errorMsg = "Họ tên khách hàng phải từ 2 đến 100 ký tự.";
+        return false;
+      }
+
+      if (!isValidCustomerName(customerName)) {
+        this.errorMsg =
+          "Họ tên chỉ được chứa chữ cái và khoảng trắng, không được chứa số hoặc ký tự đặc biệt.";
         return false;
       }
 
@@ -1490,10 +1710,9 @@ export const usePosStore = defineStore("posStore", {
 
       /*
        * BE hiện tại:
-       * - VNPAY: VNPay toàn phần
-       * - VIETQR: VietQR toàn phần
-       * - MIXED + transferProvider=VNPAY: tiền mặt + VNPay
-       * - MIXED + transferProvider=VIETQR: tiền mặt + VietQR
+       * - /checkout: tạo hóa đơn POS mới
+       * - /held-orders/{id}/checkout: chỉ thanh toán phiếu treo HOLD
+       * - /orders/{id}/retry-payment: thanh toán lại hóa đơn PENDING_PAYMENT
        */
       if (selectedPaymentMethod === "VNPAY") {
         transferProvider = "VNPAY";
@@ -1540,6 +1759,24 @@ export const usePosStore = defineStore("posStore", {
         return false;
       }
 
+      const retryPaymentOrderId = this.activePendingPaymentOrderId || null;
+
+      const paymentOnlyPayload = {
+        paymentMethod: selectedPaymentMethod,
+        transferProvider:
+          selectedPaymentMethod === "MIXED" ? transferProvider : null,
+        cashGiven:
+          selectedPaymentMethod === "CASH" || selectedPaymentMethod === "MIXED"
+            ? cashGiven
+            : null,
+        transferAmount:
+          selectedPaymentMethod === "VNPAY" ||
+          selectedPaymentMethod === "VIETQR" ||
+          selectedPaymentMethod === "MIXED"
+            ? transferAmount || null
+            : null,
+      };
+
       this.isLoading = true;
       this.errorMsg = "";
       this.vnpayUrl = "";
@@ -1552,11 +1789,17 @@ export const usePosStore = defineStore("posStore", {
       try {
         let data: any;
 
-        if (this.activeHeldOrderId) {
+        if (retryPaymentOrderId) {
+          const response = await api.post(
+            `/admin/pos/orders/${retryPaymentOrderId}/retry-payment`,
+            paymentOnlyPayload
+          );
+
+          data = response.data;
+        } else if (this.activeHeldOrderId) {
           /*
-           * Nếu mở phiếu treo rồi thêm/sửa/xóa sản phẩm hoặc đổi voucher,
-           * phải cập nhật lại phiếu trước khi checkout.
-           * Như vậy thu ngân không bắt buộc bấm "Cập nhật phiếu" riêng.
+           * Chỉ gọi endpoint phiếu treo khi order hiện tại thật sự là HOLD.
+           * Nếu đã tạo QR/VNPay rồi thì phải đi nhánh retryPaymentOrderId ở trên.
            */
           if (this.cashPaid <= 0) {
             await api.patch(
@@ -1567,21 +1810,7 @@ export const usePosStore = defineStore("posStore", {
 
           const response = await api.post(
             `/admin/pos/held-orders/${this.activeHeldOrderId}/checkout`,
-            {
-              paymentMethod: selectedPaymentMethod,
-              transferProvider:
-                selectedPaymentMethod === "MIXED" ? transferProvider : null,
-              cashGiven:
-                selectedPaymentMethod === "CASH" ||
-                selectedPaymentMethod === "MIXED"
-                  ? cashGiven
-                  : null,
-              transferAmount:
-                selectedPaymentMethod === "VIETQR" ||
-                selectedPaymentMethod === "MIXED"
-                  ? transferAmount
-                  : null,
-            }
+            paymentOnlyPayload
           );
 
           data = response.data;
@@ -1605,6 +1834,7 @@ export const usePosStore = defineStore("posStore", {
           data?.code ||
           data?.orderCode ||
           data?.invoiceCode ||
+          retryPaymentOrderId ||
           this.activeHeldOrderId ||
           null;
 
@@ -1621,6 +1851,11 @@ export const usePosStore = defineStore("posStore", {
         ) {
           if (data.vnpayPaymentUrl) {
             const redirectUrl = data.vnpayPaymentUrl;
+
+            this.activePendingPaymentOrderId = orderId;
+            this.activePendingPaymentTransferProvider = "VNPAY";
+            this.activeHeldOrderId = null;
+            this.activeHeldOrderCashierName = "";
 
             this.savePendingCheckoutDraft();
             await this.fetchHeldOrders();
@@ -1650,6 +1885,11 @@ export const usePosStore = defineStore("posStore", {
               data.transferAmount || data.remainingAmount || transferAmount || 0
             );
 
+            this.activePendingPaymentOrderId = orderId;
+            this.activePendingPaymentTransferProvider = "VIETQR";
+            this.activeHeldOrderId = null;
+            this.activeHeldOrderCashierName = "";
+
             return {
               success: true,
               data,
@@ -1659,6 +1899,9 @@ export const usePosStore = defineStore("posStore", {
           this.errorMsg = "Không nhận được mã VietQR từ máy chủ.";
           return false;
         }
+
+        this.activePendingPaymentOrderId = null;
+        this.activePendingPaymentTransferProvider = "";
 
         return {
           success: true,
@@ -1727,6 +1970,8 @@ export const usePosStore = defineStore("posStore", {
         this.vietQrContent = "";
         this.pendingVietQrOrderId = null;
         this.pendingVietQrAmount = 0;
+        this.activePendingPaymentOrderId = null;
+        this.activePendingPaymentTransferProvider = "";
 
         this.resetLocalOrderOnly();
         await this.fetchProducts();
@@ -1751,9 +1996,9 @@ export const usePosStore = defineStore("posStore", {
     async holdCurrentOrder() {
       this.errorMsg = "";
 
-      if (this.cashPaid > 0) {
+      if (this.cashPaid > 0 || this.activePendingPaymentOrderId) {
         this.errorMsg =
-          "Đơn đã nhận tiền mặt một phần, không được treo/cập nhật phiếu.";
+          "Đơn đã nhận tiền/tạo thanh toán online, không được treo/cập nhật phiếu.";
         return false;
       }
 
@@ -1893,6 +2138,8 @@ export const usePosStore = defineStore("posStore", {
         this.vietQrContent = "";
         this.pendingVietQrOrderId = null;
         this.pendingVietQrAmount = 0;
+        this.activePendingPaymentOrderId = null;
+        this.activePendingPaymentTransferProvider = "";
         this.errorMsg = "";
 
         const items = Array.isArray(data.items) ? data.items : [];
@@ -1937,6 +2184,8 @@ export const usePosStore = defineStore("posStore", {
         this.vietQrContent = "";
         this.pendingVietQrOrderId = null;
         this.pendingVietQrAmount = 0;
+        this.activePendingPaymentOrderId = null;
+        this.activePendingPaymentTransferProvider = "";
         this.lastOrderId = data.orderId || orderId;
         this.activeHeldOrderId = Number(data.orderId || orderId);
         this.activeHeldOrderCashierName = data.cashierName || "";

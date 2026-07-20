@@ -311,4 +311,18 @@ public class PosController {
                 posService.confirmVietQrPayment(orderId, authentication.getName())
         );
     }
+    @PostMapping("/orders/{orderId}/retry-payment")
+    public ResponseEntity<PosOrderResponse> retryPendingPayment(
+            @PathVariable Integer orderId,
+            @Valid @RequestBody PosHeldOrderCheckoutRequest request,
+            Authentication authentication,
+            HttpServletRequest httpRequest
+    ) {
+        String cashierEmail = getCurrentEmail(authentication);
+        String clientIp = getClientIp(httpRequest);
+
+        return ResponseEntity.ok(
+                posService.retryPendingPayment(orderId, request, cashierEmail, clientIp)
+        );
+    }
 }

@@ -23,10 +23,18 @@ public class PosHoldRequest {
 
     @NotBlank(message = "Họ tên khách hàng không được để trống")
     @Size(min = 2, max = 100, message = "Họ tên khách hàng phải từ 2 đến 100 ký tự")
+    @Pattern(
+            regexp = "^[\\p{L}]+(?:\\s+[\\p{L}]+)*$",
+            message = "Họ tên chỉ được chứa chữ cái và khoảng trắng, không được chứa số hoặc ký tự đặc biệt."
+    )
     private String customerName;
 
     @NotBlank(message = "Email khách hàng không được để trống")
     @Email(message = "Email khách hàng không đúng định dạng")
+    @Pattern(
+            regexp = "^(?!.*\\.\\.)(?!\\.)(?!.*\\.@)[A-Za-z0-9_%+-]+(?:\\.[A-Za-z0-9_%+-]+)*@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,}$",
+            message = "Email khách hàng không đúng định dạng"
+    )
     @Size(max = 255, message = "Email khách hàng không được vượt quá 255 ký tự")
     private String customerEmail;
 
