@@ -48,9 +48,24 @@
               <i class="bi bi-info-circle me-1"></i> Vui lòng không đóng cửa sổ này cho đến khi thanh toán xong!
             </div>
 
-            <button @click="confirmQrPayment" class="btn btn-success w-100 py-3 fw-bold rounded-3" style="background-color: #10b981; border: none; font-size: 1.1rem;">
-              Xác nhận thanh toán! <i class="bi bi-check-circle ms-1"></i>
-            </button>
+            <!-- NÚT HỦY THANH TOÁN VÀ XÁC NHẬN -->
+            <div class="d-flex gap-2 w-100 mt-2">
+              <button 
+                @click="handleCancelQR" 
+                class="btn btn-outline-secondary w-50 py-3 fw-bold rounded-3" 
+                style="font-size: 1rem;"
+              >
+                Hủy thanh toán
+              </button>
+
+              <button 
+                @click="confirmQrPayment" 
+                class="btn btn-success w-50 py-3 fw-bold rounded-3" 
+                style="background-color: #10b981; border: none; font-size: 1rem;"
+              >
+                Đã chuyển khoản <i class="bi bi-check-circle ms-1"></i>
+              </button>
+            </div>
           </div>
         </div>
       </Transition>
@@ -713,11 +728,10 @@ const handlePlaceOrder = async () => {
 
     // LUỒNG 1: NẾU LÀ VNPAY -> CHUYỂN HƯỚNG SANG TRANG THANH TOÁN VNPay
     if (submitData.paymentMethod === "VNPAY") {
-      // Backend của m trả về key gì thì m nhớ đổi lại cho đúng (thường là paymentUrl)
       const vnpayUrl = res.data?.paymentUrl || res.data?.vnpUrl || res.data?.url; 
       
       if (vnpayUrl) {
-        window.location.href = vnpayUrl; // Bắn khách qua VNPay
+        window.location.href = vnpayUrl; 
         return; 
       } else {
         await showError("Lỗi VNPay", "Không lấy được đường dẫn thanh toán VNPay từ hệ thống.");
@@ -768,14 +782,30 @@ const handlePlaceOrder = async () => {
   }
 };
 
-// Hàm xử lý khi khách bấm "Tôi đã thanh toán"
 const confirmQrPayment = () => {
-  showQrModal.value = false; // Tắt Modal QR
-  
-  // Tùy chọn: Thêm 1 chút thời gian delay tạo cảm giác "hệ thống đang xử lý"
+  showQrModal.value = false;
   setTimeout(() => {
-    showSuccessModal.value = true; // Bật Modal Thành công
+    showSuccessModal.value = true;
   }, 200);
+};
+
+// Hủy thanh toán QR và chuyển về trang Lịch sử đơn hàng
+const handleCancelQR = () => {
+  // 1. Tắt modal QR
+  showQrModal.value = false; 
+
+  // 2. Bắn thông báo
+  Swal.fire({
+    toast: true,
+    position: 'top-end',
+    icon: 'info',
+    title: 'Đã hủy quá trình quét mã QR',
+    showConfirmButton: false,
+    timer: 2000
+  });
+
+  // 3. Đẩy về trang Lịch sử đơn hàng
+  goToOrders();
 };
 
 const goToCart = () => {
@@ -850,7 +880,7 @@ onMounted(() => {
 .premium-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75); /* Tăng độ tối nhẹ để tập trung vào popup */
+  background: rgba(0, 0, 0, 0.75); 
   backdrop-filter: blur(5px);
   display: flex;
   align-items: center;
@@ -859,7 +889,6 @@ onMounted(() => {
   padding: 24px;
 }
 
-/* Hiệu ứng trượt lên nhẹ nhàng cho Popup QR */
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(30px); }
   to { opacity: 1; transform: translateY(0); }
