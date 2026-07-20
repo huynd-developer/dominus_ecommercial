@@ -374,6 +374,7 @@
                   </div>
                 </div>
 
+                <!-- KHỐI CÁC NÚT THAO TÁC -->
                 <div class="text-end mt-3 d-flex justify-content-end gap-2">
                   <button
                     v-if="order.status === 3"
@@ -387,20 +388,31 @@
 
                   <button
                     v-if="order.canCancel"
-                    class="btn btn-outline-danger"
+                    class="btn btn-outline-danger btn-sm"
                     :disabled="store.orderLoading"
                     @click="cancelOrder(order)"
                   >
                     Hủy đơn
                   </button>
 
+                  <!-- NÚT MUA LẠI MỚI THÊM VÀO -->
+                  <button
+                    v-if="order.status === 4 || order.status === 3"
+                    class="btn btn-primary btn-sm px-3 text-white"
+                    style="background-color: #bd9a5f; border-color: #bd9a5f;"
+                    @click="handleReorder(order)"
+                  >
+                    <i class="bi bi-cart-plus me-1"></i> Mua lại
+                  </button>
+
                   <span
-                    v-else
+                    v-if="!order.canCancel && order.status !== 3 && order.status !== 4"
                     class="text-muted small align-self-center"
                   >
                     Đơn hàng không còn được hủy
                   </span>
                 </div>
+
               </div>
             </div>
           </Transition>
@@ -419,10 +431,12 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import { useRouter } from "vue-router"; // <-- Import Router
 import Swal from "sweetalert2";
 import ReviewModal from "./ReviewModal.vue";
 import { customerProfileService } from "../services/customerProfile.service";
 import { useCustomerProfileStore } from "../stores/customerProfile.store";
+import api from "@/common/api";
 import type {
   CustomerOrderResponse,
   ReviewResponse,
@@ -430,6 +444,7 @@ import type {
 } from "../types/profile.type";
 
 const store = useCustomerProfileStore();
+const router = useRouter(); // <-- Khởi tạo router
 
 // Biến lưu trạng thái Tab hiện tại
 const currentTab = ref<number | 'ALL'>('ALL');
@@ -663,6 +678,55 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
   await store.cancelOrder(order);
   await fetchOrdersAndReviews();
 };
+
+// ===============================================
+// HÀM XỬ LÝ MUA LẠI ĐƠN HÀNG (ĐÃ FIX LỖI + CHUYỂN THẲNG CHECKOUT)
+// ===============================================
+const handleReorder = async (order: any) => {
+  const result = await Swal.fire({
+    title: "Mua lại đơn hàng?",
+    text: "Sản phẩm sẽ được thêm vào giỏ và chuyển đến trang thanh toán ngay.",
+    icon: "question",
+    showCancelButton: true,
+    confirmButtonColor: "#bd9a5f",
+    cancelButtonColor: "#6c757d",
+    confirmButtonText: "Mua lại ngay",
+    cancelButtonText: "Hủy",
+    reverseButtons: true,
+  });
+
+  if (result.isConfirmed) {
+    try {
+      store.orderLoading = true;
+
+      // 1. Chạy vòng lặp tạo mảng các API thêm sản phẩm vào giỏ
+      const addPromises = order.items.map((item: any) => {
+        // Backend thường lưu ID của phân loại sản phẩm ở productVariantId hoặc variantId
+        const variantId = item.productVariantId || item.variantId || item.productId;
+        
+        // Gọi API nhét đồ vào giỏ (nếu API của m khác thì sửa lại URL chỗ này nhé)
+        return api.post("/v1/customer/cart/add", {
+          productVariantId: Number(variantId),
+          quantity: Number(item.quantity || 1)
+        });
+      });
+
+      // 2. Chờ TẤT CẢ sản phẩm được đẩy thành công vào giỏ hàng
+      await Promise.all(addPromises);
+
+      toast("success", "Đang chuyển đến trang thanh toán...");
+      
+      // 3. Đẩy thẳng khách hàng sang trang Checkout như m yêu cầu!
+      router.push("/checkout"); 
+      
+    } catch (error) {
+      showError(error, "Không thể thêm sản phẩm vào giỏ hàng lúc này. Vui lòng thử lại.");
+    } finally {
+      store.orderLoading = false;
+    }
+  }
+};
+// ===============================================
 
 // HÀM SINH LỊCH SỬ TRACKING GIẢ LẬP
 const getTrackingHistory = (order: any) => {

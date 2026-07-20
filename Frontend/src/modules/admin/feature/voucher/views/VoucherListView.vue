@@ -246,7 +246,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue'; // Đã thêm watch ở đây
 import axios from 'axios';
 import Swal from 'sweetalert2';
 
@@ -270,6 +270,30 @@ const initialForm = {
   maxDiscount: 0, usageLimit: 1, startDate: '', endDate: '', status: 1
 };
 const form = ref({ ...initialForm });
+
+// ================= THEO DÕI TỰ ĐỘNG CHUYỂN TRẠNG THÁI =================
+watch(() => form.value.endDate, (newEndDate) => {
+  if (newEndDate) {
+    const end = new Date(newEndDate).getTime();
+    const now = new Date().getTime();
+
+    // Lấy số lượt đã dùng (nếu đang ở form sửa thì mới có biến này, thêm mới thì là 0)
+    const used = (form.value as any).usedCount || 0;
+    const limit = form.value.usageLimit || 0;
+
+    // Nếu ngày kết thúc ở tương lai
+    if (end > now) {
+      // Kiểm tra thêm điều kiện xem còn lượt dùng không
+      if (limit === 0 || used < limit) {
+        form.value.status = 1; // Tự động chuyển sang Hoạt động
+      }
+    } else {
+      // Nếu lùi ngày kết thúc về quá khứ
+      form.value.status = 0; // Tự động chuyển sang Tạm dừng
+    }
+  }
+});
+// ======================================================================
 
 // ================= CÁC HÀM VALIDATE VÀ FORMAT GIAO DIỆN =================
 

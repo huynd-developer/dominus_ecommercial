@@ -58,8 +58,9 @@
             <div class="small text-muted">{{ customer.email }}</div>
           </td>
 
-          <td class="text-truncate" style="max-width: 230px">
-            {{ customer.address || "Chưa cập nhật" }}
+          <!-- ĐÃ SỬA GỌI HÀM FORMAT ADDRESS Ở ĐÂY -->
+          <td class="text-truncate" style="max-width: 230px" :title="formatAddress(customer.address)">
+            {{ formatAddress(customer.address) }}
           </td>
 
           <td>
@@ -149,6 +150,26 @@ const formatDate = (value: string | null) => {
 
 const getStatusText = (status: number) => {
   return status === 1 ? "Đang hoạt động" : "Đã khóa";
+};
+
+// HÀM FORMAT ĐỊA CHỈ TỪ JSON SANG TEXT
+const formatAddress = (addressStr: string | null) => {
+  if (!addressStr || addressStr === "Chưa cập nhật") return "Chưa cập nhật";
+  
+  try {
+    if (addressStr.trim().startsWith('[')) {
+      const parsedAddresses = JSON.parse(addressStr);
+      
+      if (Array.isArray(parsedAddresses) && parsedAddresses.length > 0) {
+        const defaultAddress = parsedAddresses[0];
+        return defaultAddress.fullAddress || defaultAddress.specificAddress || 'Chưa cập nhật';
+      }
+    }
+    return addressStr;
+  } catch (error) {
+    console.error("Lỗi parse địa chỉ từ JSON:", error);
+    return addressStr;
+  }
 };
 </script>
 

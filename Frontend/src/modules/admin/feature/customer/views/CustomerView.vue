@@ -235,8 +235,9 @@
 
                     <div class="info-item">
                       <div class="info-label">Địa chỉ</div>
+                      <!-- ĐÃ CẬP NHẬT GỌI HÀM FORMAT ADDRESS Ở ĐÂY -->
                       <div class="info-value">
-                        {{ selectedCustomer.address || "Chưa cập nhật" }}
+                        {{ formatAddress(selectedCustomer.address) }}
                       </div>
                     </div>
 
@@ -548,6 +549,26 @@ const formatDate = (value: string | null) => {
 
 const getStatusText = (status: number) => {
   return status === 1 ? "Đang hoạt động" : "Đã khóa";
+};
+
+// HÀM FORMAT ĐỊA CHỈ TỪ JSON SANG TEXT (THÊM MỚI VÀO ĐÂY)
+const formatAddress = (addressStr: string | null | undefined) => {
+  if (!addressStr || addressStr === "Chưa cập nhật") return "Chưa cập nhật";
+  
+  try {
+    if (String(addressStr).trim().startsWith('[')) {
+      const parsedAddresses = JSON.parse(String(addressStr));
+      
+      if (Array.isArray(parsedAddresses) && parsedAddresses.length > 0) {
+        const defaultAddress = parsedAddresses[0];
+        return defaultAddress.fullAddress || defaultAddress.specificAddress || 'Chưa cập nhật';
+      }
+    }
+    return addressStr;
+  } catch (error) {
+    console.error("Lỗi parse địa chỉ từ JSON:", error);
+    return addressStr;
+  }
 };
 </script>
 
