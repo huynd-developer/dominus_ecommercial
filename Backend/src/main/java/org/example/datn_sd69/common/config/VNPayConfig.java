@@ -75,7 +75,7 @@ public class VNPayConfig {
         return vnp_Version;
     }
 
-    public String hmacSHA512(final String key, final String data) {
+    public static String hmacSHA512(final String key, final String data) {
         try {
             if (key == null || data == null) {
                 return "";
@@ -117,5 +117,18 @@ public class VNPayConfig {
         }
 
         return sb.toString();
+    }
+
+    public static String getIpAddress(jakarta.servlet.http.HttpServletRequest request) {
+        String ipAdress;
+        try {
+            ipAdress = request.getHeader("X-FORWARDED-FOR");
+            if (ipAdress == null) {
+                ipAdress = request.getRemoteAddr();
+            }
+        } catch (Exception e) {
+            ipAdress = "Invalid IP";
+        }
+        return ipAdress;
     }
 }

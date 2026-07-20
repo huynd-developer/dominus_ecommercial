@@ -62,4 +62,14 @@ public interface VoucherRepository extends JpaRepository<Voucher, Integer> {
     List<Voucher> findByIsDeletedFalseOrderByIdDesc();
 
     boolean existsByCode(String code);
+
+    // Thêm hàm này vào dưới cùng
+    @Query("SELECT v FROM Voucher v WHERE v.isDeleted = false " +
+            "AND (:keyword IS NULL OR LOWER(v.code) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+            "AND (:status IS NULL OR v.status = :status) " +
+            "ORDER BY v.id DESC")
+    org.springframework.data.domain.Page<Voucher> searchVouchers(
+            @Param("keyword") String keyword,
+            @Param("status") Integer status,
+            org.springframework.data.domain.Pageable pageable);
 }

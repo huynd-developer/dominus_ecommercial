@@ -29,8 +29,12 @@ public class AdminVoucherController {
      * GET /api/admin/vouchers
      */
     @GetMapping
-    public ResponseEntity<?> getAllVouchers() {
-        return ResponseEntity.ok(voucherService.getAllVouchers());
+    public ResponseEntity<?> getAllVouchers(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Integer status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(voucherService.getVouchers(keyword, status, page, size));
     }
 
     /**

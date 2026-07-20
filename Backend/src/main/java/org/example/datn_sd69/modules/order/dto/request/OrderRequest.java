@@ -32,10 +32,7 @@ public class OrderRequest {
     private String shippingAddress;
 
     @NotBlank(message = "Phương thức thanh toán không được để trống")
-    @Pattern(
-            regexp = "(?i)^(COD|VNPAY)$",
-            message = "Phương thức thanh toán chỉ hỗ trợ COD hoặc VNPAY"
-    )
+    @Pattern(regexp = "^(COD|VIETQR|VNPAY)$", message = "Phương thức thanh toán không hợp lệ")
     private String paymentMethod;
 
     @Size(max = 255, message = "Ghi chú tối đa 255 ký tự")
@@ -51,4 +48,13 @@ public class OrderRequest {
             message = "Mã giảm giá chỉ được chứa chữ, số, dấu gạch ngang hoặc gạch dưới"
     )
     private String voucherCode;
+
+    // ... các trường cũ (customerName, phone, address...)
+
+    // --- THÊM PHẦN THÔNG TIN VAT ---
+    private Boolean isVatRequired; // Khách có bật toggle yêu cầu VAT không
+    private String taxCode;
+    private String vatEmail;
+    private String companyName;
+    private String companyAddress;
 }
