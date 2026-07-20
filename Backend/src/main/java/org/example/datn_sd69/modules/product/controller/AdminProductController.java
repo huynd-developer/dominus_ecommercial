@@ -57,7 +57,7 @@ public class AdminProductController {
     @GetMapping
     public ResponseEntity<ApiResponse<Map<String, Object>>> getAllProducts(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "99") int size) {
 
         return ResponseEntity.ok(
                 ApiResponse.success(
@@ -126,10 +126,19 @@ public class AdminProductController {
     @PreAuthorize("hasAnyAuthority('MANAGER','OWNER')")
     public ResponseEntity<ApiResponse<String>> uploadProductImage(
             @PathVariable Integer id,
-            @RequestParam("file") MultipartFile file) throws Exception {
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(
+                    value = "isPrimary",
+                    defaultValue = "false"
+            ) Boolean isPrimary
+    ) throws Exception {
 
         String imageUrl =
-                productService.uploadImage(id, file);
+                productService.uploadImage(
+                        id,
+                        file,
+                        isPrimary
+                );
 
         return ResponseEntity.ok(
                 ApiResponse.success(
@@ -176,6 +185,16 @@ public class AdminProductController {
                         null,
                         "Xóa ảnh thành công"
                 )
+        );
+    }
+
+    @GetMapping("/{id}/images")
+    public ResponseEntity<?> getImages(
+            @PathVariable Integer id
+    ) {
+
+        return ResponseEntity.ok(
+                productService.getProductImages(id)
         );
     }
 }

@@ -32,6 +32,8 @@ public class ProductResponse {
 
     private String primaryImageUrl;
 
+    private List<ProductImageResponse> images;
+
     private Set<FragranceFamilyDTO> fragranceFamilies;
 
     private List<VariantDTO> variants;

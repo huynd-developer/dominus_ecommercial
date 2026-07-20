@@ -40,23 +40,69 @@
               {{ item.productName || item.sku || "Sản phẩm" }}
             </h4>
 
-            <span v-if="item.sku" class="sku-badge">
-              {{ item.sku }}
+            <div class="badge-row">
+              <span v-if="item.sku" class="sku-badge">
+                {{ item.sku }}
+              </span>
+
+              <span v-if="item.hasPromotion" class="flash-sale-badge">
+                Flash Sale -{{ formatDiscount(item.discountPercent) }}%
+              </span>
+            </div>
+          </div>
+
+          <div
+            v-if="item.hasPromotion && item.promotionName"
+            class="promotion-name"
+          >
+            {{ item.promotionName }}
+            <span v-if="item.promotionEndDate">
+              · Kết thúc: {{ formatDateTime(item.promotionEndDate) }}
             </span>
           </div>
 
-          <p class="item-variant">
-            Dung tích:
-            <strong>{{ item.capacity || "-" }}</strong>
-          </p>
+          <div class="variant-grid">
+            <p class="item-variant">
+              Dung tích:
+              <strong>{{ item.capacity || "-" }}</strong>
+            </p>
+
+            <p class="item-variant">
+              Loại chai:
+              <strong>{{ item.bottleType || "-" }}</strong>
+            </p>
+          </div>
+
+          <div class="date-grid">
+            <span>
+              NSX:
+              <strong>{{ formatDate(item.manufacturingDate) }}</strong>
+            </span>
+
+            <span :class="{ 'text-danger': isExpired(item) }">
+              HSD:
+              <strong>{{ formatDate(item.expirationDate) }}</strong>
+            </span>
+          </div>
 
           <p class="stock-line">
             Tồn kho:
             <strong>{{ Number(item.stockQuantity || 0) }}</strong>
           </p>
 
+          <div class="status-row">
+            <span
+              :class="[
+                'status-badge',
+                isItemAvailable(item) ? 'status-ok' : 'status-error',
+              ]"
+            >
+              {{ isItemAvailable(item) ? "Có thể mua" : "Không khả dụng" }}
+            </span>
+          </div>
+
           <p v-if="!isItemAvailable(item)" class="unavailable-text">
-            {{ item.unavailableReason || "Sản phẩm hiện không khả dụng" }}
+            {{ getUnavailableReason(item) }}
           </p>
 
           <div class="qty-wrapper">
@@ -89,9 +135,39 @@
         </div>
 
         <div class="item-action">
-          <span class="price">
-            {{ formatCurrency(getLineTotal(item)) }}
-          </span>
+          <template v-if="item.hasPromotion">
+            <span class="unit-price old-unit-price">
+              Giá gốc: {{ formatCurrency(item.originalPrice) }}
+            </span>
+
+            <span class="unit-price sale-unit-price">
+              Giá sale: {{ formatCurrency(item.price) }}
+            </span>
+
+            <div class="promotion-price-box">
+              <span class="old-price">
+                {{ formatCurrency(getOriginalLineTotal(item)) }}
+              </span>
+
+              <span class="discount-badge">
+                -{{ formatDiscount(item.discountPercent) }}%
+              </span>
+
+              <span class="price">
+                {{ formatCurrency(getLineTotal(item)) }}
+              </span>
+            </div>
+          </template>
+
+          <template v-else>
+            <span class="unit-price">
+              Đơn giá: {{ formatCurrency(item.price) }}
+            </span>
+
+            <span class="price">
+              {{ formatCurrency(getLineTotal(item)) }}
+            </span>
+          </template>
 
           <button
             class="btn-delete"
@@ -113,14 +189,64 @@
 </template>
 
 <script setup lang="ts">
+interface CartItem {
+  cartItemId: number;
+  productVariantId?: number;
+
+  sku?: string | null;
+  productName?: string | null;
+  capacity?: string | null;
+  bottleType?: string | null;
+
+  quantity?: number | null;
+
+  /**
+   * Giá thực tế BE trả về để tính tiền.
+   * Nếu có Flash Sale thì price = salePrice.
+   */
+  price?: number | null;
+
+  /**
+   * Giá gốc.
+   */
+  originalPrice?: number | null;
+
+  /**
+   * Giá Flash Sale.
+   */
+  salePrice?: number | null;
+
+  discountPercent?: number | null;
+  hasPromotion?: boolean | null;
+  promotionId?: number | null;
+  promotionName?: string | null;
+  promotionEndDate?: string | null;
+
+  stockQuantity?: number | null;
+  note?: string | null;
+
+  image?: string | null;
+  imageUrl?: string | null;
+  thumbnailUrl?: string | null;
+
+  manufacturingDate?: string | null;
+  expirationDate?: string | null;
+  variantStatus?: number | null;
+  expired?: boolean | null;
+
+  available?: boolean | null;
+  sellable?: boolean | null;
+  unavailableReason?: string | null;
+}
+
 defineProps<{
-  cartItems: any[];
+  cartItems: CartItem[];
   isLoading: boolean;
   isUpdating?: boolean;
 }>();
 
 defineEmits<{
-  (e: "update-qty", item: any, quantity: number): void;
+  (e: "update-qty", item: CartItem, quantity: number): void;
   (e: "remove-item", cartItemId: number): void;
 }>();
 
@@ -136,7 +262,60 @@ const FALLBACK_IMAGE =
     </svg>
   `);
 
-const getItemImage = (item: any) => {
+const toDateOnly = (value?: string | null) => {
+  if (!value) return null;
+  return String(value).substring(0, 10);
+};
+
+const isBeforeToday = (value?: string | null) => {
+  const dateOnly = toDateOnly(value);
+
+  if (!dateOnly) return false;
+
+  const date = new Date(`${dateOnly}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return !Number.isNaN(date.getTime()) && date.getTime() < today.getTime();
+};
+
+const isAfterToday = (value?: string | null) => {
+  const dateOnly = toDateOnly(value);
+
+  if (!dateOnly) return false;
+
+  const date = new Date(`${dateOnly}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return !Number.isNaN(date.getTime()) && date.getTime() > today.getTime();
+};
+
+const formatDate = (value?: string | null) => {
+  const dateOnly = toDateOnly(value);
+
+  if (!dateOnly) return "-";
+
+  const date = new Date(`${dateOnly}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleDateString("vi-VN");
+};
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toLocaleString("vi-VN", {
+    hour12: false,
+  });
+};
+
+const getItemImage = (item: CartItem) => {
   return item?.image || item?.imageUrl || item?.thumbnailUrl || FALLBACK_IMAGE;
 };
 
@@ -145,21 +324,102 @@ const handleImageError = (event: Event) => {
   target.src = FALLBACK_IMAGE;
 };
 
-const isItemAvailable = (item: any) => {
-  return item?.available !== false && Number(item?.stockQuantity || 0) > 0;
+const isExpired = (item: CartItem) => {
+  return Boolean(item?.expired) || isBeforeToday(item?.expirationDate);
 };
 
-const getLineTotal = (item: any) => {
+const getUnavailableReason = (item: CartItem) => {
+  if (!item) {
+    return "Sản phẩm không hợp lệ";
+  }
+
+  if (item.unavailableReason) {
+    return item.unavailableReason;
+  }
+
+  if (item.available === false || item.sellable === false) {
+    return "Sản phẩm hiện không khả dụng";
+  }
+
+  if (item.variantStatus != null && Number(item.variantStatus) !== 1) {
+    return "Sản phẩm đang ngừng bán";
+  }
+
+  if (Number(item.quantity || 0) <= 0) {
+    return "Số lượng sản phẩm không hợp lệ";
+  }
+
+  if (Number(item.stockQuantity || 0) <= 0) {
+    return "Sản phẩm đã hết hàng";
+  }
+
+  if (Number(item.quantity || 0) > Number(item.stockQuantity || 0)) {
+    return "Số lượng trong giỏ vượt quá tồn kho hiện tại";
+  }
+
+  if (isAfterToday(item.manufacturingDate)) {
+    return "Sản phẩm chưa tới ngày được bán";
+  }
+
+  if (isExpired(item)) {
+    return "Sản phẩm đã hết hạn sử dụng";
+  }
+
+  return "Sản phẩm hiện không khả dụng";
+};
+
+const isItemAvailable = (item: CartItem) => {
+  if (!item) return false;
+
+  if (item.available === false || item.sellable === false) {
+    return false;
+  }
+
+  if (item.variantStatus != null && Number(item.variantStatus) !== 1) {
+    return false;
+  }
+
+  const quantity = Number(item.quantity || 0);
+  const stockQuantity = Number(item.stockQuantity || 0);
+
+  if (quantity <= 0 || stockQuantity <= 0 || quantity > stockQuantity) {
+    return false;
+  }
+
+  if (isAfterToday(item.manufacturingDate)) {
+    return false;
+  }
+
+  if (isExpired(item)) {
+    return false;
+  }
+
+  return true;
+};
+
+const getLineTotal = (item: CartItem) => {
   return Number(item?.price || 0) * Number(item?.quantity || 0);
 };
 
-const formatCurrency = (val: number) => {
+const getOriginalLineTotal = (item: CartItem) => {
+  return Number(item?.originalPrice || item?.price || 0) * Number(item?.quantity || 0);
+};
+
+const formatCurrency = (val?: number | null) => {
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
     currency: "VND",
-  })
-    .format(Number(val || 0))
-    .replace("₫", "₫");
+  }).format(Number(val || 0));
+};
+
+const formatDiscount = (value?: number | null) => {
+  const numberValue = Number(value || 0);
+
+  if (Number.isInteger(numberValue)) {
+    return String(numberValue);
+  }
+
+  return numberValue.toFixed(2).replace(/\.?0+$/, "");
 };
 </script>
 
@@ -286,6 +546,12 @@ const formatCurrency = (val: number) => {
   line-height: 1.35;
 }
 
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .sku-badge {
   width: fit-content;
   background: #f8fafc;
@@ -297,6 +563,34 @@ const formatCurrency = (val: number) => {
   font-weight: 600;
 }
 
+.flash-sale-badge {
+  width: fit-content;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.promotion-name {
+  width: fit-content;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.variant-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .item-variant {
   font-size: 15px;
   color: #718096;
@@ -306,10 +600,27 @@ const formatCurrency = (val: number) => {
 .item-variant strong {
   color: #b78d52;
   font-weight: 700;
-  font-size: 16px;
+  font-size: 15px;
   background: rgba(183, 141, 82, 0.1);
   padding: 4px 10px;
   border-radius: 6px;
+}
+
+.date-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.date-grid strong {
+  color: #06132b;
+}
+
+.text-danger strong,
+.text-danger {
+  color: #dc2626 !important;
 }
 
 .stock-line {
@@ -320,6 +631,32 @@ const formatCurrency = (val: number) => {
 
 .stock-line strong {
   color: #06132b;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-badge {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.status-ok {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.status-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
 }
 
 .unavailable-text {
@@ -381,14 +718,56 @@ const formatCurrency = (val: number) => {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  justify-content: space-between;
+  justify-content: center;
+  gap: 10px;
   min-height: 130px;
+}
+
+.unit-price {
+  color: #64748b;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.old-unit-price {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+
+.sale-unit-price {
+  color: #dc2626;
+  font-weight: 800;
+}
+
+.promotion-price-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.old-price {
+  color: #94a3b8;
+  font-size: 14px;
+  text-decoration: line-through;
+  white-space: nowrap;
+}
+
+.discount-badge {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .price {
   font-weight: 800;
   font-size: 22px;
   color: #e53e3e;
+  white-space: nowrap;
 }
 
 .btn-delete {

@@ -51,33 +51,78 @@ export interface FavoriteResponse {
 
 export interface CustomerOrderItemResponse {
   orderItemId: number;
+
   productVariantId: number | null;
   productId: number | null;
-  productName: string;
+
+  productName: string | null;
   brandName: string | null;
   sku: string | null;
+
+  capacity: string | null;
+  bottleType: string | null;
+
+  manufacturingDate: string | null;
+  expirationDate: string | null;
+
   quantity: number;
+
+  /**
+   * Giá gốc tại thời điểm đặt hàng.
+   */
   originalPrice: number;
+
+  /**
+   * Số tiền giảm trên 1 sản phẩm tại thời điểm đặt hàng.
+   */
   discountAmount: number;
+
+  /**
+   * Giá cuối cùng trên 1 sản phẩm tại thời điểm đặt hàng.
+   */
   finalPrice: number;
+
+  /**
+   * Thành tiền dòng = finalPrice * quantity.
+   */
+  lineTotal: number;
+
   note: string | null;
   image: string | null;
 }
 
 export interface CustomerOrderResponse {
   orderId: number;
-  orderType: string;
-  customerName: string;
-  customerPhone: string;
-  shippingAddress: string;
+
+  orderType: string | null;
+
+  customerName: string | null;
+  customerPhone: string | null;
+  shippingAddress: string | null;
+
   totalAmount: number;
   discountAmount: number;
   finalAmount: number;
-  paymentMethod: string;
+
+  paymentMethod: string | null;
+
+  /**
+   * 0 = Chờ xác nhận
+   * 1 = Đã xác nhận
+   * 2 = Đang giao hàng
+   * 3 = Hoàn thành
+   * 4 = Đã hủy
+   * 5 = Giao hàng thất bại
+   * 6 = Yêu cầu hoàn hàng / đổi trả
+   * 7 = Hoàn hàng / đổi trả hoàn tất
+   */
   status: number;
+
   statusText: string;
   canCancel: boolean;
+
   createdAt: string;
+
   items: CustomerOrderItemResponse[];
 }
 
@@ -94,7 +139,7 @@ export interface ReviewResponse {
 
   productVariantId: number | null;
   productId: number | null;
-  productName: string;
+  productName: string | null;
   brandName: string | null;
   sku: string | null;
   image: string | null;
@@ -110,7 +155,7 @@ export interface ReviewableOrderItemResponse {
 
   productVariantId: number | null;
   productId: number | null;
-  productName: string;
+  productName: string | null;
   brandName: string | null;
   sku: string | null;
   image: string | null;

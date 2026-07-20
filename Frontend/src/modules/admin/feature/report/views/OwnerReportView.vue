@@ -4,7 +4,7 @@
       <div>
         <h2 class="fw-bold mb-1">Báo cáo Owner</h2>
         <p class="text-muted mb-0">
-          Thống kê doanh thu, đơn hàng và sản phẩm bán chạy
+          Thống kê doanh thu, đơn hoàn thành và sản phẩm bán chạy
         </p>
       </div>
 
@@ -13,6 +13,10 @@
         :disabled="reportStore.loading"
         @click="reportStore.fetchAll()"
       >
+        <span
+          v-if="reportStore.loading"
+          class="spinner-border spinner-border-sm me-2"
+        ></span>
         Làm mới
       </button>
     </div>
@@ -73,6 +77,10 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .owner-report-page {
+    padding: 16px;
+  }
+
   .page-header {
     align-items: flex-start;
     flex-direction: column;

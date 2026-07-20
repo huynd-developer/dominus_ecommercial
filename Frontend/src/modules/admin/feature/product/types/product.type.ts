@@ -33,9 +33,7 @@ export interface BottleType {
 export interface Capacity {
   id: number
 
-  capacityValue?: string
-
-  value?: string
+  value?: number
 
   name?: string
 }
@@ -48,16 +46,26 @@ export interface FragranceFamily {
   name?: string
 }
 
+export interface ProductImage {
+  id: number
+
+  imageUrl: string
+
+  isPrimary: boolean
+}
+
 export interface ProductVariant {
   id?: number
 
   capacityId: number
+
   capacityName?: string
 
   bottleTypeId: number
+
   bottleTypeName?: string
 
-  sku: string
+  sku?: string
 
   price: number
 
@@ -71,7 +79,6 @@ export interface ProductVariant {
 }
 
 export interface Product {
-
   id: number
 
   name: string
@@ -98,13 +105,35 @@ export interface Product {
 
   primaryImageUrl?: string
 
+  images?: ProductImage[]
+
   fragranceFamilies: FragranceFamily[]
 
   variants: ProductVariant[]
+}
+
+export interface ProductVariantRequest {
+
+  id?: number
+
+  capacityId: number
+
+  bottleTypeId: number
+
+  price: number
+
+  stockQuantity: number
+
+  manufacturingDate: string
+
+  expirationDate: string
+
+  status: number
 
 }
 
 export interface ProductRequestDTO {
+
   name: string
 
   description?: string
@@ -123,7 +152,9 @@ export interface ProductRequestDTO {
 
   fragranceFamilyIds: number[]
 
-  variants: ProductVariant[]
+  variants: ProductVariantRequest[]
+
 }
 
-export interface ProductResponse extends Product {}
+export interface ProductResponse
+  extends Product {}

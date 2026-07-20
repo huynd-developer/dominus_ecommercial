@@ -246,6 +246,13 @@ const openEditModal = async (id: number) => {
     showModal.value = true;
   } catch (error) {
     console.error("Fetch promotion detail failed:", error);
+
+    await Swal.fire({
+      icon: "error",
+      title: "Không tải được chi tiết chiến dịch",
+      text: "Vui lòng thử lại sau.",
+      confirmButtonColor: "#bd9a5f",
+    });
   }
 };
 

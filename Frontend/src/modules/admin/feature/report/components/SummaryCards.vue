@@ -7,19 +7,19 @@
           {{ formatMoney(summary?.totalRevenue || 0) }}
         </div>
         <div class="report-card-desc">
-          Chỉ tính đơn hoàn thành Status = 3
+          Doanh thu từ đơn đã hoàn thành
         </div>
       </div>
     </div>
 
     <div class="col-12 col-md-4">
       <div class="report-card">
-        <div class="report-card-label">Số đơn đã bán</div>
+        <div class="report-card-label">Số đơn hoàn thành</div>
         <div class="report-card-value">
-          {{ summary?.totalOrders || 0 }}
+          {{ formatNumber(summary?.totalOrders || 0) }}
         </div>
         <div class="report-card-desc">
-          Tổng số đơn hoàn thành
+          Không tính đơn chờ xác nhận, đang giao hoặc đã hủy
         </div>
       </div>
     </div>
@@ -28,11 +28,20 @@
       <div class="report-card">
         <div class="report-card-label">Sản phẩm đã bán</div>
         <div class="report-card-value">
-          {{ summary?.totalProductsSold || 0 }}
+          {{ formatNumber(summary?.totalProductsSold || 0) }}
         </div>
         <div class="report-card-desc">
-          Tổng quantity trong OrderItem
+          Tổng số lượng sản phẩm trong đơn hoàn thành
         </div>
+      </div>
+    </div>
+
+    <div v-if="summary" class="col-12">
+      <div class="range-box">
+        Khoảng báo cáo:
+        <strong>{{ formatDate(summary.fromDate) }}</strong>
+        <span> đến </span>
+        <strong>{{ formatDate(summary.toDate) }}</strong>
       </div>
     </div>
   </div>
@@ -45,11 +54,35 @@ defineProps<{
   summary: ReportSummaryResponse | null;
 }>();
 
-const formatMoney = (value: number) => {
-  return Number(value || 0).toLocaleString("vi-VN", {
+const toNumber = (value: unknown) => {
+  const numberValue = Number(value ?? 0);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+};
+
+const formatMoney = (value: unknown) => {
+  return toNumber(value).toLocaleString("vi-VN", {
     style: "currency",
     currency: "VND",
+    maximumFractionDigits: 0,
   });
+};
+
+const formatNumber = (value: unknown) => {
+  return toNumber(value).toLocaleString("vi-VN");
+};
+
+const formatDate = (value?: string | null) => {
+  if (!value) return "-";
+
+  const parts = value.split("-");
+
+  if (parts.length !== 3) {
+    return value;
+  }
+
+  const [year, month, day] = parts;
+
+  return `${day}/${month}/${year}`;
 };
 </script>
 
@@ -60,6 +93,7 @@ const formatMoney = (value: number) => {
   padding: 22px;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
   border: 1px solid #f1f1f1;
+  height: 100%;
 }
 
 .report-card-label {
@@ -78,5 +112,18 @@ const formatMoney = (value: number) => {
   font-size: 13px;
   color: #9ca3af;
   margin-top: 8px;
+}
+
+.range-box {
+  background: #fff;
+  border: 1px solid #f1f1f1;
+  border-radius: 14px;
+  padding: 14px 18px;
+  color: #6b7280;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.range-box strong {
+  color: #111827;
 }
 </style>

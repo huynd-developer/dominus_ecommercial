@@ -1,7 +1,11 @@
 <template>
-  <div class="cart-premium-panel rounded-3 d-flex flex-column h-100 p-3 select-none position-relative">
+  <div
+    class="cart-premium-panel rounded-3 d-flex flex-column h-100 p-3 select-none position-relative"
+  >
     <div class="pos-ui-container d-flex flex-column h-100 min-h-0">
-      <div class="cart-header d-flex align-items-center justify-content-between border-bottom border-dark-custom pb-2 mb-2 shrink-0">
+      <div
+        class="cart-header d-flex align-items-center justify-content-between border-bottom border-dark-custom pb-2 mb-2 shrink-0"
+      >
         <div class="d-flex align-items-center gap-2 min-w-0">
           <div class="icon-wrap rounded p-2 d-flex align-items-center justify-content-center">
             <i class="bi bi-cart3 text-gold fs-6"></i>
@@ -52,13 +56,25 @@
               </div>
             </div>
 
-            <button
-              type="button"
-              class="btn-held-outline shrink-0"
-              @click="handleTransferActiveHeldOrder"
-            >
-              Chuyển
-            </button>
+            <div class="d-flex flex-column gap-1 shrink-0">
+              <button
+                type="button"
+                class="btn-held-outline"
+                :disabled="posStore.isLoading"
+                @click="handleTransferActiveHeldOrder"
+              >
+                Chuyển
+              </button>
+
+              <button
+                type="button"
+                class="btn-held-danger"
+                :disabled="posStore.isLoading"
+                @click="handleCancelActiveHeldOrder"
+              >
+                Hủy phiếu
+              </button>
+            </div>
           </div>
         </div>
 
@@ -84,8 +100,12 @@
           </div>
 
           <div class="d-flex align-items-center gap-2 mb-2">
-            <div class="input-wrapper flex-grow-1 position-relative d-flex align-items-center min-w-0">
-              <i class="bi bi-telephone text-muted-custom position-absolute start-0 ms-2 font-xs"></i>
+            <div
+              class="input-wrapper flex-grow-1 position-relative d-flex align-items-center min-w-0"
+            >
+              <i
+                class="bi bi-telephone text-muted-custom position-absolute start-0 ms-2 font-xs"
+              ></i>
 
               <input
                 type="text"
@@ -112,7 +132,10 @@
           <div v-if="posStore.customer" class="customer-box rounded-3 p-2">
             <div class="row g-2">
               <div class="col-6">
-                <label class="field-label">Họ tên <span class="text-danger">*</span></label>
+                <label class="field-label">
+                  Họ tên <span class="text-danger">*</span>
+                </label>
+
                 <input
                   type="text"
                   v-model="posStore.customer.name"
@@ -124,7 +147,10 @@
               </div>
 
               <div class="col-6">
-                <label class="field-label">Email <span class="text-danger">*</span></label>
+                <label class="field-label">
+                  Email <span class="text-danger">*</span>
+                </label>
+
                 <input
                   type="email"
                   v-model="posStore.customer.email"
@@ -139,7 +165,9 @@
             <div class="d-flex justify-content-between align-items-center mt-1">
               <span class="text-muted-custom font-xs">
                 Hạng:
-                <strong class="text-gold">{{ posStore.customer.customerRank || "BRONZE" }}</strong>
+                <strong class="text-gold">
+                  {{ posStore.customer.customerRank || "BRONZE" }}
+                </strong>
               </span>
 
               <button
@@ -160,11 +188,16 @@
           </div>
         </div>
 
-        <div v-if="posStore.cart.length === 0" class="empty-cart d-flex flex-column align-items-center justify-content-center text-center rounded-3 mb-2">
+        <div
+          v-if="posStore.cart.length === 0"
+          class="empty-cart d-flex flex-column align-items-center justify-content-center text-center rounded-3 mb-2"
+        >
           <i class="bi bi-bag-x display-6 text-muted-custom opacity-25"></i>
+
           <p class="text-light opacity-75 mb-1 fw-bold font-sm">
             Giỏ hàng trống
           </p>
+
           <p class="text-muted-custom font-xs mb-0">
             Chọn sản phẩm hoặc quét SKU để thêm vào giỏ.
           </p>
@@ -219,7 +252,9 @@
                       <i class="bi bi-dash"></i>
                     </button>
 
-                    <span class="qty-number">{{ item.quantity }}</span>
+                    <span class="qty-number">
+                      {{ item.quantity }}
+                    </span>
 
                     <button
                       class="qty-btn"
@@ -254,23 +289,116 @@
         </div>
 
         <div class="checkout-section pt-2 border-top border-dark-custom mt-2">
-          <div class="d-flex justify-content-between mb-1 text-muted-custom font-xs">
-            <span>Tạm tính</span>
-            <span class="text-light fw-bold">{{ formatPrice(posStore.totalAmount) }} ₫</span>
-          </div>
-
-          <div class="d-flex align-items-center gap-2 mb-2">
-            <div class="input-wrapper flex-grow-1 position-relative d-flex align-items-center">
-              <i class="bi bi-ticket-perforated text-muted-custom position-absolute start-0 ms-2 font-xs"></i>
+          <div class="voucher-row d-flex align-items-center gap-2 mb-2">
+            <div
+              class="input-wrapper flex-grow-1 position-relative d-flex align-items-center min-w-0"
+            >
+              <i
+                class="bi bi-ticket-perforated text-muted-custom position-absolute start-0 ms-2 font-xs"
+              ></i>
 
               <input
                 type="text"
-                v-model="posStore.voucherCode"
+                v-model.trim="posStore.voucherCode"
                 placeholder="Mã giảm giá"
-                class="form-input ps-4"
-                :disabled="posStore.cart.length === 0 || lockedOrder"
+                class="form-input ps-4 text-uppercase"
+                maxlength="50"
+                :disabled="posStore.cart.length === 0 || lockedOrder || posStore.isLoading"
+                @input="handleVoucherTyping"
+                @keydown.enter="handleApplyVoucher"
               />
             </div>
+
+            <button
+              type="button"
+              class="btn-apply-voucher shrink-0"
+              :disabled="posStore.cart.length === 0 || lockedOrder || posStore.isLoading || !posStore.voucherCode"
+              @click="handleApplyVoucher"
+            >
+              Áp
+            </button>
+
+            <button
+              v-if="posStore.voucherCode || posStore.discountAmount > 0"
+              type="button"
+              class="btn-clear-voucher shrink-0"
+              :disabled="lockedOrder || posStore.isLoading"
+              title="Xóa mã giảm giá"
+              @click="handleClearVoucher"
+            >
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+
+          <div
+            v-if="posStore.discountAmount > 0"
+            class="voucher-applied-box rounded-3 px-2 py-1 mb-2 d-flex justify-content-between align-items-center gap-2"
+          >
+            <span class="font-xs text-success text-truncate">
+              <i class="bi bi-check-circle me-1"></i>
+              Đã áp mã {{ posStore.voucherCode }}
+            </span>
+
+            <strong class="font-xs text-success shrink-0">
+              -{{ formatPrice(posStore.discountAmount) }} ₫
+            </strong>
+          </div>
+
+          <div class="money-detail-box rounded-3 p-2 mb-2">
+            <div class="money-detail-title mb-2">
+              <i class="bi bi-receipt-cutoff me-1"></i>
+              Chi tiết thanh toán
+            </div>
+
+            <div class="money-detail-row">
+              <span>Tiền hàng</span>
+              <strong>{{ formatPrice(posStore.totalAmount) }} ₫</strong>
+            </div>
+
+            <div
+              v-if="posStore.discountAmount > 0"
+              class="money-detail-row text-success"
+            >
+              <span>
+                Giảm mã
+                <strong>{{ posStore.voucherCode }}</strong>
+              </span>
+
+              <strong>-{{ formatPrice(posStore.discountAmount) }} ₫</strong>
+            </div>
+
+            <div v-else class="money-detail-row text-muted-custom">
+              <span>Giảm giá</span>
+              <strong>0 ₫</strong>
+            </div>
+
+            <div class="money-detail-divider"></div>
+
+            <div class="money-detail-row money-detail-final">
+              <span>Thành tiền sau giảm</span>
+              <strong>{{ formatPrice(posStore.finalAmount) }} ₫</strong>
+            </div>
+
+            <template v-if="posStore.cashPaid > 0">
+              <div class="money-detail-row text-success">
+                <span>Đã nhận tiền mặt</span>
+                <strong>-{{ formatPrice(posStore.cashPaid) }} ₫</strong>
+              </div>
+
+              <div class="money-detail-divider"></div>
+
+              <div class="money-detail-row money-detail-payable">
+                <span>Còn phải thu</span>
+                <strong>{{ formatPrice(posStore.remainingAmount) }} ₫</strong>
+              </div>
+            </template>
+
+            <template v-else>
+              <div class="money-detail-row money-detail-payable">
+                <span>Khách cần thanh toán</span>
+                <strong>{{ formatPrice(posStore.remainingAmount) }} ₫</strong>
+              </div>
+            </template>
           </div>
 
           <div
@@ -279,12 +407,16 @@
           >
             <div class="d-flex justify-content-between font-xs mb-1">
               <span class="text-muted-custom">Đã nhận tiền mặt</span>
-              <strong class="text-success">{{ formatPrice(posStore.cashPaid) }} ₫</strong>
+              <strong class="text-success">
+                {{ formatPrice(posStore.cashPaid) }} ₫
+              </strong>
             </div>
 
             <div class="d-flex justify-content-between font-xs">
               <span class="text-muted-custom">Còn thiếu</span>
-              <strong class="text-warning">{{ formatPrice(posStore.remainingAmount) }} ₫</strong>
+              <strong class="text-warning">
+                {{ formatPrice(posStore.remainingAmount) }} ₫
+              </strong>
             </div>
 
             <div class="font-xs text-muted-custom mt-1">
@@ -319,8 +451,12 @@
               v-if="posStore.showHeldOrdersPanel"
               class="held-list rounded-3 mt-2"
             >
-              <div class="d-flex justify-content-between align-items-center px-2 py-2 border-bottom border-dark-custom">
-                <span class="text-light fw-bold font-xs">Danh sách phiếu treo</span>
+              <div
+                class="d-flex justify-content-between align-items-center px-2 py-2 border-bottom border-dark-custom"
+              >
+                <span class="text-light fw-bold font-xs">
+                  Danh sách phiếu treo
+                </span>
 
                 <button
                   type="button"
@@ -366,6 +502,7 @@
                     <button
                       type="button"
                       class="btn-open-held"
+                      :disabled="posStore.isLoading"
                       @click="handleOpenHeldOrder(held.orderId)"
                     >
                       Mở
@@ -374,9 +511,19 @@
                     <button
                       type="button"
                       class="btn-transfer-held"
+                      :disabled="posStore.isLoading"
                       @click="handleTransferHeldOrder(held.orderId)"
                     >
                       Chuyển
+                    </button>
+
+                    <button
+                      type="button"
+                      class="btn-cancel-held"
+                      :disabled="posStore.isLoading"
+                      @click="handleCancelHeldOrder(held.orderId)"
+                    >
+                      Hủy
                     </button>
                   </div>
                 </div>
@@ -386,7 +533,7 @@
 
           <div class="total-row d-flex justify-content-between align-items-center mb-2">
             <span class="text-light font-sm fw-bold">
-              {{ posStore.hasPartialCashPayment ? "Còn cần thanh toán" : "Khách cần thanh toán" }}
+              Còn phải thu
             </span>
 
             <strong class="text-gold fs-5">
@@ -460,12 +607,16 @@
         <div class="modal-body">
           <div v-if="posStore.hasPartialCashPayment" class="payment-row">
             <span>Đã nhận trước đó:</span>
-            <span class="text-success">{{ formatPrice(posStore.cashPaid) }} ₫</span>
+            <span class="text-success">
+              {{ formatPrice(posStore.cashPaid) }} ₫
+            </span>
           </div>
 
           <div class="payment-row">
             <span>Còn cần thanh toán:</span>
-            <span class="text-highlight">{{ formatPrice(posStore.remainingAmount) }} ₫</span>
+            <span class="text-highlight">
+              {{ formatPrice(posStore.remainingAmount) }} ₫
+            </span>
           </div>
 
           <div class="payment-row input-row">
@@ -481,21 +632,36 @@
                 @keydown.enter="processCashPayment"
               />
 
-              <span class="position-absolute text-muted-custom fw-bold" style="right: 12px">
+              <span
+                class="position-absolute text-muted-custom fw-bold"
+                style="right: 12px"
+              >
                 ₫
               </span>
             </div>
 
             <div class="d-flex gap-2 mt-2 flex-wrap">
-              <button type="button" class="btn-quick-cash" @click="setExactAmount">
+              <button
+                type="button"
+                class="btn-quick-cash"
+                @click="setExactAmount"
+              >
                 Đưa đủ
               </button>
 
-              <button type="button" class="btn-quick-cash" @click="addAmount(500000)">
+              <button
+                type="button"
+                class="btn-quick-cash"
+                @click="addAmount(500000)"
+              >
                 +500.000
               </button>
 
-              <button type="button" class="btn-quick-cash" @click="addAmount(100000)">
+              <button
+                type="button"
+                class="btn-quick-cash"
+                @click="addAmount(100000)"
+              >
                 +100.000
               </button>
             </div>
@@ -504,7 +670,9 @@
           <div class="payment-row border-top border-dark-custom pt-3 mt-1">
             <span>Sau lần đưa này:</span>
 
-            <span :class="cashAfterThisPayment >= posStore.finalAmount ? 'text-success' : 'text-warning'">
+            <span
+              :class="cashAfterThisPayment >= posStore.finalAmount ? 'text-success' : 'text-warning'"
+            >
               {{
                 cashAfterThisPayment >= posStore.finalAmount
                   ? "Đủ tiền mặt"
@@ -513,7 +681,10 @@
             </span>
           </div>
 
-          <div v-if="cashAfterThisPayment >= posStore.finalAmount" class="payment-row">
+          <div
+            v-if="cashAfterThisPayment >= posStore.finalAmount"
+            class="payment-row"
+          >
             <span>Tiền thừa dự kiến:</span>
             <span class="text-success">
               {{ formatPrice(cashAfterThisPayment - posStore.finalAmount) }} ₫
@@ -526,7 +697,11 @@
         </div>
 
         <div class="modal-footer">
-          <button class="btn-cancel" type="button" @click="showCashModal = false">
+          <button
+            class="btn-cancel"
+            type="button"
+            @click="showCashModal = false"
+          >
             Hủy bỏ
           </button>
 
@@ -748,7 +923,9 @@ const cashAfterThisPayment = computed(() => {
 const ensureCustomerDraftFromPhoneInput = () => {
   const phone = normalizePhone(posStore.customer?.phone || customerPhoneInput.value);
 
-  if (!phone) return;
+  if (!phone) {
+    return;
+  }
 
   if (!posStore.customer) {
     posStore.customer = {
@@ -860,6 +1037,19 @@ const handleClearCustomer = () => {
   posStore.errorMsg = "";
 };
 
+const handleVoucherTyping = () => {
+  posStore.voucherCode = String(posStore.voucherCode || "").toUpperCase();
+  posStore.handleVoucherTyping();
+};
+
+const handleApplyVoucher = async () => {
+  await posStore.applyVoucher();
+};
+
+const handleClearVoucher = () => {
+  posStore.clearVoucher();
+};
+
 const handleCancelOrder = () => {
   if (posStore.activeHeldOrderId) {
     customerPhoneInput.value = "";
@@ -915,7 +1105,9 @@ const toggleHeldOrdersPanel = async () => {
 };
 
 const handleHoldOrder = async () => {
-  if (!validateCustomerBeforeCheckout()) return;
+  if (!validateCustomerBeforeCheckout()) {
+    return;
+  }
 
   const result = await posStore.holdCurrentOrder();
 
@@ -976,13 +1168,44 @@ const handleTransferHeldOrder = async (orderId: number) => {
 };
 
 const handleTransferActiveHeldOrder = async () => {
-  if (!posStore.activeHeldOrderId) return;
+  if (!posStore.activeHeldOrderId) {
+    return;
+  }
 
   await openTransferModal(posStore.activeHeldOrderId);
 };
 
+const handleCancelHeldOrder = async (orderId: number) => {
+  if (!orderId) {
+    posStore.errorMsg = "Mã phiếu treo không hợp lệ.";
+    return;
+  }
+
+  const isCancellingActiveHeldOrder = posStore.activeHeldOrderId === orderId;
+
+  const result = await posStore.cancelHeldOrder(orderId);
+
+  if (result && isCancellingActiveHeldOrder) {
+    customerPhoneInput.value = "";
+    displayCash.value = "";
+    showCashModal.value = false;
+    closeTransferModal();
+  }
+};
+
+const handleCancelActiveHeldOrder = async () => {
+  if (!posStore.activeHeldOrderId) {
+    posStore.errorMsg = "Không có phiếu treo đang mở.";
+    return;
+  }
+
+  await handleCancelHeldOrder(posStore.activeHeldOrderId);
+};
+
 const handleCheckoutAction = async () => {
-  if (!validateCustomerBeforeCheckout()) return;
+  if (!validateCustomerBeforeCheckout()) {
+    return;
+  }
 
   if (posStore.paymentMethod === "CASH") {
     displayCash.value = new Intl.NumberFormat("vi-VN").format(
@@ -1068,7 +1291,9 @@ const buildInvoiceSnapshot = (backendData: any = {}) => {
 };
 
 const processCashPayment = async () => {
-  if (!validateCustomerBeforeCheckout()) return;
+  if (!validateCustomerBeforeCheckout()) {
+    return;
+  }
 
   if (rawCashGiven.value <= 0) {
     posStore.errorMsg = "Vui lòng nhập số tiền khách đưa.";
@@ -1095,10 +1320,14 @@ const processCashPayment = async () => {
 
   const checkoutResult = await posStore.processCheckout({
     paymentMethod: "CASH",
-    cashGiven: posStore.activeHeldOrderId ? rawCashGiven.value : cashAfterThisPayment.value,
+    cashGiven: posStore.activeHeldOrderId
+      ? rawCashGiven.value
+      : cashAfterThisPayment.value,
   });
 
-  if (!isCheckoutSuccess(checkoutResult)) return;
+  if (!isCheckoutSuccess(checkoutResult)) {
+    return;
+  }
 
   const backendData = getCheckoutData(checkoutResult);
   const invoiceSnapshot = buildInvoiceSnapshot(backendData);
@@ -1210,7 +1439,13 @@ const processCashPayment = async () => {
 .btn-mini:disabled,
 .payment-method-btn:disabled,
 .btn-held:disabled,
-.btn-held-outline:disabled {
+.btn-held-outline:disabled,
+.btn-held-danger:disabled,
+.btn-open-held:disabled,
+.btn-transfer-held:disabled,
+.btn-cancel-held:disabled,
+.btn-apply-voucher:disabled,
+.btn-clear-voucher:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -1415,6 +1650,101 @@ const processCashPayment = async () => {
   background: rgba(239, 68, 68, 0.16);
 }
 
+.btn-apply-voucher {
+  border: 1px solid rgba(243, 198, 63, 0.42);
+  background: rgba(243, 198, 63, 0.12);
+  color: #f3c63f;
+  border-radius: 8px;
+  padding: 7px 11px;
+  font-size: 0.75rem;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-apply-voucher:hover:not(:disabled) {
+  background: #f3c63f;
+  color: #0b1120;
+}
+
+.btn-clear-voucher {
+  width: 31px;
+  height: 31px;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  background: rgba(239, 68, 68, 0.08);
+  color: #fca5a5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.btn-clear-voucher:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fecaca;
+}
+
+.voucher-applied-box {
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.22);
+}
+
+.money-detail-box {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid #263654;
+}
+
+.money-detail-title {
+  color: #f3c63f;
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.money-detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #94a3b8;
+  font-size: 0.74rem;
+  margin-bottom: 6px;
+}
+
+.money-detail-row strong {
+  color: #f8fafc;
+  white-space: nowrap;
+}
+
+.money-detail-divider {
+  height: 1px;
+  background: #263654;
+  margin: 7px 0;
+}
+
+.money-detail-final span,
+.money-detail-final strong {
+  color: #f8fafc;
+  font-weight: 900;
+}
+
+.money-detail-payable span,
+.money-detail-payable strong {
+  color: #f3c63f;
+  font-weight: 900;
+  font-size: 0.82rem;
+}
+
+.money-detail-row.text-success span,
+.money-detail-row.text-success strong {
+  color: #4ade80 !important;
+}
+
+.money-detail-row.text-muted-custom span,
+.money-detail-row.text-muted-custom strong {
+  color: #64748b !important;
+}
+
 .partial-payment-box {
   background-color: rgba(245, 158, 11, 0.08);
   border: 1px solid rgba(245, 158, 11, 0.28);
@@ -1482,7 +1812,8 @@ const processCashPayment = async () => {
 }
 
 .btn-open-held,
-.btn-transfer-held {
+.btn-transfer-held,
+.btn-cancel-held {
   border: none;
   border-radius: 7px;
   padding: 5px 8px;
@@ -1500,6 +1831,34 @@ const processCashPayment = async () => {
   background: rgba(14, 165, 233, 0.16);
   color: #7dd3fc;
   border: 1px solid rgba(14, 165, 233, 0.35);
+}
+
+.btn-held-danger {
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+  color: #fca5a5;
+  border-radius: 7px;
+  padding: 5px 8px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.btn-held-danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fecaca;
+}
+
+.btn-cancel-held {
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.32);
+}
+
+.btn-cancel-held:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fecaca;
 }
 
 .payment-row-btns {

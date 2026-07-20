@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -25,19 +26,19 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
             "voucher"
     })
     @Query("""
-    SELECT o
-    FROM Order o
-    WHERE
-        (
-            :keyword IS NULL
-            OR TRIM(:keyword) = ''
-            OR LOWER(o.customerName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-            OR LOWER(o.customerPhone) LIKE LOWER(CONCAT('%', :keyword, '%'))
-            OR CAST(o.id AS string) LIKE CONCAT('%', :keyword, '%')
-        )
-        AND (:status IS NULL OR o.status = :status)
-        AND (:orderType IS NULL OR o.orderType = :orderType)
-    ORDER BY o.createdAt DESC
+        SELECT o
+        FROM Order o
+        WHERE
+            (
+                :keyword IS NULL
+                OR TRIM(:keyword) = ''
+                OR LOWER(o.customerName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                OR LOWER(o.customerPhone) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                OR CAST(o.id AS string) LIKE CONCAT('%', :keyword, '%')
+            )
+            AND (:status IS NULL OR o.status = :status)
+            AND (:orderType IS NULL OR o.orderType = :orderType)
+        ORDER BY o.createdAt DESC
     """)
     Page<Order> searchAdminOrders(
             @Param("keyword") String keyword,
@@ -46,13 +47,19 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
             Pageable pageable
     );
 
+    /**
+     * Báo cáo doanh thu chỉ tính đơn đã hoàn thành.
+     *
+     * Service truyền status = 3.
+     * Không tính đơn chờ xác nhận, đã xác nhận, đang giao, đã hủy.
+     */
     @Query(value = """
-            SELECT COALESCE(SUM(o.FinalAmount), 0)
-            FROM Orders o
-            WHERE o.Status = :status
-              AND o.CreatedAt >= :fromDate
-              AND o.CreatedAt < :toDate
-            """, nativeQuery = true)
+        SELECT COALESCE(SUM(o.FinalAmount), 0)
+        FROM [Orders] o
+        WHERE o.Status = :status
+          AND o.CreatedAt >= :fromDate
+          AND o.CreatedAt < :toDate
+    """, nativeQuery = true)
     BigDecimal sumFinalAmountByStatusAndCreatedAtBetween(
             @Param("status") Integer status,
             @Param("fromDate") LocalDateTime fromDate,
@@ -60,12 +67,12 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     );
 
     @Query(value = """
-            SELECT COUNT(o.Id)
-            FROM Orders o
-            WHERE o.Status = :status
-              AND o.CreatedAt >= :fromDate
-              AND o.CreatedAt < :toDate
-            """, nativeQuery = true)
+        SELECT COUNT(o.Id)
+        FROM [Orders] o
+        WHERE o.Status = :status
+          AND o.CreatedAt >= :fromDate
+          AND o.CreatedAt < :toDate
+    """, nativeQuery = true)
     Long countOrdersByStatusAndCreatedAtBetween(
             @Param("status") Integer status,
             @Param("fromDate") LocalDateTime fromDate,
@@ -73,18 +80,19 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     );
 
     @Query(value = """
-            SELECT *
-            FROM Orders o
-            WHERE o.Status = :status
-              AND o.CreatedAt >= :fromDate
-              AND o.CreatedAt < :toDate
-            ORDER BY o.CreatedAt ASC
-            """, nativeQuery = true)
+        SELECT *
+        FROM [Orders] o
+        WHERE o.Status = :status
+          AND o.CreatedAt >= :fromDate
+          AND o.CreatedAt < :toDate
+        ORDER BY o.CreatedAt ASC
+    """, nativeQuery = true)
     List<Order> findCompletedOrdersForChart(
             @Param("status") Integer status,
             @Param("fromDate") LocalDateTime fromDate,
             @Param("toDate") LocalDateTime toDate
     );
+
     List<Order> findByCustomer_UserIdOrderByCreatedAtDesc(Integer customerId);
 
     Optional<Order> findByIdAndCustomer_UserId(Integer orderId, Integer customerId);
@@ -100,10 +108,10 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
         SELECT o
         FROM Order o
         WHERE o.status = 0
-        AND UPPER(o.paymentMethod) = 'HOLD'
-        AND (:cashierId IS NULL OR o.cashier.userId = :cashierId)
+          AND UPPER(o.paymentMethod) = 'HOLD'
+          AND (:cashierId IS NULL OR o.cashier.userId = :cashierId)
         ORDER BY o.createdAt DESC
-        """)
+    """)
     List<Order> findHeldOrders(@Param("cashierId") Integer cashierId);
 
     @EntityGraph(attributePaths = {
@@ -117,7 +125,7 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
         SELECT o
         FROM Order o
         WHERE o.id = :orderId
-        """)
+    """)
     Optional<Order> findDetailById(@Param("orderId") Integer orderId);
 
     List<Order> findByStatusAndCreatedAtBefore(

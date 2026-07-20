@@ -54,7 +54,7 @@
       </div>
     </div>
 
-    <div v-if="showModal" class="modal d-block" style="background: rgba(0,0,0,0.5); z-index: 1050;">
+   <div v-if="showModal" class="modal d-block" style="background: rgba(0,0,0,0.5); z-index: 1050;">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow">
           <div class="modal-header">
@@ -64,7 +64,16 @@
           <div class="modal-body">
             <div class="mb-3">
               <label class="form-label fw-medium">Tên loại chai <span class="text-danger">*</span></label>
-              <input v-model="formData.name" type="text" class="form-control shadow-none" placeholder="VD: Chai gốc Fullbox, Ống chiết...">
+              <input 
+                v-model="formData.name" 
+                type="text" 
+                class="form-control shadow-none" 
+                :class="{ 'is-invalid': errors.name }"
+                placeholder="VD: Chai gốc Fullbox, Ống chiết..."
+                @input="validateForm"
+                @keyup.enter="handleSubmit"
+              >
+              <small v-if="errors.name" class="text-danger mt-1 d-block">{{ errors.name }}</small>
             </div>
           </div>
           <div class="modal-footer border-0 bg-light">
@@ -98,6 +107,9 @@ const isSaving = ref(false);
 
 const formData = ref<BottleTypeRequest>({ name: '', status: 1 });
 
+// 👇 THÊM MỚI: Biến state chứa thông báo lỗi cho ô input
+const errors = ref({ name: '' });
+
 const Toast = Swal.mixin({
   toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true
 });
@@ -109,10 +121,34 @@ onMounted(() => {
 const handleSearch = () => { bottleTypeStore.fetchBottleTypes(searchKeyword.value, 0); };
 const changePage = (page: number) => { if (page >= 0 && page < bottleTypeStore.totalPages) bottleTypeStore.fetchBottleTypes(searchKeyword.value, page); };
 
+// 👇 THÊM MỚI: Hàm kiểm tra lỗi Form Frontend
+const validateForm = () => {
+  errors.value.name = ''; 
+  const nameValue = formData.value.name.trim();
+  
+  // Regex: Cho phép chữ cái tiếng Việt, khoảng trắng và dấu ngoặc đơn ()
+  const nameRegex = /^[\p{L}\s()]+$/u; 
+
+  if (!nameValue) {
+    errors.value.name = 'Tên loại chai không được để trống';
+    return false;
+  }
+  if (nameValue.length > 255) {
+    errors.value.name = 'Tên loại chai không được vượt quá 255 ký tự';
+    return false;
+  }
+  if (!nameRegex.test(nameValue)) {
+    errors.value.name = 'Tên loại chai chỉ được chứa chữ cái, khoảng trắng và dấu ngoặc đơn ()';
+    return false;
+  }
+  return true;
+};
+
 // Mở modal thêm mới
 const openAddModal = () => {
   isEdit.value = false;
   formData.value = { name: '', status: 1 };
+  errors.value.name = ''; // Reset lỗi
   showModal.value = true;
 };
 
@@ -121,29 +157,54 @@ const openEditModal = (item: BottleType) => {
   isEdit.value = true;
   currentId.value = item.id;
   formData.value = { name: item.name, status: item.status };
+  errors.value.name = ''; // Reset lỗi
   showModal.value = true;
 };
 
 // Click nút Lưu
 const handleSubmit = async () => {
-  if (!formData.value.name.trim()) {
-    Toast.fire({ icon: 'warning', title: 'Vui lòng nhập tên loại chai!' });
-    return;
-  }
+  // Chặn lại nếu Form lỗi
+  if (!validateForm()) return;
 
   try {
     isSaving.value = true;
 
     if (isEdit.value && currentId.value) {
       await bottleTypeStore.updateBottleType(currentId.value, formData.value);
+      await bottleTypeStore.fetchBottleTypes(searchKeyword.value, bottleTypeStore.currentPage); // Tải lại trang hiện tại
       Toast.fire({ icon: 'success', title: 'Cập nhật thành công!' });
     } else {
       await bottleTypeStore.createBottleType(formData.value);
+      searchKeyword.value = '';
+      await bottleTypeStore.fetchBottleTypes('', 0); // Về trang đầu tiên
       Toast.fire({ icon: 'success', title: 'Thêm mới thành công!' });
     }
     showModal.value = false; 
   } catch (error: any) {
-    Toast.fire({ icon: 'error', title: error.message || 'Có lỗi xảy ra!' });
+    console.error("Chi tiết lỗi Axios:", error);
+
+    // 👇 BÓC TÁCH LỖI TỪ BACKEND TRẢ VỀ
+    if (error.response && error.response.data) {
+      const responseData = error.response.data;
+
+      // 1. Lỗi Validation từ Spring Boot
+      if (responseData.errors && responseData.errors.name) {
+        errors.value.name = responseData.errors.name;
+        return; 
+      }
+
+      // 2. Lỗi trùng lặp từ Service (IllegalArgumentException)
+      if (responseData.message) {
+        const lowerMsg = responseData.message.toLowerCase();
+        if (lowerMsg.includes('tồn tại') || lowerMsg.includes('exists') || lowerMsg.includes('duplicate')) {
+          errors.value.name = 'Loại chai này đã tồn tại trong hệ thống!';
+        } else {
+          Toast.fire({ icon: 'error', title: responseData.message });
+        }
+        return;
+      }
+    }
+    Toast.fire({ icon: 'error', title: 'Máy chủ không phản hồi!' });
   } finally {
     isSaving.value = false;
   }
@@ -157,10 +218,10 @@ const handleToggleStatus = async (item: BottleType) => {
       name: item.name, 
       status: newStatus
     });
+    await bottleTypeStore.fetchBottleTypes(searchKeyword.value, bottleTypeStore.currentPage);
     Toast.fire({ icon: 'success', title: 'Đã thay đổi trạng thái!' });
   } catch (error) {
     Toast.fire({ icon: 'error', title: 'Không thể đổi trạng thái!' });
-    bottleTypeStore.fetchBottleTypes(searchKeyword.value, bottleTypeStore.currentPage);
   }
 };
 
@@ -168,16 +229,27 @@ const handleToggleStatus = async (item: BottleType) => {
 const handleDelete = (id: number) => {
   Swal.fire({
     title: 'Bạn có chắc chắn muốn xóa?',
-    text: "Hành động này không thể hoàn tác!",
+    text: "Hành động này sẽ đưa loại chai vào thùng rác!",
     icon: 'warning', showCancelButton: true, confirmButtonColor: '#dc3545', cancelButtonColor: '#6c757d',
     confirmButtonText: 'Vâng, xóa nó!', cancelButtonText: 'Hủy'
   }).then(async (result) => {
     if (result.isConfirmed) {
       try {
+        const isLastItemOnPage = bottleTypeStore.bottleTypes && bottleTypeStore.bottleTypes.length === 1;
+        const isNotFirstPage = bottleTypeStore.currentPage > 0;
+
         await bottleTypeStore.deleteBottleType(id);
+        
+        // Cập nhật lại danh sách thông minh
+        if (isLastItemOnPage && isNotFirstPage) {
+          await bottleTypeStore.fetchBottleTypes(searchKeyword.value, bottleTypeStore.currentPage - 1);
+        } else {
+          await bottleTypeStore.fetchBottleTypes(searchKeyword.value, bottleTypeStore.currentPage);
+        }
+
         Swal.fire('Đã xóa!', 'Loại chai đã bị xóa.', 'success');
-      } catch (error) {
-        Swal.fire('Lỗi!', 'Không thể xóa loại chai này.', 'error');
+      } catch (error: any) {
+        Swal.fire('Lỗi!', error.message || 'Không thể xóa loại chai này.', 'error');
       }
     }
   });

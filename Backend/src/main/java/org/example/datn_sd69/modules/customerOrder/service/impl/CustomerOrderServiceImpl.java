@@ -24,17 +24,33 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class CustomerOrderServiceImpl implements CustomerOrderService {
 
+    /**
+     * Trạng thái đơn hàng:
+     *
+     * 0 = Chờ xác nhận
+     * 1 = Đã xác nhận / Đang chuẩn bị hàng
+     * 2 = Đang giao hàng
+     * 3 = Hoàn thành
+     * 4 = Đã hủy
+     * 5 = Giao hàng thất bại
+     * 6 = Yêu cầu hoàn hàng / đổi trả
+     * 7 = Hoàn hàng / đổi trả hoàn tất
+     */
     private static final int STATUS_PENDING = 0;
     private static final int STATUS_CONFIRMED = 1;
     private static final int STATUS_SHIPPING = 2;
     private static final int STATUS_COMPLETED = 3;
     private static final int STATUS_CANCELLED = 4;
+    private static final int STATUS_DELIVERY_FAILED = 5;
+    private static final int STATUS_RETURN_REQUESTED = 6;
+    private static final int STATUS_RETURN_COMPLETED = 7;
 
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
@@ -50,8 +66,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         return orderRepository.findByCustomer_UserIdOrderByCreatedAtDesc(customer.getUserId())
                 .stream()
                 .map(order -> {
-                    List<OrderItem> items =
-                            orderItemRepository.findByOrderId(order.getId());
+                    List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
                     return mapToOrderResponse(order, items);
                 })
                 .toList();
@@ -70,8 +85,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                         "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn"
                 ));
 
-        List<OrderItem> items =
-                orderItemRepository.findByOrderId(order.getId());
+        List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
 
         return mapToOrderResponse(order, items);
     }
@@ -89,17 +103,23 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                         "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn"
                 ));
 
-        if (!Integer.valueOf(STATUS_PENDING).equals(order.getStatus())) {
+        if (!canCancelOrder(order)) {
             throw badRequest("Chỉ được hủy đơn hàng khi đơn đang ở trạng thái chờ xác nhận");
         }
 
-        List<OrderItem> items =
-                orderItemRepository.findByOrderId(order.getId());
+        List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
 
         if (items.isEmpty()) {
             throw badRequest("Đơn hàng không có sản phẩm, không thể hủy");
         }
 
+        restoreStockWhenCancel(items);
+
+        order.setStatus(STATUS_CANCELLED);
+        orderRepository.save(order);
+    }
+
+    private void restoreStockWhenCancel(List<OrderItem> items) {
         for (OrderItem item : items) {
             ProductVariant variant = item.getProductVariant();
 
@@ -118,12 +138,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                     : variant.getStockQuantity();
 
             variant.setStockQuantity(currentStock + quantity);
-
             productVariantRepository.save(variant);
         }
-
-        order.setStatus(STATUS_CANCELLED);
-        orderRepository.save(order);
     }
 
     private CustomerOrderResponse mapToOrderResponse(Order order, List<OrderItem> items) {
@@ -143,7 +159,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 order.getPaymentMethod(),
                 order.getStatus(),
                 getStatusText(order.getStatus()),
-                Integer.valueOf(STATUS_PENDING).equals(order.getStatus()),
+                canCancelOrder(order),
                 order.getCreatedAt(),
                 itemResponses
         );
@@ -154,20 +170,48 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         Product product = variant != null ? variant.getProduct() : null;
         Brand brand = product != null ? product.getBrand() : null;
 
+        BigDecimal originalPrice = moneyOrZero(item.getOriginalPrice());
+        BigDecimal discountAmount = moneyOrZero(item.getDiscountAmount());
+        BigDecimal finalPrice = moneyOrZero(item.getFinalPrice());
+
+        Integer quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+
+        BigDecimal lineTotal = finalPrice.multiply(BigDecimal.valueOf(quantity));
+
         return new CustomerOrderItemResponse(
                 item.getId(),
+
                 variant != null ? variant.getId() : null,
                 product != null ? product.getId() : null,
+
                 product != null ? product.getName() : null,
                 brand != null ? brand.getName() : null,
                 variant != null ? variant.getSku() : null,
+
+                getCapacityText(variant),
+                getBottleTypeText(variant),
+
+                variant != null ? variant.getManufacturingDate() : null,
+                variant != null ? variant.getExpirationDate() : null,
+
                 item.getQuantity(),
-                moneyOrZero(item.getOriginalPrice()),
-                moneyOrZero(item.getDiscountAmount()),
-                moneyOrZero(item.getFinalPrice()),
+
+                originalPrice,
+                discountAmount,
+                finalPrice,
+                lineTotal,
+
                 item.getNote(),
                 item.getImage()
         );
+    }
+
+    private boolean canCancelOrder(Order order) {
+        if (order == null || order.getStatus() == null) {
+            return false;
+        }
+
+        return Integer.valueOf(STATUS_PENDING).equals(order.getStatus());
     }
 
     private String getStatusText(Integer status) {
@@ -181,8 +225,33 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             case STATUS_SHIPPING -> "Đang giao hàng";
             case STATUS_COMPLETED -> "Hoàn thành";
             case STATUS_CANCELLED -> "Đã hủy";
+            case STATUS_DELIVERY_FAILED -> "Giao hàng thất bại";
+            case STATUS_RETURN_REQUESTED -> "Yêu cầu hoàn hàng / đổi trả";
+            case STATUS_RETURN_COMPLETED -> "Hoàn hàng / đổi trả hoàn tất";
             default -> "Không xác định";
         };
+    }
+
+    private String getCapacityText(ProductVariant variant) {
+        if (variant == null || variant.getCapacity() == null || variant.getCapacity().getValue() == null) {
+            return null;
+        }
+
+        Double value = variant.getCapacity().getValue();
+
+        if (value % 1 == 0) {
+            return value.intValue() + "ml";
+        }
+
+        return value + "ml";
+    }
+
+    private String getBottleTypeText(ProductVariant variant) {
+        if (variant == null || variant.getBottleType() == null) {
+            return null;
+        }
+
+        return variant.getBottleType().getName();
     }
 
     private Customer getCurrentCustomer() {
@@ -214,7 +283,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             );
         }
 
-        return userRepository.findByEmail(email)
+        return userRepository.findByEmail(email.trim())
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.UNAUTHORIZED,
                         "Không tìm thấy tài khoản đăng nhập"

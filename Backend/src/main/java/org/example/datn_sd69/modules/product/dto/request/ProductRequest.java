@@ -55,9 +55,9 @@ public class ProductRequest {
         @NotNull(message = "Loại chai không được để trống")
         private Integer bottleTypeId;
 
-        @NotBlank(message = "SKU không được để trống")
+/*        @NotBlank(message = "SKU không được để trống")
         @Size(max = 100, message = "SKU không được vượt quá 100 ký tự")
-        private String sku;
+        private String sku;*/
 
         @NotNull(message = "Giá không được để trống")
         @DecimalMin(

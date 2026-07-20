@@ -19,11 +19,21 @@ public class CustomerOrderController {
 
     private final CustomerOrderService customerOrderService;
 
+    /**
+     * Lấy danh sách đơn hàng của khách đang đăng nhập.
+     *
+     * GET /api/customer/orders
+     */
     @GetMapping
     public ResponseEntity<?> getMyOrders() {
         return ResponseEntity.ok(customerOrderService.getMyOrders());
     }
 
+    /**
+     * Xem chi tiết 1 đơn hàng của khách đang đăng nhập.
+     *
+     * GET /api/customer/orders/{orderId}
+     */
     @GetMapping("/{orderId}")
     public ResponseEntity<?> getOrderDetail(
             @PathVariable
@@ -33,6 +43,14 @@ public class CustomerOrderController {
         return ResponseEntity.ok(customerOrderService.getOrderDetail(orderId));
     }
 
+    /**
+     * Khách hủy đơn.
+     *
+     * Chỉ cho hủy khi đơn đang ở trạng thái:
+     * 0 = Chờ xác nhận
+     *
+     * PATCH /api/customer/orders/{orderId}/cancel
+     */
     @PatchMapping("/{orderId}/cancel")
     public ResponseEntity<?> cancelOrder(
             @PathVariable

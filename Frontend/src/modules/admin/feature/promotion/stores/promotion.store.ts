@@ -3,6 +3,7 @@ import Swal from "sweetalert2";
 import { promotionService } from "../services/promotion.service";
 import type {
   FlashSaleProductResponse,
+  FlashSaleSearchParams,
   PageResponse,
   PromotionProductVariantOptionResponse,
   PromotionRequest,
@@ -23,7 +24,19 @@ const getErrorMessage = (error: any): string => {
     return data.message;
   }
 
+  if (typeof data === "string") {
+    return data;
+  }
+
   return "Có lỗi xảy ra, vui lòng thử lại";
+};
+
+const getPageContent = <T>(page: PageResponse<T> | T[] | any): T[] => {
+  if (Array.isArray(page)) return page;
+  if (Array.isArray(page?.content)) return page.content;
+  if (Array.isArray(page?.data?.content)) return page.data.content;
+  if (Array.isArray(page?.data)) return page.data;
+  return [];
 };
 
 const getPageNumber = <T>(page: PageResponse<T>) => {
@@ -54,8 +67,14 @@ export const usePromotionStore = defineStore("promotionStore", {
     optionTotalPages: 0,
     optionTotalElements: 0,
 
+    flashSalePageNumber: 0,
+    flashSalePageSize: 8,
+    flashSaleTotalPages: 0,
+    flashSaleTotalElements: 0,
+
     loading: false,
     optionLoading: false,
+    flashSaleLoading: false,
     saving: false,
   }),
 
@@ -71,10 +90,14 @@ export const usePromotionStore = defineStore("promotionStore", {
           size: params.size ?? this.pageSize,
         });
 
-        this.promotions = res.data.content || [];
+        this.promotions = getPageContent<PromotionResponse>(res.data);
         this.pageNumber = getPageNumber(res.data);
         this.totalPages = getTotalPages(res.data);
         this.totalElements = getTotalElements(res.data);
+
+        if (params.size) {
+          this.pageSize = params.size;
+        }
       } catch (error: any) {
         await Swal.fire({
           icon: "error",
@@ -105,10 +128,15 @@ export const usePromotionStore = defineStore("promotionStore", {
           size: params.size ?? this.optionPageSize,
         });
 
-        this.variantOptions = res.data.content || [];
+        this.variantOptions =
+          getPageContent<PromotionProductVariantOptionResponse>(res.data);
         this.optionPageNumber = getPageNumber(res.data);
         this.optionTotalPages = getTotalPages(res.data);
         this.optionTotalElements = getTotalElements(res.data);
+
+        if (params.size) {
+          this.optionPageSize = params.size;
+        }
       } catch (error: any) {
         await Swal.fire({
           icon: "error",
@@ -223,9 +251,28 @@ export const usePromotionStore = defineStore("promotionStore", {
       }
     },
 
-    async fetchFlashSaleProducts() {
-      const res = await promotionService.getFlashSaleProducts();
-      this.flashSaleProducts = res.data || [];
+    async fetchFlashSaleProducts(params: FlashSaleSearchParams = {}) {
+      this.flashSaleLoading = true;
+
+      try {
+        const res = await promotionService.getFlashSaleProducts({
+          page: params.page ?? this.flashSalePageNumber,
+          size: params.size ?? this.flashSalePageSize,
+        });
+
+        this.flashSaleProducts = getPageContent<FlashSaleProductResponse>(
+          res.data
+        );
+        this.flashSalePageNumber = getPageNumber(res.data);
+        this.flashSaleTotalPages = getTotalPages(res.data);
+        this.flashSaleTotalElements = getTotalElements(res.data);
+
+        if (params.size) {
+          this.flashSalePageSize = params.size;
+        }
+      } finally {
+        this.flashSaleLoading = false;
+      }
     },
   },
 });

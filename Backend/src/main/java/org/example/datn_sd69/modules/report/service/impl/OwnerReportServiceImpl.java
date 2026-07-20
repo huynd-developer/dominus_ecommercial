@@ -28,7 +28,6 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.regex.Pattern;
 
 @Service
@@ -36,10 +35,24 @@ import java.util.regex.Pattern;
 @Transactional(readOnly = true)
 public class OwnerReportServiceImpl implements OwnerReportService {
 
+    /**
+     * Chỉ tính doanh thu khi đơn đã HOÀN THÀNH.
+     *
+     * 0 - Chờ xác nhận
+     * 1 - Đã xác nhận
+     * 2 - Đang giao hàng
+     * 3 - Hoàn thành
+     * 4 - Đã hủy
+     * 5 - Giao hàng thất bại
+     *
+     * Doanh thu thực tế không tính đơn đang chờ, đã xác nhận hoặc đang giao.
+     */
     private static final Integer COMPLETED_STATUS = 3;
+
     private static final int DEFAULT_LIMIT = 10;
     private static final int MAX_LIMIT = 50;
     private static final int MAX_CUSTOM_DAYS = 366;
+
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private static final Pattern DATE_PATTERN = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
@@ -101,7 +114,7 @@ public class OwnerReportServiceImpl implements OwnerReportService {
         LinkedHashMap<String, RevenueBucket> buckets = initChartBuckets(range);
 
         for (Order order : orders) {
-            if (order.getCreatedAt() == null) {
+            if (order == null || order.getCreatedAt() == null) {
                 continue;
             }
 
@@ -143,8 +156,8 @@ public class OwnerReportServiceImpl implements OwnerReportService {
                 .limit(safeLimit)
                 .map(item -> new BestSellingProductResponse(
                         item.getProductId(),
-                        item.getProductName(),
-                        item.getBrandName(),
+                        safeText(item.getProductName(), "Sản phẩm"),
+                        safeText(item.getBrandName(), "Không rõ thương hiệu"),
                         longOrZero(item.getTotalSold()),
                         moneyOrZero(item.getRevenue()),
                         item.getImageUrl()
@@ -160,7 +173,7 @@ public class OwnerReportServiceImpl implements OwnerReportService {
         ReportFilterType filterType = parseFilterType(rawFilterType);
 
         if (filterType != ReportFilterType.CUSTOM) {
-            if (rawFromDate != null || rawToDate != null) {
+            if (StringUtils.hasText(rawFromDate) || StringUtils.hasText(rawToDate)) {
                 throw badRequest("fromDate và toDate chỉ được truyền khi filterType = CUSTOM");
             }
         }
@@ -180,18 +193,23 @@ public class OwnerReportServiceImpl implements OwnerReportService {
             case WEEK -> {
                 fromDate = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
                 toDate = fromDate.plusDays(6);
+
+                if (toDate.isAfter(today)) {
+                    toDate = today;
+                }
+
                 chartGroupType = ChartGroupType.DAY;
             }
 
             case MONTH -> {
                 fromDate = today.withDayOfMonth(1);
-                toDate = today.withDayOfMonth(today.lengthOfMonth());
+                toDate = today;
                 chartGroupType = ChartGroupType.DAY;
             }
 
             case YEAR -> {
                 fromDate = today.withDayOfYear(1);
-                toDate = today.with(TemporalAdjusters.lastDayOfYear());
+                toDate = today;
                 chartGroupType = ChartGroupType.MONTH;
             }
 
@@ -207,13 +225,13 @@ public class OwnerReportServiceImpl implements OwnerReportService {
                     throw badRequest("toDate không được lớn hơn ngày hiện tại");
                 }
 
-                long days = ChronoUnit.DAYS.between(fromDate, toDate);
+                long inclusiveDays = ChronoUnit.DAYS.between(fromDate, toDate) + 1;
 
-                if (days > MAX_CUSTOM_DAYS) {
+                if (inclusiveDays > MAX_CUSTOM_DAYS) {
                     throw badRequest("Khoảng thời gian tùy chỉnh tối đa là " + MAX_CUSTOM_DAYS + " ngày");
                 }
 
-                chartGroupType = days <= 31 ? ChartGroupType.DAY : ChartGroupType.MONTH;
+                chartGroupType = inclusiveDays <= 31 ? ChartGroupType.DAY : ChartGroupType.MONTH;
             }
 
             default -> throw badRequest("filterType không hợp lệ");
@@ -230,12 +248,12 @@ public class OwnerReportServiceImpl implements OwnerReportService {
     }
 
     private ReportFilterType parseFilterType(String rawValue) {
-        if (rawValue == null) {
-            throw badRequest("filterType là bắt buộc. Giá trị hợp lệ: DAY, WEEK, MONTH, YEAR, CUSTOM");
-        }
-
-        if (!StringUtils.hasText(rawValue)) {
-            throw badRequest("filterType không được để trống");
+        /*
+         * Controller đang để filterType optional.
+         * Dashboard thực tế nên có mặc định, tránh vừa vào trang đã 400.
+         */
+        if (rawValue == null || !StringUtils.hasText(rawValue)) {
+            return ReportFilterType.MONTH;
         }
 
         if (containsWhitespace(rawValue)) {
@@ -356,7 +374,15 @@ public class OwnerReportServiceImpl implements OwnerReportService {
     }
 
     private boolean containsWhitespace(String value) {
-        return value.chars().anyMatch(Character::isWhitespace);
+        return value != null && value.chars().anyMatch(Character::isWhitespace);
+    }
+
+    private String safeText(String value, String fallback) {
+        if (!StringUtils.hasText(value)) {
+            return fallback;
+        }
+
+        return value.trim();
     }
 
     private BigDecimal moneyOrZero(BigDecimal value) {
