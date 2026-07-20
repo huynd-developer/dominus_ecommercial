@@ -311,6 +311,27 @@ public class PosController {
                 posService.confirmVietQrPayment(orderId, authentication.getName())
         );
     }
+
+    /**
+     * Hủy thanh toán online đang chờ để quay lại phiếu treo.
+     *
+     * Dùng khi khách bấm VietQR/VNPay nhưng chưa thanh toán,
+     * sau đó muốn đóng QR để sửa sản phẩm/voucher hoặc đổi luồng xử lý.
+     *
+     * PATCH /api/admin/pos/orders/{orderId}/cancel-pending-payment
+     */
+    @PatchMapping("/orders/{orderId}/cancel-pending-payment")
+    public ResponseEntity<PosOrderResponse> cancelPendingPayment(
+            @PathVariable Integer orderId,
+            Authentication authentication
+    ) {
+        String cashierEmail = getCurrentEmail(authentication);
+
+        return ResponseEntity.ok(
+                posService.cancelPendingPayment(orderId, cashierEmail)
+        );
+    }
+
     @PostMapping("/orders/{orderId}/retry-payment")
     public ResponseEntity<PosOrderResponse> retryPendingPayment(
             @PathVariable Integer orderId,

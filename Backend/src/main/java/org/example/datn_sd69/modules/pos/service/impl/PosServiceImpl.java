@@ -811,6 +811,11 @@ public class PosServiceImpl implements PosService {
 
         return orderRepository.findHeldOrders(cashierIdFilter)
                 .stream()
+                /*
+                 * Chặn thêm ở service để tránh FE hiển thị nhầm đơn đã chuyển
+                 * sang VNPAY/MIXED_VNPAY/VIETQR nhưng còn sót trong state/cache.
+                 */
+                .filter(this::isHeldOrderAtCounter)
                 .map(order -> toHeldOrderResponse(order, currentEmployee))
                 .toList();
     }
@@ -1364,17 +1369,47 @@ public class PosServiceImpl implements PosService {
             throw new RuntimeException("Mã phiếu treo không được để trống.");
         }
 
-        Order order = orderRepository.findDetailById(orderId).orElseThrow(() -> new RuntimeException("Không tìm thấy phiếu treo."));
+        /*
+         * Chỉ lấy đúng phiếu treo tại quầy.
+         * Không dùng findDetailById() vì method đó lấy mọi loại đơn:
+         * ONLINE, đơn đã chuyển sang VNPAY, MIXED_VNPAY, VIETQR...
+         */
+        Order order = orderRepository.findHeldOrderById(orderId)
+                .orElseThrow(() -> new RuntimeException(
+                        "Không tìm thấy phiếu treo tại quầy hoặc phiếu không còn ở trạng thái đang treo."
+                ));
 
-        if (order.getStatus() == null || order.getStatus() != ORDER_STATUS_PENDING) {
-            throw new RuntimeException("Chỉ phiếu đang treo mới được xử lý.");
-        }
-
-        if (order.getPaymentMethod() == null || !PAYMENT_HOLD.equalsIgnoreCase(order.getPaymentMethod())) {
-            throw new RuntimeException("Đây không phải phiếu treo tại quầy.");
+        if (!isHeldOrderAtCounter(order)) {
+            throw new RuntimeException(
+                    "Không tìm thấy phiếu treo tại quầy hoặc phiếu không còn ở trạng thái đang treo."
+            );
         }
 
         return order;
+    }
+
+    private boolean isCounterOrder(Order order) {
+        if (order == null || order.getOrderType() == null) {
+            return false;
+        }
+
+        String orderType = order.getOrderType().trim().toUpperCase(Locale.ROOT);
+
+        return "IN_STORE".equals(orderType) || "POS".equals(orderType);
+    }
+
+    private boolean isHeldOrderAtCounter(Order order) {
+        if (order == null) {
+            return false;
+        }
+
+        boolean pending = order.getStatus() != null
+                && order.getStatus() == ORDER_STATUS_PENDING;
+
+        boolean holdPayment = order.getPaymentMethod() != null
+                && PAYMENT_HOLD.equalsIgnoreCase(order.getPaymentMethod());
+
+        return pending && holdPayment && isCounterOrder(order);
     }
 
     private void validateCanViewHeldOrder(Order order, Employee currentEmployee) {
@@ -1683,6 +1718,114 @@ public class PosServiceImpl implements PosService {
 
         return response;
     }
+
+
+    /**
+     * Hủy payment intent đang chờ và đưa hóa đơn online pending quay lại phiếu treo HOLD.
+     *
+     * Lý do cần endpoint này:
+     * - Khi bấm VietQR/VNPay, hệ thống đã tạo hóa đơn PENDING_PAYMENT và đã giữ/trừ kho.
+     * - Nếu khách chưa thanh toán rồi bấm X/Đổi phương thức để sửa sản phẩm hoặc voucher,
+     *   không được chỉ mở khóa ở FE vì DB đã giữ hàng.
+     * - Phải hoàn lại lượng tồn kho đã giữ, đổi paymentMethod về HOLD,
+     *   để lần thanh toán sau trừ kho lại đúng một lần.
+     */
+    @Override
+    @Transactional
+    public PosOrderResponse cancelPendingPayment(Integer orderId, String cashierEmail) {
+        if (orderId == null) {
+            throw new RuntimeException("Mã hóa đơn không hợp lệ.");
+        }
+
+        Employee currentEmployee = resolveCashier(cashierEmail);
+
+        Order order = orderRepository.findPendingPaymentOrderById(orderId)
+                .orElseThrow(() -> new RuntimeException(
+                        "Không tìm thấy hóa đơn đang chờ thanh toán hoặc hóa đơn không còn ở trạng thái chờ thanh toán."
+                ));
+
+        if (!isSameCashier(order, currentEmployee) && !isManagerOrOwner(currentEmployee)) {
+            throw new RuntimeException("Bạn không có quyền hủy thanh toán hóa đơn của nhân viên khác.");
+        }
+
+        String paymentMethod = order.getPaymentMethod() == null
+                ? ""
+                : order.getPaymentMethod().trim().toUpperCase(Locale.ROOT);
+
+        /*
+         * Không cho rollback đơn MIXED vì hệ thống hiện chưa có bảng PaymentTransaction
+         * để lưu riêng khoản tiền mặt đã nhận. Nếu đã nhận tiền mặt một phần thì chỉ
+         * được đổi cổng chuyển khoản bằng retry-payment, không được sửa sản phẩm/voucher.
+         */
+        if (PAYMENT_MIXED.equals(paymentMethod)
+                || PAYMENT_MIXED_VNPAY.equals(paymentMethod)
+                || PAYMENT_MIXED_VIETQR.equals(paymentMethod)) {
+            throw new RuntimeException(
+                    "Đơn đã nhận tiền mặt một phần, không được sửa sản phẩm/voucher. Vui lòng chỉ đổi phương thức chuyển khoản hoặc hủy hóa đơn theo quyền quản lý."
+            );
+        }
+
+        if (!PAYMENT_VNPAY.equals(paymentMethod) && !PAYMENT_VIETQR.equals(paymentMethod)) {
+            throw new RuntimeException("Hóa đơn này không phải hóa đơn đang chờ thanh toán online.");
+        }
+
+        List<OrderItem> orderItems = orderItemRepository.findByOrderIdWithVariant(order.getId());
+
+        if (orderItems.isEmpty()) {
+            throw new RuntimeException("Hóa đơn không có sản phẩm.");
+        }
+
+        /*
+         * Khi tạo thanh toán online, checkout/checkoutHeldOrder đã giữ hàng bằng cách trừ kho.
+         * Quay lại HOLD thì phải hoàn kho để phiếu treo về đúng bản chất: chưa trừ kho.
+         */
+        for (OrderItem item : orderItems) {
+            ProductVariant variant = item.getProductVariant();
+            Integer quantity = item.getQuantity();
+
+            if (variant == null || quantity == null || quantity <= 0) {
+                continue;
+            }
+
+            int currentStock = variant.getStockQuantity() != null
+                    ? variant.getStockQuantity()
+                    : 0;
+
+            variant.setStockQuantity(currentStock + quantity);
+            variantRepository.save(variant);
+        }
+
+        order.setPaymentMethod(PAYMENT_HOLD);
+        order.setStatus(ORDER_STATUS_PENDING);
+        order.setCompletedAt(null);
+
+        Order savedOrder = orderRepository.save(order);
+
+        Integer customerPointAfter = savedOrder.getCustomer() != null
+                ? savedOrder.getCustomer().getLoyaltyPoints()
+                : 0;
+
+        PosOrderResponse response = buildResponseFromOrder(
+                savedOrder,
+                orderItems,
+                "HELD",
+                BigDecimal.ZERO,
+                savedOrder.getFinalAmount() != null ? savedOrder.getFinalAmount() : BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                null,
+                null,
+                null,
+                0,
+                customerPointAfter
+        );
+
+        applyHeldOrderPermissions(response, savedOrder, currentEmployee);
+
+        return response;
+    }
+
     @Override
     @Transactional
     public PosOrderResponse retryPendingPayment(

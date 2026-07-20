@@ -122,4 +122,5 @@ public interface PosService {
             String cashierEmail,
             String clientIp
     );
+    PosOrderResponse cancelPendingPayment(Integer orderId, String cashierEmail);
 }
