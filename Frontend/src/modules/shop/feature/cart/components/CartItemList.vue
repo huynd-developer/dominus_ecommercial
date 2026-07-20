@@ -18,8 +18,8 @@
 
     <div v-else-if="cartItems.length === 0" class="empty">
       Giỏ hàng trống.
-      <router-link to="/products">Tiếp tục mua sắm ➔</router-link>
-    </div>
+      <router-link to="/">Tiếp tục mua sắm ➔</router-link>
+</div>
 
     <div v-else class="item-list">
       <div

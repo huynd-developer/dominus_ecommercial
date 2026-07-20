@@ -24,18 +24,65 @@
     </div>
 
     <div class="card-body">
+      <!-- THANH TAB TRẠNG THÁI -->
+      <div v-if="!store.orderLoading" class="status-tabs mb-4">
+        <div 
+          class="tab-item" 
+          :class="{ active: currentTab === 'ALL' }" 
+          @click="currentTab = 'ALL'"
+        >
+          Tất cả
+        </div>
+        <div 
+          class="tab-item" 
+          :class="{ active: currentTab === 0 }" 
+          @click="currentTab = 0"
+        >
+          Chờ xác nhận
+        </div>
+        <div 
+          class="tab-item" 
+          :class="{ active: currentTab === 1 }" 
+          @click="currentTab = 1"
+        >
+          Đã xác nhận
+        </div>
+        <div 
+          class="tab-item" 
+          :class="{ active: currentTab === 2 }" 
+          @click="currentTab = 2"
+        >
+          Đang giao
+        </div>
+        <div 
+          class="tab-item" 
+          :class="{ active: currentTab === 3 }" 
+          @click="currentTab = 3"
+        >
+          Hoàn thành
+        </div>
+        <div 
+          class="tab-item" 
+          :class="{ active: currentTab === 4 }" 
+          @click="currentTab = 4"
+        >
+          Đã hủy
+        </div>
+      </div>
+
       <div v-if="store.orderLoading" class="text-center py-5">
         <div class="spinner-border"></div>
         <p class="text-muted mt-3 mb-0">Đang tải đơn hàng...</p>
       </div>
 
-      <div v-else-if="store.orders.length === 0" class="empty-box">
-        Bạn chưa có đơn hàng nào
+      <div v-else-if="filteredOrders.length === 0" class="empty-box">
+        <span v-if="store.orders.length === 0">Bạn chưa có đơn hàng nào</span>
+        <span v-else>Không có đơn hàng nào ở trạng thái này</span>
       </div>
 
       <div v-else class="order-list">
         <div
-          v-for="order in store.orders"
+          v-for="order in filteredOrders"
           :key="order.orderId"
           class="order-card"
           :class="{ opened: isOrderOpen(order.orderId) }"
@@ -111,6 +158,36 @@
                     <strong>{{ formatOrderType(order.orderType) }}</strong>
                   </div>
                 </div>
+
+                <!-- BẮT ĐẦU KHỐI THEO DÕI ĐƠN HÀNG (FAKE TRACKING) -->
+                <div class="tracking-container mt-2 mb-4">
+                  <h6 class="fw-bold mb-3"><i class="bi bi-truck me-2"></i>Theo dõi kiện hàng</h6>
+                  <div class="timeline">
+                    <div 
+                      v-for="(track, index) in getTrackingHistory(order)" 
+                      :key="index"
+                      class="timeline-item"
+                      :class="{ 'is-active': track.active, 'is-cancel': track.isCancel }"
+                    >
+                      <div class="timeline-time">
+                        <div class="t-date">{{ formatTrackingTime(track.time).date }}</div>
+                        <div class="t-time">{{ formatTrackingTime(track.time).time }}</div>
+                      </div>
+                      
+                      <div class="timeline-marker">
+                        <div class="dot"></div>
+                        <div v-if="index !== getTrackingHistory(order).length - 1" class="line"></div>
+                      </div>
+                      
+                      <div class="timeline-content">
+                        <div class="t-title">{{ track.title }}</div>
+                        <div class="t-desc">{{ track.desc }}</div>
+                        <img v-if="track.img" :src="track.img" class="tracking-img mt-2" alt="Bằng chứng giao hàng">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <!-- KẾT THÚC KHỐI THEO DÕI -->
 
                 <div class="order-items">
                   <div
@@ -297,6 +374,7 @@
                   </div>
                 </div>
 
+                <!-- KHỐI CÁC NÚT THAO TÁC -->
                 <div class="text-end mt-3 d-flex justify-content-end gap-2">
                   <button
                     v-if="order.status === 3"
@@ -310,20 +388,31 @@
 
                   <button
                     v-if="order.canCancel"
-                    class="btn btn-outline-danger"
+                    class="btn btn-outline-danger btn-sm"
                     :disabled="store.orderLoading"
                     @click="cancelOrder(order)"
                   >
                     Hủy đơn
                   </button>
 
+                  <!-- NÚT MUA LẠI MỚI THÊM VÀO -->
+                  <button
+                    v-if="order.status === 4 || order.status === 3"
+                    class="btn btn-primary btn-sm px-3 text-white"
+                    style="background-color: #bd9a5f; border-color: #bd9a5f;"
+                    @click="handleReorder(order)"
+                  >
+                    <i class="bi bi-cart-plus me-1"></i> Mua lại
+                  </button>
+
                   <span
-                    v-else
+                    v-if="!order.canCancel && order.status !== 3 && order.status !== 4"
                     class="text-muted small align-self-center"
                   >
                     Đơn hàng không còn được hủy
                   </span>
                 </div>
+
               </div>
             </div>
           </Transition>
@@ -342,10 +431,12 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import { useRouter } from "vue-router"; // <-- Import Router
 import Swal from "sweetalert2";
 import ReviewModal from "./ReviewModal.vue";
 import { customerProfileService } from "../services/customerProfile.service";
 import { useCustomerProfileStore } from "../stores/customerProfile.store";
+import api from "@/common/api";
 import type {
   CustomerOrderResponse,
   ReviewResponse,
@@ -353,6 +444,10 @@ import type {
 } from "../types/profile.type";
 
 const store = useCustomerProfileStore();
+const router = useRouter(); // <-- Khởi tạo router
+
+// Biến lưu trạng thái Tab hiện tại
+const currentTab = ref<number | 'ALL'>('ALL');
 
 const reviewLoading = ref(false);
 const submittingReview = ref(false);
@@ -363,6 +458,14 @@ const openedOrderId = ref<number | null>(null);
 
 const reviewableMap = reactive<Record<number, ReviewableOrderItemResponse[]>>({});
 const reviewLoadingByOrder = reactive<Record<number, boolean>>({});
+
+// Lọc đơn hàng theo Tab
+const filteredOrders = computed(() => {
+  if (currentTab.value === 'ALL') {
+    return store.orders;
+  }
+  return store.orders.filter((order: CustomerOrderResponse) => order.status === currentTab.value);
+});
 
 const completedOrders = computed(() => {
   return store.orders.filter((order: CustomerOrderResponse) => order.status === 3);
@@ -574,6 +677,122 @@ const submitReview = async (payload: {
 const cancelOrder = async (order: CustomerOrderResponse) => {
   await store.cancelOrder(order);
   await fetchOrdersAndReviews();
+};
+
+// ===============================================
+// HÀM XỬ LÝ MUA LẠI ĐƠN HÀNG (ĐÃ FIX LỖI + CHUYỂN THẲNG CHECKOUT)
+// ===============================================
+const handleReorder = async (order: any) => {
+  const result = await Swal.fire({
+    title: "Mua lại đơn hàng?",
+    text: "Sản phẩm sẽ được thêm vào giỏ và chuyển đến trang thanh toán ngay.",
+    icon: "question",
+    showCancelButton: true,
+    confirmButtonColor: "#bd9a5f",
+    cancelButtonColor: "#6c757d",
+    confirmButtonText: "Mua lại ngay",
+    cancelButtonText: "Hủy",
+    reverseButtons: true,
+  });
+
+  if (result.isConfirmed) {
+    try {
+      store.orderLoading = true;
+
+      // 1. Chạy vòng lặp tạo mảng các API thêm sản phẩm vào giỏ
+      const addPromises = order.items.map((item: any) => {
+        // Backend thường lưu ID của phân loại sản phẩm ở productVariantId hoặc variantId
+        const variantId = item.productVariantId || item.variantId || item.productId;
+        
+        // Gọi API nhét đồ vào giỏ (nếu API của m khác thì sửa lại URL chỗ này nhé)
+        return api.post("/v1/customer/cart/add", {
+          productVariantId: Number(variantId),
+          quantity: Number(item.quantity || 1)
+        });
+      });
+
+      // 2. Chờ TẤT CẢ sản phẩm được đẩy thành công vào giỏ hàng
+      await Promise.all(addPromises);
+
+      toast("success", "Đang chuyển đến trang thanh toán...");
+      
+      // 3. Đẩy thẳng khách hàng sang trang Checkout như m yêu cầu!
+      router.push("/checkout"); 
+      
+    } catch (error) {
+      showError(error, "Không thể thêm sản phẩm vào giỏ hàng lúc này. Vui lòng thử lại.");
+    } finally {
+      store.orderLoading = false;
+    }
+  }
+};
+// ===============================================
+
+// HÀM SINH LỊCH SỬ TRACKING GIẢ LẬP
+const getTrackingHistory = (order: any) => {
+  const history = [];
+  const baseDate = new Date(order.createdAt).getTime();
+
+  // Mốc 1: Chờ xác nhận
+  history.push({
+    time: new Date(baseDate),
+    title: 'Đơn hàng đã đặt',
+    desc: 'Đơn hàng đang chờ shop xác nhận.',
+    active: order.status === 0
+  });
+
+  // Mốc 2: Đang chuẩn bị (Status >= 1)
+  if (order.status >= 1 && order.status !== 4) {
+    history.push({
+      time: new Date(baseDate + 2 * 60 * 60 * 1000), // Cộng thêm 2 tiếng
+      title: 'Đang chuẩn bị hàng',
+      desc: 'Người bán đang chuẩn bị kiện hàng của bạn.',
+      active: order.status === 1
+    });
+  }
+
+  // Mốc 3: Đang giao (Status >= 2)
+  if (order.status >= 2 && order.status !== 4) {
+    history.push({
+      time: new Date(baseDate + 14 * 60 * 60 * 1000), // Cộng 14 tiếng
+      title: 'Đã giao cho ĐVVC',
+      desc: 'Kiện hàng đã rời trung tâm phân loại và đang trên đường giao.',
+      active: order.status === 2
+    });
+  }
+
+  // Mốc 4: Hoàn thành (Status === 3)
+  if (order.status === 3) {
+    history.push({
+      time: order.completedAt ? new Date(order.completedAt) : new Date(baseDate + 48 * 60 * 60 * 1000),
+      title: 'Đã giao',
+      desc: `Kiện hàng của bạn đã được giao. Người nhận: ${order.customerName || 'Bạn'}`,
+      img: 'https://images.unsplash.com/photo-1615460549969-36fa19521a4f?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80', // Ảnh hộp hàng minh họa
+      active: true
+    });
+  }
+
+  // Mốc Hủy (Status === 4)
+  if (order.status === 4) {
+    history.push({
+      time: new Date(baseDate + 30 * 60 * 1000), // Hủy sau 30 phút
+      title: 'Đã hủy',
+      desc: 'Đơn hàng đã được hủy bỏ.',
+      active: true,
+      isCancel: true
+    });
+  }
+
+  // Đảo ngược để trạng thái mới nhất lên đầu
+  return history.reverse();
+};
+
+const formatTrackingTime = (dateStr: string | number | Date) => {
+  const date = new Date(dateStr);
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const time = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  return { date: `${day} tháng ${month}`, time };
 };
 
 const getCapacityText = (item: any) => {
@@ -788,6 +1007,137 @@ const toast = (
 </script>
 
 <style scoped>
+/* CSS CHO PHẦN THANH TAB TRẠNG THÁI */
+.status-tabs {
+  display: flex;
+  background-color: #fff;
+  border-bottom: 1px solid #e0e0e0;
+  border-radius: 8px 8px 0 0;
+  overflow-x: auto;
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 14px 12px;
+  font-size: 15px;
+  color: #555;
+  cursor: pointer;
+  white-space: nowrap;
+  border-bottom: 3px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.tab-item:hover {
+  color: #bd9a5f;
+}
+
+.tab-item.active {
+  color: #bd9a5f;
+  font-weight: bold;
+  border-bottom: 3px solid #bd9a5f;
+}
+
+/* CSS KHỐI THEO DÕI GIAO HÀNG (TIMELINE) */
+.tracking-container {
+  background: #f8fafc;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline-item {
+  display: flex;
+  min-height: 80px;
+  color: #94a3b8;
+}
+
+.timeline-item.is-active {
+  color: #0f172a;
+}
+
+.timeline-item.is-cancel {
+  color: #ef4444;
+}
+
+.timeline-time {
+  width: 90px;
+  flex-shrink: 0;
+  text-align: right;
+  padding-right: 15px;
+  padding-top: 2px;
+}
+
+.t-date {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.t-time {
+  font-size: 12px;
+}
+
+.timeline-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-right: 15px;
+}
+
+.timeline-marker .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #cbd5e1;
+  margin-top: 5px;
+  z-index: 2;
+}
+
+.timeline-item.is-active .timeline-marker .dot {
+  background-color: #22c55e;
+  box-shadow: 0 0 0 3px #dcfce7;
+}
+
+.timeline-item.is-cancel .timeline-marker .dot {
+  background-color: #ef4444;
+}
+
+.timeline-marker .line {
+  width: 2px;
+  flex-grow: 1;
+  background-color: #e2e8f0;
+  margin-top: 5px;
+}
+
+.timeline-content {
+  padding-bottom: 25px;
+  flex-grow: 1;
+}
+
+.t-title {
+  font-weight: bold;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.t-desc {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tracking-img {
+  width: 100%;
+  max-width: 200px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+/* KẾT THÚC CSS TIMELINE */
+
 .empty-box {
   text-align: center;
   padding: 60px 20px;

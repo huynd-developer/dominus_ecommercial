@@ -1,6 +1,8 @@
 package org.example.datn_sd69.repository;
 
 import org.example.datn_sd69.entity.Order;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -11,9 +13,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Integer> {
@@ -47,12 +46,6 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
             Pageable pageable
     );
 
-    /**
-     * Báo cáo doanh thu chỉ tính đơn đã hoàn thành.
-     *
-     * Service truyền status = 3.
-     * Không tính đơn chờ xác nhận, đã xác nhận, đang giao, đã hủy.
-     */
     @Query(value = """
         SELECT COALESCE(SUM(o.FinalAmount), 0)
         FROM [Orders] o
@@ -97,6 +90,18 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
 
     Optional<Order> findByIdAndCustomer_UserId(Integer orderId, Integer customerId);
 
+    /**
+     * Danh sách phiếu treo tại quầy thật sự.
+     *
+     * Điều kiện bắt buộc:
+     * - status = 0
+     * - paymentMethod = HOLD
+     * - orderType = POS hoặc IN_STORE
+     *
+     * Nếu thiếu orderType, FE có thể hiển thị nhầm đơn không phải phiếu treo POS,
+     * sau đó khi bấm mở/hủy/chuyển service sẽ báo:
+     * "Đây không phải phiếu treo tại quầy."
+     */
     @EntityGraph(attributePaths = {
             "customer",
             "customer.user",
@@ -109,11 +114,16 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
         FROM Order o
         WHERE o.status = 0
           AND UPPER(o.paymentMethod) = 'HOLD'
+          AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
           AND (:cashierId IS NULL OR o.cashier.userId = :cashierId)
         ORDER BY o.createdAt DESC
     """)
     List<Order> findHeldOrders(@Param("cashierId") Integer cashierId);
 
+    /**
+     * Lấy chi tiết đơn dùng chung cho màn quản lý đơn.
+     * Không dùng method này để mở/hủy/chuyển phiếu treo POS.
+     */
     @EntityGraph(attributePaths = {
             "customer",
             "customer.user",
@@ -128,8 +138,79 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     """)
     Optional<Order> findDetailById(@Param("orderId") Integer orderId);
 
+    /**
+     * Lấy đúng 1 phiếu treo tại quầy.
+     * Service open/update/checkout/cancel/transfer phiếu treo nên dùng method này,
+     * không dùng findDetailById().
+     */
+    @EntityGraph(attributePaths = {
+            "customer",
+            "customer.user",
+            "cashier",
+            "cashier.user",
+            "voucher"
+    })
+    @Query("""
+        SELECT o
+        FROM Order o
+        WHERE o.id = :orderId
+          AND o.status = 0
+          AND UPPER(o.paymentMethod) = 'HOLD'
+          AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
+    """)
+    Optional<Order> findHeldOrderById(@Param("orderId") Integer orderId);
+
     List<Order> findByStatusAndCreatedAtBefore(
             Integer status,
             LocalDateTime createdAt
     );
+
+    /**
+     * Check trùng phiếu treo theo SĐT.
+     * Phải dùng cùng điều kiện với findHeldOrders().
+     */
+    @EntityGraph(attributePaths = {
+            "customer",
+            "customer.user",
+            "cashier",
+            "cashier.user",
+            "voucher"
+    })
+    @Query("""
+        SELECT o
+        FROM Order o
+        WHERE o.status = 0
+          AND UPPER(o.paymentMethod) = 'HOLD'
+          AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
+          AND o.customerPhone = :phone
+        ORDER BY o.createdAt DESC
+    """)
+    List<Order> findActiveHeldOrdersByCustomerPhone(@Param("phone") String phone);
+
+    /**
+     * Đơn tại quầy đang chờ thanh toán online.
+     * Đây KHÔNG phải phiếu treo HOLD nữa.
+     */
+    @EntityGraph(attributePaths = {
+            "customer",
+            "customer.user",
+            "cashier",
+            "cashier.user",
+            "voucher"
+    })
+    @Query("""
+        SELECT o
+        FROM Order o
+        WHERE o.id = :orderId
+          AND o.status = 0
+          AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
+          AND UPPER(o.paymentMethod) IN (
+              'VNPAY',
+              'VIETQR',
+              'MIXED',
+              'MIXED_VNPAY',
+              'MIXED_VIETQR'
+          )
+    """)
+    Optional<Order> findPendingPaymentOrderById(@Param("orderId") Integer orderId);
 }

@@ -14,7 +14,7 @@ public class PosOrderResponse {
     private Integer orderId;
 
     /**
-     * COMPLETED hoặc PENDING_PAYMENT
+     * COMPLETED, PENDING_PAYMENT hoặc HELD
      */
     private String status;
 
@@ -22,16 +22,46 @@ public class PosOrderResponse {
     private BigDecimal discountAmount;
     private BigDecimal finalAmount;
 
+    private String voucherCode;
+
     /**
-     * CASH, VNPAY hoặc MIXED
+     * Response trả cho FE:
+     *
+     * CASH
+     * VNPAY
+     * VIETQR
+     * MIXED
+     *
+     * Với MIXED thì xem thêm transferProvider để biết:
+     * - CASH + VNPAY
+     * - CASH + VIETQR
      */
     private String paymentMethod;
 
     /**
+     * Dùng khi paymentMethod = MIXED hoặc thanh toán chuyển khoản toàn phần.
+     *
+     * VNPAY:
+     * - VNPay toàn phần hoặc CASH + VNPAY.
+     *
+     * VIETQR:
+     * - VietQR toàn phần hoặc CASH + VIETQR.
+     */
+    private String transferProvider;
+
+    /**
      * Tổng tiền đã ghi nhận ngay.
-     * Với MIXED + VNPay pending:
-     * - paidAmount = cashGiven
-     * - remainingAmount = transferAmount
+     *
+     * CASH:
+     * - paidAmount = finalAmount.
+     *
+     * VNPAY / VIETQR:
+     * - paidAmount = 0 khi đang chờ thanh toán.
+     * - remainingAmount = finalAmount.
+     *
+     * MIXED:
+     * - paidAmount = cashGiven.
+     * - remainingAmount = transferAmount.
      */
     private BigDecimal paidAmount;
     private BigDecimal remainingAmount;
@@ -40,7 +70,27 @@ public class PosOrderResponse {
     private BigDecimal transferAmount;
     private BigDecimal changeAmount;
 
+    /**
+     * Link thanh toán VNPay.
+     * Có dữ liệu khi:
+     * - paymentMethod = VNPAY
+     * - hoặc paymentMethod = MIXED và transferProvider = VNPAY
+     */
     private String vnpayPaymentUrl;
+
+    /**
+     * Ảnh QR VietQR.
+     * Có dữ liệu khi:
+     * - paymentMethod = VIETQR
+     * - hoặc paymentMethod = MIXED và transferProvider = VIETQR
+     */
+    private String vietQrImageUrl;
+
+    /**
+     * Nội dung chuyển khoản VietQR.
+     * Ví dụ: POSDH123
+     */
+    private String vietQrContent;
 
     private LocalDateTime createdAt;
 
@@ -49,6 +99,12 @@ public class PosOrderResponse {
     private String customerEmail;
 
     private String cashierName;
+
+    private Boolean ownOrder;
+    private Boolean canOpen;
+    private Boolean canCheckout;
+    private Boolean canTransfer;
+    private Boolean canCancel;
 
     private Integer loyaltyPointsEarned;
     private Integer customerLoyaltyPointsAfter;

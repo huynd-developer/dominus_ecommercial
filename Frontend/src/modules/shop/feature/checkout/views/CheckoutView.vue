@@ -32,6 +32,45 @@
     <ShopFooter />
 
     <Teleport to="body">
+      <!-- BƯỚC 1: POPUP MÃ QR (Chỉ hiện khi chọn VietQR) -->
+      <Transition name="fade-modal">
+        <div v-if="showQrModal" class="premium-modal-overlay">
+          <div class="qr-payment-box bg-white p-4 rounded-4 shadow-lg text-center d-flex flex-column align-items-center mx-3" style="max-width: 400px; animation: slideUp 0.3s ease-out;">
+            <div class="mb-2 text-primary">
+              <i class="bi bi-qr-code-scan" style="font-size: 2.5rem; color: #10b981;"></i>
+            </div>
+            <h4 class="mb-2 fw-bold" style="color: #06132b;">Thanh toán đơn hàng</h4>
+            <p class="text-muted small mb-3">Vui lòng mở ứng dụng ngân hàng và quét mã QR bên dưới để hoàn tất.</p>
+            
+            <img :src="qrCodeUrl" alt="Mã VietQR" class="img-fluid rounded mb-3" style="border: 2px dashed #bd9a5f; padding: 8px;" />
+            
+            <div class="alert alert-warning py-2 px-3 mb-3 w-100 text-start" style="font-size: 0.85rem;">
+              <i class="bi bi-info-circle me-1"></i> Vui lòng không đóng cửa sổ này cho đến khi thanh toán xong!
+            </div>
+
+            <!-- NÚT HỦY THANH TOÁN VÀ XÁC NHẬN -->
+            <div class="d-flex gap-2 w-100 mt-2">
+              <button 
+                @click="handleCancelQR" 
+                class="btn btn-outline-secondary w-50 py-3 fw-bold rounded-3" 
+                style="font-size: 1rem;"
+              >
+                Hủy thanh toán
+              </button>
+
+              <button 
+                @click="confirmQrPayment" 
+                class="btn btn-success w-50 py-3 fw-bold rounded-3" 
+                style="background-color: #10b981; border: none; font-size: 1rem;"
+              >
+                Đã chuyển khoản <i class="bi bi-check-circle ms-1"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- BƯỚC 2: BẢNG HÓA ĐƠN GỐC (Hiện ra sau khi COD hoặc sau khi xác nhận QR) -->
       <Transition name="fade-modal">
         <div v-if="showSuccessModal" class="premium-modal-overlay">
           <OrderResultCard
@@ -84,8 +123,12 @@ const router = useRouter();
 const cartItems = ref<any[]>([]);
 const isSubmitting = ref(false);
 const isPageLoading = ref(true);
-const showSuccessModal = ref(false);
 const updatingItemKey = ref<string | number | null>(null);
+
+// Tách riêng 2 trạng thái quản lý Modal
+const showQrModal = ref(false);
+const showSuccessModal = ref(false);
+const qrCodeUrl = ref("");
 
 const successStatusText = ref("");
 const successMessage = ref(
@@ -253,6 +296,7 @@ const formatPaymentMethod = (value: string | null | undefined) => {
 
   if (normalized === "COD") return "Thanh toán khi nhận hàng";
   if (normalized === "VNPAY") return "VNPay";
+  if (normalized === "VIETQR") return "Chuyển khoản VietQR";
   if (normalized === "CASH") return "Tiền mặt";
   if (normalized === "BANK_TRANSFER") return "Chuyển khoản";
   if (normalized === "TRANSFER") return "Chuyển khoản";
@@ -376,8 +420,24 @@ const validateCheckoutForm = async (): Promise<CheckoutSubmitData | null> => {
   const provinceName = String(orderForm.value.provinceName || "").trim();
   const wardName = String(orderForm.value.wardName || "").trim();
 
+  const profileAddressStr = String(orderForm.value.profileAddress || "");
+  let isSavedAddress = false;
+  
+  if (shippingAddress) {
+    try {
+      if (profileAddressStr.startsWith('[')) {
+        const arr = JSON.parse(profileAddressStr);
+        isSavedAddress = arr.some((a: any) => a.fullAddress === shippingAddress || a.fullAddress === rawShippingAddress);
+      } else {
+        isSavedAddress = profileAddressStr === shippingAddress || profileAddressStr === rawShippingAddress;
+      }
+    } catch (e) {
+      isSavedAddress = profileAddressStr.includes(shippingAddress);
+    }
+  }
+
   const isEditingStructuredAddress =
-    Boolean(provinceName) || Boolean(wardName) || Boolean(specificAddress);
+    !isSavedAddress && (Boolean(provinceName) || Boolean(wardName) || Boolean(specificAddress));
 
   if (cartItems.value.length === 0) {
     await showWarning(
@@ -516,10 +576,10 @@ const validateCheckoutForm = async (): Promise<CheckoutSubmitData | null> => {
     return null;
   }
 
-  if (!["COD", "VNPAY"].includes(paymentMethod)) {
+  if (!["COD", "VNPAY", "VIETQR"].includes(paymentMethod)) {
     await showWarning(
       "Phương thức thanh toán không hợp lệ",
-      "Chỉ hỗ trợ COD hoặc VNPAY."
+      "Chỉ hỗ trợ thanh toán được cấu hình sẵn."
     );
     return null;
   }
@@ -657,7 +717,6 @@ const handlePlaceOrder = async () => {
   const submitData = await validateCheckoutForm();
 
   if (!submitData) return;
-
   if (isSubmitting.value) return;
 
   isSubmitting.value = true;
@@ -667,76 +726,86 @@ const handlePlaceOrder = async () => {
 
     localStorage.removeItem("applied_voucher");
 
-    if (submitData.paymentMethod === "VNPAY" && res.data?.paymentUrl) {
-      window.location.href = res.data.paymentUrl;
-      return;
+    // LUỒNG 1: NẾU LÀ VNPAY -> CHUYỂN HƯỚNG SANG TRANG THANH TOÁN VNPay
+    if (submitData.paymentMethod === "VNPAY") {
+      const vnpayUrl = res.data?.paymentUrl || res.data?.vnpUrl || res.data?.url; 
+      
+      if (vnpayUrl) {
+        window.location.href = vnpayUrl; 
+        return; 
+      } else {
+        await showError("Lỗi VNPay", "Không lấy được đường dẫn thanh toán VNPay từ hệ thống.");
+        isSubmitting.value = false;
+        return;
+      }
     }
 
+    // LUỒNG CHUNG CHO VIETQR & COD: Chuẩn bị Data cho bảng Thành công
     const responseStatus = Number(res.data?.status ?? 0);
     const responseStatusText = getStatusText(responseStatus);
 
     successStatusText.value = responseStatusText;
-    successMessage.value =
-      res.data?.message ||
-      "Cảm ơn bạn đã mua sắm tại Dominus. Đơn hàng của bạn đang chờ cửa hàng xác nhận.";
-
+    successMessage.value = res.data?.message || "Cảm ơn bạn đã mua sắm tại Dominus. Đơn hàng của bạn đang chờ cửa hàng xác nhận.";
     successDetails.value = [
-      {
-        label: "Mã đơn hàng",
-        value: res.data?.orderId ? `#${res.data.orderId}` : "-",
-      },
-      {
-        label: "Trạng thái",
-        value: responseStatusText,
-      },
-      {
-        label: "Phương thức",
-        value: formatPaymentMethod(
-          res.data?.paymentMethod || submitData.paymentMethod
-        ),
-      },
-      {
-        label: "Mã giảm giá",
-        value: res.data?.voucherCode || submitData.voucherCode || "Không có",
-      },
-      {
-        label: "Tạm tính",
-        value: formatCurrency(Number(res.data?.totalAmount ?? totalAmount.value)),
-        money: true,
-      },
-      {
-        label: "Giảm giá",
-        value: `-${formatCurrency(
-          Number(res.data?.discountAmount ?? discountAmount.value)
-        )}`,
-        money: true,
-      },
-      {
-        label: "Tổng thanh toán",
-        value: formatCurrency(Number(res.data?.finalAmount ?? finalTotal.value)),
-        money: true,
-      },
+      { label: "Mã đơn hàng", value: res.data?.orderId ? `#${res.data.orderId}` : "-" },
+      { label: "Trạng thái", value: responseStatusText },
+      { label: "Phương thức", value: formatPaymentMethod(res.data?.paymentMethod || submitData.paymentMethod) },
+      { label: "Mã giảm giá", value: res.data?.voucherCode || submitData.voucherCode || "Không có" },
+      { label: "Tạm tính", value: formatCurrency(Number(res.data?.totalAmount ?? totalAmount.value)), money: true },
+      { label: "Giảm giá", value: `-${formatCurrency(Number(res.data?.discountAmount ?? discountAmount.value))}`, money: true },
+      { label: "Tổng thanh toán", value: formatCurrency(Number(res.data?.finalAmount ?? finalTotal.value)), money: true },
     ];
 
     discountAmount.value = 0;
     appliedVoucherCode.value = "";
-
     window.dispatchEvent(new Event("cart-updated"));
 
-    showSuccessModal.value = true;
+    // LUỒNG 2: NẾU LÀ VIETQR -> HIỆN POPUP QR
+    if (submitData.paymentMethod === "VIETQR") {
+      const orderId = res.data?.orderId || Math.floor(Math.random() * 100000);
+      const amount = res.data?.finalAmount ?? finalTotal.value;
+      
+      qrCodeUrl.value = res.data?.qrUrl || `https://img.vietqr.io/image/970422-0123456789-compact2.png?amount=${amount}&addInfo=Thanh toan don ${orderId}&accountName=SHOP DOMINUS`;
+      
+      showQrModal.value = true;
+    } 
+    // LUỒNG 3: NẾU LÀ COD -> HIỆN BILL THÀNH CÔNG
+    else {
+      showSuccessModal.value = true;
+    }
+
   } catch (error: any) {
     console.error("Lỗi đặt hàng:", error);
-
-    await showError(
-      "Không thể đặt hàng",
-      getErrorMessage(
-        error,
-        "Có lỗi xảy ra khi đặt hàng. Vui lòng thử lại."
-      )
-    );
+    await showError("Không thể đặt hàng", getErrorMessage(error, "Có lỗi xảy ra khi đặt hàng. Vui lòng thử lại."));
   } finally {
     isSubmitting.value = false;
   }
+};
+
+const confirmQrPayment = () => {
+  showQrModal.value = false;
+  setTimeout(() => {
+    showSuccessModal.value = true;
+  }, 200);
+};
+
+// Hủy thanh toán QR và chuyển về trang Lịch sử đơn hàng
+const handleCancelQR = () => {
+  // 1. Tắt modal QR
+  showQrModal.value = false; 
+
+  // 2. Bắn thông báo
+  Swal.fire({
+    toast: true,
+    position: 'top-end',
+    icon: 'info',
+    title: 'Đã hủy quá trình quét mã QR',
+    showConfirmButton: false,
+    timer: 2000
+  });
+
+  // 3. Đẩy về trang Lịch sử đơn hàng
+  goToOrders();
 };
 
 const goToCart = () => {
@@ -761,12 +830,8 @@ const goToOrders = () => {
 const loadInitialData = async () => {
   try {
     isPageLoading.value = true;
-
     const profileOk = await loadCustomerProfile();
-
-    if (!profileOk) {
-      return;
-    }
+    if (!profileOk) return;
 
     await loadCartSummary();
     await loadSavedVoucher();
@@ -815,13 +880,18 @@ onMounted(() => {
 .premium-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.75); 
+  backdrop-filter: blur(5px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
   padding: 24px;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .fade-modal-enter-active,

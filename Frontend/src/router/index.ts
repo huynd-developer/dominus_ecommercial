@@ -238,7 +238,12 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "vouchers",
         name: "AdminVouchers",
+<<<<<<< HEAD
         component: mockPage("Hệ thống Voucher", "Hiếu"),
+=======
+        component: () =>
+          import("@/modules/admin/feature/voucher/views/VoucherListView.vue"),
+>>>>>>> 8081e6f43c7f943ec21444881202dd10a53a2465
         meta: {
           requiresAuth: true,
           allowedRoles: ["OWNER", "MANAGER"],

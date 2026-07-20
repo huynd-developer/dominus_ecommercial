@@ -14,7 +14,8 @@
         <div>
           <div class="text-muted small">Hạng thành viên</div>
           <div class="fw-bold fs-4">
-            {{ store.profile.customerRank || "Bronze" }}
+            <!-- Đã áp dụng hàm dịch hạng thành viên sang tiếng Việt -->
+            {{ formatRank(store.profile.customerRank) }}
           </div>
         </div>
 
@@ -137,6 +138,19 @@ const handleTabClick = (tab: ProfileTab) => {
       tab,
     },
   });
+};
+
+// HÀM MỚI: Dịch hạng thành viên sang tiếng Việt
+const formatRank = (rank: string | null | undefined) => {
+  const normalized = String(rank || "Bronze").toUpperCase();
+  switch (normalized) {
+    case "BRONZE": return "Đồng";
+    case "SILVER": return "Bạc";
+    case "GOLD": return "Vàng";
+    case "PLATINUM": return "Bạch kim";
+    case "DIAMOND": return "Kim cương";
+    default: return rank || "Đồng";
+  }
 };
 
 onMounted(() => {

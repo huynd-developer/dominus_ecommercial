@@ -13,18 +13,63 @@ import java.util.Optional;
 @Repository
 public interface VoucherRepository extends JpaRepository<Voucher, Integer> {
 
+    /**
+     * Dùng cho POS / Checkout:
+     * Tìm voucher theo code, không phân biệt hoa thường.
+     *
+     * Không check status/date ở query này vì service sẽ tự validate
+     * để trả đúng lỗi nghiệp vụ:
+     * - mã đã ngừng hoạt động
+     * - chưa đến thời gian dùng
+     * - đã hết hạn
+     * - hết lượt sử dụng
+     * - đơn chưa đủ tối thiểu
+     */
     @Query("""
             SELECT v FROM Voucher v
-            WHERE v.code = :code
-              AND v.status = 1
-              AND v.startDate <= :now
-              AND v.endDate   >= :now
-              AND v.usedCount  < v.usageLimit
+            WHERE LOWER(v.code) = LOWER(:code)
+              AND (v.isDeleted = false OR v.isDeleted IS NULL)
             """)
-    Optional<Voucher> findValidByCode(@Param("code") String code, @Param("now") LocalDateTime now);
+    Optional<Voucher> findByCodeIgnoreCase(@Param("code") String code);
+
+    /**
+     * Dùng cho luồng cũ nếu còn chỗ nào đang gọi.
+     */
     Optional<Voucher> findByCode(String code);
+
+    /**
+     * Dùng cho API khách hàng/apply cũ.
+     */
+    @Query("""
+            SELECT v FROM Voucher v
+            WHERE LOWER(v.code) = LOWER(:code)
+              AND v.status = 1
+              AND (v.isDeleted = false OR v.isDeleted IS NULL)
+              AND (v.startDate IS NULL OR v.startDate <= :now)
+              AND (v.endDate IS NULL OR v.endDate >= :now)
+              AND (
+                    v.usageLimit IS NULL
+                    OR v.usageLimit <= 0
+                    OR v.usedCount IS NULL
+                    OR v.usedCount < v.usageLimit
+                  )
+            """)
+    Optional<Voucher> findValidByCode(
+            @Param("code") String code,
+            @Param("now") LocalDateTime now
+    );
 
     List<Voucher> findByIsDeletedFalseOrderByIdDesc();
 
     boolean existsByCode(String code);
+
+    // Thêm hàm này vào dưới cùng
+    @Query("SELECT v FROM Voucher v WHERE v.isDeleted = false " +
+            "AND (:keyword IS NULL OR LOWER(v.code) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+            "AND (:status IS NULL OR v.status = :status) " +
+            "ORDER BY v.id DESC")
+    org.springframework.data.domain.Page<Voucher> searchVouchers(
+            @Param("keyword") String keyword,
+            @Param("status") Integer status,
+            org.springframework.data.domain.Pageable pageable);
 }

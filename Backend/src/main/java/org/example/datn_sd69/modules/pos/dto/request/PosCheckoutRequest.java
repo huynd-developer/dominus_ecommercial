@@ -16,12 +16,48 @@ import java.util.Locale;
 @Data
 public class PosCheckoutRequest {
 
+    /**
+     * Phương thức thanh toán chính.
+     *
+     * CASH:
+     * - Thanh toán tiền mặt toàn phần.
+     *
+     * VNPAY:
+     * - Thanh toán VNPay toàn phần.
+     *
+     * VIETQR:
+     * - Thanh toán VietQR toàn phần.
+     *
+     * MIXED:
+     * - Tiền mặt + chuyển khoản.
+     * - Bắt buộc dùng thêm transferProvider = VNPAY hoặc VIETQR.
+     *
+     * MIXED_VNPAY / MIXED_VIETQR:
+     * - Cho phép tương thích nếu FE muốn gửi thẳng kiểu cụ thể.
+     */
     @NotBlank(message = "Phương thức thanh toán không được để trống")
     @Pattern(
-            regexp = "^(CASH|VNPAY|MIXED)$",
-            message = "Phương thức thanh toán chỉ được là CASH, VNPAY hoặc MIXED"
+            regexp = "^(CASH|VNPAY|VIETQR|MIXED|MIXED_VNPAY|MIXED_VIETQR)$",
+            message = "Phương thức thanh toán chỉ được là CASH, VNPAY, VIETQR, MIXED, MIXED_VNPAY hoặc MIXED_VIETQR"
     )
     private String paymentMethod;
+
+    /**
+     * Nhà cung cấp phần chuyển khoản khi paymentMethod = MIXED.
+     *
+     * MIXED + VNPAY:
+     * transferProvider = VNPAY
+     *
+     * MIXED + VIETQR:
+     * transferProvider = VIETQR
+     *
+     * Nếu paymentMethod là VNPAY hoặc VIETQR toàn phần thì field này có thể bỏ trống.
+     */
+    @Pattern(
+            regexp = "^(VNPAY|VIETQR)$",
+            message = "Nhà cung cấp chuyển khoản chỉ được là VNPAY hoặc VIETQR"
+    )
+    private String transferProvider;
 
     @NotBlank(message = "Số điện thoại khách hàng không được để trống")
     @Pattern(
@@ -49,20 +85,23 @@ public class PosCheckoutRequest {
      * - cashGiven >= finalAmount.
      *
      * MIXED:
-     * - cashGiven là phần tiền mặt dùng để thanh toán.
-     * - Không xử lý tiền thừa trong MIXED. Nếu khách đưa dư, thu ngân trả lại ngay và chỉ nhập số tiền thực nhận vào đơn.
+     * - cashGiven là phần tiền mặt đã nhận.
+     * - Không xử lý tiền thừa trong MIXED.
      */
     @DecimalMin(value = "0.00", message = "Tiền mặt không được âm")
     private BigDecimal cashGiven;
 
     /**
-     * Tiền chuyển khoản / VNPay.
+     * Tiền chuyển khoản.
      *
      * VNPAY:
      * - Nếu FE không gửi, BE tự hiểu là thanh toán toàn bộ finalAmount bằng VNPay.
      *
+     * VIETQR:
+     * - Nếu FE không gửi, BE tự hiểu là thanh toán toàn bộ finalAmount bằng VietQR.
+     *
      * MIXED:
-     * - transferAmount là phần còn lại cần thanh toán bằng VNPay.
+     * - transferAmount là phần còn lại cần thanh toán bằng transferProvider.
      */
     @DecimalMin(value = "0.00", message = "Tiền chuyển khoản không được âm")
     private BigDecimal transferAmount;
@@ -75,6 +114,15 @@ public class PosCheckoutRequest {
         this.paymentMethod = paymentMethod == null
                 ? null
                 : paymentMethod.trim().toUpperCase(Locale.ROOT);
+    }
+
+    public void setTransferProvider(String transferProvider) {
+        if (transferProvider == null || transferProvider.trim().isBlank()) {
+            this.transferProvider = null;
+            return;
+        }
+
+        this.transferProvider = transferProvider.trim().toUpperCase(Locale.ROOT);
     }
 
     public void setCustomerPhone(String customerPhone) {

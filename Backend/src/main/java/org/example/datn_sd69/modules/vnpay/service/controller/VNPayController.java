@@ -41,6 +41,11 @@ public class VNPayController {
 
     private static final String PAYMENT_VNPAY = "VNPAY";
     private static final String PAYMENT_MIXED = "MIXED";
+    private static final String PAYMENT_MIXED_VNPAY = "MIXED_VNPAY";
+    private static final String PAYMENT_MIXED_VIETQR = "MIXED_VIETQR";
+
+    private static final String TRANSFER_PROVIDER_VNPAY = "VNPAY";
+    private static final String TRANSFER_PROVIDER_VIETQR = "VIETQR";
 
     private static final String ORDER_TYPE_ONLINE = "ONLINE";
 
@@ -55,7 +60,7 @@ public class VNPayController {
 
     /**
      * VNPay IPN server-to-server.
-     *
+     * <p>
      * Dùng để VNPay gọi về BE xác nhận giao dịch.
      * Trả về RspCode theo chuẩn VNPay.
      */
@@ -115,7 +120,7 @@ public class VNPayController {
 
     /**
      * VNPay Return browser redirect.
-     *
+     * <p>
      * FE hoặc trình duyệt có thể gọi URL này sau khi thanh toán.
      * Vẫn verify chữ ký để tránh giả callback.
      */
@@ -251,19 +256,58 @@ public class VNPayController {
 
         String method = order.getPaymentMethod().trim().toUpperCase();
 
-        return PAYMENT_VNPAY.equals(method) || PAYMENT_MIXED.equals(method);
+        return PAYMENT_VNPAY.equals(method)
+                || PAYMENT_MIXED.equals(method)
+                || PAYMENT_MIXED_VNPAY.equals(method);
     }
 
     private boolean isMixedOrder(Order order) {
-        return order != null
-                && order.getPaymentMethod() != null
-                && PAYMENT_MIXED.equalsIgnoreCase(order.getPaymentMethod().trim());
+        if (order == null || order.getPaymentMethod() == null) {
+            return false;
+        }
+
+        String method = order.getPaymentMethod().trim().toUpperCase();
+
+        return PAYMENT_MIXED.equals(method)
+                || PAYMENT_MIXED_VNPAY.equals(method);
     }
 
     private boolean isFullVnpayOrder(Order order) {
         return order != null
                 && order.getPaymentMethod() != null
                 && PAYMENT_VNPAY.equalsIgnoreCase(order.getPaymentMethod().trim());
+    }
+
+    private String toResponsePaymentMethod(String paymentMethod) {
+        String method = paymentMethod == null
+                ? ""
+                : paymentMethod.trim().toUpperCase();
+
+        if (PAYMENT_MIXED.equals(method)
+                || PAYMENT_MIXED_VNPAY.equals(method)
+                || PAYMENT_MIXED_VIETQR.equals(method)) {
+            return PAYMENT_MIXED;
+        }
+
+        return method;
+    }
+
+    private String resolveTransferProviderFromPaymentMethod(String paymentMethod) {
+        String method = paymentMethod == null
+                ? ""
+                : paymentMethod.trim().toUpperCase();
+
+        if (PAYMENT_VNPAY.equals(method)
+                || PAYMENT_MIXED.equals(method)
+                || PAYMENT_MIXED_VNPAY.equals(method)) {
+            return TRANSFER_PROVIDER_VNPAY;
+        }
+
+        if (PAYMENT_MIXED_VIETQR.equals(method)) {
+            return TRANSFER_PROVIDER_VIETQR;
+        }
+
+        return null;
     }
 
     private boolean isOnlineOrder(Order order) {
@@ -274,10 +318,10 @@ public class VNPayController {
 
     /**
      * VNPay trả amount theo đơn vị *100.
-     *
+     * <p>
      * VNPAY:
      * - VNPay phải bằng đúng finalAmount.
-     *
+     * <p>
      * MIXED:
      * - VNPay chỉ là phần còn thiếu.
      * - Không thêm DB nên không có chỗ lưu cashGiven.
@@ -369,7 +413,8 @@ public class VNPayController {
         result.put("status", order.getStatus());
         result.put("statusText", getStatusText(order.getStatus()));
         result.put("orderType", order.getOrderType());
-        result.put("paymentMethod", order.getPaymentMethod());
+        result.put("paymentMethod", toResponsePaymentMethod(order.getPaymentMethod()));
+        result.put("transferProvider", resolveTransferProviderFromPaymentMethod(order.getPaymentMethod()));
 
         result.put("totalAmount", totalAmount);
         result.put("discountAmount", discountAmount);
