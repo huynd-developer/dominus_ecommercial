@@ -1478,7 +1478,39 @@ watch(
   { immediate: true }
 );
 
-const handleCancelOrder = () => {
+const handleCancelOrder = async () => {
+  if (posStore.activePendingPaymentOrderId || posStore.pendingVietQrOrderId) {
+    const orderId =
+      posStore.activePendingPaymentOrderId ||
+      posStore.pendingVietQrOrderId ||
+      posStore.lastOrderId;
+
+    const result = await posStore.cancelPendingPaymentForEdit(orderId);
+
+    if (!result) {
+      setPosError(
+        posStore.errorMsg ||
+          "Không thể hủy yêu cầu thanh toán online để quay lại chỉnh sửa."
+      );
+      return;
+    }
+
+    showVietQrModal.value = false;
+    vietQrOrderId.value = null;
+    pendingVietQrInvoiceSnapshot.value = null;
+    displayCash.value = "";
+    closeTransferModal();
+
+    if (posStore.customer?.phone) {
+      customerPhoneInput.value = normalizePhone(posStore.customer.phone);
+    }
+
+    showPosToast(
+      "Đã hủy yêu cầu thanh toán online. Có thể sửa sản phẩm/voucher hoặc chọn lại phương thức."
+    );
+    return;
+  }
+
   if (posStore.activeHeldOrderId) {
     customerPhoneInput.value = "";
     displayCash.value = "";
@@ -1748,9 +1780,42 @@ const openVietQrModalFromCheckout = (checkoutResult: any) => {
   return true;
 };
 
-const closeVietQrModal = () => {
+const closeVietQrModal = async () => {
+  const orderId =
+    vietQrOrderId.value ||
+    posStore.pendingVietQrOrderId ||
+    posStore.activePendingPaymentOrderId ||
+    posStore.lastOrderId;
+
+  /*
+   * Đóng QR / Đổi phương thức nghĩa là khách CHƯA thanh toán.
+   * Phải hủy payment intent ở backend rồi đưa đơn về HOLD để được sửa
+   * sản phẩm/voucher. Không được chỉ đóng modal vì posStore vẫn bị lock
+   * bởi activePendingPaymentOrderId.
+   */
+  if (orderId && posStore.activePendingPaymentOrderId) {
+    const result = await posStore.cancelPendingPaymentForEdit(orderId);
+
+    if (!result) {
+      setPosError(
+        posStore.errorMsg ||
+          "Không thể đổi phương thức. Vui lòng kiểm tra lại trạng thái hóa đơn."
+      );
+      return;
+    }
+
+    if (posStore.customer?.phone) {
+      customerPhoneInput.value = normalizePhone(posStore.customer.phone);
+    }
+
+    showPosToast(
+      "Đã hủy mã VietQR chưa thanh toán. Có thể sửa sản phẩm/voucher hoặc chọn lại phương thức."
+    );
+  }
+
   showVietQrModal.value = false;
   vietQrOrderId.value = null;
+  pendingVietQrInvoiceSnapshot.value = null;
 };
 
 const confirmVietQrPayment = async () => {

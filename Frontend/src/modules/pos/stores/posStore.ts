@@ -92,6 +92,7 @@ export interface PosFilterOption {
 export type PosPaymentMethod = "CASH" | "VNPAY" | "VIETQR";
 export type PosCheckoutPaymentMethod = "CASH" | "VNPAY" | "VIETQR" | "MIXED";
 export type PosTransferProvider = "" | "VNPAY" | "VIETQR";
+type NonEmptyTransferProvider = "VNPAY" | "VIETQR";
 
 export interface PosStoreState {
   allProducts: PosProduct[];
@@ -561,6 +562,104 @@ const fetchFirstAvailable = async (urls: string[]) => {
 
   throw lastError;
 };
+
+const getOrderPaymentMethod = (order?: Partial<PosHeldOrder> | null): string => {
+  return String(order?.paymentMethod || "")
+    .trim()
+    .toUpperCase();
+};
+
+const isPendingOnlinePaymentOrder = (
+  order?: Partial<PosHeldOrder> | null
+): boolean => {
+  const method = getOrderPaymentMethod(order);
+
+  return [
+    "VNPAY",
+    "VIETQR",
+    "MIXED",
+    "MIXED_VNPAY",
+    "MIXED_VIETQR",
+  ].includes(method);
+};
+
+const isRealHeldOrder = (order?: Partial<PosHeldOrder> | null): boolean => {
+  return getOrderPaymentMethod(order) === "HOLD";
+};
+
+const getTransferProviderFromPaymentMethod = (
+  paymentMethod?: string | null
+): NonEmptyTransferProvider => {
+  const method = String(paymentMethod || "")
+    .trim()
+    .toUpperCase();
+
+  if (method === "VNPAY" || method === "MIXED_VNPAY") {
+    return "VNPAY";
+  }
+
+  return "VIETQR";
+};
+
+const cloneCartItems = (items?: CartItem[] | null): CartItem[] => {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items
+    .filter((item) => item?.product?.sku && Number(item.quantity || 0) > 0)
+    .map((item) => ({
+      product: { ...item.product },
+      quantity: Number(item.quantity || 1),
+    }));
+};
+
+const mergeCartItemsBySku = (
+  baseItems: CartItem[],
+  incomingItems: CartItem[]
+): CartItem[] => {
+  const mergedMap = new Map<string, CartItem>();
+
+  const appendItem = (item: CartItem) => {
+    const sku = String(item?.product?.sku || "")
+      .trim()
+      .toLowerCase();
+
+    if (!sku) {
+      return;
+    }
+
+    const quantity = Math.max(Number(item.quantity || 1), 1);
+    const existing = mergedMap.get(sku);
+
+    if (!existing) {
+      mergedMap.set(sku, {
+        product: { ...item.product },
+        quantity,
+      });
+      return;
+    }
+
+    const maxStock = Math.max(
+      Number(existing.product.stockQuantity || 0),
+      Number(item.product.stockQuantity || 0),
+      existing.quantity + quantity
+    );
+
+    existing.quantity = Math.min(existing.quantity + quantity, maxStock);
+    existing.product = {
+      ...existing.product,
+      ...item.product,
+      stockQuantity: maxStock,
+    };
+  };
+
+  cloneCartItems(baseItems).forEach(appendItem);
+  cloneCartItems(incomingItems).forEach(appendItem);
+
+  return Array.from(mergedMap.values());
+};
+
 
 const sortVouchersByBest = (vouchers: PosVoucher[]): PosVoucher[] => {
   return [...vouchers].sort((a, b) => {
@@ -1032,13 +1131,326 @@ export const usePosStore = defineStore("posStore", {
     async fetchHeldOrders() {
       try {
         const { data } = await api.get("/admin/pos/held-orders");
-        this.heldOrders = Array.isArray(data) ? data : [];
+
+        const rawOrders = Array.isArray(data)
+          ? data
+          : data?.data || data?.content || data?.items || [];
+
+        /*
+         * Khung "Đơn hàng đang xử lý" được dùng cho cả:
+         * - HOLD: phiếu treo thật sự, mở bằng /held-orders/{id}
+         * - VNPAY/VIETQR/MIXED_*: đơn đang chờ thanh toán online,
+         *   khi bấm lại không được gọi /held-orders/{id} nữa.
+         *
+         * Backend hiện có thể chỉ trả HOLD. Vì vậy giữ lại các card pending
+         * đang có ở local để khách đóng QR rồi vẫn mở lại đổi phương thức được.
+         */
+        const localPendingOrders = this.heldOrders.filter((order) =>
+          isPendingOnlinePaymentOrder(order)
+        );
+
+        const nextOrders = [
+          ...rawOrders.filter((order: PosHeldOrder) => {
+            return isRealHeldOrder(order) || isPendingOnlinePaymentOrder(order);
+          }),
+        ];
+
+        for (const pendingOrder of localPendingOrders) {
+          const existed = nextOrders.some(
+            (order: PosHeldOrder) =>
+              Number(order.orderId) === Number(pendingOrder.orderId)
+          );
+
+          if (!existed) {
+            nextOrders.unshift(pendingOrder);
+          }
+        }
+
+        this.heldOrders = nextOrders;
       } catch (error: any) {
         this.errorMsg = getBackendMessage(
           error,
-          "Không thể tải danh sách phiếu treo."
+          "Không thể tải danh sách đơn hàng đang xử lý."
         );
       }
+    },
+
+    findLocalHeldOrderByCustomerPhone(phone?: string | null): PosHeldOrder | null {
+      const cleanPhone = normalizePhone(phone);
+
+      if (!cleanPhone) {
+        return null;
+      }
+
+      return (
+        this.heldOrders.find((order) => {
+          return (
+            isRealHeldOrder(order) &&
+            normalizePhone(order.customerPhone) === cleanPhone
+          );
+        }) || null
+      );
+    },
+
+    upsertProcessingOrderCard(
+      orderId: number | string | null | undefined,
+      paymentMethod: string
+    ) {
+      if (!orderId) {
+        return;
+      }
+
+      const normalizedPaymentMethod = String(paymentMethod || "")
+        .trim()
+        .toUpperCase();
+
+      const numericOrderId = Number(orderId);
+      const existingOrder = this.heldOrders.find(
+        (held) => Number(held.orderId) === numericOrderId
+      );
+
+      const nextOrder: PosHeldOrder = {
+        orderId: numericOrderId,
+        status: isPendingOnlinePaymentOrder({
+          paymentMethod: normalizedPaymentMethod,
+        })
+          ? "PENDING_PAYMENT"
+          : "HELD",
+        paymentMethod: normalizedPaymentMethod || "HOLD",
+        totalAmount: Number(existingOrder?.totalAmount || this.totalAmount || 0),
+        discountAmount: Number(
+          existingOrder?.discountAmount || this.discountAmount || 0
+        ),
+        finalAmount: Number(existingOrder?.finalAmount || this.finalAmount || 0),
+        createdAt: existingOrder?.createdAt || new Date().toISOString(),
+        cashierId: existingOrder?.cashierId,
+        cashierName:
+          existingOrder?.cashierName || this.activeHeldOrderCashierName || "",
+        customerId: existingOrder?.customerId || this.customer?.customerId,
+        customerName: existingOrder?.customerName || this.customer?.name || "",
+        customerPhone: existingOrder?.customerPhone || this.customer?.phone || "",
+        customerEmail: existingOrder?.customerEmail || this.customer?.email || "",
+        ownOrder: existingOrder?.ownOrder ?? existingOrder?.isOwnOrder ?? true,
+        isOwnOrder: existingOrder?.isOwnOrder ?? existingOrder?.ownOrder ?? true,
+        canOpen: true,
+        canCheckout: true,
+        canTransfer: isRealHeldOrder({ paymentMethod: normalizedPaymentMethod }),
+        canCancel: isRealHeldOrder({ paymentMethod: normalizedPaymentMethod }),
+      };
+
+      const existed = Boolean(existingOrder);
+
+      this.heldOrders = existed
+        ? this.heldOrders.map((held) =>
+            Number(held.orderId) === numericOrderId ? nextOrder : held
+          )
+        : [nextOrder, ...this.heldOrders];
+    },
+
+    removeProcessingOrderCard(orderId: number | string | null | undefined) {
+      if (!orderId) {
+        return;
+      }
+
+      this.heldOrders = this.heldOrders.filter(
+        (held) => Number(held.orderId) !== Number(orderId)
+      );
+    },
+
+    async cancelPendingPaymentForEdit(orderId?: number | string | null) {
+      const targetOrderId =
+        orderId ||
+        this.activePendingPaymentOrderId ||
+        this.pendingVietQrOrderId ||
+        this.lastOrderId;
+
+      if (!targetOrderId) {
+        this.vnpayUrl = "";
+        this.vietQrImageUrl = "";
+        this.vietQrContent = "";
+        this.pendingVietQrOrderId = null;
+        this.pendingVietQrAmount = 0;
+        this.activePendingPaymentOrderId = null;
+        this.activePendingPaymentTransferProvider = "";
+        this.clearPendingCheckoutDraft();
+        return {
+          success: true,
+          data: null,
+        };
+      }
+
+      const localProcessingOrder = this.heldOrders.find(
+        (held) => Number(held.orderId) === Number(targetOrderId)
+      );
+
+      this.isLoading = true;
+      this.errorMsg = "";
+
+      try {
+        /*
+         * Khi chỉ mới tạo QR/VNPay mà khách chưa thanh toán,
+         * muốn sửa sản phẩm/voucher thì phải hủy payment intent ở backend
+         * và đưa đơn về HOLD. Không được chỉ clear state FE,
+         * vì backend đã tạo đơn pending payment và có thể đã giữ/trừ kho.
+         */
+        const { data } = await api.patch(
+          `/admin/pos/orders/${targetOrderId}/cancel-pending-payment`
+        );
+
+        const responseOrderId = data?.orderId || data?.id || targetOrderId;
+        const responseItems = Array.isArray(data?.items) ? data.items : [];
+
+        if (responseItems.length > 0) {
+          this.cart = responseItems.map((item: any) =>
+            this.mapOrderItemToCartItem(item)
+          );
+        }
+
+        const customerPhone =
+          data?.customerPhone || localProcessingOrder?.customerPhone || this.customer?.phone;
+        const customerName =
+          data?.customerName || localProcessingOrder?.customerName || this.customer?.name;
+        const customerEmail =
+          data?.customerEmail || localProcessingOrder?.customerEmail || this.customer?.email;
+
+        if (customerPhone || customerName || customerEmail) {
+          this.customer = {
+            customerId:
+              data?.customerId || localProcessingOrder?.customerId || this.customer?.customerId,
+            name: customerName || "",
+            phone: customerPhone || "",
+            email: customerEmail || "",
+            customerRank: data?.customerRank || this.customer?.customerRank || "BRONZE",
+            loyaltyPoints: Number(
+              data?.customerLoyaltyPointsAfter || this.customer?.loyaltyPoints || 0
+            ),
+          };
+          this.markCustomerSaved();
+        }
+
+        const returnedVoucherCode = String(
+          data?.voucherCode ||
+            data?.voucher_code ||
+            data?.code ||
+            data?.voucher?.code ||
+            data?.voucher?.voucherCode ||
+            this.voucherCode ||
+            ""
+        )
+          .trim()
+          .toUpperCase();
+
+        this.voucherCode = returnedVoucherCode;
+        this.discountAmount = Number(
+          data?.discountAmount ||
+            data?.discount_amount ||
+            data?.voucherDiscountAmount ||
+            this.discountAmount ||
+            0
+        );
+
+        this.vnpayUrl = "";
+        this.vietQrImageUrl = "";
+        this.vietQrContent = "";
+        this.pendingVietQrOrderId = null;
+        this.pendingVietQrAmount = 0;
+        this.activePendingPaymentOrderId = null;
+        this.activePendingPaymentTransferProvider = "";
+        this.paymentMethod = "CASH";
+        this.transferProvider = "";
+        this.activeHeldOrderId = Number(responseOrderId);
+        this.activeHeldOrderCashierName =
+          data?.cashierName || localProcessingOrder?.cashierName || "";
+        this.activeHeldOrderOwnOrder =
+          data?.ownOrder !== false && data?.isOwnOrder !== false;
+        this.activeHeldOrderCanOpen = data?.canOpen !== false;
+        this.activeHeldOrderCanCheckout = data?.canCheckout !== false;
+        this.activeHeldOrderCanTransfer = data?.canTransfer !== false;
+        this.activeHeldOrderCanCancel = data?.canCancel !== false;
+        this.lastOrderId = responseOrderId;
+
+        this.upsertProcessingOrderCard(responseOrderId, "HOLD");
+        this.clearPendingCheckoutDraft();
+        await this.fetchHeldOrders();
+
+        if (this.cart.length > 0) {
+          await this.fetchAvailableVouchers();
+        }
+
+        this.errorMsg =
+          `Đã hủy yêu cầu thanh toán online của đơn #${responseOrderId}. ` +
+          "Có thể sửa sản phẩm, voucher hoặc chọn lại phương thức thanh toán.";
+
+        return {
+          success: true,
+          data,
+        };
+      } catch (error: any) {
+        this.errorMsg = getBackendMessage(
+          error,
+          "Không thể quay lại chỉnh sửa đơn đang chờ thanh toán. Backend cần hỗ trợ hủy payment intent và đưa đơn về phiếu treo HOLD."
+        );
+
+        return false;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    openPendingPaymentOrderFromList(order: PosHeldOrder) {
+      if (!order?.orderId) {
+        this.errorMsg = "Không xác định được hóa đơn đang chờ thanh toán.";
+        return false;
+      }
+
+      const currentProvider = getTransferProviderFromPaymentMethod(
+        order.paymentMethod
+      );
+
+      /*
+       * Đơn này đã qua bước tạo VietQR/VNPay nên không còn là phiếu HOLD.
+       * Vì vậy không gọi /held-orders/{id}, chỉ set trạng thái để lần thanh toán
+       * tiếp theo đi qua /orders/{id}/retry-payment.
+       */
+      this.activeHeldOrderId = null;
+      this.activeHeldOrderCashierName = "";
+      this.activeHeldOrderOwnOrder =
+        order.ownOrder !== false && order.isOwnOrder !== false;
+      this.activeHeldOrderCanOpen = true;
+      this.activeHeldOrderCanCheckout = true;
+      this.activeHeldOrderCanTransfer = false;
+      this.activeHeldOrderCanCancel = false;
+
+      this.activePendingPaymentOrderId = order.orderId;
+      this.activePendingPaymentTransferProvider = currentProvider;
+      this.paymentMethod = currentProvider;
+      this.transferProvider = currentProvider;
+      this.lastOrderId = order.orderId;
+
+      if (
+        !this.customer ||
+        normalizePhone(this.customer.phone) !== normalizePhone(order.customerPhone)
+      ) {
+        this.customer = {
+          customerId: order.customerId,
+          name: order.customerName || "",
+          phone: order.customerPhone || "",
+          email: order.customerEmail || "",
+          customerRank: "BRONZE",
+          loyaltyPoints: 0,
+        };
+        this.markCustomerSaved();
+      }
+
+      this.showHeldOrdersPanel = false;
+      this.errorMsg =
+        `Đã mở lại đơn #${order.orderId} đang chờ thanh toán ${currentProvider}. ` +
+        "Có thể thanh toán lại hoặc đổi phương thức thanh toán.";
+
+      return {
+        success: true,
+        data: order,
+      };
     },
 
     async fetchTransferTargets() {
@@ -1857,6 +2269,11 @@ export const usePosStore = defineStore("posStore", {
             this.activeHeldOrderId = null;
             this.activeHeldOrderCashierName = "";
 
+            this.upsertProcessingOrderCard(
+              orderId,
+              selectedPaymentMethod === "MIXED" ? "MIXED_VNPAY" : "VNPAY"
+            );
+
             this.savePendingCheckoutDraft();
             await this.fetchHeldOrders();
 
@@ -1889,6 +2306,18 @@ export const usePosStore = defineStore("posStore", {
             this.activePendingPaymentTransferProvider = "VIETQR";
             this.activeHeldOrderId = null;
             this.activeHeldOrderCashierName = "";
+
+            this.upsertProcessingOrderCard(
+              orderId,
+              selectedPaymentMethod === "MIXED" ? "MIXED_VIETQR" : "VIETQR"
+            );
+
+            /*
+             * VietQR không redirect nên user hay bấm X đóng QR.
+             * Phải lưu draft + giữ card pending để bấm lại đổi phương thức.
+             */
+            this.savePendingCheckoutDraft();
+            await this.fetchHeldOrders();
 
             return {
               success: true,
@@ -1972,6 +2401,7 @@ export const usePosStore = defineStore("posStore", {
         this.pendingVietQrAmount = 0;
         this.activePendingPaymentOrderId = null;
         this.activePendingPaymentTransferProvider = "";
+        this.removeProcessingOrderCard(targetOrderId);
 
         this.resetLocalOrderOnly();
         await this.fetchProducts();
@@ -2012,9 +2442,29 @@ export const usePosStore = defineStore("posStore", {
       this.errorMsg = "";
 
       try {
+        /*
+         * Nếu khách đã có phiếu treo cùng SĐT thì không POST /hold nữa.
+         * POST /hold sẽ bị backend chặn duplicate.
+         * Logic đúng: mở phiếu #cũ, merge sản phẩm đang chọn, rồi PATCH cập nhật.
+         */
+        if (!this.activeHeldOrderId) {
+          const existingHeldOrder = this.findLocalHeldOrderByCustomerPhone(
+            this.customer?.phone
+          );
+
+          if (existingHeldOrder?.orderId) {
+            const opened = await this.openHeldOrder(existingHeldOrder.orderId);
+
+            if (!opened) {
+              return false;
+            }
+          }
+        }
+
         const payload = this.buildCurrentOrderPayload();
 
         let data: any;
+        const wasUpdatingHeldOrder = Boolean(this.activeHeldOrderId);
 
         if (this.activeHeldOrderId) {
           const response = await api.patch(
@@ -2028,7 +2478,6 @@ export const usePosStore = defineStore("posStore", {
         }
 
         const savedOrderId = data?.orderId || this.activeHeldOrderId || null;
-        const wasUpdatingHeldOrder = Boolean(this.activeHeldOrderId);
 
         this.lastOrderId = savedOrderId;
 
@@ -2044,12 +2493,33 @@ export const usePosStore = defineStore("posStore", {
           data,
         };
       } catch (error: any) {
-        this.errorMsg = getBackendMessage(
+        const message = getBackendMessage(
           error,
           this.activeHeldOrderId
             ? "Cập nhật phiếu treo thất bại. Vui lòng kiểm tra lại."
             : "Treo phiếu thất bại. Vui lòng kiểm tra lại."
         );
+
+        /*
+         * Phòng trường hợp FE chưa fetch kịp danh sách phiếu treo,
+         * backend vẫn báo trùng phiếu #xxx thì tự refresh lại danh sách.
+         */
+        const duplicateHeldOrderId = String(message).match(/#(\d+)/)?.[1];
+
+        if (!this.activeHeldOrderId && duplicateHeldOrderId) {
+          await this.fetchHeldOrders();
+
+          const opened = await this.openHeldOrder(Number(duplicateHeldOrderId));
+
+          if (opened) {
+            this.errorMsg =
+              `Khách hàng này đã có phiếu treo #${duplicateHeldOrderId}. ` +
+              "Đã mở phiếu và giữ sản phẩm đang chọn, bấm Lưu tạm lại để cập nhật.";
+            return false;
+          }
+        }
+
+        this.errorMsg = message;
 
         return false;
       } finally {
@@ -2112,11 +2582,31 @@ export const usePosStore = defineStore("posStore", {
         return false;
       }
 
-      if (this.cashPaid > 0) {
+      const localOrder = this.heldOrders.find(
+        (held) => Number(held.orderId) === Number(orderId)
+      );
+
+      /*
+       * Card pending online vẫn nằm ở "Đơn hàng đang xử lý".
+       * Nếu click lại thì không được gọi /held-orders/{id},
+       * vì endpoint đó chỉ dành cho phiếu HOLD.
+       */
+      if (localOrder && isPendingOnlinePaymentOrder(localOrder)) {
+        return this.openPendingPaymentOrderFromList(localOrder);
+      }
+
+      if (this.cashPaid > 0 && !this.activePendingPaymentOrderId) {
         this.errorMsg =
           "Đơn hiện tại đã nhận tiền mặt một phần, không được mở phiếu treo.";
         return false;
       }
+
+      const unsavedCartBeforeOpen = cloneCartItems(this.cart);
+      const unsavedCustomerPhoneBeforeOpen = normalizePhone(this.customer?.phone);
+      const shouldMergeUnsavedCart =
+        unsavedCartBeforeOpen.length > 0 &&
+        !this.activeHeldOrderId &&
+        !this.activePendingPaymentOrderId;
 
       this.isLoading = true;
       this.errorMsg = "";
@@ -2144,7 +2634,25 @@ export const usePosStore = defineStore("posStore", {
 
         const items = Array.isArray(data.items) ? data.items : [];
 
-        this.cart = items.map((item: any) => this.mapOrderItemToCartItem(item));
+        const heldCart = items.map((item: any) =>
+          this.mapOrderItemToCartItem(item)
+        );
+
+        const heldCustomerPhone = normalizePhone(data.customerPhone);
+
+        /*
+         * Nếu user đang chọn thêm sản phẩm rồi mới click phiếu treo cùng SĐT,
+         * không được làm mất giỏ đang chọn. Merge vào phiếu để bấm Lưu tạm là cập nhật.
+         */
+        const canMergeUnsavedCart =
+          shouldMergeUnsavedCart &&
+          (!unsavedCustomerPhoneBeforeOpen ||
+            !heldCustomerPhone ||
+            unsavedCustomerPhoneBeforeOpen === heldCustomerPhone);
+
+        this.cart = canMergeUnsavedCart
+          ? mergeCartItemsBySku(heldCart, unsavedCartBeforeOpen)
+          : heldCart;
 
         this.customer = {
           customerId: data.customerId,
@@ -2201,7 +2709,9 @@ export const usePosStore = defineStore("posStore", {
           await this.fetchAvailableVouchers();
         }
 
-        this.errorMsg = `Đã mở phiếu treo #${this.activeHeldOrderId}. Có thể thêm/sửa sản phẩm và voucher, khách hàng được giữ nguyên.`;
+        this.errorMsg = canMergeUnsavedCart
+          ? `Đã mở phiếu treo #${this.activeHeldOrderId} và gộp sản phẩm đang chọn. Bấm Lưu tạm để cập nhật phiếu.`
+          : `Đã mở phiếu treo #${this.activeHeldOrderId}. Có thể thêm/sửa sản phẩm và voucher, khách hàng được giữ nguyên.`;
 
         return {
           success: true,
