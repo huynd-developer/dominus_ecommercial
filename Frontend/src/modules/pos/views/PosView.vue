@@ -17,16 +17,28 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
 import { usePosStore } from "../stores/posStore";
-import PosHeader from "../components/PosHeader.vue";
+import PosHeader from "../components/posHeader.vue";
 import ProductGrid from "../components/productGrid.vue";
 import CartSideBar from "../components/cartSideBar.vue";
 
 const posStore = usePosStore();
 
 onMounted(async () => {
-  sessionStorage.removeItem("pos_pending_checkout_draft");
+  /*
+   * Không được xóa pos_pending_checkout_draft ở đây.
+   * Draft này dùng để khôi phục hóa đơn đang chờ thanh toán VNPay/VietQR
+   * khi người dùng back lại trang POS.
+   */
 
+  await posStore.fetchPosFilters();
   await posStore.fetchProducts();
+
+  /*
+   * Phải restore sau khi fetchProducts()
+   * để giỏ hàng còn map được lại thông tin sản phẩm mới nhất.
+   */
+  posStore.restorePendingCheckoutDraft();
+
   await posStore.fetchHeldOrders();
 });
 </script>

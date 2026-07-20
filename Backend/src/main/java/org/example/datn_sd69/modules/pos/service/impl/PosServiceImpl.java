@@ -1683,4 +1683,124 @@ public class PosServiceImpl implements PosService {
 
         return response;
     }
+    @Override
+    @Transactional
+    public PosOrderResponse retryPendingPayment(
+            Integer orderId,
+            PosHeldOrderCheckoutRequest request,
+            String cashierEmail,
+            String clientIp
+    ) {
+        if (request == null) {
+            throw new RuntimeException("Dữ liệu thanh toán không được để trống.");
+        }
+
+        Employee currentEmployee = resolveCashier(cashierEmail);
+
+        Order order = orderRepository.findPendingPaymentOrderById(orderId)
+                .orElseThrow(() -> new RuntimeException(
+                        "Không tìm thấy hóa đơn đang chờ thanh toán hoặc hóa đơn không còn ở trạng thái chờ thanh toán."
+                ));
+
+        if (!isSameCashier(order, currentEmployee) && !isManagerOrOwner(currentEmployee)) {
+            throw new RuntimeException("Bạn không có quyền thanh toán hóa đơn của nhân viên khác.");
+        }
+
+        List<OrderItem> orderItems = orderItemRepository.findByOrderIdWithVariant(order.getId());
+
+        if (orderItems.isEmpty()) {
+            throw new RuntimeException("Hóa đơn không có sản phẩm.");
+        }
+
+        BigDecimal finalAmount = order.getFinalAmount() != null
+                ? order.getFinalAmount()
+                : BigDecimal.ZERO;
+
+        PosCheckoutRequest paymentRequest = new PosCheckoutRequest();
+        paymentRequest.setPaymentMethod(request.getPaymentMethod());
+        paymentRequest.setCashGiven(request.getCashGiven());
+        paymentRequest.setTransferAmount(request.getTransferAmount());
+        paymentRequest.setTransferProvider(request.getTransferProvider());
+
+        paymentRequest.setCustomerPhone(order.getCustomerPhone());
+        paymentRequest.setCustomerName(order.getCustomerName());
+        paymentRequest.setCustomerEmail(
+                order.getCustomer() != null && order.getCustomer().getUser() != null
+                        ? order.getCustomer().getUser().getEmail()
+                        : null
+        );
+
+        paymentRequest.setItems(List.of(new PosItemRequest()));
+
+        PaymentSummary paymentSummary =
+                validateAndBuildPaymentSummary(paymentRequest, finalAmount);
+
+        /*
+         * Quan trọng:
+         * Đơn pending payment đã trừ/giữ kho ở lần checkout đầu.
+         * Retry thanh toán KHÔNG được trừ kho lần nữa.
+         */
+        boolean completedImmediately = paymentSummary.completedImmediately();
+
+        order.setPaymentMethod(paymentSummary.orderPaymentMethod());
+        order.setStatus(completedImmediately ? ORDER_STATUS_COMPLETED : ORDER_STATUS_PENDING);
+
+        if (completedImmediately) {
+            order.setCompletedAt(LocalDateTime.now());
+        }
+
+        Order savedOrder = orderRepository.save(order);
+
+        int loyaltyPointsEarned = 0;
+
+        if (completedImmediately && savedOrder.getCustomer() != null) {
+            loyaltyPointsEarned = applyLoyaltyPointsIfNeeded(savedOrder, savedOrder.getCustomer());
+
+            if (savedOrder.getVoucher() != null) {
+                increaseVoucherUsedCount(savedOrder.getVoucher());
+            }
+        }
+
+        String vnpayUrl = null;
+        String vietQrImageUrl = null;
+        String vietQrContent = null;
+
+        if (paymentSummary.needVnpayPayment()) {
+            vnpayUrl = vnPayService.createPaymentUrl(
+                    savedOrder.getId(),
+                    paymentSummary.transferAmount(),
+                    clientIp
+            );
+        }
+
+        if (paymentSummary.needVietQrPayment()) {
+            VietQrResponse vietQr = vietQrService.createPaymentQr(
+                    savedOrder.getId(),
+                    paymentSummary.transferAmount()
+            );
+
+            vietQrImageUrl = vietQr.getQrImageUrl();
+            vietQrContent = vietQr.getTransferContent();
+        }
+
+        Integer customerPointAfter = savedOrder.getCustomer() != null
+                ? savedOrder.getCustomer().getLoyaltyPoints()
+                : 0;
+
+        return buildResponseFromOrder(
+                savedOrder,
+                orderItems,
+                completedImmediately ? "COMPLETED" : "PENDING_PAYMENT",
+                paymentSummary.paidAmount(),
+                paymentSummary.remainingAmount(),
+                paymentSummary.cashGiven(),
+                paymentSummary.transferAmount(),
+                paymentSummary.changeAmount(),
+                vnpayUrl,
+                vietQrImageUrl,
+                vietQrContent,
+                loyaltyPointsEarned,
+                customerPointAfter
+        );
+    }
 }

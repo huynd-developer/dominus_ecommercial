@@ -1,26 +1,73 @@
 <template>
   <div class="product-panel d-flex flex-column h-100 select-none">
     <div class="filter-search-section mb-2 shrink-0">
-      <div class="filter-top-row d-flex align-items-center gap-2 mb-2">
-        <div
-          class="category-slider d-flex gap-2 overflow-auto pb-1 no-scrollbar flex-grow-1 min-w-0"
+      <div class="filter-main-row d-flex align-items-center gap-2">
+        <select
+          v-model="posStore.selectedCategory"
+          class="pos-filter-select brand-filter"
+          :disabled="posStore.cashPaid > 0"
         >
-          <button
-            v-for="cat in posStore.categories"
-            :key="cat"
-            type="button"
-            :class="[
-              'luxury-pill',
-              { active: posStore.selectedCategory === cat },
-            ]"
-            :disabled="posStore.cashPaid > 0"
-            @click="posStore.selectedCategory = cat"
+          <option value="Tất cả">Tất cả thương hiệu</option>
+          <option
+            v-for="brand in brandSelectOptions"
+            :key="brand"
+            :value="brand"
           >
-            {{ cat }}
-          </button>
-        </div>
+            {{ brand }}
+          </option>
+        </select>
 
-        <div class="product-search-wrapper position-relative shrink-0">
+        <select
+          v-model="selectedCapacity"
+          class="pos-filter-select capacity-filter"
+          :disabled="posStore.cashPaid > 0"
+        >
+          <option value="">Tất cả dung tích</option>
+          <option
+            v-for="capacity in capacityOptions"
+            :key="capacity"
+            :value="capacity"
+          >
+            {{ capacity }}
+          </option>
+        </select>
+
+        <select
+          v-model="selectedBottleType"
+          class="pos-filter-select bottle-filter"
+          :disabled="posStore.cashPaid > 0"
+        >
+          <option value="">Tất cả loại chai</option>
+          <option
+            v-for="bottleType in bottleTypeOptions"
+            :key="bottleType"
+            :value="bottleType"
+          >
+            {{ bottleType }}
+          </option>
+        </select>
+
+        <select
+          v-model="selectedStockFilter"
+          class="pos-filter-select stock-filter"
+          :disabled="posStore.cashPaid > 0"
+        >
+          <option value="">Tất cả còn hàng</option>
+          <option value="AVAILABLE">Còn hàng</option>
+          <option value="LOW">Sắp hết hàng</option>
+        </select>
+
+        <button
+          type="button"
+          class="btn-reset-filter"
+          :disabled="posStore.cashPaid > 0 || !hasAnyFilter"
+          @click="clearAllFilters"
+        >
+          <i class="bi bi-arrow-counterclockwise me-1"></i>
+          Xóa lọc
+        </button>
+
+        <div class="product-search-wrapper position-relative flex-grow-1 min-w-0">
           <i class="bi bi-search search-icon"></i>
 
           <input
@@ -45,59 +92,6 @@
             <i class="bi bi-x-lg"></i>
           </button>
         </div>
-      </div>
-
-      <div class="filter-bottom-row d-flex align-items-center gap-2">
-        <select
-          v-model="selectedCapacity"
-          class="pos-filter-select"
-          :disabled="posStore.cashPaid > 0"
-        >
-          <option value="">Tất cả dung tích</option>
-          <option
-            v-for="capacity in capacityOptions"
-            :key="capacity"
-            :value="capacity"
-          >
-            {{ capacity }}
-          </option>
-        </select>
-
-        <select
-          v-model="selectedBottleType"
-          class="pos-filter-select"
-          :disabled="posStore.cashPaid > 0"
-        >
-          <option value="">Tất cả loại chai</option>
-          <option
-            v-for="bottleType in bottleTypeOptions"
-            :key="bottleType"
-            :value="bottleType"
-          >
-            {{ bottleType }}
-          </option>
-        </select>
-
-        <select
-          v-model="selectedStockFilter"
-          class="pos-filter-select stock-filter"
-          :disabled="posStore.cashPaid > 0"
-        >
-          <option value="">Tất cả tồn kho</option>
-          <option value="AVAILABLE">Còn hàng</option>
-          <option value="LOW">Sắp hết hàng</option>
-          <option value="OUT">Hết hàng</option>
-        </select>
-
-        <button
-          type="button"
-          class="btn-reset-filter"
-          :disabled="posStore.cashPaid > 0 || !hasAdvancedFilter"
-          @click="clearAdvancedFilters"
-        >
-          <i class="bi bi-arrow-counterclockwise me-1"></i>
-          Xóa lọc
-        </button>
       </div>
     </div>
 
@@ -296,8 +290,16 @@ import {
 const posStore = usePosStore();
 const selectedCapacity = ref<string>("");
 const selectedBottleType = ref<string>("");
-const selectedStockFilter = ref<"" | "AVAILABLE" | "LOW" | "OUT">("");
+const selectedStockFilter = ref<"" | "AVAILABLE" | "LOW">("");
 
+const brandSelectOptions = computed<string[]>(() => {
+  return (posStore.categories || [])
+    .map((item) => String(item || "").trim())
+    .filter((item, index, arr) => {
+      return item && item !== "Tất cả" && arr.indexOf(item) === index;
+    })
+    .sort((a, b) => a.localeCompare(b, "vi"));
+});
 const normalizeFilterText = (value?: string | null) => {
   return String(value || "").trim();
 };
@@ -326,6 +328,23 @@ const getCapacityFromProduct = (product: PosProduct) => {
   return `${numberValue} ml`;
 };
 
+const normalizeCapacityOption = (value?: string | null) => {
+  const text = normalizeFilterText(value);
+  const match = text.match(/(\d+(?:[.,]\d+)?)\s*ml/i);
+
+  if (!match?.[1]) {
+    return text;
+  }
+
+  const numberValue = Number(match[1].replace(",", "."));
+
+  if (!Number.isFinite(numberValue)) {
+    return text;
+  }
+
+  return `${numberValue} ml`;
+};
+
 const getBottleTypeFromProduct = (product: PosProduct): string => {
   const text = normalizeFilterText(product.subName);
 
@@ -348,9 +367,16 @@ const getBottleTypeFromProduct = (product: PosProduct): string => {
 };
 
 const capacityOptions = computed<string[]>(() => {
-  const values = posStore.filteredProducts
-    .map(getCapacityFromProduct)
+  const apiValues = (posStore.capacityOptions || [])
+    .map((item) => normalizeCapacityOption(item.label || item.name))
     .filter(isNonEmptyString);
+
+  const values =
+    apiValues.length > 0
+      ? apiValues
+      : posStore.filteredProducts
+          .map(getCapacityFromProduct)
+          .filter(isNonEmptyString);
 
   return [...new Set(values)].sort((a, b) => {
     return Number(a.replace(/\D/g, "")) - Number(b.replace(/\D/g, ""));
@@ -358,22 +384,33 @@ const capacityOptions = computed<string[]>(() => {
 });
 
 const bottleTypeOptions = computed<string[]>(() => {
-  const values = posStore.filteredProducts
-    .map(getBottleTypeFromProduct)
+  const apiValues = (posStore.bottleTypeOptions || [])
+    .map((item) => item.label || item.name)
     .filter(isNonEmptyString);
+
+  const values =
+    apiValues.length > 0
+      ? apiValues
+      : posStore.filteredProducts
+          .map(getBottleTypeFromProduct)
+          .filter(isNonEmptyString);
 
   return [...new Set(values)].sort((a, b) => a.localeCompare(b, "vi"));
 });
 
-const hasAdvancedFilter = computed(() => {
+const hasAnyFilter = computed(() => {
   return Boolean(
-    selectedCapacity.value ||
+    posStore.selectedCategory !== "Tất cả" ||
+      posStore.searchQuery ||
+      selectedCapacity.value ||
       selectedBottleType.value ||
       selectedStockFilter.value
   );
 });
 
-const clearAdvancedFilters = () => {
+const clearAllFilters = () => {
+  posStore.selectedCategory = "Tất cả";
+  posStore.searchQuery = "";
   selectedCapacity.value = "";
   selectedBottleType.value = "";
   selectedStockFilter.value = "";
@@ -384,6 +421,14 @@ const displayProducts = computed(() => {
     const capacity = getCapacityFromProduct(product);
     const bottleType = getBottleTypeFromProduct(product);
     const stock = Number(product.stockQuantity || 0);
+
+    /*
+     * POS chỉ hiển thị sản phẩm còn hàng.
+     * Sản phẩm stock <= 0 bị loại khỏi bảng bán hàng.
+     */
+    if (stock <= 0) {
+      return false;
+    }
 
     const matchesCapacity =
       !selectedCapacity.value || capacity === selectedCapacity.value;
@@ -399,10 +444,6 @@ const displayProducts = computed(() => {
 
     if (selectedStockFilter.value === "LOW") {
       matchesStock = stock > 0 && stock <= 10;
-    }
-
-    if (selectedStockFilter.value === "OUT") {
-      matchesStock = stock <= 0;
     }
 
     return matchesCapacity && matchesBottleType && matchesStock;
@@ -1073,51 +1114,19 @@ const removeFromOrder = (product: PosProduct) => {
 .filter-search-section {
   min-width: 0;
   flex-shrink: 0;
-  padding: 2px 0 4px;
+  padding: 2px 0 6px;
 }
 
-.filter-top-row,
-.filter-bottom-row {
+.filter-main-row {
+  width: 100%;
   min-width: 0;
+  flex-wrap: nowrap;
 }
 
-.filter-top-row {
-  align-items: center;
-}
-
-.filter-bottom-row {
-  flex-wrap: wrap;
-  row-gap: 6px;
-}
-
-/* Brand pill */
-.category-slider {
-  min-height: 34px;
-}
-
-.luxury-pill {
-  height: 32px;
-  padding: 0 14px;
-  display: inline-flex;
-  align-items: center;
-}
-
-/* Search */
-.product-search-wrapper {
-  width: 330px;
-  max-width: 38%;
-}
-
-.product-search-input {
-  height: 34px;
-  border-radius: 11px;
-}
-
-/* Select filters */
 .pos-filter-select {
-  height: 32px;
-  min-width: 145px;
-  border-radius: 10px;
+  height: 34px;
+  min-width: 140px;
+  border-radius: 11px;
   border: 1px solid #22304d;
   background: #10182a;
   color: #dbeafe;
@@ -1125,6 +1134,7 @@ const removeFromOrder = (product: PosProduct) => {
   font-size: 0.72rem;
   font-weight: 800;
   outline: none;
+  flex-shrink: 0;
 }
 
 .pos-filter-select:focus {
@@ -1137,12 +1147,38 @@ const removeFromOrder = (product: PosProduct) => {
   cursor: not-allowed;
 }
 
+.brand-filter {
+  min-width: 175px;
+  max-width: 220px;
+  border-color: rgba(243, 198, 63, 0.45);
+}
+
+.capacity-filter {
+  min-width: 145px;
+}
+
+.bottle-filter {
+  min-width: 150px;
+}
+
 .stock-filter {
-  min-width: 125px;
+  min-width: 130px;
+}
+
+.product-search-wrapper {
+  width: auto;
+  max-width: none;
+  min-width: 260px;
+}
+
+.product-search-input {
+  width: 100%;
+  height: 34px;
+  border-radius: 11px;
 }
 
 .btn-reset-filter {
-  height: 32px;
+  height: 34px;
   border-radius: 10px;
   border: 1px solid rgba(243, 198, 63, 0.35);
   background: rgba(243, 198, 63, 0.08);
@@ -1152,6 +1188,7 @@ const removeFromOrder = (product: PosProduct) => {
   font-weight: 900;
   cursor: pointer;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-reset-filter:hover:not(:disabled) {
@@ -1164,26 +1201,34 @@ const removeFromOrder = (product: PosProduct) => {
   cursor: not-allowed;
 }
 
-@media (max-width: 1200px) {
-  .filter-top-row {
-    flex-direction: column;
-    align-items: stretch !important;
+@media (max-width: 1400px) {
+  .filter-main-row {
+    flex-wrap: wrap;
   }
 
   .product-search-wrapper {
+    flex-basis: 100%;
     width: 100%;
-    max-width: 100%;
+    min-width: 0;
   }
+}
 
-  .filter-bottom-row {
+@media (max-width: 1200px) {
+  .filter-main-row {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .pos-filter-select,
-  .btn-reset-filter {
+  .btn-reset-filter,
+  .product-search-wrapper {
     width: 100%;
     min-width: 0;
+    max-width: none;
+  }
+
+  .product-search-wrapper {
+    grid-column: 1 / -1;
   }
 }
 </style>
