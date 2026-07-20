@@ -24,7 +24,7 @@ public class AdminCapacityController {
     public ResponseEntity<Page<Capacity>> getAllCapacities(
             @RequestParam(name = "keyword", defaultValue = "") String keyword,
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "5") int size) {
+            @RequestParam(name = "size", defaultValue = "99") int size) {
 
         // CẤU HÌNH SORT: Sắp xếp giảm dần theo cột "id" để bản ghi mới thêm lên đầu trang 1
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));

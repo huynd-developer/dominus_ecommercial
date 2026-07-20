@@ -7,6 +7,7 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
+import java.time.LocalDate;
 
 @Data
 public class ProductRequest {
@@ -54,9 +55,9 @@ public class ProductRequest {
         @NotNull(message = "Loại chai không được để trống")
         private Integer bottleTypeId;
 
-        @NotBlank(message = "SKU không được để trống")
+/*        @NotBlank(message = "SKU không được để trống")
         @Size(max = 100, message = "SKU không được vượt quá 100 ký tự")
-        private String sku;
+        private String sku;*/
 
         @NotNull(message = "Giá không được để trống")
         @DecimalMin(
@@ -72,6 +73,12 @@ public class ProductRequest {
                 message = "Tồn kho không được âm"
         )
         private Integer stockQuantity;
+
+        @NotNull(message = "Ngày sản xuất không được để trống")
+        private LocalDate manufacturingDate;
+
+        @NotNull(message = "Hạn sử dụng không được để trống")
+        private LocalDate expirationDate;
 
         private Integer status = 1;
     }

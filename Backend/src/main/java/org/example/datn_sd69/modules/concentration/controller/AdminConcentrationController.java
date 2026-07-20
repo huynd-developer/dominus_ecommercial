@@ -22,7 +22,7 @@ public class AdminConcentrationController {
     public ResponseEntity<Page<Concentration>> getAllConcentrations(
             @RequestParam(name = "keyword", required = false, defaultValue = "") String keyword, // BẮT BUỘC CÓ DÒNG NÀY
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "5") int size) {
+            @RequestParam(name = "size", defaultValue = "99") int size) {
 
         Pageable pageable = PageRequest.of(page, size);
         return ResponseEntity.ok(concentrationService.getAll(keyword, pageable));

@@ -6,9 +6,10 @@ import type {
 } from '../types/product.type'
 
 export const productService = {
-  // ==========================
+
+  // =====================================
   // PRODUCT
-  // ==========================
+  // =====================================
 
   getProducts: async (
     page = 0,
@@ -64,14 +65,15 @@ export const productService = {
     return response.data ?? response
   },
 
-  // ==========================
-  // IMAGE
-  // ==========================
+  // =====================================
+  // PRODUCT IMAGE
+  // =====================================
 
   uploadImage: async (
     productId: number,
     file: File
   ) => {
+
     const formData = new FormData()
 
     formData.append('file', file)
@@ -89,53 +91,93 @@ export const productService = {
     return response.data ?? response
   },
 
-  // ==========================
+  getImagesByProduct: async (
+    productId: number
+  ) => {
+
+    const response = await request.get(
+      `/api/v1/products/${productId}/images`
+    )
+
+    return response.data ?? response
+  },
+
+  setPrimaryImage: async (
+    productId: number,
+    imageId: number
+  ) => {
+
+    const response = await request.put(
+      `/api/v1/products/admin/${productId}/images/${imageId}/primary`
+    )
+
+    return response.data ?? response
+  },
+
+  deleteImage: async (
+    imageId: number
+  ) => {
+
+    const response = await request.delete(
+      `/api/v1/products/admin/images/${imageId}`
+    )
+
+    return response.data ?? response
+  },
+
+  // =====================================
   // MASTER DATA
-  // ==========================
+  // =====================================
 
   getBrands: async () => {
+
     const response = await request.get(
-      '/api/admin/brands'
+      '/api/admin/brands?page=0&size=999'
     )
 
     return response.data ?? response
   },
 
   getCategories: async () => {
+
     const response = await request.get(
-      '/api/admin/categories'
+      '/api/admin/categories?page=0&size=999'
     )
 
     return response.data ?? response
   },
 
   getConcentrations: async () => {
+
     const response = await request.get(
-      '/api/admin/concentrations'
+      '/api/admin/concentrations?page=0&size=999'
     )
 
     return response.data ?? response
   },
 
   getCapacities: async () => {
+
     const response = await request.get(
-      '/api/admin/capacities'
+      '/api/admin/capacities?page=0&size=999'
     )
 
     return response.data ?? response
   },
 
   getBottleTypes: async () => {
+
     const response = await request.get(
-      '/api/admin/bottle-types'
+      '/api/admin/bottle-types?page=0&size=999'
     )
 
     return response.data ?? response
   },
 
   getFragranceFamilies: async () => {
+
     const response = await request.get(
-      '/api/admin/fragrance-families'
+      '/api/admin/fragrance-families?page=0&size=999'
     )
 
     return response.data ?? response

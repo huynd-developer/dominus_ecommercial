@@ -22,7 +22,7 @@ public class AdminBottleTypeController {
     public ResponseEntity<Page<BottleType>> getAllBottleTypes(
             @RequestParam(name = "keyword", defaultValue = "") String keyword,
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "5") int size) {
+            @RequestParam(name = "size", defaultValue = "99") int size) {
 
         Pageable pageable = PageRequest.of(page, size);
         return ResponseEntity.ok(bottleTypeService.getAll(keyword, pageable));

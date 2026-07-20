@@ -5,8 +5,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
@@ -14,17 +14,28 @@ import java.util.Optional;
 
 public interface ProductVariantRepository extends JpaRepository<ProductVariant, Integer> {
 
-    // Lấy toàn bộ variant của 1 sản phẩm
+    // ================= CRUD =================
+
     List<ProductVariant> findByProduct_Id(Integer productId);
 
-    // Xóa toàn bộ variant theo ProductId
     @Modifying
     @Query("DELETE FROM ProductVariant v WHERE v.product.id = :productId")
     void deleteByProduct_Id(@Param("productId") Integer productId);
 
-    boolean existsBySkuIgnoreCase(String sku);
+    // ================= SKU =================
 
-    boolean existsBySkuIgnoreCaseAndIdNot(String sku, Integer id);
+    /**
+     * Kiểm tra SKU đã tồn tại chưa.
+     * Dùng khi backend tự sinh SKU.
+     */
+    boolean existsBySku(String sku);
+
+    /**
+     * Dùng nếu sau này cho phép sửa SKU.
+     */
+    boolean existsBySkuAndIdNot(String sku, Integer id);
+
+    // ================= Paging =================
 
     Page<ProductVariant> findByIsDeletedFalse(Pageable pageable);
 
@@ -33,21 +44,25 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
             Pageable pageable
     );
 
-    Page<ProductVariant> findByProductIdAndIsDeletedFalse(
+    Page<ProductVariant> findByProduct_IdAndIsDeletedFalse(
             Integer productId,
             Pageable pageable
     );
 
-    Page<ProductVariant> findByProductIdAndSkuContainingIgnoreCaseAndIsDeletedFalse(
+    Page<ProductVariant> findByProduct_IdAndSkuContainingIgnoreCaseAndIsDeletedFalse(
             Integer productId,
             String keyword,
             Pageable pageable
     );
 
-    List<ProductVariant> findByProductIdAndStatusAndIsDeletedFalse(
+    List<ProductVariant> findByProduct_IdAndStatusAndIsDeletedFalse(
             Integer productId,
             Integer status
     );
+
+    List<ProductVariant> findByProduct_IdAndIsDeletedFalse(Integer productId);
+
+    // ================= Detail =================
 
     @EntityGraph(attributePaths = {
             "product",
@@ -63,9 +78,9 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
             "capacity",
             "bottleType"
     })
-    Optional<ProductVariant> findBySkuIgnoreCaseAndIsDeletedFalse(String sku);
+    Optional<ProductVariant> findBySkuAndIsDeletedFalse(String sku);
 
-    List<ProductVariant> findByProductIdAndIsDeletedFalse(Integer productId);
+    // ================= Promotion =================
 
     @EntityGraph(attributePaths = {
             "product",
@@ -83,8 +98,15 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
         ORDER BY p.name ASC, v.sku ASC
     """)
     Page<ProductVariant> searchVariantsForPromotion(
-            String keyword,
+            @Param("keyword") String keyword,
             Pageable pageable
     );
 
+    @EntityGraph(attributePaths = {
+            "product",
+            "product.brand",
+            "capacity",
+            "bottleType"
+    })
+    Optional<ProductVariant> findBySkuIgnoreCaseAndIsDeletedFalse(String sku);
 }

@@ -26,7 +26,7 @@ public class AdminBrandController {
     public ResponseEntity<?> getAll(
             @RequestParam(name = "keyword", required = false) String keyword,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "99") int size) {
 
         return ResponseEntity.ok(Map.of(
                 "status", "Thành công",

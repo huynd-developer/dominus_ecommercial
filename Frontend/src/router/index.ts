@@ -1,16 +1,17 @@
 import { createRouter, createWebHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
-import { h } from "vue";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
+import { h } from "vue";
 
-import ShopLayout from "@/modules/shop/layout/ShopLayout.vue";
-import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
-
+// Import các trang của m
 import CartView from "@/modules/shop/feature/cart/views/CartView.vue";
 import CheckoutView from "@/modules/shop/feature/checkout/views/CheckoutView.vue";
 import PaymentReturnView from "@/modules/shop/feature/checkout/views/PaymentReturnView.vue";
-
 import ProductView from "@/modules/admin/feature/product/views/ProductView.vue";
+
+// Admin layout & pages
+import AdminLayout from "@/modules/admin/layout/AdminLayout.vue";
+import ShopLayout from "@/modules/shop/layout/ShopLayout.vue";
 
 const mockPage = (title: string, assignee: string) => ({
   render: () =>
@@ -31,6 +32,9 @@ const mockPage = (title: string, assignee: string) => ({
 });
 
 const routes: Array<RouteRecordRaw> = [
+  // ==========================================
+  // STOREFRONT - USER
+  // ==========================================
   {
     path: "/",
     component: ShopLayout,
@@ -45,7 +49,9 @@ const routes: Array<RouteRecordRaw> = [
         path: "customer/profile",
         name: "CustomerProfile",
         component: () =>
-          import("@/modules/shop/feature/profile/views/CustomerProfileView.vue"),
+          import(
+            "@/modules/shop/feature/profile/views/CustomerProfileView.vue"
+          ),
         meta: {
           requiresAuth: true,
           allowedRoles: ["USER"],
@@ -54,6 +60,7 @@ const routes: Array<RouteRecordRaw> = [
     ],
   },
 
+  // Code của m (Chi tiết SP, Giỏ hàng, Thanh toán)
   {
     path: "/products",
     name: "ProductList",
@@ -94,6 +101,9 @@ const routes: Array<RouteRecordRaw> = [
     component: PaymentReturnView,
   },
 
+  // ==========================================
+  // POS PAYMENT RETURN
+  // ==========================================
   {
     path: "/payment/result",
     name: "PosPaymentResult",
@@ -104,6 +114,9 @@ const routes: Array<RouteRecordRaw> = [
     },
   },
 
+  // ==========================================
+  // AUTH
+  // ==========================================
   {
     path: "/login",
     name: "Login",
@@ -120,6 +133,9 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import("@/modules/auth/views/RegisterView.vue"),
   },
 
+  // ==========================================
+  // ADMIN
+  // ==========================================
   {
     path: "/admin",
     component: AdminLayout,
@@ -153,8 +169,8 @@ const routes: Array<RouteRecordRaw> = [
         component: ProductView,
         meta: {
           requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER"],
-        },
+          allowedRoles: ["OWNER", "MANAGER"]
+        }
       },
       {
         path: "categories",
@@ -183,20 +199,14 @@ const routes: Array<RouteRecordRaw> = [
           import(
             "@/modules/admin/feature/fragranceFamily/views/FragranceFamilyView.vue"
           ),
-        meta: {
-          requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER"],
-        },
+        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "capacities",
         name: "AdminCapacities",
         component: () =>
           import("@/modules/admin/feature/capacity/views/CapacityView.vue"),
-        meta: {
-          requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER"],
-        },
+        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "concentrations",
@@ -205,25 +215,21 @@ const routes: Array<RouteRecordRaw> = [
           import(
             "@/modules/admin/feature/concentration/views/ConcentrationView.vue"
           ),
-        meta: {
-          requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER"],
-        },
+        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "bottle-types",
         name: "AdminBottleTypes",
         component: () =>
           import("@/modules/admin/feature/bottleType/views/BottleTypeView.vue"),
-        meta: {
-          requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER"],
-        },
+        meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
         path: "orders",
         name: "AdminOrders",
-        component: mockPage("Quản lý Đơn hàng", "Trung"),
+        // ĐÃ SỬA: Thay đổi từ mockPage sang view thực tế
+        component: () =>
+          import("@/modules/admin/feature/orders/views/OrderListView.vue"),
         meta: {
           requiresAuth: true,
           allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
@@ -232,8 +238,12 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "vouchers",
         name: "AdminVouchers",
+<<<<<<< HEAD
+        component: mockPage("Hệ thống Voucher", "Hiếu"),
+=======
         component: () =>
           import("@/modules/admin/feature/voucher/views/VoucherListView.vue"),
+>>>>>>> 8081e6f43c7f943ec21444881202dd10a53a2465
         meta: {
           requiresAuth: true,
           allowedRoles: ["OWNER", "MANAGER"],
@@ -271,11 +281,6 @@ const routes: Array<RouteRecordRaw> = [
       },
     ],
   },
-
-  {
-    path: "/:pathMatch(.*)*",
-    redirect: "/",
-  },
 ];
 
 const router = createRouter({
@@ -283,22 +288,22 @@ const router = createRouter({
   routes,
 });
 
-router.beforeEach((to) => {
+router.beforeEach(async (to, from) => {
   const authStore = useAuthStore();
 
   const token = localStorage.getItem("token");
   const localRole = localStorage.getItem("role");
 
-  const isAuthenticated = authStore.isAuthenticated || Boolean(token);
+  const isAuthenticated = authStore.isAuthenticated || !!token;
 
-  const userRole = String(authStore.role || localRole || "")
+  const userRole = (authStore.role || localRole || "")
     .toUpperCase()
     .replace("ROLE_", "")
     .trim();
 
   if (
     isAuthenticated &&
-    ["Login", "AdminLogin", "Register"].includes(String(to.name || ""))
+    ["Login", "AdminLogin", "Register"].includes(to.name as string)
   ) {
     if (userRole === "OWNER") {
       return {
@@ -332,9 +337,6 @@ router.beforeEach((to) => {
       return {
         name: "Login",
         replace: true,
-        query: {
-          redirect: to.fullPath,
-        },
       };
     }
 

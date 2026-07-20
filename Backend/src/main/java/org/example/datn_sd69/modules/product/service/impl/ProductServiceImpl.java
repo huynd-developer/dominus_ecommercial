@@ -5,6 +5,7 @@ import com.cloudinary.utils.ObjectUtils;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.*;
 import org.example.datn_sd69.modules.product.dto.request.ProductRequest;
+import org.example.datn_sd69.modules.product.dto.response.ProductImageResponse;
 import org.example.datn_sd69.modules.product.dto.response.ProductResponse;
 import org.example.datn_sd69.modules.product.service.ProductService;
 import org.example.datn_sd69.repository.*;
@@ -13,6 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import java.time.LocalDate;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -92,9 +94,29 @@ public class ProductServiceImpl implements ProductService {
             variant.setProduct(savedProduct);
             variant.setCapacity(capacity);
             variant.setBottleType(bottleType);
-            variant.setSku(dto.getSku());
+
+            String sku = generateSku(savedProduct, capacity, bottleType);
+            variant.setSku(sku);
+
+            variant.setPrice(dto.getPrice());
             variant.setPrice(dto.getPrice());
             variant.setStockQuantity(dto.getStockQuantity());
+
+            if (dto.getExpirationDate()
+                    .isBefore(dto.getManufacturingDate())) {
+                throw new RuntimeException(
+                        "Hạn sử dụng phải sau ngày sản xuất"
+                );
+            }
+
+            variant.setManufacturingDate(
+                    dto.getManufacturingDate()
+            );
+
+            variant.setExpirationDate(
+                    dto.getExpirationDate()
+            );
+
             variant.setStatus(dto.getStatus());
             variant.setIsDeleted(false);
 
@@ -169,9 +191,28 @@ public class ProductServiceImpl implements ProductService {
             variant.setProduct(product);
             variant.setCapacity(capacity);
             variant.setBottleType(bottleType);
-            variant.setSku(dto.getSku());
+
+            String sku = generateSku(product, capacity, bottleType);
+            variant.setSku(sku);
+
             variant.setPrice(dto.getPrice());
             variant.setStockQuantity(dto.getStockQuantity());
+
+            if (dto.getExpirationDate()
+                    .isBefore(dto.getManufacturingDate())) {
+                throw new RuntimeException(
+                        "Hạn sử dụng phải sau ngày sản xuất"
+                );
+            }
+
+            variant.setManufacturingDate(
+                    dto.getManufacturingDate()
+            );
+
+            variant.setExpirationDate(
+                    dto.getExpirationDate()
+            );
+
             variant.setStatus(dto.getStatus());
             variant.setIsDeleted(false);
 
@@ -260,14 +301,19 @@ public class ProductServiceImpl implements ProductService {
         productRepository.save(product);
     }
     @Override
+    @Transactional
     public String uploadImage(
             Integer productId,
-            MultipartFile file) throws Exception {
+            MultipartFile file,
+            Boolean isPrimary
+    ) throws Exception {
 
         Product product =
                 productRepository.findById(productId)
                         .orElseThrow(() ->
-                                new RuntimeException("Không tìm thấy sản phẩm"));
+                                new RuntimeException(
+                                        "Không tìm thấy sản phẩm"
+                                ));
 
         Map uploadResult =
                 cloudinary.uploader().upload(
@@ -276,56 +322,142 @@ public class ProductServiceImpl implements ProductService {
                 );
 
         String imageUrl =
-                uploadResult.get("secure_url").toString();
+                uploadResult.get("secure_url")
+                        .toString();
 
-        ProductImage image = new ProductImage();
+        if (Boolean.TRUE.equals(isPrimary)) {
+
+            List<ProductImage> oldImages =
+                    productImageRepository
+                            .findByProduct_Id(productId);
+
+            for (ProductImage image : oldImages) {
+
+                image.setIsPrimary(false);
+
+            }
+
+            productImageRepository.saveAll(oldImages);
+        }
+
+        ProductImage image =
+                new ProductImage();
 
         image.setProduct(product);
+
         image.setImageUrl(imageUrl);
 
-        List<ProductImage> images =
-                productImageRepository.findByProduct_Id(productId);
-
-        image.setIsPrimary(images.isEmpty());
+        image.setIsPrimary(
+                Boolean.TRUE.equals(isPrimary)
+        );
 
         productImageRepository.save(image);
 
         return imageUrl;
     }
     @Override
-    public void deleteProductImage(Integer imageId) {
+    @Transactional
+    public void deleteProductImage(
+            Integer imageId
+    ) {
 
         ProductImage image =
-                productImageRepository.findById(imageId)
+                productImageRepository.findById(
+                                imageId
+                        )
                         .orElseThrow(() ->
-                                new RuntimeException("Không tìm thấy ảnh"));
+                                new RuntimeException(
+                                        "Không tìm thấy ảnh"
+                                ));
+
+        Integer productId =
+                image.getProduct().getId();
+
+        boolean wasPrimary =
+                Boolean.TRUE.equals(
+                        image.getIsPrimary()
+                );
 
         productImageRepository.delete(image);
+
+        if (wasPrimary) {
+
+            List<ProductImage> remainImages =
+                    productImageRepository
+                            .findByProduct_Id(productId);
+
+            if (!remainImages.isEmpty()) {
+
+                ProductImage first =
+                        remainImages.get(0);
+
+                first.setIsPrimary(true);
+
+                productImageRepository.save(first);
+            }
+        }
     }
     @Override
+    @Transactional
     public void setPrimaryImage(
             Integer productId,
-            Integer imageId) {
-
-        ProductImage selectedImage =
-                productImageRepository.findById(imageId)
-                        .orElseThrow(() ->
-                                new RuntimeException("Không tìm thấy ảnh"));
+            Integer imageId
+    ) {
 
         List<ProductImage> images =
-                productImageRepository.findByProduct_Id(productId);
+                productImageRepository
+                        .findByProduct_Id(productId);
 
         for (ProductImage image : images) {
 
-            image.setIsPrimary(false);
-
-            productImageRepository.save(image);
+            image.setIsPrimary(
+                    image.getId().equals(imageId)
+            );
         }
 
-        selectedImage.setIsPrimary(true);
-
-        productImageRepository.save(selectedImage);
+        productImageRepository.saveAll(images);
     }
+
+    private String generateSku(Product product,
+                               Capacity capacity,
+                               BottleType bottleType) {
+
+        String productCode = product.getName()
+                .replaceAll("[^a-zA-Z0-9]", "")
+                .toUpperCase();
+
+        if (productCode.length() > 5) {
+            productCode = productCode.substring(0, 5);
+        }
+
+        String capacityCode = String.valueOf(capacity.getValue());
+
+        String bottleCode = bottleType.getName()
+                .replaceAll("[^a-zA-Z0-9]", "")
+                .toUpperCase();
+
+        if (bottleCode.length() > 3) {
+            bottleCode = bottleCode.substring(0, 3);
+        }
+
+        String sku;
+
+        do {
+            int random = new Random().nextInt(9000) + 1000;
+
+            sku = productCode
+                    + "-"
+                    + capacityCode
+                    + "-"
+                    + bottleCode
+                    + "-"
+                    + random;
+
+        } while (productVariantRepository.existsBySku(sku));
+
+        return sku;
+    }
+
     private ProductResponse mapToResponse(
             Product product) {
 
@@ -397,6 +529,33 @@ public class ProductServiceImpl implements ProductService {
                         product.getId()
                 );
 
+        response.setImages(
+
+                images.stream()
+
+                        .map(img -> {
+
+                            ProductImageResponse dto =
+                                    new ProductImageResponse();
+
+                            dto.setId(
+                                    img.getId()
+                            );
+
+                            dto.setImageUrl(
+                                    img.getImageUrl()
+                            );
+
+                            dto.setIsPrimary(
+                                    img.getIsPrimary()
+                            );
+
+                            return dto;
+                        })
+
+                        .toList()
+        );
+
         images.stream()
                 .filter(img ->
                         Boolean.TRUE.equals(
@@ -451,6 +610,14 @@ public class ProductServiceImpl implements ProductService {
                                     v.getStockQuantity()
                             );
 
+                            dto.setManufacturingDate(
+                                    v.getManufacturingDate()
+                            );
+
+                            dto.setExpirationDate(
+                                    v.getExpirationDate()
+                            );
+
                             dto.setStatus(
                                     v.getStatus()
                             );
@@ -462,5 +629,33 @@ public class ProductServiceImpl implements ProductService {
         response.setVariants(variantDTOs);
 
         return response;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductImageResponse> getProductImages(
+            Integer productId
+    ) {
+
+        return productImageRepository
+                .findByProduct_Id(productId)
+                .stream()
+                .map(img -> {
+
+                    ProductImageResponse dto =
+                            new ProductImageResponse();
+
+                    dto.setId(img.getId());
+
+                    dto.setImageUrl(img.getImageUrl());
+
+                    dto.setIsPrimary(
+                            img.getIsPrimary()
+                    );
+
+                    return dto;
+
+                })
+                .toList();
     }
 }

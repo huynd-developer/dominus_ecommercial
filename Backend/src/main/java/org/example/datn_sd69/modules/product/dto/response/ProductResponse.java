@@ -5,6 +5,7 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
+import java.time.LocalDate;
 
 @Data
 public class ProductResponse {
@@ -30,6 +31,8 @@ public class ProductResponse {
     private Integer status;
 
     private String primaryImageUrl;
+
+    private List<ProductImageResponse> images;
 
     private Set<FragranceFamilyDTO> fragranceFamilies;
 
@@ -61,6 +64,10 @@ public class ProductResponse {
         private BigDecimal price;
 
         private Integer stockQuantity;
+
+        private LocalDate manufacturingDate;
+
+        private LocalDate expirationDate;
 
         private Integer status;
     }
