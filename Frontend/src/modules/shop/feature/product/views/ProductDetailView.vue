@@ -212,7 +212,7 @@ const fetchProducts = async () => {
   try {
     isLoading.value = true;
 
-    const res = await api.get("/products");
+    const res = await api.get("/v1/products");
     const rawData = extractArrayData(res.data);
 
     productList.value = Array.isArray(rawData)

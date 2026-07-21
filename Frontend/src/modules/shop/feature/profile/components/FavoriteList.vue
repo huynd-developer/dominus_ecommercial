@@ -45,10 +45,6 @@
                   {{ item.productName }}
                 </div>
 
-                <div class="text-muted small">
-                  {{ item.brandName }} · {{ item.sku }}
-                </div>
-
                 <div class="small mt-1">
                   {{ item.capacityValue || "-" }}ml ·
                   {{ item.bottleTypeName || "-" }}

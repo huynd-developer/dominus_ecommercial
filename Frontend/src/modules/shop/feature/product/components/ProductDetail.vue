@@ -184,11 +184,6 @@
             </div>
 
             <div class="spec-item">
-              <span>SKU</span>
-              <strong>{{ selectedSkuText }}</strong>
-            </div>
-
-            <div class="spec-item">
               <span>Tình trạng</span>
               <strong :class="isVariantOutOfStock ? 'text-danger' : 'text-success'">
                 {{ stockStatusText }}

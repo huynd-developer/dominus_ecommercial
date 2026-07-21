@@ -136,7 +136,7 @@
                 }"
                 @click="selectedVariant = v"
               >
-                <span class="vm-v-name">{{ v.capacity || v.bottleType || 'Loại ' + (v.productVariantId || v.id) }}</span>
+                <span class="vm-v-name">{{ v.displayCapacity || formatVariantName(v) }}</span>
                 <span class="vm-v-stock">Kho: {{ v.stockQuantity || v.stock || 0 }}</span>
               </button>
             </div>
@@ -235,6 +235,40 @@ const shortBrand = computed(() => brandMap[props.product.brand] || String(props.
 const getBottleStyle = (color?: string): Record<string, string> => ({ "--bottle-color": color || "#0a192f" });
 const formatCurrency = (value: number) => new Intl.NumberFormat("vi-VN").format(Number(value || 0)) + " đ";
 
+// Hàm đọc và format tên dung tích chuẩn xác từ API
+const formatVariantName = (v: any) => {
+  if (!v) return 'Loại';
+  
+  let cap = null;
+  
+  // Trích xuất dung tích từ nhiều trường hợp của Backend
+  if (v.capacity && typeof v.capacity === "object") {
+    cap = v.capacity.value ?? v.capacity.name;
+  } else if (v.capacityValue != null) {
+    cap = v.capacityValue;
+  } else if (v.volume != null) {
+    cap = v.volume;
+  } else if (typeof v.capacity === "string" || typeof v.capacity === "number") {
+    cap = v.capacity;
+  }
+
+  // Format thêm chữ "ml" cho đẹp
+  if (cap != null && cap !== "") {
+    const numeric = Number(cap);
+    if (!Number.isNaN(numeric)) return `${numeric}ml`;
+    const text = String(cap);
+    return text.toLowerCase().includes("ml") ? text : `${text}ml`;
+  }
+
+  // Nếu không có dung tích thì lấy Loại chai (nếu có)
+  if (v.bottleType) {
+    return typeof v.bottleType === "object" ? v.bottleType.name : v.bottleType;
+  }
+
+  // Bước đường cùng mới trả về Loại + ID
+  return 'Loại ' + (v.productVariantId || v.id);
+};
+
 const showToast = (type: "success" | "warning" | "error", title: string, message: string, showCartLink = false) => {
   toast.value = { show: true, type, title, message, showCartLink };
   if (toastTimer) window.clearTimeout(toastTimer);
@@ -280,10 +314,7 @@ const checkLoginBeforeAction = () => {
   return true;
 };
 
-// Hàm mở Modal (Đã dọn dẹp logic)
 const openVariantModal = async (type: 'CART' | 'BUY') => {
-  console.log("-> Bấm nút:", type); // M bật F12 xem có in ra dòng này không
-
   if (!checkLoginBeforeAction()) return;
 
   actionType.value = type;
@@ -294,19 +325,68 @@ const openVariantModal = async (type: 'CART' | 'BUY') => {
   isLoadingVariants.value = true;
 
   try {
-    const res = await api.get(`/products/${getProductId()}`);
+    const res = await api.get(`/v1/products/${getProductId()}`);
     const data = res.data?.data || res.data;
 
-    if (data && data.variants && data.variants.length > 0) {
-      fullVariants.value = data.variants;
-    } else if (props.product.variants && props.product.variants.length > 0) {
-      fullVariants.value = props.product.variants;
-    } else {
-      fullVariants.value = [props.product];
+    let rawVariants = data?.variants || data?.productVariants || data?.productVariantList;
+
+    if (!rawVariants || rawVariants.length === 0) {
+      rawVariants = props.product.variants || [props.product];
     }
+
+    const processedVariants = rawVariants.map((v: any) => {
+      let cap = null;
+
+      // Đã update thêm `capacityName` theo đúng cấu trúc ảnh m gửi
+      if (v.capacityName != null) {
+        cap = v.capacityName;
+      } else if (v.capacity && typeof v.capacity === "object") {
+        cap = v.capacity.value ?? v.capacity.name;
+      } else if (v.capacityValue != null) {
+        cap = v.capacityValue;
+      } else if (v.volume != null) {
+        cap = v.volume;
+      } else if (typeof v.capacity === "string" || typeof v.capacity === "number") {
+        cap = v.capacity;
+      }
+
+      let displayCap = "";
+      let numericCap = 0;
+
+      // Xử lý mất đuôi .0 (VD: "50.0" -> 50) và ghép đuôi "ml"
+      if (cap != null && cap !== "") {
+        numericCap = parseFloat(String(cap).replace("ml", "")) || 0;
+        displayCap = numericCap > 0 ? `${numericCap}ml` : String(cap);
+      }
+
+      // Đã update thêm `bottleTypeName`
+      if (!displayCap || numericCap === 0) {
+         const bottle = v.bottleTypeName || v.bottleType;
+         displayCap = typeof bottle === "object" ? bottle?.name : bottle;
+      }
+
+      if (!displayCap) {
+         displayCap = 'Loại ' + (v.productVariantId || v.id);
+      }
+
+      return {
+        ...v,
+        displayCapacity: displayCap,
+        numericCapacity: numericCap
+      };
+    });
+
+    processedVariants.sort((a: any, b: any) => a.numericCapacity - b.numericCapacity);
+    fullVariants.value = processedVariants;
+
   } catch (error) {
     console.error("Lỗi lấy danh sách biến thể:", error);
-    fullVariants.value = props.product.variants || [props.product];
+    const fallbackVariants = props.product.variants || [props.product];
+    fullVariants.value = fallbackVariants.map((v: any) => ({
+        ...v,
+        displayCapacity: 'Loại ' + (v.productVariantId || v.id),
+        numericCapacity: 0
+    }));
   } finally {
     isLoadingVariants.value = false;
   }

@@ -95,7 +95,8 @@
           >
             <div class="order-header-content">
               <div>
-                <strong>Đơn #{{ order.orderId }}</strong>
+                <!-- ĐÃ SỬA: Dùng hàm generateOrderCode để tạo mã đơn -->
+                <strong>Đơn {{ generateOrderCode(order.orderId) }}</strong>
                 <div class="small text-muted">
                   {{ formatDate(order.createdAt) }}
                 </div>
@@ -202,9 +203,9 @@
                         class="item-img"
                         alt="item"
                       />
-
-                      <div v-else class="item-img placeholder-img">
-                        No
+                      <!-- ĐÃ SỬA: Việt hóa chữ "No" thành "Không có ảnh" -->
+                      <div v-else class="item-img placeholder-img" style="text-align: center; line-height: 1.2;">
+                        Không<br>có ảnh
                       </div>
 
                       <div class="product-info">
@@ -214,11 +215,6 @@
 
                         <div class="brand-name">
                           {{ item.brandName || "Không rõ thương hiệu" }}
-                        </div>
-
-                        <div class="sku-line">
-                          <span>SKU:</span>
-                          <code>{{ item.sku || "-" }}</code>
                         </div>
 
                         <div class="variant-line">
@@ -395,7 +391,7 @@
                     Hủy đơn
                   </button>
 
-                  <!-- NÚT MUA LẠI MỚI THÊM VÀO -->
+                  <!-- NÚT MUA LẠI -->
                   <button
                     v-if="order.status === 4 || order.status === 3"
                     class="btn btn-primary btn-sm px-3 text-white"
@@ -431,7 +427,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { useRouter } from "vue-router"; // <-- Import Router
+import { useRouter } from "vue-router"; 
 import Swal from "sweetalert2";
 import ReviewModal from "./ReviewModal.vue";
 import { customerProfileService } from "../services/customerProfile.service";
@@ -444,7 +440,7 @@ import type {
 } from "../types/profile.type";
 
 const store = useCustomerProfileStore();
-const router = useRouter(); // <-- Khởi tạo router
+const router = useRouter(); 
 
 // Biến lưu trạng thái Tab hiện tại
 const currentTab = ref<number | 'ALL'>('ALL');
@@ -458,6 +454,12 @@ const openedOrderId = ref<number | null>(null);
 
 const reviewableMap = reactive<Record<number, ReviewableOrderItemResponse[]>>({});
 const reviewLoadingByOrder = reactive<Record<number, boolean>>({});
+
+// ĐÃ THÊM: Hàm "phù phép" ID thành Mã đơn hàng (VD: DH-000015)
+const generateOrderCode = (id: number | string | null | undefined) => {
+  if (!id) return "N/A";
+  return `DH-${String(id).padStart(6, '0')}`;
+};
 
 // Lọc đơn hàng theo Tab
 const filteredOrders = computed(() => {
@@ -643,6 +645,7 @@ const openReview = async (orderId: number, orderItemId: number) => {
 const submitReview = async (payload: {
   rating: number;
   comment: string | null;
+  files: File[]; // Nhận thêm mảng file từ Modal
 }) => {
   if (!selectedReviewItem.value) {
     return;
@@ -654,11 +657,24 @@ const submitReview = async (payload: {
   try {
     submittingReview.value = true;
 
-    await customerProfileService.createReview({
-      orderItemId,
-      rating: payload.rating,
-      comment: payload.comment,
-    });
+    // 1. Tạo FormData để chứa dữ liệu
+    const formData = new FormData();
+    formData.append('orderItemId', String(orderItemId));
+    formData.append('rating', String(payload.rating));
+    
+    if (payload.comment) {
+      formData.append('comment', payload.comment);
+    }
+
+    // 2. Nhét từng file ảnh/video vào FormData
+    if (payload.files && payload.files.length > 0) {
+      payload.files.forEach((file) => {
+        formData.append('mediaFiles', file); // 'mediaFiles' là tên key, nhớ dặn Backend hứng đúng tên này nhé
+      });
+    }
+
+    // 3. Gọi API (nhớ báo Backend đổi API nhận form-data thay vì application/json)
+    await customerProfileService.createReview(formData as any);
 
     reviewModalVisible.value = false;
     selectedReviewItem.value = null;
@@ -675,13 +691,52 @@ const submitReview = async (payload: {
 };
 
 const cancelOrder = async (order: CustomerOrderResponse) => {
-  await store.cancelOrder(order);
-  await fetchOrdersAndReviews();
+  const { value: reason, isConfirmed } = await Swal.fire({
+    title: "Lý do hủy đơn hàng?",
+    text: "Vui lòng cho chúng tôi biết lý do bạn muốn hủy đơn này:",
+    input: "radio",
+    inputOptions: {
+      "Thay đổi thông tin": "Tôi muốn cập nhật địa chỉ / sđt nhận hàng",
+      "Thay đổi sản phẩm": "Tôi muốn thêm/bớt sản phẩm hoặc đổi phân loại",
+      "Thay đổi phương thức thanh toán": "Tôi muốn thay đổi phương thức thanh toán",
+      "Đổi ý": "Tôi không còn nhu cầu mua nữa",
+      "Giao hàng lâu": "Thời gian giao hàng dự kiến quá lâu",
+      "Khác": "Lý do khác",
+    },
+    inputValidator: (value) => {
+      if (!value) {
+        return "Vui lòng chọn một lý do để tiếp tục!";
+      }
+    },
+    showCancelButton: true,
+    confirmButtonColor: "#dc2626", 
+    cancelButtonColor: "#f8fafc", // Đổi nút Hủy thành màu nền xám nhạt cho sang
+    confirmButtonText: "Xác nhận hủy",
+    cancelButtonText: "Quay lại",
+    reverseButtons: true,
+    // THÊM ĐOẠN CUSTOM CLASS NÀY VÀO:
+    customClass: {
+      popup: 'swal-custom-popup',
+      title: 'swal-custom-title',
+      cancelButton: 'swal-custom-cancel',
+      confirmButton: 'swal-custom-confirm'
+    }
+  });
+
+  if (isConfirmed) {
+    try {
+      store.orderLoading = true;
+      await store.cancelOrder(order);
+      await fetchOrdersAndReviews();
+      toast("success", "Đã hủy đơn hàng thành công!");
+    } catch (error) {
+      showError(error, "Không thể hủy đơn hàng lúc này. Vui lòng thử lại.");
+    } finally {
+      store.orderLoading = false;
+    }
+  }
 };
 
-// ===============================================
-// HÀM XỬ LÝ MUA LẠI ĐƠN HÀNG (ĐÃ FIX LỖI + CHUYỂN THẲNG CHECKOUT)
-// ===============================================
 const handleReorder = async (order: any) => {
   const result = await Swal.fire({
     title: "Mua lại đơn hàng?",
@@ -699,24 +754,19 @@ const handleReorder = async (order: any) => {
     try {
       store.orderLoading = true;
 
-      // 1. Chạy vòng lặp tạo mảng các API thêm sản phẩm vào giỏ
       const addPromises = order.items.map((item: any) => {
-        // Backend thường lưu ID của phân loại sản phẩm ở productVariantId hoặc variantId
         const variantId = item.productVariantId || item.variantId || item.productId;
         
-        // Gọi API nhét đồ vào giỏ (nếu API của m khác thì sửa lại URL chỗ này nhé)
         return api.post("/v1/customer/cart/add", {
           productVariantId: Number(variantId),
           quantity: Number(item.quantity || 1)
         });
       });
 
-      // 2. Chờ TẤT CẢ sản phẩm được đẩy thành công vào giỏ hàng
       await Promise.all(addPromises);
 
       toast("success", "Đang chuyển đến trang thanh toán...");
       
-      // 3. Đẩy thẳng khách hàng sang trang Checkout như m yêu cầu!
       router.push("/checkout"); 
       
     } catch (error) {
@@ -726,14 +776,11 @@ const handleReorder = async (order: any) => {
     }
   }
 };
-// ===============================================
 
-// HÀM SINH LỊCH SỬ TRACKING GIẢ LẬP
 const getTrackingHistory = (order: any) => {
   const history = [];
   const baseDate = new Date(order.createdAt).getTime();
 
-  // Mốc 1: Chờ xác nhận
   history.push({
     time: new Date(baseDate),
     title: 'Đơn hàng đã đặt',
@@ -741,41 +788,37 @@ const getTrackingHistory = (order: any) => {
     active: order.status === 0
   });
 
-  // Mốc 2: Đang chuẩn bị (Status >= 1)
   if (order.status >= 1 && order.status !== 4) {
     history.push({
-      time: new Date(baseDate + 2 * 60 * 60 * 1000), // Cộng thêm 2 tiếng
+      time: new Date(baseDate + 2 * 60 * 60 * 1000), 
       title: 'Đang chuẩn bị hàng',
       desc: 'Người bán đang chuẩn bị kiện hàng của bạn.',
       active: order.status === 1
     });
   }
 
-  // Mốc 3: Đang giao (Status >= 2)
   if (order.status >= 2 && order.status !== 4) {
     history.push({
-      time: new Date(baseDate + 14 * 60 * 60 * 1000), // Cộng 14 tiếng
+      time: new Date(baseDate + 14 * 60 * 60 * 1000), 
       title: 'Đã giao cho ĐVVC',
       desc: 'Kiện hàng đã rời trung tâm phân loại và đang trên đường giao.',
       active: order.status === 2
     });
   }
 
-  // Mốc 4: Hoàn thành (Status === 3)
   if (order.status === 3) {
     history.push({
       time: order.completedAt ? new Date(order.completedAt) : new Date(baseDate + 48 * 60 * 60 * 1000),
       title: 'Đã giao',
       desc: `Kiện hàng của bạn đã được giao. Người nhận: ${order.customerName || 'Bạn'}`,
-      img: 'https://images.unsplash.com/photo-1615460549969-36fa19521a4f?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80', // Ảnh hộp hàng minh họa
+      img: 'https://images.unsplash.com/photo-1615460549969-36fa19521a4f?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80', 
       active: true
     });
   }
 
-  // Mốc Hủy (Status === 4)
   if (order.status === 4) {
     history.push({
-      time: new Date(baseDate + 30 * 60 * 1000), // Hủy sau 30 phút
+      time: new Date(baseDate + 30 * 60 * 1000), 
       title: 'Đã hủy',
       desc: 'Đơn hàng đã được hủy bỏ.',
       active: true,
@@ -783,7 +826,6 @@ const getTrackingHistory = (order: any) => {
     });
   }
 
-  // Đảo ngược để trạng thái mới nhất lên đầu
   return history.reverse();
 };
 
@@ -1435,5 +1477,65 @@ code {
   .order-total-box {
     max-width: 100%;
   }
+  /* 
+  CSS FIX GIAO DIỆN SWEETALERT2 (KHÔNG SCOPED)
+  Do SweetAlert2 render thẻ HTML ở ngoài cùng của body nên phải để un-scoped 
+*/
+.swal-custom-popup {
+  border-radius: 16px !important;
+  padding: 2em 1.5em !important;
+  font-family: inherit !important;
 }
+
+.swal-custom-title {
+  font-size: 22px !important;
+  color: #06132b !important; /* Xanh đen đồng bộ web */
+}
+
+/* Ép các tùy chọn Radio xếp dọc, căn trái */
+.swal2-radio {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+  text-align: left !important;
+  margin-top: 1.5em !important;
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.swal2-radio label {
+  display: flex !important;
+  align-items: center !important;
+  font-size: 15px !important;
+  color: #475569 !important;
+  width: 100% !important;
+  cursor: pointer;
+  margin: 0 !important;
+}
+
+/* Đổi màu dấu chấm radio thành màu vàng đồng của web */
+.swal2-radio input[type="radio"] {
+  margin-right: 12px !important;
+  accent-color: #bd9a5f !important; 
+  width: 18px !important;
+  height: 18px !important;
+  cursor: pointer;
+}
+
+.swal-custom-cancel {
+  color: #64748b !important;
+  border: 1px solid #e2e8f0 !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+.swal-custom-confirm {
+  font-weight: 600 !important;
+  box-shadow: 0 4px 10px rgba(220, 38, 38, 0.2) !important;
+}
+}
+
 </style>

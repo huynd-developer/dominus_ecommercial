@@ -115,7 +115,10 @@ const extractCapacity = (variant: any, flashSale?: FlashSaleProductResponse | nu
 
   let value = null;
 
-  if (variant?.capacity && typeof variant.capacity === "object") {
+  // Bổ sung `capacityName` thần thánh vào đây
+  if (variant?.capacityName != null) {
+    value = variant.capacityName;
+  } else if (variant?.capacity && typeof variant.capacity === "object") {
     value = variant.capacity.value ?? variant.capacity.name;
   } else if (variant?.capacityValue != null) {
     value = variant.capacityValue;
@@ -131,14 +134,14 @@ const extractCapacity = (variant: any, flashSale?: FlashSaleProductResponse | nu
     return "N/A";
   }
 
-  const numeric = Number(value);
+  // Xử lý cắt bỏ đuôi thập phân ".0" (VD: "50.0" -> 50)
+  const numeric = parseFloat(String(value).replace("ml", ""));
 
-  if (!Number.isNaN(numeric)) {
+  if (!Number.isNaN(numeric) && numeric > 0) {
     return `${numeric}ml`;
   }
 
   const text = String(value);
-
   return text.toLowerCase().includes("ml") ? text : `${text}ml`;
 };
 
@@ -411,24 +414,19 @@ const loadProductDetail = async () => {
     product.value = null;
 
     const [productRes, flashSaleIndex] = await Promise.all([
-      api.get(`/products/${productId}`),
+      // SỬA Ở ĐÂY: Thêm /v1 vào trước /products
+      api.get(`/v1/products/${productId}`), 
       fetchActiveFlashSaleIndex(),
     ]);
 
     const productData = extractObjectData(productRes.data);
 
-    let variantData: any[] = [];
-
-    try {
-      const variantRes = await api.get(`/products/${productId}/variants`);
-      variantData = extractArrayData(variantRes.data);
-    } catch (variantError) {
-      variantData =
-        productData?.variants ||
-        productData?.productVariants ||
-        productData?.productVariantList ||
+    // Lấy luôn danh sách biến thể từ API chi tiết sản phẩm, không cần gọi thêm API /variants cho đỡ lỗi 500
+    const variantData = 
+        productData?.variants || 
+        productData?.productVariants || 
+        productData?.productVariantList || 
         [];
-    }
 
     product.value = mapProduct(productData, variantData, flashSaleIndex);
   } catch (error: any) {
