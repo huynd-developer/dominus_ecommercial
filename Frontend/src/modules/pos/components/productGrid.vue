@@ -277,7 +277,7 @@
       </template>
 
       <template v-else-if="posStore.activeHeldOrderId">
-        Đang sửa phiếu treo: được tick thêm sản phẩm, tăng giảm số lượng, xóa
+        Đang sửa đơn lưu tạm: được tick thêm sản phẩm, tăng giảm số lượng, xóa
         sản phẩm, đổi voucher; không được đổi khách hàng.
       </template>
 
@@ -541,7 +541,7 @@ const buttonTitle = computed(() => {
   }
 
   if (posStore.activeHeldOrderId) {
-    return "Thêm sản phẩm vào phiếu treo đang sửa";
+    return "Thêm sản phẩm vào đơn lưu tạm đang sửa";
   }
 
   return "Chọn sản phẩm";
@@ -612,7 +612,7 @@ const isExpired = (product: any) => {
 const getDisabledReason = (product: any) => {
   /*
    * Không khóa sản phẩm bằng activeHeldOrderId.
-   * Mở phiếu treo vẫn được tick thêm sản phẩm và chỉnh số lượng.
+   * Mở đơn lưu tạm vẫn được tick thêm sản phẩm và chỉnh số lượng.
    * Chỉ khóa chọn/sửa sản phẩm khi đã nhận tiền mặt tạm.
    */
   if (posStore.cashPaid > 0) {

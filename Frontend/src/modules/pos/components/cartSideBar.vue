@@ -403,7 +403,7 @@
                 "
               ></i>
 
-              {{ posStore.activeHeldOrderId ? "Cập nhật phiếu" : "Lưu tạm" }}
+              {{ posStore.activeHeldOrderId ? "Cập nhật lưu tạm" : "Lưu tạm" }}
             </button>
           </div>
 
@@ -463,7 +463,7 @@
             <span v-else>
               {{
                 posStore.activeHeldOrderId
-                  ? "THANH TOÁN PHIẾU TREO"
+                  ? "THANH TOÁN ĐƠN LƯU TẠM"
                   : "XÁC NHẬN THANH TOÁN"
               }}
             </span>
@@ -690,7 +690,7 @@
     <div v-if="showTransferModal" class="modal-overlay">
       <div class="modal-content transfer-modal">
         <div class="modal-header">
-          <h3>Chuyển phiếu treo #{{ transferOrderId }}</h3>
+          <h3>Chuyển đơn lưu tạm #{{ transferOrderId }}</h3>
 
           <button class="close-btn" type="button" @click="closeTransferModal">
             ✕
@@ -717,7 +717,7 @@
             v-else-if="filteredTransferTargets.length === 0"
             class="text-center text-muted-custom py-3 font-xs"
           >
-            Không có nhân viên phù hợp để chuyển phiếu.
+            Không có nhân viên phù hợp để chuyển đơn lưu tạm.
           </div>
 
           <div v-else class="transfer-list">
@@ -754,12 +754,8 @@
 
                 <div class="text-end shrink-0">
                   <span class="role-badge">
-                    {{ employee.roleName || "STAFF" }}
+                    {{ formatEmployeeRoleName(employee.roleName) }}
                   </span>
-
-                  <div class="employee-job mt-1">
-                    {{ employee.jobTitle || "Nhân viên" }}
-                  </div>
                 </div>
               </div>
             </button>
@@ -804,7 +800,7 @@ const handleTransferHeldOrderEvent = async (event: Event) => {
   const orderId = Number(customEvent.detail?.orderId || 0);
 
   if (!orderId) {
-    setPosError("Mã phiếu treo không hợp lệ.");
+    setPosError("Mã đơn lưu tạm không hợp lệ.");
     return;
   }
 
@@ -816,7 +812,7 @@ const handleCancelHeldOrderEvent = async (event: Event) => {
   const orderId = Number(customEvent.detail?.orderId || 0);
 
   if (!orderId) {
-    setPosError("Mã phiếu treo không hợp lệ.");
+    setPosError("Mã đơn lưu tạm không hợp lệ.");
     return;
   }
 
@@ -874,7 +870,7 @@ const customerLocked = computed(() => {
   return posStore.isCustomerLocked;
 });
 const heldOrderCannotCheckoutMessage =
-  "Phiếu này đang thuộc nhân viên khác. Vui lòng chuyển phiếu trước khi thanh toán.";
+  "Đơn lưu tạm này đang thuộc nhân viên khác. Vui lòng chuyển đơn lưu tạm trước khi thanh toán.";
 
 const heldOrderCannotCheckout = computed(() => {
   return Boolean(
@@ -904,7 +900,7 @@ const getSwalIcon = (message: string): SweetAlertIcon => {
     lowerMessage.includes("đã lưu") ||
     lowerMessage.includes("đã hủy") ||
     lowerMessage.includes("đã chuyển") ||
-    lowerMessage.includes("đã treo") ||
+    lowerMessage.includes("đã lưu tạm") ||
     lowerMessage.includes("đã cập nhật")
   ) {
     return "success";
@@ -1000,14 +996,22 @@ const shouldShowCustomerSaveControls = computed(() => {
   );
 });
 
+const isCashierTransferTarget = (employee: any) => {
+  return String(employee?.roleName || "").trim().toUpperCase() === "CASHIER";
+};
+
 const filteredTransferTargets = computed(() => {
   const keyword = transferKeyword.value.trim().toLowerCase();
 
+  const cashierTargets = (posStore.transferTargets || []).filter(
+    isCashierTransferTarget
+  );
+
   if (!keyword) {
-    return posStore.transferTargets;
+    return cashierTargets;
   }
 
-  return posStore.transferTargets.filter((employee) => {
+  return cashierTargets.filter((employee) => {
     return (
       String(employee.employeeCode || "")
         .toLowerCase()
@@ -1021,10 +1025,7 @@ const filteredTransferTargets = computed(() => {
       String(employee.phone || "")
         .toLowerCase()
         .includes(keyword) ||
-      String(employee.roleName || "")
-        .toLowerCase()
-        .includes(keyword) ||
-      String(employee.jobTitle || "")
+      String(formatEmployeeRoleName(employee.roleName) || "")
         .toLowerCase()
         .includes(keyword)
     );
@@ -1035,6 +1036,25 @@ const formatPrice = (val?: number | null) => {
   return new Intl.NumberFormat("vi-VN").format(Number(val || 0));
 };
 
+const formatEmployeeRoleName = (roleName?: string | null) => {
+  const role = String(roleName || "")
+    .trim()
+    .toUpperCase();
+
+  switch (role) {
+    case "OWNER":
+      return "Chủ cửa hàng";
+    case "MANAGER":
+      return "Quản lý";
+    case "CASHIER":
+      return "Thu ngân";
+    case "USER":
+      return "Khách hàng";
+    default:
+      return "Nhân viên";
+  }
+};
+
 const normalizePhone = (phone?: string | null) => {
   return (phone || "").replace(/\D/g, "").trim();
 };
@@ -1043,7 +1063,7 @@ watch(
   () => [posStore.activeHeldOrderId, posStore.customer?.phone],
   () => {
     /*
-     * Khi mở phiếu treo từ header,
+     * Khi mở đơn lưu tạm từ header,
      * cartSideBar phải tự đồng bộ lại SĐT khách hàng vào input.
      */
     if (posStore.activeHeldOrderId && posStore.customer?.phone) {
@@ -1356,7 +1376,7 @@ const validateCustomerBeforeCheckout = () => {
 const handleCustomerChanged = () => {
   if (customerLocked.value) {
     posStore.errorMsg =
-      "Không được sửa thông tin khách hàng của phiếu treo. Muốn đổi khách thì hủy phiếu cũ và tạo phiếu mới.";
+      "Không được sửa thông tin khách hàng của đơn lưu tạm. Muốn đổi khách thì hủy đơn lưu tạm cũ và tạo đơn lưu tạm mới.";
     return;
   }
 
@@ -1376,7 +1396,7 @@ const handleCustomerEmailInput = () => {
 const handleCustomerPhoneTyping = () => {
   if (customerLocked.value) {
     posStore.errorMsg =
-      "Không được sửa số điện thoại khách hàng của phiếu treo.";
+      "Không được sửa số điện thoại khách hàng của đơn lưu tạm.";
     return;
   }
 
@@ -1394,7 +1414,7 @@ const handleCustomerPhoneTyping = () => {
 const handleSaveCustomer = async () => {
   if (customerLocked.value) {
     setPosError(
-      "Không được lưu/sửa khách hàng khi đang mở phiếu treo hoặc đơn đã nhận tiền."
+      "Không được lưu/sửa khách hàng khi đang mở đơn lưu tạm hoặc đơn đã nhận tiền."
     );
     return;
   }
@@ -1425,7 +1445,7 @@ const handleSaveCustomer = async () => {
 const handleSearchCustomer = async () => {
   if (customerLocked.value) {
     posStore.errorMsg =
-      "Không được đổi khách hàng của phiếu treo. Muốn đổi khách thì hủy phiếu cũ và tạo phiếu mới.";
+      "Không được đổi khách hàng của đơn lưu tạm. Muốn đổi khách thì hủy đơn lưu tạm cũ và tạo đơn lưu tạm mới.";
     return;
   }
 
@@ -1564,8 +1584,8 @@ const handleHoldOrder = async () => {
   const wasUpdatingHeldOrder = Boolean(posStore.activeHeldOrderId);
 
   /*
-   * Nếu chưa mở phiếu treo thì check trùng SĐT trước khi tạo phiếu mới.
-   * Nếu đang mở phiếu treo thì cho cập nhật chính phiếu đó.
+   * Nếu chưa mở đơn lưu tạm thì check trùng SĐT trước khi tạo đơn lưu tạm mới.
+   * Nếu đang mở đơn lưu tạm thì cho cập nhật chính đơn lưu tạm đó.
    */
   if (!posStore.activeHeldOrderId) {
     const currentPhone = normalizePhone(
@@ -1579,12 +1599,12 @@ const handleHoldOrder = async () => {
     });
 
     if (duplicatedHeldOrder) {
-      const message = `Khách hàng này đang có phiếu treo #${duplicatedHeldOrder.orderId} chưa thanh toán. Vui lòng mở phiếu treo đó ở khu Đơn hàng đang xử lý để cập nhật sản phẩm.`;
+      const message = `Khách hàng này đang có đơn lưu tạm #${duplicatedHeldOrder.orderId} chưa thanh toán. Vui lòng mở đơn lưu tạm đó ở khu Đơn hàng đang xử lý để cập nhật sản phẩm.`;
 
       setPosError(message);
 
       /*
-       * Header đang là nơi hiển thị phiếu treo,
+       * Header đang là nơi hiển thị đơn lưu tạm,
        * nên chỉ cần reload danh sách, không mở panel bên cart nữa.
        */
       await posStore.fetchHeldOrders();
@@ -1597,12 +1617,11 @@ const handleHoldOrder = async () => {
 
   if (!result) {
     const message =
-      posStore.errorMsg ||
-      "Treo phiếu thất bại. Vui lòng kiểm tra lại thông tin.";
+      posStore.errorMsg || "Lưu tạm thất bại. Vui lòng kiểm tra lại thông tin.";
 
     setPosError(message);
 
-    if (message.includes("đang có phiếu treo")) {
+    if (message.includes("đang có đơn lưu tạm")) {
       await posStore.fetchHeldOrders();
     }
 
@@ -1615,14 +1634,14 @@ const handleHoldOrder = async () => {
   closeTransferModal();
 
   /*
-   * Sau khi lưu/cập nhật, reload header phiếu treo.
+   * Sau khi lưu/cập nhật, reload header đơn lưu tạm.
    */
   await posStore.fetchHeldOrders();
 
   showPosToast(
     wasUpdatingHeldOrder
-      ? "Đã cập nhật phiếu treo thành công."
-      : "Đã lưu tạm phiếu thành công. Phiếu đã hiển thị ở phía trên."
+      ? "Đã cập nhật đơn lưu tạm thành công."
+      : "Đã lưu tạm đơn thành công. Đơn đã hiển thị ở phía trên."
   );
 };
 
@@ -1640,13 +1659,13 @@ const handleOpenHeldOrder = async (orderId: number) => {
 
 const openTransferModal = async (orderId: number) => {
   if (!orderId) {
-    setPosError("Mã phiếu treo không hợp lệ.");
+    setPosError("Mã đơn lưu tạm không hợp lệ.");
     return;
   }
 
   if (posStore.cashPaid > 0) {
     setPosError(
-      "Đơn đã nhận tiền mặt một phần, không được chuyển phiếu cho nhân viên khác."
+      "Đơn đã nhận tiền mặt một phần, không được chuyển đơn lưu tạm cho nhân viên khác."
     );
     return;
   }
@@ -1668,12 +1687,12 @@ const closeTransferModal = () => {
 
 const confirmTransferOrder = async () => {
   if (!transferOrderId.value) {
-    setPosError("Mã phiếu treo không hợp lệ.");
+    setPosError("Mã đơn lưu tạm không hợp lệ.");
     return;
   }
 
   if (!selectedTransferEmployeeId.value) {
-    setPosError("Vui lòng chọn nhân viên nhận phiếu.");
+    setPosError("Vui lòng chọn nhân viên nhận đơn lưu tạm.");
     return;
   }
 
@@ -1689,7 +1708,7 @@ const confirmTransferOrder = async () => {
   if (!result) {
     setPosError(
       posStore.errorMsg ||
-        "Chuyển phiếu thất bại. Vui lòng kiểm tra nhân viên nhận phiếu."
+        "Chuyển đơn lưu tạm thất bại. Vui lòng kiểm tra nhân viên nhận đơn lưu tạm."
     );
     return;
   }
@@ -1697,8 +1716,8 @@ const confirmTransferOrder = async () => {
   closeTransferModal();
 
   /*
-   * Nếu đang mở chính phiếu vừa chuyển,
-   * phải dọn form hiện tại để cashier không thao tác tiếp trên phiếu đã chuyển.
+   * Nếu đang mở chính đơn lưu tạm vừa chuyển,
+   * phải dọn form hiện tại để cashier không thao tác tiếp trên đơn lưu tạm đã chuyển.
    */
   if (isTransferringActiveHeldOrder) {
     customerPhoneInput.value = "";
@@ -1712,7 +1731,7 @@ const confirmTransferOrder = async () => {
   posStore.showHeldOrdersPanel = true;
   await posStore.fetchHeldOrders();
 
-  showPosToast(posStore.errorMsg || "Đã chuyển phiếu thành công.");
+  showPosToast(posStore.errorMsg || "Đã chuyển đơn lưu tạm thành công.");
 };
 
 const handleTransferHeldOrder = async (orderId: number) => {
@@ -1729,11 +1748,32 @@ const handleTransferActiveHeldOrder = async () => {
 
 const handleCancelHeldOrder = async (orderId: number) => {
   if (!orderId) {
-    posStore.errorMsg = "Mã phiếu treo không hợp lệ.";
+    setPosError("Mã đơn lưu tạm không hợp lệ.");
     return;
   }
 
-  const isCancellingActiveHeldOrder = posStore.activeHeldOrderId === orderId;
+  const confirmResult = await Swal.fire({
+    icon: "warning",
+    title: "Hủy đơn lưu tạm?",
+    text: `Đơn lưu tạm #${orderId} sẽ bị hủy và không thể khôi phục.`,
+    showCancelButton: true,
+    confirmButtonText: "Đồng ý hủy",
+    cancelButtonText: "Không hủy",
+    confirmButtonColor: "#ef4444",
+    cancelButtonColor: "#334155",
+    background: "#0f172a",
+    color: "#f8fafc",
+    reverseButtons: true,
+    focusCancel: true,
+  });
+
+  if (!confirmResult.isConfirmed) {
+    return;
+  }
+
+  const isCancellingActiveHeldOrder =
+    Number(posStore.activeHeldOrderId || 0) === Number(orderId);
+
   const result = await posStore.cancelHeldOrder(orderId);
 
   if (result && isCancellingActiveHeldOrder) {
@@ -1746,7 +1786,7 @@ const handleCancelHeldOrder = async (orderId: number) => {
 
 const handleCancelActiveHeldOrder = async () => {
   if (!posStore.activeHeldOrderId) {
-    posStore.errorMsg = "Không có phiếu treo đang mở.";
+    posStore.errorMsg = "Không có đơn lưu tạm đang mở.";
     return;
   }
 
