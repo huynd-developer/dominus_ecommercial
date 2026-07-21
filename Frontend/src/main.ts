@@ -7,6 +7,10 @@ import { permission } from './common/directives/permission.ts'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap/dist/js/bootstrap.bundle.min.js'
 import 'bootstrap-icons/font/bootstrap-icons.css'
+
+import Antd from "ant-design-vue";
+import "ant-design-vue/dist/reset.css";
+
 // 1. Khởi tạo instance của ứng dụng Vue và Pinia trước
 const app = createApp(App)
 const pinia = createPinia()
@@ -21,3 +25,5 @@ app.directive(
   'permission',
   permission
 )
+
+app.use(Antd);

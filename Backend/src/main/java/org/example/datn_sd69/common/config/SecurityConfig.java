@@ -68,7 +68,8 @@ public class SecurityConfig {
                                 "/api/products/**",
                                 "/api/shop/products/**",
                                 "/api/bottle-types/**",
-                                "/api/promotions/flash-sale"
+                                "/api/promotions/flash-sale",
+                                "/api/admin/orders/**"
                         ).permitAll()
 
                         .requestMatchers("/api/owner/reports/**")
