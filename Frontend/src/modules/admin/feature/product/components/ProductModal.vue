@@ -700,7 +700,7 @@
 
           <!-- SKU -->
 
-          <td>
+          <!-- <td>
 
             <input
               :value="
@@ -712,7 +712,7 @@
               readonly
             >
 
-          </td>
+          </td> -->
 
           <!-- Price -->
 
