@@ -1,19 +1,38 @@
 package org.example.datn_sd69.modules.orderAdmin.service;
 
 import org.example.datn_sd69.modules.orderAdmin.dto.response.OrderAdminResponse;
-import org.example.datn_sd69.modules.orderAdmin.dto.response.OrderDetailAdminResponse;
+import org.example.datn_sd69.modules.orderAdmin.dto.response.OrderDetailResponse;
 import org.springframework.data.domain.Page;
 
 public interface OrderAdminService {
-    // 1. Danh sách đơn hàng
-    Page<OrderAdminResponse> searchOrders(String keyword, Integer status, String orderType, int page, int size);
 
-    // 2. Chi tiết đơn hàng
-    OrderDetailAdminResponse getOrderDetail(Integer orderId);
+    /**
+     * Danh sách đơn hàng
+     */
+    Page<OrderAdminResponse> searchOrders(
+            String keyword,
+            Integer status,
+            String orderType,
+            int page,
+            int size
+    );
 
-    // 3. Chuyển đổi trạng thái (Luồng dương)
-    void nextOrderStatus(Integer orderId);
+    /**
+     * Chi tiết đơn hàng
+     */
+    OrderDetailResponse getOrderDetail(Integer orderId);
 
-    // 4. Hủy đơn hàng và hoàn tồn kho
+    /**
+     * Chuyển trạng thái đơn hàng
+     */
+    OrderDetailResponse updateStatus(
+            Integer orderId,
+            Integer newStatus
+    );
+
+    /**
+     * Hủy đơn
+     */
     void cancelOrder(Integer orderId);
+
 }
