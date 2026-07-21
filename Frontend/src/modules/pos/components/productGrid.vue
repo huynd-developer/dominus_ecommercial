@@ -222,9 +222,19 @@
                   <i class="bi bi-dash"></i>
                 </button>
 
-                <span class="qty-number-grid">
-                  {{ getCartItem(product)?.quantity || 0 }}
-                </span>
+                <input
+                  class="qty-number-grid qty-input-grid"
+                  type="number"
+                  min="1"
+                  :max="Number(product.stockQuantity || 0)"
+                  :value="getCartItem(product)?.quantity || 1"
+                  :disabled="posStore.cashPaid > 0"
+                  title="Nhập số lượng"
+                  @click.stop
+                  @keydown.stop
+                  @input.stop="handleQuantityInput(product, $event)"
+                  @change.stop="handleQuantityInput(product, $event, true)"
+                />
 
                 <button
                   type="button"
@@ -308,41 +318,71 @@ const isNonEmptyString = (value: unknown): value is string => {
   return typeof value === "string" && value.trim().length > 0;
 };
 
-const getCapacityFromProduct = (product: PosProduct) => {
-  const text = normalizeFilterText(product.subName);
-  const match = text.match(/(\d+(?:[.,]\d+)?)\s*ml/i);
+const formatCapacityValue = (value: number): string => {
+  const normalized = Number(value.toFixed(3));
+  const displayValue = Number.isInteger(normalized)
+    ? String(Math.trunc(normalized))
+    : String(normalized).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
 
-  const rawValue = match?.[1];
-
-  if (!rawValue) {
-    return "";
-  }
-
-  const value = rawValue.replace(",", ".");
-  const numberValue = Number(value);
-
-  if (!Number.isFinite(numberValue)) {
-    return "";
-  }
-
-  return `${numberValue} ml`;
+  return `${displayValue} ml`;
 };
 
-const normalizeCapacityOption = (value?: string | null) => {
-  const text = normalizeFilterText(value);
-  const match = text.match(/(\d+(?:[.,]\d+)?)\s*ml/i);
+const extractCapacityNumber = (value?: unknown): number | null => {
+  const text = normalizeFilterText(String(value ?? ""));
+
+  if (!text) {
+    return null;
+  }
+
+  const match = text.match(/(\d+(?:[.,]\d+)?)\s*(?:ml|mili|milliliter)?/i);
 
   if (!match?.[1]) {
-    return text;
+    return null;
   }
 
   const numberValue = Number(match[1].replace(",", "."));
 
-  if (!Number.isFinite(numberValue)) {
-    return text;
+  if (!Number.isFinite(numberValue) || numberValue <= 0) {
+    return null;
   }
 
-  return `${numberValue} ml`;
+  return numberValue;
+};
+
+const normalizeCapacityOption = (value?: unknown): string => {
+  const numberValue = extractCapacityNumber(value);
+
+  if (numberValue == null) {
+    return normalizeFilterText(String(value ?? ""));
+  }
+
+  return formatCapacityValue(numberValue);
+};
+
+const getCapacityFromProduct = (product: PosProduct): string => {
+  const rawProduct = product as any;
+
+  const candidates = [
+    rawProduct?.capacityLabel,
+    rawProduct?.capacityName,
+    rawProduct?.capacityValue,
+    rawProduct?.capacity,
+    rawProduct?.volume,
+    rawProduct?.size,
+    rawProduct?.variantName,
+    rawProduct?.variantText,
+    rawProduct?.subName,
+  ];
+
+  for (const candidate of candidates) {
+    const capacity = normalizeCapacityOption(candidate);
+
+    if (capacity) {
+      return capacity;
+    }
+  }
+
+  return "";
 };
 
 const getBottleTypeFromProduct = (product: PosProduct): string => {
@@ -417,6 +457,8 @@ const clearAllFilters = () => {
 };
 
 const displayProducts = computed(() => {
+  const selectedCapacityValue = normalizeCapacityOption(selectedCapacity.value);
+
   return posStore.filteredProducts.filter((product) => {
     const capacity = getCapacityFromProduct(product);
     const bottleType = getBottleTypeFromProduct(product);
@@ -431,7 +473,7 @@ const displayProducts = computed(() => {
     }
 
     const matchesCapacity =
-      !selectedCapacity.value || capacity === selectedCapacity.value;
+      !selectedCapacityValue || capacity === selectedCapacityValue;
 
     const matchesBottleType =
       !selectedBottleType.value || bottleType === selectedBottleType.value;
@@ -535,10 +577,28 @@ const placeholderImage = (name?: string) => {
   )}&background=random&color=fff&size=200`;
 };
 
+const formatMlText = (value?: string | null): string => {
+  return String(value || "").replace(
+    /(\d+(?:[.,]\d+)?)\s*ml/gi,
+    (_match, rawNumber) => {
+      const numberValue = Number(String(rawNumber).replace(",", "."));
+
+      if (!Number.isFinite(numberValue)) {
+        return `${rawNumber} ml`;
+      }
+
+      return `${numberValue} ml`;
+    }
+  );
+};
+
 const getVariantText = (product: any) => {
-  return product?.subName && String(product.subName).trim()
-    ? product.subName
-    : "Biến thể mặc định";
+  const text =
+    product?.subName && String(product.subName).trim()
+      ? String(product.subName).trim()
+      : "Biến thể mặc định";
+
+  return formatMlText(text);
 };
 
 const getProductTitle = (product: any) => {
@@ -648,6 +708,56 @@ const increaseQuantity = (product: PosProduct) => {
   }
 
   posStore.updateQuantity(product.sku, item.quantity + 1);
+};
+
+const handleQuantityInput = (
+  product: PosProduct,
+  event: Event,
+  forceNormalize = false
+) => {
+  if (posStore.cashPaid > 0) {
+    posStore.errorMsg =
+      "Đơn đã nhận tiền mặt một phần, không được sửa số lượng.";
+    return;
+  }
+
+  const item = getCartItem(product);
+
+  if (!item || !product?.sku) {
+    return;
+  }
+
+  const input = event.target as HTMLInputElement;
+  const rawValue = String(input.value || "").trim();
+
+  if (!rawValue && !forceNormalize) {
+    return;
+  }
+
+  const stock = Number(product.stockQuantity || 0);
+
+  if (stock <= 0) {
+    posStore.errorMsg = "Sản phẩm đã hết hàng.";
+    input.value = String(item.quantity || 1);
+    return;
+  }
+
+  const parsedValue = Number(rawValue);
+
+  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+    if (!forceNormalize) {
+      return;
+    }
+
+    posStore.updateQuantity(product.sku, 1);
+    input.value = "1";
+    return;
+  }
+
+  const quantity = Math.min(Math.max(Math.trunc(parsedValue), 1), stock);
+
+  posStore.updateQuantity(product.sku, quantity);
+  input.value = String(quantity);
 };
 
 const decreaseQuantity = (product: PosProduct) => {
@@ -1020,7 +1130,7 @@ const removeFromOrder = (product: PosProduct) => {
 }
 
 .product-qty-actions {
-  min-width: 126px;
+  min-width: 142px;
 }
 
 .qty-btn-grid,
@@ -1075,6 +1185,30 @@ const removeFromOrder = (product: PosProduct) => {
   color: #f3c63f;
   font-weight: 900;
   font-size: 0.72rem;
+}
+
+.qty-input-grid {
+  width: 42px;
+  padding: 0 4px;
+  text-align: center;
+  outline: none;
+  appearance: textfield;
+}
+
+.qty-input-grid::-webkit-outer-spin-button,
+.qty-input-grid::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.qty-input-grid:focus {
+  border-color: rgba(243, 198, 63, 0.75);
+  box-shadow: 0 0 0 2px rgba(243, 198, 63, 0.1);
+}
+
+.qty-input-grid:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .not-selected-text {
