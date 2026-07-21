@@ -143,6 +143,8 @@
 
                       Thương hiệu
 
+                      <span class="text-danger">*</span>
+
                     </label>
 
                     <select
@@ -177,6 +179,8 @@
                     <label class="form-label">
 
                       Danh mục
+
+                      <span class="text-danger">*</span>
 
                     </label>
 
@@ -213,6 +217,8 @@
 
                       Nồng độ
 
+                      <span class="text-danger">*</span>
+
                     </label>
 
                     <select
@@ -247,6 +253,8 @@
                     <label class="form-label">
 
                       Giới tính
+
+                      <span class="text-danger">*</span>
 
                     </label>
 
@@ -284,6 +292,8 @@
                     <label class="form-label">
 
                       Trạng thái
+
+                      <span class="text-danger">*</span>
 
                     </label>
 
@@ -379,6 +389,8 @@
                   <h4>
 
                     Nhóm hương
+
+                    <span class="text-danger">*</span>
 
                   </h4>
 
@@ -559,11 +571,15 @@
 
             Dung tích
 
+            <span class="text-danger">*</span>
+
           </th>
 
           <th width="180">
 
             Loại chai
+
+            <span class="text-danger">*</span>
 
           </th>
 
@@ -577,11 +593,15 @@
 
             Giá bán
 
+            <span class="text-danger">*</span>
+
           </th>
 
           <th width="130">
 
             Tồn kho
+
+            <span class="text-danger">*</span>
 
           </th>
 
@@ -589,11 +609,15 @@
 
             NSX
 
+            <span class="text-danger">*</span>
+
           </th>
 
           <th width="170">
 
             HSD
+
+            <span class="text-danger">*</span>
 
           </th>
 
@@ -1386,6 +1410,42 @@ const validateForm = () => {
   
 
   if (formData.value.concentrationId === 0) {
+
+    for (const variant of formData.value.variants) {
+
+  if (variant.capacityId === 0) {
+
+    Swal.fire(
+      "Thiếu dữ liệu",
+      "Chưa chọn dung tích",
+      "warning"
+    )
+
+    return false
+  }
+
+  if (variant.bottleTypeId === 0) {
+
+    Swal.fire(
+      "Thiếu dữ liệu",
+      "Chưa chọn loại chai",
+      "warning"
+    )
+
+    return false
+  }
+
+  if (variant.price <= 0) {
+
+    Swal.fire(
+      "Thiếu dữ liệu",
+      "Giá bán phải lớn hơn 0",
+      "warning"
+    )
+
+    return false
+  }
+}
 
     Swal.fire(
       "Thiếu dữ liệu",
