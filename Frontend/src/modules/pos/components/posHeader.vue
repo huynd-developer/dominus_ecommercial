@@ -13,7 +13,7 @@
             </div>
 
             <div class="held-subtitle text-truncate">
-              Phiếu treo được hiển thị tại đây để mở lại nhanh.
+              Đơn lưu tạm được hiển thị tại đây để mở lại nhanh.
             </div>
           </div>
         </div>
@@ -23,7 +23,7 @@
             type="button"
             class="btn-header-action"
             :disabled="posStore.isLoading"
-            title="Tải lại phiếu treo"
+            title="Tải lại đơn lưu tạm"
             @click="posStore.fetchHeldOrders()"
           >
             <i
@@ -40,7 +40,7 @@
         class="held-empty-card d-flex align-items-center justify-content-center"
       >
         <i class="bi bi-inbox me-2"></i>
-        Chưa có phiếu treo.
+        Chưa có đơn lưu tạm.
       </div>
 
       <div v-else class="held-card-list custom-scrollbar">
@@ -53,7 +53,7 @@
               Number(posStore.activeHeldOrderId || 0) === Number(held.orderId),
             disabled: posStore.isLoading || posStore.cashPaid > 0,
           }"
-          :title="`Bấm để mở phiếu #${held.orderId}`"
+          :title="`Bấm để mở đơn #${held.orderId}`"
           @click="openHeldOrderFromHeader(held.orderId)"
         >
           <div class="held-card-main">
@@ -80,7 +80,7 @@
               <button
                 type="button"
                 class="btn-held-action btn-transfer-mini"
-                title="Chuyển phiếu cho nhân viên khác"
+                title="Chuyển đơn lưu tạm cho nhân viên khác"
                 :disabled="posStore.isLoading || posStore.cashPaid > 0"
                 @click.stop="transferHeldOrderFromHeader(held.orderId)"
               >
@@ -91,7 +91,7 @@
               <button
                 type="button"
                 class="btn-held-action btn-cancel-mini"
-                title="Hủy phiếu treo"
+                title="Hủy đơn lưu tạm"
                 :disabled="posStore.isLoading || posStore.cashPaid > 0"
                 @click.stop="cancelHeldOrderFromHeader(held.orderId)"
               >
@@ -105,7 +105,7 @@
 
       <div v-if="posStore.cashPaid > 0" class="header-warning mt-2">
         <i class="bi bi-lock-fill me-1"></i>
-        Đơn đã nhận tiền mặt một phần, không được mở/chuyển sang phiếu khác.
+        Đơn đã nhận tiền mặt một phần, không được mở/chuyển sang đơn lưu tạm khác.
       </div>
     </section>
   </header>
@@ -131,13 +131,13 @@ const focusProductSearch = () => {
 
 const openHeldOrderFromHeader = async (orderId: number) => {
   if (!orderId) {
-    posStore.errorMsg = "Mã phiếu treo không hợp lệ.";
+    posStore.errorMsg = "Mã đơn lưu tạm không hợp lệ.";
     return;
   }
 
   if (posStore.cashPaid > 0) {
     posStore.errorMsg =
-      "Đơn đã nhận tiền mặt một phần, không được mở phiếu treo khác.";
+      "Đơn đã nhận tiền mặt một phần, không được mở đơn lưu tạm khác.";
     return;
   }
 
@@ -146,13 +146,13 @@ const openHeldOrderFromHeader = async (orderId: number) => {
 
 const transferHeldOrderFromHeader = (orderId: number) => {
   if (!orderId) {
-    posStore.errorMsg = "Mã phiếu treo không hợp lệ.";
+    posStore.errorMsg = "Mã đơn lưu tạm không hợp lệ.";
     return;
   }
 
   if (posStore.cashPaid > 0) {
     posStore.errorMsg =
-      "Đơn đã nhận tiền mặt một phần, không được chuyển phiếu.";
+      "Đơn đã nhận tiền mặt một phần, không được chuyển đơn lưu tạm.";
     return;
   }
 
@@ -167,12 +167,12 @@ const transferHeldOrderFromHeader = (orderId: number) => {
 
 const cancelHeldOrderFromHeader = (orderId: number) => {
   if (!orderId) {
-    posStore.errorMsg = "Mã phiếu treo không hợp lệ.";
+    posStore.errorMsg = "Mã đơn lưu tạm không hợp lệ.";
     return;
   }
 
   if (posStore.cashPaid > 0) {
-    posStore.errorMsg = "Đơn đã nhận tiền mặt một phần, không được hủy phiếu.";
+    posStore.errorMsg = "Đơn đã nhận tiền mặt một phần, không được hủy đơn lưu tạm.";
     return;
   }
 
@@ -285,7 +285,7 @@ onUnmounted(() => {
   padding-bottom: 2px;
 }
 
-/* CARD PHIẾU TREO */
+/* CARD ĐƠN LƯU TẠM */
 .held-card {
   width: 280px;
   min-width: 280px;

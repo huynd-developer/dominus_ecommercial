@@ -7,12 +7,14 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class OrderAdminResponse {
+public class OrderDetailResponse {
 
     /**
      * Mã đơn hàng
@@ -25,22 +27,18 @@ public class OrderAdminResponse {
     private String orderType;
 
     /**
-     * Tên khách hàng
+     * Khách hàng
      */
+    private Integer customerId;
+
     private String customerName;
 
-    /**
-     * SĐT khách hàng
-     */
     private String customerPhone;
 
-    /**
-     * Địa chỉ giao hàng
-     */
     private String shippingAddress;
 
     /**
-     * Thu ngân xử lý
+     * Thu ngân
      */
     private Integer cashierId;
 
@@ -59,12 +57,12 @@ public class OrderAdminResponse {
     private String paymentMethod;
 
     /**
-     * Tiền hàng
+     * Tổng tiền hàng
      */
     private BigDecimal totalAmount;
 
     /**
-     * Giảm giá
+     * Tiền giảm
      */
     private BigDecimal discountAmount;
 
@@ -75,15 +73,6 @@ public class OrderAdminResponse {
 
     /**
      * Trạng thái
-     *
-     * 0 Chờ xác nhận
-     * 1 Đã xác nhận
-     * 2 Đang giao
-     * 3 Hoàn thành
-     * 4 Đã hủy
-     * 5 Giao thất bại
-     * 6 Yêu cầu hoàn hàng
-     * 7 Hoàn hàng hoàn tất
      */
     private Integer status;
 
@@ -101,5 +90,20 @@ public class OrderAdminResponse {
      * Thời gian hoàn thành
      */
     private LocalDateTime completedAt;
+
+    /**
+     * Điểm thưởng đã cộng
+     */
+    private Integer loyaltyPointsEarned;
+
+    /**
+     * Đã cộng điểm hay chưa
+     */
+    private Boolean loyaltyPointsApplied;
+
+    /**
+     * Danh sách sản phẩm
+     */
+    private List<OrderItemResponse> items = new ArrayList<>();
 
 }

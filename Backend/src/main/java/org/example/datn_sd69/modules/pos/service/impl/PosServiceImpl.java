@@ -1485,7 +1485,7 @@ public class PosServiceImpl implements PosService {
         }
 
         if (!canReceivePosTransfer(targetEmployee)) {
-            throw new RuntimeException("Nhân viên nhận phiếu không có quyền xử lý POS.");
+            throw new RuntimeException("Chỉ được chuyển đơn lưu tạm cho nhân viên thu ngân.");
         }
     }
 
@@ -1663,7 +1663,12 @@ public class PosServiceImpl implements PosService {
 
         String roleName = user.getRole().getName().trim().toUpperCase(Locale.ROOT);
 
-        return "CASHIER".equals(roleName) || "ROLE_CASHIER".equals(roleName) || "MANAGER".equals(roleName) || "ROLE_MANAGER".equals(roleName) || "OWNER".equals(roleName) || "ROLE_OWNER".equals(roleName);
+        /*
+         * Nghiệp vụ mới:
+         * Chỉ cho chuyển đơn lưu tạm cho nhân viên thu ngân.
+         * MANAGER/OWNER vẫn có quyền chuyển/hủy, nhưng không được là người nhận đơn.
+         */
+        return "CASHIER".equals(roleName) || "ROLE_CASHIER".equals(roleName);
     }
 
     @Override

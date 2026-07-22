@@ -1,6 +1,16 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import {
+  ref,
+  computed,
+  onMounted,
+  watch
+} from 'vue'
+
+import {
+  useRouter,
+  useRoute
+} from 'vue-router'
+
 import Swal from 'sweetalert2'
 
 import { useProductStore } from '../stores/productStore'
@@ -16,11 +26,14 @@ const store = useProductStore()
 const router = useRouter()
 const route = useRoute()
 
-const searchQuery = ref('')
+const searchQuery = ref(
+  String(route.query.q || '')
+)
 
 const showModal = ref(false)
 
-const selectedProduct = ref<Product | null>(null)
+const selectedProduct =
+  ref<Product | null>(null)
 
 const currentPage = ref(
   Number(route.query.page) || 1
@@ -28,31 +41,45 @@ const currentPage = ref(
 
 const pageSize = ref(10)
 
+const loading = ref(false)
+
 onMounted(async () => {
-  await store.fetchDropdowns()
-  await store.fetchProducts()
+  loading.value = true
+
+  try {
+    await Promise.all([
+      store.fetchDropdowns(),
+      store.fetchProducts()
+    ])
+  } finally {
+    loading.value = false
+  }
 })
 
 const filteredData = computed(() => {
-  if (!searchQuery.value) {
+  const keyword =
+    searchQuery.value
+      .trim()
+      .toLowerCase()
+
+  if (!keyword) {
     return store.products
   }
 
-  const keyword =
-    searchQuery.value.toLowerCase()
-
   return store.products.filter(
-    (item) =>
-      item.name?.toLowerCase().includes(keyword) ||
-      item.brandName
-        ?.toLowerCase()
-        .includes(keyword) ||
-      item.categoryName
-        ?.toLowerCase()
-        .includes(keyword) ||
-      item.concentrationName
-        ?.toLowerCase()
-        .includes(keyword)
+    (item) => {
+      const text = [
+        item.name,
+        item.brandName,
+        item.categoryName,
+        item.concentrationName
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+
+      return text.includes(keyword)
+    }
   )
 })
 
@@ -76,18 +103,70 @@ const paginatedData = computed(() => {
   )
 })
 
-watch(currentPage, (newPage) => {
+watch(
+  () => route.query.page,
+  (page) => {
+    currentPage.value =
+      Number(page) || 1
+  }
+)
+
+watch(
+  () => route.query.q,
+  (q) => {
+    searchQuery.value =
+      String(q || '')
+  }
+)
+
+watch(currentPage, () => {
   router.replace({
     query: {
       ...route.query,
-      page: newPage
+      page: currentPage.value,
+      q:
+        searchQuery.value || undefined
     }
   })
 })
 
 watch(searchQuery, () => {
   currentPage.value = 1
+
+  router.replace({
+    query: {
+      ...route.query,
+      page: 1,
+      q:
+        searchQuery.value || undefined
+    }
+  })
 })
+
+watch(pageSize, () => {
+  currentPage.value = 1
+})
+
+watch(totalPages, (pages) => {
+  if (currentPage.value > pages) {
+    currentPage.value = pages
+  }
+})
+
+const refreshProducts =
+  async () => {
+    if (loading.value) {
+      return
+    }
+
+    loading.value = true
+
+    try {
+      await store.fetchProducts()
+    } finally {
+      loading.value = false
+    }
+  }
 
 const openAddModal = () => {
   selectedProduct.value = null
@@ -101,33 +180,46 @@ const openEditModal = (
   showModal.value = true
 }
 
-const closeAllModals = () => {
+const closeModal = () => {
   showModal.value = false
 }
 
 const stopSelling = async (
   id: number
 ) => {
-  const result = await Swal.fire({
-    title: 'Ẩn sản phẩm?',
-    text: 'Sản phẩm sẽ được chuyển sang trạng thái ngừng kinh doanh.',
-    icon: 'warning',
+  const result =
+    await Swal.fire({
+      title: 'Ẩn sản phẩm?',
+      text: 'Sản phẩm sẽ được chuyển sang trạng thái ngừng kinh doanh.',
+      icon: 'warning',
 
-    showCancelButton: true,
+      showCancelButton: true,
 
-    confirmButtonColor: '#f59e0b',
+      confirmButtonColor:
+        '#f59e0b',
 
-    confirmButtonText: 'Ẩn sản phẩm',
+      confirmButtonText:
+        'Ẩn sản phẩm',
 
-    cancelButtonText: 'Hủy'
-  })
+      cancelButtonText: 'Hủy'
+    })
 
   if (!result.isConfirmed) {
     return
   }
 
   try {
-    await productService.deleteProduct(id)
+    Swal.fire({
+      title: 'Đang xử lý...',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading()
+      }
+    })
+
+    await productService.deleteProduct(
+      id
+    )
 
     Swal.fire({
       icon: 'success',
@@ -138,7 +230,7 @@ const stopSelling = async (
     })
 
     await store.fetchProducts()
-  } catch (error) {
+  } catch {
     Swal.fire({
       icon: 'error',
       title: 'Lỗi',
@@ -151,31 +243,27 @@ const stopSelling = async (
 <template>
   <div class="product-page">
 
-    <!-- Header -->
     <div class="page-header">
       <div>
         <h3 class="page-title">
-          <i class="bi bi-box-seam me-2"></i>
+          <i
+            class="bi bi-box-seam me-2"
+          ></i>
           Quản lý nước hoa
         </h3>
-
-        <!-- <div class="text-muted small">
-          Tổng cộng
-          <b>{{ filteredData.length }}</b>
-          sản phẩm
-        </div> -->
       </div>
 
       <button
         class="btn btn-primary px-4"
         @click="openAddModal"
       >
-        <i class="bi bi-plus-circle me-2"></i>
+        <i
+          class="bi bi-plus-circle me-2"
+        ></i>
         Thêm sản phẩm
       </button>
     </div>
 
-    <!-- Toolbar -->
     <div class="toolbar">
 
       <div class="search-box">
@@ -196,46 +284,88 @@ const stopSelling = async (
           class="form-select"
           style="width:100px"
         >
-          <option :value="10">10</option>
-          <option :value="20">20</option>
-          <option :value="50">50</option>
+          <option :value="10">
+            10
+          </option>
+
+          <option :value="20">
+            20
+          </option>
+
+          <option :value="50">
+            50
+          </option>
         </select>
 
         <button
           class="btn btn-light"
-          @click="store.fetchProducts"
+          :disabled="loading"
+          @click="refreshProducts"
         >
-          <i class="bi bi-arrow-clockwise"></i>
+          <i
+            class="bi bi-arrow-clockwise"
+          ></i>
         </button>
 
       </div>
 
     </div>
 
-    <!-- Table -->
-    <div class="table-wrapper">
-
-      <ProductList
-        :paginated-data="paginatedData"
-        :brand-list="store.brandList"
-        @edit="openEditModal"
-        @stop-selling="stopSelling"
-      />
-
+    <div
+      v-if="loading"
+      class="loading-state"
+    >
+      Đang tải dữ liệu...
     </div>
 
-    <!-- Footer -->
-    <div class="footer">
+    <div
+      v-else-if="
+        filteredData.length === 0
+      "
+      class="empty-state"
+    >
+      Không tìm thấy sản phẩm
+    </div>
 
+    <div
+      v-else
+      class="table-wrapper"
+    >
+      <ProductList
+        :paginated-data="
+          paginatedData
+        "
+        :brand-list="
+          store.brandList
+        "
+        @edit="openEditModal"
+        @stop-selling="
+          stopSelling
+        "
+      />
+    </div>
+
+    <div
+      v-if="!loading"
+      class="footer"
+    >
       <div class="text-muted">
 
         Hiển thị
 
-        <b>{{ paginatedData.length }}</b>
+        <b>
+          {{
+            paginatedData.length
+          }}
+        </b>
 
         /
 
-        <b>{{ filteredData.length }}</b>
+        <b>
+          {{
+            filteredData.length
+          }}
+        </b>
 
       </div>
 
@@ -243,28 +373,34 @@ const stopSelling = async (
 
         <button
           class="btn btn-light"
-          :disabled="currentPage==1"
-          @click="currentPage--"
+          :disabled="
+            currentPage === 1
+          "
+          @click="
+            currentPage--
+          "
         >
           ←
         </button>
 
         <span>
-
           {{ currentPage }}
-
           /
-
           {{ totalPages }}
-
         </span>
 
         <button
           class="btn btn-light"
-          :disabled="currentPage==totalPages"
-          @click="currentPage++"
+          :disabled="
+            currentPage ===
+            totalPages
+          "
+          @click="
+            currentPage++
+          "
         >
           →
+
         </button>
 
       </div>
@@ -272,24 +408,50 @@ const stopSelling = async (
     </div>
 
     <Teleport to="body">
+
       <ProductModal
         v-if="showModal"
-        :product-selected="selectedProduct"
-        :brand-list="store.brandList"
-        :category-list="store.categoryList"
-        :concentration-list="store.concentrationList"
-        :fragrance-family-list="store.fragranceFamilyList"
-        :capacity-list="store.capacityList"
-        :bottle-type-list="store.bottleTypeList"
-        @close="closeAllModals"
-        @refresh="store.fetchProducts"
+        :product-selected="
+          selectedProduct
+        "
+        :brand-list="
+          store.brandList
+        "
+        :category-list="
+          store.categoryList
+        "
+        :concentration-list="
+          store.concentrationList
+        "
+        :fragrance-family-list="
+          store.fragranceFamilyList
+        "
+        :capacity-list="
+          store.capacityList
+        "
+        :bottle-type-list="
+          store.bottleTypeList
+        "
+        @close="closeModal"
+        @refresh="
+          store.fetchProducts
+        "
       />
+
     </Teleport>
 
   </div>
 </template>
 
 <style scoped>
+
+.loading-state,
+.empty-state {
+  padding: 60px;
+  text-align: center;
+  color: #64748b;
+  font-size: 15px;
+}
 
 .product-page{
     display:flex;

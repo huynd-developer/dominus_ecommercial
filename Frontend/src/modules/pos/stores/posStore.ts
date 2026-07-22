@@ -955,7 +955,7 @@ export const usePosStore = defineStore("posStore", {
     restorePendingCheckoutDraft() {
       /*
        * Draft dùng cho đơn đang chờ thanh toán online.
-       * Không để đơn pending payment bị hiểu nhầm là phiếu treo HOLD.
+       * Không để đơn pending payment bị hiểu nhầm là đơn lưu tạm HOLD.
        */
       if (this.activeHeldOrderId) {
         return false;
@@ -1138,7 +1138,7 @@ export const usePosStore = defineStore("posStore", {
 
         /*
          * Khung "Đơn hàng đang xử lý" được dùng cho cả:
-         * - HOLD: phiếu treo thật sự, mở bằng /held-orders/{id}
+         * - HOLD: đơn lưu tạm thật sự, mở bằng /held-orders/{id}
          * - VNPAY/VIETQR/MIXED_*: đơn đang chờ thanh toán online,
          *   khi bấm lại không được gọi /held-orders/{id} nữa.
          *
@@ -1388,7 +1388,7 @@ export const usePosStore = defineStore("posStore", {
       } catch (error: any) {
         this.errorMsg = getBackendMessage(
           error,
-          "Không thể quay lại chỉnh sửa đơn đang chờ thanh toán. Backend cần hỗ trợ hủy payment intent và đưa đơn về phiếu treo HOLD."
+          "Không thể quay lại chỉnh sửa đơn đang chờ thanh toán. Backend cần hỗ trợ hủy payment intent và đưa đơn về đơn lưu tạm HOLD."
         );
 
         return false;
@@ -1408,7 +1408,7 @@ export const usePosStore = defineStore("posStore", {
       );
 
       /*
-       * Đơn này đã qua bước tạo VietQR/VNPay nên không còn là phiếu HOLD.
+       * Đơn này đã qua bước tạo VietQR/VNPay nên không còn là đơn HOLD.
        * Vì vậy không gọi /held-orders/{id}, chỉ set trạng thái để lần thanh toán
        * tiếp theo đi qua /orders/{id}/retry-payment.
        */
@@ -1464,7 +1464,7 @@ export const usePosStore = defineStore("posStore", {
         this.transferTargets = [];
         this.errorMsg = getBackendMessage(
           error,
-          "Không thể tải danh sách nhân viên nhận phiếu."
+          "Không thể tải danh sách nhân viên nhận đơn lưu tạm."
         );
       } finally {
         this.isLoading = false;
@@ -1677,7 +1677,7 @@ export const usePosStore = defineStore("posStore", {
       if (this.activeHeldOrderId || this.activePendingPaymentOrderId) {
         this.errorMsg = this.activePendingPaymentOrderId
           ? "Hóa đơn đang chờ thanh toán, không được đổi khách hàng."
-          : "Đang mở phiếu treo, không được đổi khách hàng.";
+          : "Đang mở đơn lưu tạm, không được đổi khách hàng.";
         return;
       }
 
@@ -1738,7 +1738,7 @@ export const usePosStore = defineStore("posStore", {
         this.customerSavedKey = "";
         this.errorMsg =
           data?.message ||
-          "Không tìm thấy khách hàng. Vui lòng nhập họ tên và email. Hệ thống sẽ lưu khách khi treo phiếu hoặc thanh toán.";
+          "Không tìm thấy khách hàng. Vui lòng nhập họ tên và email. Hệ thống sẽ lưu khách khi lưu tạm hoặc thanh toán.";
       } catch (error: any) {
         this.customer = null;
         this.customerSavedKey = "";
@@ -1757,7 +1757,7 @@ export const usePosStore = defineStore("posStore", {
       if (this.activeHeldOrderId || this.activePendingPaymentOrderId) {
         this.errorMsg = this.activePendingPaymentOrderId
           ? "Hóa đơn đang chờ thanh toán, không được đổi/lưu khách hàng."
-          : "Đang mở phiếu treo, không được đổi/lưu khách hàng.";
+          : "Đang mở đơn lưu tạm, không được đổi/lưu khách hàng.";
         return false;
       }
 
@@ -2123,7 +2123,7 @@ export const usePosStore = defineStore("posStore", {
       /*
        * BE hiện tại:
        * - /checkout: tạo hóa đơn POS mới
-       * - /held-orders/{id}/checkout: chỉ thanh toán phiếu treo HOLD
+       * - /held-orders/{id}/checkout: chỉ thanh toán đơn lưu tạm HOLD
        * - /orders/{id}/retry-payment: thanh toán lại hóa đơn PENDING_PAYMENT
        */
       if (selectedPaymentMethod === "VNPAY") {
@@ -2210,7 +2210,7 @@ export const usePosStore = defineStore("posStore", {
           data = response.data;
         } else if (this.activeHeldOrderId) {
           /*
-           * Chỉ gọi endpoint phiếu treo khi order hiện tại thật sự là HOLD.
+           * Chỉ gọi endpoint đơn lưu tạm khi order hiện tại thật sự là HOLD.
            * Nếu đã tạo QR/VNPay rồi thì phải đi nhánh retryPaymentOrderId ở trên.
            */
           if (this.cashPaid <= 0) {
@@ -2428,7 +2428,7 @@ export const usePosStore = defineStore("posStore", {
 
       if (this.cashPaid > 0 || this.activePendingPaymentOrderId) {
         this.errorMsg =
-          "Đơn đã nhận tiền/tạo thanh toán online, không được treo/cập nhật phiếu.";
+          "Đơn đã nhận tiền/tạo thanh toán online, không được lưu tạm/cập nhật đơn.";
         return false;
       }
 
@@ -2443,9 +2443,9 @@ export const usePosStore = defineStore("posStore", {
 
       try {
         /*
-         * Nếu khách đã có phiếu treo cùng SĐT thì không POST /hold nữa.
+         * Nếu khách đã có đơn lưu tạm cùng SĐT thì không POST /hold nữa.
          * POST /hold sẽ bị backend chặn duplicate.
-         * Logic đúng: mở phiếu #cũ, merge sản phẩm đang chọn, rồi PATCH cập nhật.
+         * Logic đúng: mở đơn #cũ, merge sản phẩm đang chọn, rồi PATCH cập nhật.
          */
         if (!this.activeHeldOrderId) {
           const existingHeldOrder = this.findLocalHeldOrderByCustomerPhone(
@@ -2485,8 +2485,8 @@ export const usePosStore = defineStore("posStore", {
         await this.fetchHeldOrders();
 
         this.errorMsg = wasUpdatingHeldOrder
-          ? `Đã cập nhật phiếu treo #${savedOrderId || ""} thành công.`
-          : `Đã treo phiếu #${savedOrderId || ""} thành công.`;
+          ? `Đã cập nhật đơn lưu tạm #${savedOrderId || ""} thành công.`
+          : `Đã lưu tạm #${savedOrderId || ""} thành công.`;
 
         return {
           success: true,
@@ -2496,13 +2496,13 @@ export const usePosStore = defineStore("posStore", {
         const message = getBackendMessage(
           error,
           this.activeHeldOrderId
-            ? "Cập nhật phiếu treo thất bại. Vui lòng kiểm tra lại."
-            : "Treo phiếu thất bại. Vui lòng kiểm tra lại."
+            ? "Cập nhật lưu tạm thất bại. Vui lòng kiểm tra lại."
+            : "Lưu tạm thất bại. Vui lòng kiểm tra lại."
         );
 
         /*
-         * Phòng trường hợp FE chưa fetch kịp danh sách phiếu treo,
-         * backend vẫn báo trùng phiếu #xxx thì tự refresh lại danh sách.
+         * Phòng trường hợp FE chưa fetch kịp danh sách đơn lưu tạm,
+         * backend vẫn báo trùng đơn #xxx thì tự refresh lại danh sách.
          */
         const duplicateHeldOrderId = String(message).match(/#(\d+)/)?.[1];
 
@@ -2513,8 +2513,8 @@ export const usePosStore = defineStore("posStore", {
 
           if (opened) {
             this.errorMsg =
-              `Khách hàng này đã có phiếu treo #${duplicateHeldOrderId}. ` +
-              "Đã mở phiếu và giữ sản phẩm đang chọn, bấm Lưu tạm lại để cập nhật.";
+              `Khách hàng này đã có đơn lưu tạm #${duplicateHeldOrderId}. ` +
+              "Đã mở đơn lưu tạm và giữ sản phẩm đang chọn, bấm Lưu tạm lại để cập nhật.";
             return false;
           }
         }
@@ -2562,7 +2562,7 @@ export const usePosStore = defineStore("posStore", {
           image: `https://ui-avatars.com/api/?name=${encodeURIComponent(
             productName
           )}&background=random&color=fff&size=200`,
-          category: item.brandName || item.categoryName || "Phiếu treo",
+          category: item.brandName || item.categoryName || "Đơn lưu tạm",
           manufacturingDate: toDateOnly(item.manufacturingDate),
           expirationDate: toDateOnly(item.expirationDate),
           status: item.variantStatus ?? item.status ?? null,
@@ -2578,7 +2578,7 @@ export const usePosStore = defineStore("posStore", {
 
     async openHeldOrder(orderId: number) {
       if (!orderId) {
-        this.errorMsg = "Mã phiếu treo không hợp lệ.";
+        this.errorMsg = "Mã đơn lưu tạm không hợp lệ.";
         return false;
       }
 
@@ -2589,7 +2589,7 @@ export const usePosStore = defineStore("posStore", {
       /*
        * Card pending online vẫn nằm ở "Đơn hàng đang xử lý".
        * Nếu click lại thì không được gọi /held-orders/{id},
-       * vì endpoint đó chỉ dành cho phiếu HOLD.
+       * vì endpoint đó chỉ dành cho đơn HOLD.
        */
       if (localOrder && isPendingOnlinePaymentOrder(localOrder)) {
         return this.openPendingPaymentOrderFromList(localOrder);
@@ -2597,7 +2597,7 @@ export const usePosStore = defineStore("posStore", {
 
       if (this.cashPaid > 0 && !this.activePendingPaymentOrderId) {
         this.errorMsg =
-          "Đơn hiện tại đã nhận tiền mặt một phần, không được mở phiếu treo.";
+          "Đơn hiện tại đã nhận tiền mặt một phần, không được mở đơn lưu tạm.";
         return false;
       }
 
@@ -2615,7 +2615,7 @@ export const usePosStore = defineStore("posStore", {
         const { data } = await api.get(`/admin/pos/held-orders/${orderId}`);
 
         /*
-         * Mở phiếu treo phải là trạng thái chỉnh sửa sạch:
+         * Mở đơn lưu tạm phải là trạng thái chỉnh sửa sạch:
          * - Được thêm/sửa/xóa sản phẩm và voucher
          * - Không bị khóa bởi trạng thái thanh toán/VNPay/VietQR cũ
          */
@@ -2641,8 +2641,8 @@ export const usePosStore = defineStore("posStore", {
         const heldCustomerPhone = normalizePhone(data.customerPhone);
 
         /*
-         * Nếu user đang chọn thêm sản phẩm rồi mới click phiếu treo cùng SĐT,
-         * không được làm mất giỏ đang chọn. Merge vào phiếu để bấm Lưu tạm là cập nhật.
+         * Nếu user đang chọn thêm sản phẩm rồi mới click đơn lưu tạm cùng SĐT,
+         * không được làm mất giỏ đang chọn. Merge vào đơn để bấm Lưu tạm là cập nhật.
          */
         const canMergeUnsavedCart =
           shouldMergeUnsavedCart &&
@@ -2710,8 +2710,8 @@ export const usePosStore = defineStore("posStore", {
         }
 
         this.errorMsg = canMergeUnsavedCart
-          ? `Đã mở phiếu treo #${this.activeHeldOrderId} và gộp sản phẩm đang chọn. Bấm Lưu tạm để cập nhật phiếu.`
-          : `Đã mở phiếu treo #${this.activeHeldOrderId}. Có thể thêm/sửa sản phẩm và voucher, khách hàng được giữ nguyên.`;
+          ? `Đã mở đơn lưu tạm #${this.activeHeldOrderId} và gộp sản phẩm đang chọn. Bấm Lưu tạm để cập nhật đơn.`
+          : `Đã mở đơn lưu tạm #${this.activeHeldOrderId}. Có thể thêm/sửa sản phẩm và voucher, khách hàng được giữ nguyên.`;
 
         return {
           success: true,
@@ -2720,7 +2720,7 @@ export const usePosStore = defineStore("posStore", {
       } catch (error: any) {
         this.errorMsg = getBackendMessage(
           error,
-          "Không thể mở phiếu treo. Phiếu có thể thuộc nhân viên khác hoặc đã thanh toán."
+          "Không thể mở đơn lưu tạm. Đơn có thể thuộc nhân viên khác hoặc đã thanh toán."
         );
 
         return false;
@@ -2736,12 +2736,12 @@ export const usePosStore = defineStore("posStore", {
 
     async transferHeldOrder(orderId: number, targetEmployeeId: number) {
       if (!orderId) {
-        this.errorMsg = "Mã phiếu treo không hợp lệ.";
+        this.errorMsg = "Mã đơn lưu tạm không hợp lệ.";
         return false;
       }
 
       if (!targetEmployeeId || targetEmployeeId <= 0) {
-        this.errorMsg = "Vui lòng chọn nhân viên nhận phiếu.";
+        this.errorMsg = "Vui lòng chọn nhân viên nhận đơn lưu tạm.";
         return false;
       }
 
@@ -2770,7 +2770,7 @@ export const usePosStore = defineStore("posStore", {
 
         await this.fetchHeldOrders();
 
-        this.errorMsg = `Đã chuyển phiếu #${orderId} cho ${
+        this.errorMsg = `Đã chuyển đơn #${orderId} cho ${
           data.cashierName || "nhân viên được chọn"
         }.`;
 
@@ -2781,7 +2781,7 @@ export const usePosStore = defineStore("posStore", {
       } catch (error: any) {
         this.errorMsg = getBackendMessage(
           error,
-          "Chuyển phiếu thất bại. Bạn chỉ được chuyển phiếu của mình, trừ khi là MANAGER/OWNER."
+          "Chuyển đơn lưu tạm thất bại. Bạn chỉ được chuyển đơn lưu tạm của mình, trừ khi là MANAGER/OWNER."
         );
 
         return false;
@@ -2792,13 +2792,13 @@ export const usePosStore = defineStore("posStore", {
 
     async cancelHeldOrder(orderId: number) {
       if (!orderId) {
-        this.errorMsg = "Mã phiếu treo không hợp lệ.";
+        this.errorMsg = "Mã đơn lưu tạm không hợp lệ.";
         return false;
       }
 
       if (this.cashPaid > 0) {
         this.errorMsg =
-          "Đơn hiện tại đã nhận tiền mặt một phần, không được hủy phiếu treo.";
+          "Đơn hiện tại đã nhận tiền mặt một phần, không được hủy đơn lưu tạm.";
         return false;
       }
 
@@ -2817,7 +2817,7 @@ export const usePosStore = defineStore("posStore", {
         await this.fetchHeldOrders();
         await this.fetchProducts();
 
-        this.errorMsg = `Đã hủy phiếu treo #${orderId}.`;
+        this.errorMsg = `Đã hủy đơn lưu tạm #${orderId}.`;
 
         return {
           success: true,
@@ -2826,7 +2826,7 @@ export const usePosStore = defineStore("posStore", {
       } catch (error: any) {
         this.errorMsg = getBackendMessage(
           error,
-          "Hủy phiếu treo thất bại. Phiếu có thể đã thanh toán, đã bị hủy hoặc không thuộc quyền của bạn."
+          "Hủy đơn lưu tạm thất bại. Đơn có thể đã thanh toán, đã bị hủy hoặc không thuộc quyền của bạn."
         );
 
         return false;
