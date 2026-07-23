@@ -241,6 +241,29 @@ const getBackendMessage = (error: any, fallback: string): string => {
   return fallback;
 };
 
+const isPendingPaymentNotFoundMessage = (message?: string | null): boolean => {
+  const cleanMessage = String(message || "")
+    .trim()
+    .toLowerCase();
+
+  return (
+    cleanMessage.includes("không tìm thấy hóa đơn đang chờ thanh toán") ||
+    cleanMessage.includes("hóa đơn không còn ở trạng thái chờ thanh toán") ||
+    cleanMessage.includes("không còn ở trạng thái chờ thanh toán")
+  );
+};
+
+const isCashStillMissingMessage = (message?: string | null): boolean => {
+  const cleanMessage = String(message || "")
+    .trim()
+    .toLowerCase();
+
+  return (
+    cleanMessage.includes("khách còn thiếu") ||
+    cleanMessage.includes("vui lòng chọn thêm phương thức thanh toán")
+  );
+};
+
 const toDateOnly = (value?: string | null): string | null => {
   if (!value) return null;
   return String(value).substring(0, 10);
@@ -991,15 +1014,22 @@ export const usePosStore = defineStore("posStore", {
         this.pendingVietQrAmount = Number(draft.pendingVietQrAmount || 0);
 
         this.lastOrderId = draft.lastOrderId || null;
+
+        /*
+         * Chỉ khôi phục pending id khi draft có pending id thật sự.
+         * Không dùng lastOrderId làm pending id vì lastOrderId có thể là
+         * hóa đơn đã hoàn tất/đã hủy/đã rời trạng thái chờ thanh toán.
+         * Nếu dùng lastOrderId, lần thanh toán lại sẽ gọi nhầm retry-payment.
+         */
         this.activePendingPaymentOrderId =
-          draft.activePendingPaymentOrderId ||
-          draft.pendingVietQrOrderId ||
-          draft.lastOrderId ||
-          null;
+          draft.activePendingPaymentOrderId || draft.pendingVietQrOrderId || null;
+
         this.activePendingPaymentTransferProvider =
-          draft.activePendingPaymentTransferProvider ||
-          draft.transferProvider ||
-          (draft.paymentMethod === "VNPAY" ? "VNPAY" : "");
+          this.activePendingPaymentOrderId
+            ? draft.activePendingPaymentTransferProvider ||
+              draft.transferProvider ||
+              (draft.paymentMethod === "VNPAY" ? "VNPAY" : "")
+            : ""; 
 
         this.activeHeldOrderId = this.activePendingPaymentOrderId
           ? null
@@ -1007,6 +1037,12 @@ export const usePosStore = defineStore("posStore", {
         this.activeHeldOrderCashierName = this.activePendingPaymentOrderId
           ? ""
           : draft.activeHeldOrderCashierName || "";
+
+        /*
+         * Không đưa đơn VNPay/VietQR pending vào heldOrders.
+         * Nếu chưa bấm Lưu tạm thì không được hiển thị ở khu đơn lưu tạm phía trên.
+         * Draft vẫn khôi phục giỏ/khách/tiền đã nhận ở form thanh toán bên phải.
+         */
 
         this.errorMsg =
           "Đã khôi phục hóa đơn đang chờ thanh toán. Nếu khách chưa thanh toán, có thể chọn lại phương thức hoặc thanh toán lại.";
@@ -1160,40 +1196,17 @@ export const usePosStore = defineStore("posStore", {
           : data?.data || data?.content || data?.items || [];
 
         /*
-         * Khung "Đơn hàng đang xử lý" được dùng cho cả:
-         * - HOLD: đơn lưu tạm thật sự, mở bằng /held-orders/{id}
-         * - VNPAY/VIETQR/MIXED_*: đơn đang chờ thanh toán online,
-         *   khi bấm lại không được gọi /held-orders/{id} nữa.
-         *
-         * Backend hiện có thể chỉ trả HOLD. Vì vậy giữ lại các card pending
-         * đang có ở local để khách đóng QR rồi vẫn mở lại đổi phương thức được.
+         * Khu phía trên chỉ hiển thị đơn lưu tạm thật sự.
+         * Đơn VNPay/VietQR đang pending nhưng chưa bấm Lưu tạm chỉ được
+         * khôi phục ở form thanh toán bên phải, không đưa vào heldOrders.
          */
-        const localPendingOrders = this.heldOrders.filter((order) =>
-          isPendingOnlinePaymentOrder(order)
+        this.heldOrders = rawOrders.filter((order: PosHeldOrder) =>
+          isRealHeldOrder(order)
         );
-
-        const nextOrders = [
-          ...rawOrders.filter((order: PosHeldOrder) => {
-            return isRealHeldOrder(order) || isPendingOnlinePaymentOrder(order);
-          }),
-        ];
-
-        for (const pendingOrder of localPendingOrders) {
-          const existed = nextOrders.some(
-            (order: PosHeldOrder) =>
-              Number(order.orderId) === Number(pendingOrder.orderId)
-          );
-
-          if (!existed) {
-            nextOrders.unshift(pendingOrder);
-          }
-        }
-
-        this.heldOrders = nextOrders;
       } catch (error: any) {
         this.errorMsg = getBackendMessage(
           error,
-          "Không thể tải danh sách đơn hàng đang xử lý."
+          "Không thể tải danh sách đơn lưu tạm."
         );
       }
     },
@@ -1280,12 +1293,69 @@ export const usePosStore = defineStore("posStore", {
       );
     },
 
+    preparePartialTransferMethodChange(orderId?: number | string | null) {
+      const targetOrderId =
+        orderId || this.activePendingPaymentOrderId || this.pendingVietQrOrderId;
+
+      if (!targetOrderId) {
+        /*
+         * Chưa có hóa đơn online pending thật sự thì không được lấy lastOrderId
+         * để retry. Trường hợp này giữ nguyên luồng hiện tại:
+         * - nếu đang mở đơn lưu tạm HOLD thì checkout qua held-orders/{id}/checkout
+         * - nếu là đơn mới thì checkout qua /checkout
+         */
+        this.errorMsg =
+          "Chưa có yêu cầu thanh toán online đang chờ. Hãy chọn VNPay/VietQR rồi bấm thanh toán.";
+        return false;
+      }
+
+      if (this.cashPaid <= 0) {
+        return false;
+      }
+
+      const currentProvider =
+        this.activePendingPaymentTransferProvider ||
+        this.transferProvider ||
+        (this.paymentMethod === "VNPAY" ? "VNPAY" : "VIETQR");
+
+      const normalizedProvider: PosTransferProvider =
+        currentProvider === "VNPAY" ? "VNPAY" : "VIETQR";
+
+      /*
+       * Đơn đã nhận tiền mặt một phần không được hủy pending payment để sửa
+       * sản phẩm/voucher. Giữ activePendingPaymentOrderId để gọi retry-payment
+       * khi nhân viên chọn lại VNPay/VietQR.
+       */
+      this.activePendingPaymentOrderId = targetOrderId;
+      this.activePendingPaymentTransferProvider = normalizedProvider;
+      this.activeHeldOrderId = null;
+      this.activeHeldOrderCashierName = "";
+
+      this.vnpayUrl = "";
+      this.vietQrImageUrl = "";
+      this.vietQrContent = "";
+      this.pendingVietQrOrderId = null;
+      this.pendingVietQrAmount = 0;
+      this.transferProvider = normalizedProvider;
+
+      /*
+       * Không upsert vào heldOrders vì đơn này chưa chắc là đơn lưu tạm.
+       * Header phía trên chỉ dành cho đơn đã bấm Lưu tạm.
+       */
+      this.savePendingCheckoutDraft();
+
+      this.errorMsg =
+        "Đơn đã nhận tiền mặt một phần. Chỉ được đổi kênh chuyển khoản, không được sửa sản phẩm/voucher.";
+
+      return {
+        success: true,
+        data: null,
+      };
+    },
+
     async cancelPendingPaymentForEdit(orderId?: number | string | null) {
       const targetOrderId =
-        orderId ||
-        this.activePendingPaymentOrderId ||
-        this.pendingVietQrOrderId ||
-        this.lastOrderId;
+        orderId || this.activePendingPaymentOrderId || this.pendingVietQrOrderId;
 
       if (!targetOrderId) {
         this.vnpayUrl = "";
@@ -1300,6 +1370,11 @@ export const usePosStore = defineStore("posStore", {
           success: true,
           data: null,
         };
+      }
+
+      if (this.cashPaid > 0) {
+        this.preparePartialTransferMethodChange(targetOrderId);
+        return false;
       }
 
       const localProcessingOrder = this.heldOrders.find(
@@ -2144,6 +2219,21 @@ export const usePosStore = defineStore("posStore", {
       let transferAmount = Number(extra?.transferAmount || 0);
 
       /*
+       * Nếu đơn đã nhận tiền mặt một phần rồi người dùng trả thêm tiền mặt,
+       * một số UI cũ chỉ truyền số tiền đưa thêm. Backend lại cần tổng tiền mặt
+       * đã nhận cho lần checkout, nên cộng lại tại store để không gọi API với
+       * số tiền thiếu rồi bị 400.
+       */
+      if (
+        selectedPaymentMethod === "CASH" &&
+        this.cashPaid > 0 &&
+        cashGiven > 0 &&
+        cashGiven <= this.remainingAmount
+      ) {
+        cashGiven = this.cashPaid + cashGiven;
+      }
+
+      /*
        * BE hiện tại:
        * - /checkout: tạo hóa đơn POS mới
        * - /held-orders/{id}/checkout: chỉ thanh toán đơn lưu tạm HOLD
@@ -2292,11 +2382,10 @@ export const usePosStore = defineStore("posStore", {
             this.activeHeldOrderId = null;
             this.activeHeldOrderCashierName = "";
 
-            this.upsertProcessingOrderCard(
-              orderId,
-              selectedPaymentMethod === "MIXED" ? "MIXED_VNPAY" : "VNPAY"
-            );
-
+            /*
+             * Không đưa hóa đơn VNPay pending vào heldOrders.
+             * Nếu nhân viên chưa bấm Lưu tạm thì back về POS chỉ khôi phục ở form bên phải.
+             */
             this.savePendingCheckoutDraft();
             await this.fetchHeldOrders();
 
@@ -2330,14 +2419,9 @@ export const usePosStore = defineStore("posStore", {
             this.activeHeldOrderId = null;
             this.activeHeldOrderCashierName = "";
 
-            this.upsertProcessingOrderCard(
-              orderId,
-              selectedPaymentMethod === "MIXED" ? "MIXED_VIETQR" : "VIETQR"
-            );
-
             /*
-             * VietQR không redirect nên user hay bấm X đóng QR.
-             * Phải lưu draft + giữ card pending để bấm lại đổi phương thức.
+             * VietQR không redirect nên vẫn lưu draft để giữ form thanh toán.
+             * Không đưa pending vào heldOrders nếu chưa bấm Lưu tạm.
              */
             this.savePendingCheckoutDraft();
             await this.fetchHeldOrders();
@@ -2360,10 +2444,54 @@ export const usePosStore = defineStore("posStore", {
           data,
         };
       } catch (error: any) {
-        this.errorMsg = getBackendMessage(
+        const message = getBackendMessage(
           error,
           "Thanh toán thất bại. Vui lòng kiểm tra lại!"
         );
+
+        /*
+         * Pending id cũ/stale: không retry lại mã hóa đơn đã không còn chờ thanh toán.
+         * Chỉ xóa trạng thái pending local, không xóa giỏ/khách/tiền mặt.
+         */
+        if (retryPaymentOrderId && isPendingPaymentNotFoundMessage(message)) {
+          this.removeProcessingOrderCard(retryPaymentOrderId);
+          this.activePendingPaymentOrderId = null;
+          this.pendingVietQrOrderId = null;
+          this.pendingVietQrAmount = 0;
+          this.activePendingPaymentTransferProvider = "";
+          this.vnpayUrl = "";
+          this.vietQrImageUrl = "";
+          this.vietQrContent = "";
+          this.clearPendingCheckoutDraft();
+
+          this.errorMsg =
+            "Yêu cầu thanh toán online cũ không còn ở trạng thái chờ. Chọn VNPay/VietQR rồi bấm thanh toán lại.";
+          return false;
+        }
+
+        /*
+         * Nếu backend báo tiền mặt còn thiếu, giữ đúng nghiệp vụ POS:
+         * không coi là lỗi phá luồng, chỉ ghi nhận tiền mặt đang có và yêu cầu
+         * chọn VNPay/VietQR cho phần còn lại.
+         */
+        if (
+          selectedPaymentMethod === "CASH" &&
+          cashGiven > 0 &&
+          isCashStillMissingMessage(message)
+        ) {
+          this.cashPaid = Math.max(Number(this.cashPaid || 0), Number(cashGiven || 0));
+          this.paymentMethod = "VIETQR";
+          this.transferProvider = "VIETQR";
+          this.errorMsg = `Đã nhận tiền mặt ${formatMoney(
+            this.cashPaid
+          )} ₫. Còn thiếu ${formatMoney(
+            this.remainingAmount
+          )} ₫, vui lòng chọn VNPay hoặc VietQR để thanh toán phần còn lại.`;
+
+          return false;
+        }
+
+        this.errorMsg = message;
 
         return false;
       } finally {

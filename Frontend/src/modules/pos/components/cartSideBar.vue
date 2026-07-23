@@ -30,74 +30,11 @@
           @click="handleCancelOrder"
         >
           <i class="bi bi-trash"></i>
-          {{ posStore.activeHeldOrderId ? "Đóng" : "Hủy" }}
+          {{ cancelOrderButtonLabel }}
         </button>
       </div>
 
       <div class="cart-content-scroll flex-grow-1 min-h-0 pe-1">
-        <div
-          v-if="posStore.showPaymentSuccess && posStore.lastCompletedOrder"
-          class="payment-success-box rounded-3 p-2 mb-2"
-        >
-          <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
-            <div class="min-w-0">
-              <div class="payment-success-title">
-                <i class="bi bi-check-circle-fill me-1"></i>
-                Thanh toán thành công
-              </div>
-
-              <div class="payment-success-subtitle text-truncate">
-                Hóa đơn #{{ getReceiptOrderId(posStore.lastCompletedOrder) }}
-              </div>
-            </div>
-
-            <span class="payment-success-badge shrink-0">ĐÃ THU</span>
-          </div>
-
-          <div class="payment-success-row">
-            <span>Khách hàng</span>
-            <strong class="text-truncate">
-              {{ getReceiptCustomerName(posStore.lastCompletedOrder) }}
-            </strong>
-          </div>
-
-          <div class="payment-success-row">
-            <span>Phương thức</span>
-            <strong>{{ getReceiptPaymentLabel(posStore.lastCompletedOrder) }}</strong>
-          </div>
-
-          <div class="payment-success-row payment-success-total">
-            <span>Thành tiền</span>
-            <strong>
-              {{ formatPrice(getReceiptFinalAmount(posStore.lastCompletedOrder)) }} ₫
-            </strong>
-          </div>
-
-          <div class="payment-success-actions d-grid gap-2 mt-2">
-            <button
-              type="button"
-              class="btn-print-receipt"
-              @click="handlePrintLatestInvoice"
-            >
-              <i class="bi bi-printer me-1"></i>
-              In hóa đơn
-            </button>
-
-            <button
-              type="button"
-              class="btn-new-order-after-pay"
-              @click="handleContinueAfterPayment"
-            >
-              <i class="bi bi-plus-circle me-1"></i>
-              Tạo đơn mới
-            </button>
-          </div>
-
-          <div class="payment-success-note mt-2">
-            Không tự động in. Chỉ in khi khách cần hóa đơn giấy.
-          </div>
-        </div>
-
         <div class="customer-section mb-2">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <span class="text-light fw-bold font-xs">
@@ -441,7 +378,7 @@
             </div>
 
             <div class="font-xs text-muted-custom mt-1">
-              Đơn đã nhận tiền, không được sửa sản phẩm/khách/voucher.
+              Đơn đã nhận tiền, không được sửa sản phẩm/khách/voucher. Có thể chọn VNPay/VietQR rồi bấm thanh toán lại.
             </div>
           </div>
 
@@ -530,6 +467,76 @@
                   : "XÁC NHẬN THANH TOÁN"
               }}
             </span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAYMENT SUCCESS DIALOG -->
+    <div
+      v-if="posStore.showPaymentSuccess && posStore.lastCompletedOrder"
+      class="modal-overlay payment-success-dialog-overlay"
+    >
+      <div class="modal-content payment-success-modal">
+        <div class="modal-header payment-success-modal-header">
+          <div class="d-flex align-items-center gap-2 min-w-0">
+            <div class="payment-success-icon shrink-0">
+              <i class="bi bi-check-circle-fill"></i>
+            </div>
+
+            <div class="min-w-0">
+              <h3>Thanh toán thành công</h3>
+              <div class="payment-success-subtitle text-truncate">
+                Hóa đơn #{{ getReceiptOrderId(posStore.lastCompletedOrder) }}
+              </div>
+            </div>
+          </div>
+
+          <span class="payment-success-badge shrink-0">ĐÃ THU</span>
+        </div>
+
+        <div class="modal-body payment-success-modal-body">
+          <div class="payment-success-row">
+            <span>Khách hàng</span>
+            <strong class="text-truncate">
+              {{ getReceiptCustomerName(posStore.lastCompletedOrder) }}
+            </strong>
+          </div>
+
+          <div class="payment-success-row">
+            <span>Phương thức</span>
+            <strong>{{ getReceiptPaymentLabel(posStore.lastCompletedOrder) }}</strong>
+          </div>
+
+          <div class="payment-success-row payment-success-total">
+            <span>Thành tiền</span>
+            <strong>
+              {{ formatPrice(getReceiptFinalAmount(posStore.lastCompletedOrder)) }} ₫
+            </strong>
+          </div>
+
+          <div class="payment-success-note mt-2">
+            Không tự động in. Nhân viên chỉ bấm in khi khách cần hóa đơn giấy.
+          </div>
+        </div>
+
+        <div class="modal-footer payment-success-modal-footer">
+          <button
+            type="button"
+            class="btn-print-receipt"
+            @click="handlePrintLatestInvoice"
+          >
+            <i class="bi bi-printer me-1"></i>
+            In hóa đơn
+          </button>
+
+          <button
+            type="button"
+            class="btn-new-order-after-pay"
+            @click="handleContinueAfterPayment"
+          >
+            <i class="bi bi-plus-circle me-1"></i>
+            Tạo đơn mới
           </button>
         </div>
       </div>
@@ -853,9 +860,11 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import Swal, { type SweetAlertIcon } from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
+import { useRouter } from "vue-router";
 import { usePosStore } from "@/modules/pos/stores/posStore";
 
 const posStore = usePosStore();
+const router = useRouter();
 const handleTransferHeldOrderEvent = async (event: Event) => {
   const customEvent = event as CustomEvent;
   const orderId = Number(customEvent.detail?.orderId || 0);
@@ -929,6 +938,22 @@ const lockedOrder = computed(() => {
 
 const customerLocked = computed(() => {
   return posStore.isCustomerLocked;
+});
+
+const cancelOrderButtonLabel = computed(() => {
+  /*
+   * Trả lại logic cũ của nút header:
+   * - Đang mở đơn lưu tạm thì là "Đóng"
+   * - Các trường hợp còn lại là "Hủy"
+   *
+   * Đổi phương thức thanh toán không nằm ở nút này.
+   * Nhân viên đổi phương thức bằng các nút Tiền mặt/VNPay/VietQR bên dưới.
+   */
+  if (posStore.activeHeldOrderId) {
+    return "Đóng";
+  }
+
+  return "Hủy";
 });
 const heldOrderCannotCheckoutMessage =
   "Đơn lưu tạm này đang thuộc nhân viên khác. Vui lòng chuyển đơn lưu tạm trước khi thanh toán.";
@@ -1563,7 +1588,110 @@ watch(
   { immediate: true }
 );
 
+const getActiveOnlinePaymentOrderId = () => {
+  /*
+   * Chỉ coi là hóa đơn online đang chờ khi có id pending thật sự.
+   * Không dùng lastOrderId ở đây vì lastOrderId có thể là hóa đơn đã hoàn tất,
+   * đã hủy hoặc đã được BE đưa khỏi trạng thái chờ thanh toán.
+   * Nếu lấy lastOrderId làm pending id, FE sẽ gọi nhầm:
+   * /orders/{id}/retry-payment và BE trả 400.
+   */
+  const orderId =
+    posStore.activePendingPaymentOrderId ||
+    posStore.pendingVietQrOrderId ||
+    null;
+
+  if (!orderId) {
+    return null;
+  }
+
+  const numericOrderId = Number(orderId);
+
+  return Number.isFinite(numericOrderId) && numericOrderId > 0
+    ? numericOrderId
+    : null;
+};
+
+const isStalePendingPaymentMessage = (message?: string | null) => {
+  const cleanMessage = String(message || "")
+    .trim()
+    .toLowerCase();
+
+  return (
+    cleanMessage.includes("không tìm thấy hóa đơn đang chờ thanh toán") ||
+    cleanMessage.includes("hóa đơn không còn ở trạng thái chờ thanh toán") ||
+    cleanMessage.includes("không còn ở trạng thái chờ thanh toán")
+  );
+};
+
+const clearStalePendingPaymentState = () => {
+  posStore.activePendingPaymentOrderId = null;
+  posStore.pendingVietQrOrderId = null;
+  posStore.pendingVietQrAmount = 0;
+  posStore.activePendingPaymentTransferProvider = "";
+  posStore.vnpayUrl = "";
+  posStore.vietQrImageUrl = "";
+  posStore.vietQrContent = "";
+};
+
+const clearPaymentChangingUiState = () => {
+  showVietQrModal.value = false;
+  vietQrOrderId.value = null;
+  pendingVietQrInvoiceSnapshot.value = null;
+  displayCash.value = "";
+  closeTransferModal();
+
+  if (posStore.customer?.phone) {
+    customerPhoneInput.value = normalizePhone(posStore.customer.phone);
+  }
+};
+
+const preparePartialCashTransferRetry = (preferredOrderId?: number | string | null) => {
+  const orderId = preferredOrderId ? Number(preferredOrderId) : getActiveOnlinePaymentOrderId();
+
+  if (!orderId) {
+    /*
+     * Trường hợp đã nhận tiền mặt một phần nhưng không có pending id thật sự
+     * thì không được tự lấy lastOrderId làm pending id.
+     * Giữ nguyên đơn hiện tại để nhân viên chọn VNPay/VietQR và bấm thanh toán lại;
+     * processCheckout sẽ tự đi luồng phù hợp: đơn mới hoặc đơn lưu tạm đang mở.
+     */
+    clearStalePendingPaymentState();
+    clearPaymentChangingUiState();
+    return true;
+  }
+
+  /*
+   * Đơn đã nhận tiền mặt một phần và đã tạo thanh toán online thì không còn
+   * là đơn lưu tạm HOLD nữa. Phải ép state sang pending payment để lần thanh
+   * toán tiếp theo đi qua /orders/{id}/retry-payment, tránh gọi nhầm
+   * /held-orders/{id}/checkout gây lỗi "không tìm thấy phiếu treo".
+   */
+  posStore.preparePartialTransferMethodChange(orderId);
+  posStore.activePendingPaymentOrderId = orderId;
+  posStore.activeHeldOrderId = null;
+
+  clearPaymentChangingUiState();
+  return true;
+};
+
 const handleCancelOrder = async () => {
+  /*
+   * Giữ logic cũ của nút header:
+   * - Nếu đang mở đơn lưu tạm thì nút đang hiển thị "Đóng"
+   *   => chỉ đóng đơn khỏi form POS, không gọi hủy pending payment.
+   * - Nếu không phải đơn lưu tạm nhưng có pending VNPay/VietQR
+   *   => mới hủy yêu cầu thanh toán online để quay lại sửa/chọn lại phương thức.
+   */
+  if (posStore.activeHeldOrderId) {
+    customerPhoneInput.value = "";
+    displayCash.value = "";
+    showCashModal.value = false;
+    closeTransferModal();
+    posStore.closeHeldOrderLocal();
+    return;
+  }
+
   if (posStore.activePendingPaymentOrderId || posStore.pendingVietQrOrderId) {
     const orderId =
       posStore.activePendingPaymentOrderId ||
@@ -1580,34 +1708,11 @@ const handleCancelOrder = async () => {
       return;
     }
 
-    showVietQrModal.value = false;
-    vietQrOrderId.value = null;
-    pendingVietQrInvoiceSnapshot.value = null;
-    displayCash.value = "";
-    closeTransferModal();
-
-    if (posStore.customer?.phone) {
-      customerPhoneInput.value = normalizePhone(posStore.customer.phone);
-    }
+    clearPaymentChangingUiState();
 
     showPosToast(
       "Đã hủy yêu cầu thanh toán online. Có thể sửa sản phẩm/voucher hoặc chọn lại phương thức."
     );
-    return;
-  }
-
-  if (posStore.activeHeldOrderId) {
-    customerPhoneInput.value = "";
-    displayCash.value = "";
-    showCashModal.value = false;
-    closeTransferModal();
-    posStore.closeHeldOrderLocal();
-    return;
-  }
-
-  if (posStore.hasPartialCashPayment) {
-    posStore.errorMsg =
-      "Đơn đã nhận tiền mặt một phần, không được hủy trực tiếp. Cần xử lý hoàn tiền hoặc quản lý xác nhận hủy.";
     return;
   }
 
@@ -1893,29 +1998,40 @@ const closeVietQrModal = async () => {
     posStore.lastOrderId;
 
   /*
-   * Đóng QR / Đổi phương thức nghĩa là khách CHƯA thanh toán.
-   * Phải hủy payment intent ở backend rồi đưa đơn về HOLD để được sửa
-   * sản phẩm/voucher. Không được chỉ đóng modal vì posStore vẫn bị lock
-   * bởi activePendingPaymentOrderId.
+   * Đổi phương thức khi chưa nhận tiền mặt:
+   * - được hủy pending payment để đưa đơn về HOLD rồi sửa/chọn lại phương thức.
+   *
+   * Đổi phương thức khi đã nhận tiền mặt một phần:
+   * - KHÔNG được gọi cancel-pending-payment vì BE chặn sửa sản phẩm/voucher.
+   * - chỉ đóng QR và giữ activePendingPaymentOrderId để retry-payment
+   *   bằng VNPay/VietQR khác.
    */
-  if (orderId && posStore.activePendingPaymentOrderId) {
-    const result = await posStore.cancelPendingPaymentForEdit(orderId);
+  if (orderId && (posStore.activePendingPaymentOrderId || posStore.pendingVietQrOrderId || posStore.hasPartialCashPayment)) {
+    if (posStore.hasPartialCashPayment) {
+      preparePartialCashTransferRetry(orderId);
 
-    if (!result) {
-      setPosError(
-        posStore.errorMsg ||
-          "Không thể đổi phương thức. Vui lòng kiểm tra lại trạng thái hóa đơn."
+      showPosToast(
+        "Đơn đã nhận tiền mặt một phần. Chọn VNPay/VietQR rồi bấm thanh toán lại để đổi kênh chuyển khoản."
       );
-      return;
-    }
+    } else {
+      const result = await posStore.cancelPendingPaymentForEdit(orderId);
 
-    if (posStore.customer?.phone) {
-      customerPhoneInput.value = normalizePhone(posStore.customer.phone);
-    }
+      if (!result) {
+        setPosError(
+          posStore.errorMsg ||
+            "Không thể đổi phương thức. Vui lòng kiểm tra lại trạng thái hóa đơn."
+        );
+        return;
+      }
 
-    showPosToast(
-      "Đã hủy mã VietQR chưa thanh toán. Có thể sửa sản phẩm/voucher hoặc chọn lại phương thức."
-    );
+      if (posStore.customer?.phone) {
+        customerPhoneInput.value = normalizePhone(posStore.customer.phone);
+      }
+
+      showPosToast(
+        "Đã hủy mã VietQR chưa thanh toán. Có thể sửa sản phẩm/voucher hoặc chọn lại phương thức."
+      );
+    }
   }
 
   showVietQrModal.value = false;
@@ -1998,6 +2114,10 @@ const handleCheckoutAction = async () => {
       ? "VNPAY"
       : "VIETQR";
 
+  if (posStore.hasPartialCashPayment) {
+    preparePartialCashTransferRetry();
+  }
+
   const checkoutResult = await posStore.processCheckout({
     paymentMethod: selectedPaymentMethod as any,
     transferProvider: transferProvider as any,
@@ -2009,6 +2129,22 @@ const handleCheckoutAction = async () => {
   });
 
   if (!checkoutResult) {
+    /*
+     * Nếu BE báo hóa đơn không còn ở trạng thái chờ thanh toán,
+     * đây là pending id cũ/stale. Xóa trạng thái pending local để lần bấm sau
+     * không gọi lại /orders/{id}/retry-payment sai nữa.
+     */
+    if (
+      posStore.hasPartialCashPayment &&
+      isStalePendingPaymentMessage(posStore.errorMsg)
+    ) {
+      clearStalePendingPaymentState();
+
+      showPosToast(
+        "Yêu cầu thanh toán online cũ không còn ở trạng thái chờ. Đã bỏ trạng thái chờ, chọn VNPay/VietQR rồi bấm thanh toán lại."
+      );
+    }
+
     return;
   }
 
@@ -2146,162 +2282,149 @@ const getReceiptPaymentLabel = (invoice?: any | null) => {
   return method || "Không xác định";
 };
 
-const escapeReceiptHtml = (value?: unknown) => {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-};
+const openReceiptPrintPage = (invoice: any) => {
+  const orderId = getReceiptOrderId(invoice);
 
-const buildReceiptPrintHtml = (invoice: any) => {
-  const items = Array.isArray(invoice?.items) ? invoice.items : [];
-  const itemRows = items
-    .map((item: any) => {
-      const productName = escapeReceiptHtml(item.productName || "Sản phẩm");
-      const variantName = escapeReceiptHtml(item.variantName || "");
-      const quantity = Number(item.quantity || 0);
-      const price = Number(item.price || item.unitPrice || 0);
-      const lineTotal = Number(item.lineTotal || price * quantity);
-
-      return `
-        <tr>
-          <td>
-            <div class="item-name">${productName}</div>
-            ${variantName ? `<div class="item-variant">${variantName}</div>` : ""}
-          </td>
-          <td class="text-center">${quantity}</td>
-          <td class="text-end">${formatPrice(price)}</td>
-          <td class="text-end">${formatPrice(lineTotal)}</td>
-        </tr>`;
-    })
-    .join("");
-
-  const orderTime = invoice?.orderTime
-    ? new Date(invoice.orderTime).toLocaleString("vi-VN")
-    : new Date().toLocaleString("vi-VN");
-
-  return `<!doctype html>
-<html lang="vi">
-<head>
-  <meta charset="utf-8" />
-  <title>Hóa đơn #${escapeReceiptHtml(getReceiptOrderId(invoice))}</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      padding: 12px;
-      font-family: Arial, sans-serif;
-      color: #111827;
-      background: #ffffff;
-      font-size: 12px;
-    }
-    .receipt { width: 80mm; max-width: 100%; margin: 0 auto; }
-    .text-center { text-align: center; }
-    .text-end { text-align: right; }
-    .brand { font-size: 16px; font-weight: 800; margin-bottom: 4px; }
-    .muted { color: #4b5563; }
-    .divider { border-top: 1px dashed #9ca3af; margin: 8px 0; }
-    .row { display: flex; justify-content: space-between; gap: 8px; margin: 4px 0; }
-    table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-    th, td { padding: 4px 2px; vertical-align: top; border-bottom: 1px dashed #e5e7eb; }
-    th { font-size: 11px; color: #374151; }
-    .item-name { font-weight: 700; }
-    .item-variant { color: #6b7280; font-size: 11px; margin-top: 2px; }
-    .total-row { font-weight: 800; font-size: 13px; }
-    .thanks { margin-top: 10px; text-align: center; font-weight: 700; }
-    @media print {
-      body { padding: 0; }
-      .receipt { width: 80mm; }
-      @page { size: 80mm auto; margin: 4mm; }
-    }
-  </style>
-</head>
-<body>
-  <div class="receipt">
-    <div class="text-center">
-      <div class="brand">DOMINUS PERFUME</div>
-      <div class="muted">Hóa đơn bán hàng tại quầy</div>
-    </div>
-
-    <div class="divider"></div>
-
-    <div class="row"><span>Mã hóa đơn</span><strong>#${escapeReceiptHtml(getReceiptOrderId(invoice))}</strong></div>
-    <div class="row"><span>Thời gian</span><span>${escapeReceiptHtml(orderTime)}</span></div>
-    <div class="row"><span>Khách hàng</span><span>${escapeReceiptHtml(invoice?.customerName || "Khách tại quầy")}</span></div>
-    <div class="row"><span>SĐT</span><span>${escapeReceiptHtml(invoice?.customerPhone || "")}</span></div>
-    <div class="row"><span>Thanh toán</span><strong>${escapeReceiptHtml(getReceiptPaymentLabel(invoice))}</strong></div>
-
-    <div class="divider"></div>
-
-    <table>
-      <thead>
-        <tr>
-          <th class="text-start">Sản phẩm</th>
-          <th>SL</th>
-          <th class="text-end">Đơn giá</th>
-          <th class="text-end">T.Tiền</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${itemRows || `<tr><td colspan="4" class="text-center muted">Không có dữ liệu sản phẩm</td></tr>`}
-      </tbody>
-    </table>
-
-    <div class="divider"></div>
-
-    <div class="row"><span>Tiền hàng</span><span>${formatPrice(Number(invoice?.totalAmount || 0))} ₫</span></div>
-    <div class="row"><span>Giảm giá</span><span>-${formatPrice(Number(invoice?.discountAmount || 0))} ₫</span></div>
-    <div class="row total-row"><span>Thành tiền</span><span>${formatPrice(getReceiptFinalAmount(invoice))} ₫</span></div>
-    <div class="row"><span>Đã nhận tiền mặt</span><span>${formatPrice(Number(invoice?.cashGiven || 0))} ₫</span></div>
-    <div class="row"><span>Đã nhận chuyển khoản</span><span>${formatPrice(Number(invoice?.transferAmount || 0))} ₫</span></div>
-    <div class="row"><span>Tiền thừa</span><span>${formatPrice(Number(invoice?.changeAmount || 0))} ₫</span></div>
-
-    <div class="divider"></div>
-
-    <div class="thanks">Cảm ơn quý khách!</div>
-  </div>
-</body>
-</html>`;
-};
-
-const printInvoiceWithoutRoute = (invoice: any) => {
-  const iframe = document.createElement("iframe");
-  iframe.style.position = "fixed";
-  iframe.style.right = "0";
-  iframe.style.bottom = "0";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  iframe.style.border = "0";
-
-  document.body.appendChild(iframe);
-
-  const printDocument = iframe.contentDocument || iframe.contentWindow?.document;
-
-  if (!printDocument) {
-    document.body.removeChild(iframe);
-    setPosError("Không thể mở trình in hóa đơn trên trình duyệt này.");
+  if (!orderId || String(orderId).trim() === "N/A") {
+    setPosError("Không xác định được mã hóa đơn để in.");
     return;
   }
 
-  printDocument.open();
-  printDocument.write(buildReceiptPrintHtml(invoice));
-  printDocument.close();
+  try {
+    sessionStorage.setItem("pos_latest_invoice", JSON.stringify(invoice));
+  } catch (error) {
+    console.error("Không lưu được dữ liệu hóa đơn trước khi in:", error);
+    setPosError("Không thể chuẩn bị dữ liệu hóa đơn để in.");
+    return;
+  }
 
-  const removeIframe = () => {
-    setTimeout(() => {
-      if (iframe.parentNode) {
-        iframe.parentNode.removeChild(iframe);
-      }
-    }, 800);
+  /*
+   * Dùng đúng trang hóa đơn hiện có: /payment/result.
+   * Không dùng router.push/window.open để tránh nhảy khỏi màn POS.
+   * Trang hóa đơn được load trong iframe ẩn, sau đó parent gọi print()
+   * để Chrome không bỏ qua lệnh in.
+   */
+  const printUrl = router.resolve({
+    path: "/payment/result",
+    query: {
+      orderId: String(orderId),
+      paymentMethod: String(invoice?.paymentMethod || "CASH"),
+      transferProvider: String(invoice?.transferProvider || ""),
+      embed: "1",
+      source: "POS",
+    },
+  }).href;
+
+  const existingFrame = document.getElementById("pos-receipt-print-frame");
+
+  if (existingFrame) {
+    existingFrame.remove();
+  }
+
+  const iframe = document.createElement("iframe");
+  iframe.id = "pos-receipt-print-frame";
+  iframe.title = "In hóa đơn POS";
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.position = "fixed";
+  iframe.style.left = "-10000px";
+  iframe.style.top = "0";
+  iframe.style.width = "820px";
+  iframe.style.height = "1200px";
+  iframe.style.opacity = "0";
+  iframe.style.border = "0";
+  iframe.style.pointerEvents = "none";
+  iframe.style.background = "transparent";
+
+  let cleaned = false;
+  let printRequested = false;
+  let autoCleanupTimer: ReturnType<typeof setTimeout> | null = null;
+  let printDelayTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const cleanupFrame = (delay = 800) => {
+    if (cleaned) {
+      return;
+    }
+
+    cleaned = true;
+    window.removeEventListener("message", handlePrintMessage as EventListener);
+
+    if (autoCleanupTimer) {
+      clearTimeout(autoCleanupTimer);
+      autoCleanupTimer = null;
+    }
+
+    if (printDelayTimer) {
+      clearTimeout(printDelayTimer);
+      printDelayTimer = null;
+    }
+
+    window.setTimeout(() => {
+      iframe.remove();
+    }, delay);
   };
 
-  setTimeout(() => {
-    iframe.contentWindow?.focus();
-    iframe.contentWindow?.print();
-    removeIframe();
-  }, 250);
+  const requestPrint = () => {
+    if (printRequested) {
+      return;
+    }
+
+    printRequested = true;
+
+    /*
+     * Chờ Vue trong iframe mount xong và đọc pos_latest_invoice.
+     * Không tăng quá lâu để nhân viên bấm in vẫn thấy phản hồi ngay.
+     */
+    printDelayTimer = window.setTimeout(() => {
+      try {
+        const printWindow = iframe.contentWindow;
+
+        if (!printWindow) {
+          throw new Error("Không truy cập được cửa sổ in hóa đơn.");
+        }
+
+        const handleAfterPrint = () => {
+          printWindow.removeEventListener("afterprint", handleAfterPrint);
+          cleanupFrame(800);
+        };
+
+        printWindow.addEventListener("afterprint", handleAfterPrint);
+        printWindow.focus();
+        printWindow.print();
+
+        showPosToast("Đang mở hộp thoại in hóa đơn.");
+
+        autoCleanupTimer = window.setTimeout(() => {
+          printWindow.removeEventListener("afterprint", handleAfterPrint);
+          cleanupFrame(300);
+        }, 120000);
+      } catch (error) {
+        console.error("Không thể in hóa đơn:", error);
+        setPosError("Không thể mở hộp thoại in hóa đơn. Vui lòng thử lại.");
+        cleanupFrame(300);
+      }
+    }, 700);
+  };
+
+  function handlePrintMessage(event: MessageEvent) {
+    if (
+      event.data?.type !== "POS_RECEIPT_PRINT_DONE" &&
+      event.data?.type !== "POS_RECEIPT_PRINT_ERROR"
+    ) {
+      return;
+    }
+
+    cleanupFrame(300);
+  }
+
+  iframe.onload = requestPrint;
+  iframe.onerror = () => {
+    setPosError("Không tải được trang hóa đơn để in.");
+    cleanupFrame(300);
+  };
+
+  window.addEventListener("message", handlePrintMessage as EventListener);
+  document.body.appendChild(iframe);
+  iframe.src = printUrl;
 };
 
 const completePaymentOnCurrentPage = async (invoiceSnapshot: any) => {
@@ -2334,7 +2457,7 @@ const handlePrintLatestInvoice = () => {
     return;
   }
 
-  printInvoiceWithoutRoute(invoice);
+  openReceiptPrintPage(invoice);
 };
 
 const handleContinueAfterPayment = () => {
@@ -2500,9 +2623,43 @@ const processCashPayment = async () => {
   color: #0b1120;
 }
 
-.payment-success-box {
-  background: rgba(22, 163, 74, 0.1);
-  border: 1px solid rgba(34, 197, 94, 0.35);
+.payment-success-dialog-overlay {
+  z-index: 3600;
+}
+
+.payment-success-modal {
+  width: min(480px, 100%);
+  background: linear-gradient(180deg, #082f2c 0%, #0b1120 72%);
+  border: 1px solid rgba(34, 197, 94, 0.42);
+  box-shadow: 0 26px 90px rgba(0, 0, 0, 0.58);
+}
+
+.payment-success-modal-header {
+  border-bottom-color: rgba(34, 197, 94, 0.24);
+}
+
+.payment-success-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(34, 197, 94, 0.16);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  color: #86efac;
+  font-size: 1.1rem;
+}
+
+.payment-success-modal-body {
+  background: rgba(2, 6, 23, 0.12);
+}
+
+.payment-success-modal-footer {
+  justify-content: stretch;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top-color: rgba(34, 197, 94, 0.24);
 }
 
 .payment-success-title {
@@ -2559,6 +2716,7 @@ const processCashPayment = async () => {
   font-size: 0.76rem;
   font-weight: 900;
   cursor: pointer;
+  width: 100%;
 }
 
 .btn-print-receipt {
@@ -3572,6 +3730,12 @@ const processCashPayment = async () => {
   height: 42px;
   padding: 0 !important;
   font-size: 0.82rem !important;
+}
+
+@media (max-width: 420px) {
+  .payment-success-modal-footer {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-height: 760px) {

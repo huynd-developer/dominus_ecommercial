@@ -165,7 +165,7 @@
       </div>
     </div>
 
-    <div class="status-card no-print" v-if="!isProcessing">
+    <div class="status-card no-print" v-if="!isProcessing && !isEmbeddedPrint">
       <div v-if="isSuccess">
         <div class="success-icon">
           <svg
@@ -214,7 +214,7 @@
       </div>
     </div>
 
-    <div class="status-card no-print" v-if="isProcessing">
+    <div class="status-card no-print" v-if="isProcessing && !isEmbeddedPrint">
       <p>Đang xử lý hóa đơn...</p>
     </div>
   </div>
@@ -330,6 +330,40 @@ const customerPhone = ref("");
 const customerEmail = ref("");
 const orderTime = ref("");
 const orderItems = ref<any[]>([]);
+
+const normalizeOrderKey = (value: unknown): string => {
+  return String(value || "")
+    .replace(/^#/, "")
+    .trim();
+};
+
+const getInvoiceOrderKey = (data: any = {}): string => {
+  return normalizeOrderKey(
+    data.orderId || data.id || data.code || data.orderCode || data.invoiceCode
+  );
+};
+
+const shouldAutoPrint = computed(() => {
+  const printValue = getQueryValue(route.query.print).trim().toLowerCase();
+  return printValue === "1" || printValue === "true" || printValue === "yes";
+});
+
+const isEmbeddedPrint = computed(() => {
+  const embedValue = getQueryValue(route.query.embed).trim().toLowerCase();
+  return embedValue === "1" || embedValue === "true" || embedValue === "yes";
+});
+
+const notifyParentPrintDone = (type = "POS_RECEIPT_PRINT_DONE") => {
+  if (isEmbeddedPrint.value && window.parent && window.parent !== window) {
+    window.parent.postMessage(
+      {
+        type,
+        orderId: orderId.value,
+      },
+      window.location.origin
+    );
+  }
+};
 
 const normalizedPaymentMethod = computed(() => {
   return String(paymentMethod.value || "").toUpperCase();
@@ -573,12 +607,17 @@ const applyInvoiceData = (data: any = {}) => {
 
 const loadLocalPosInvoice = async (): Promise<boolean> => {
   const cachedInvoiceRaw = sessionStorage.getItem("pos_latest_invoice");
+  const requestedOrderId = normalizeOrderKey(orderId.value);
 
   if (cachedInvoiceRaw) {
     try {
       const cachedInvoice = JSON.parse(cachedInvoiceRaw);
-      applyInvoiceData(cachedInvoice);
-      return true;
+      const cachedOrderId = getInvoiceOrderKey(cachedInvoice);
+
+      if (!requestedOrderId || !cachedOrderId || requestedOrderId === cachedOrderId) {
+        applyInvoiceData(cachedInvoice);
+        return true;
+      }
     } catch (error) {
       console.warn(
         "Không đọc được dữ liệu hóa đơn trong sessionStorage:",
@@ -631,10 +670,21 @@ const loadVnpayInvoice = async (): Promise<boolean> => {
 };
 
 const printInvoice = () => {
+  const handleAfterPrint = () => {
+    window.removeEventListener("afterprint", handleAfterPrint);
+    notifyParentPrintDone();
+  };
+
+  window.addEventListener("afterprint", handleAfterPrint);
   window.print();
 };
 
 const goBackToPos = () => {
+  if (isEmbeddedPrint.value) {
+    notifyParentPrintDone();
+    return;
+  }
+
   router.push("/admin/pos");
 };
 
@@ -656,8 +706,16 @@ onMounted(async () => {
     console.error("Lỗi xử lý hóa đơn:", error);
     errorMessage.value = "Có lỗi khi xử lý hóa đơn.";
     isSuccess.value = false;
+
+    notifyParentPrintDone("POS_RECEIPT_PRINT_ERROR");
   } finally {
     isProcessing.value = false;
+
+    if (isSuccess.value && shouldAutoPrint.value) {
+      window.setTimeout(() => {
+        printInvoice();
+      }, 350);
+    }
   }
 });
 </script>
