@@ -125,6 +125,8 @@ export interface PosStoreState {
   isLoading: boolean;
   errorMsg: string;
   lastOrderId: string | number | null;
+  lastCompletedOrder: any | null;
+  showPaymentSuccess: boolean;
 
   heldOrders: PosHeldOrder[];
   transferTargets: PosTransferTarget[];
@@ -717,6 +719,8 @@ export const usePosStore = defineStore("posStore", {
     isLoading: false,
     errorMsg: "",
     lastOrderId: null,
+    lastCompletedOrder: null,
+    showPaymentSuccess: false,
 
     heldOrders: [],
     transferTargets: [],
@@ -1017,6 +1021,25 @@ export const usePosStore = defineStore("posStore", {
     clearPendingCheckoutDraft() {
       sessionStorage.removeItem("pos_pending_checkout_draft");
     },
+
+    setCompletedOrderReceipt(order: any) {
+      if (!order) {
+        this.clearCompletedOrderReceipt();
+        return;
+      }
+
+      this.lastCompletedOrder = order;
+      this.showPaymentSuccess = true;
+
+      sessionStorage.setItem("pos_latest_invoice", JSON.stringify(order));
+    },
+
+    clearCompletedOrderReceipt() {
+      this.lastCompletedOrder = null;
+      this.showPaymentSuccess = false;
+      sessionStorage.removeItem("pos_latest_invoice");
+    },
+
     resetLocalOrderOnly() {
       this.cart = [];
       this.customer = null;
@@ -2836,6 +2859,7 @@ export const usePosStore = defineStore("posStore", {
     },
 
     startNewOrder() {
+      this.clearCompletedOrderReceipt();
       this.resetLocalOrderOnly();
       this.fetchProducts();
       this.fetchHeldOrders();

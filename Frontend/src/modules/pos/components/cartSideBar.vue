@@ -35,6 +35,69 @@
       </div>
 
       <div class="cart-content-scroll flex-grow-1 min-h-0 pe-1">
+        <div
+          v-if="posStore.showPaymentSuccess && posStore.lastCompletedOrder"
+          class="payment-success-box rounded-3 p-2 mb-2"
+        >
+          <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+            <div class="min-w-0">
+              <div class="payment-success-title">
+                <i class="bi bi-check-circle-fill me-1"></i>
+                Thanh toán thành công
+              </div>
+
+              <div class="payment-success-subtitle text-truncate">
+                Hóa đơn #{{ getReceiptOrderId(posStore.lastCompletedOrder) }}
+              </div>
+            </div>
+
+            <span class="payment-success-badge shrink-0">ĐÃ THU</span>
+          </div>
+
+          <div class="payment-success-row">
+            <span>Khách hàng</span>
+            <strong class="text-truncate">
+              {{ getReceiptCustomerName(posStore.lastCompletedOrder) }}
+            </strong>
+          </div>
+
+          <div class="payment-success-row">
+            <span>Phương thức</span>
+            <strong>{{ getReceiptPaymentLabel(posStore.lastCompletedOrder) }}</strong>
+          </div>
+
+          <div class="payment-success-row payment-success-total">
+            <span>Thành tiền</span>
+            <strong>
+              {{ formatPrice(getReceiptFinalAmount(posStore.lastCompletedOrder)) }} ₫
+            </strong>
+          </div>
+
+          <div class="payment-success-actions d-grid gap-2 mt-2">
+            <button
+              type="button"
+              class="btn-print-receipt"
+              @click="handlePrintLatestInvoice"
+            >
+              <i class="bi bi-printer me-1"></i>
+              In hóa đơn
+            </button>
+
+            <button
+              type="button"
+              class="btn-new-order-after-pay"
+              @click="handleContinueAfterPayment"
+            >
+              <i class="bi bi-plus-circle me-1"></i>
+              Tạo đơn mới
+            </button>
+          </div>
+
+          <div class="payment-success-note mt-2">
+            Không tự động in. Chỉ in khi khách cần hóa đơn giấy.
+          </div>
+        </div>
+
         <div class="customer-section mb-2">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <span class="text-light fw-bold font-xs">
@@ -790,11 +853,9 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import Swal, { type SweetAlertIcon } from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
-import { useRouter } from "vue-router";
 import { usePosStore } from "@/modules/pos/stores/posStore";
 
 const posStore = usePosStore();
-const router = useRouter();
 const handleTransferHeldOrderEvent = async (event: Event) => {
   const customEvent = event as CustomEvent;
   const orderId = Number(customEvent.detail?.orderId || 0);
@@ -880,6 +941,10 @@ const heldOrderCannotCheckout = computed(() => {
 
 const availableVoucherList = computed(() => {
   return posStore.availableVouchers || [];
+});
+
+const latestCompletedInvoice = computed(() => {
+  return posStore.lastCompletedOrder || null;
 });
 
 const posToast = Swal.mixin({
@@ -1899,24 +1964,7 @@ const confirmVietQrPayment = async () => {
     remainingAmount: backendData.remainingAmount ?? 0,
   });
 
-  sessionStorage.setItem("pos_latest_invoice", JSON.stringify(invoiceSnapshot));
-
-  showVietQrModal.value = false;
-  vietQrOrderId.value = null;
-  pendingVietQrInvoiceSnapshot.value = null;
-  showCashModal.value = false;
-  displayCash.value = "";
-  customerPhoneInput.value = "";
-  closeTransferModal();
-
-  router.push({
-    name: "PosPaymentResult",
-    query: {
-      orderId: invoiceSnapshot.orderId,
-      paymentMethod: invoiceSnapshot.paymentMethod || "VIETQR",
-      transferProvider: invoiceSnapshot.transferProvider || "VIETQR",
-    },
-  });
+  await completePaymentOnCurrentPage(invoiceSnapshot);
 };
 
 const handleCheckoutAction = async () => {
@@ -1968,6 +2016,11 @@ const handleCheckoutAction = async () => {
 
   if (backendData.vietQrImageUrl) {
     openVietQrModalFromCheckout(checkoutResult);
+    return;
+  }
+
+  if (!backendData.vnpayPaymentUrl && isCheckoutSuccess(checkoutResult)) {
+    await completePaymentOnCurrentPage(buildInvoiceSnapshot(backendData));
   }
 };
 
@@ -2054,6 +2107,241 @@ const buildInvoiceSnapshot = (backendData: any = {}) => {
   };
 };
 
+const getReceiptOrderId = (invoice?: any | null) => {
+  return invoice?.orderId || invoice?.id || "N/A";
+};
+
+const getReceiptCustomerName = (invoice?: any | null) => {
+  return invoice?.customerName || "Khách tại quầy";
+};
+
+const getReceiptFinalAmount = (invoice?: any | null) => {
+  return Number(invoice?.amount ?? invoice?.finalAmount ?? 0);
+};
+
+const getReceiptPaymentLabel = (invoice?: any | null) => {
+  const method = String(invoice?.paymentMethod || "")
+    .trim()
+    .toUpperCase();
+  const provider = String(invoice?.transferProvider || "")
+    .trim()
+    .toUpperCase();
+
+  if (method === "CASH") {
+    return "Tiền mặt";
+  }
+
+  if (method === "VNPAY") {
+    return "VNPay";
+  }
+
+  if (method === "VIETQR") {
+    return "VietQR";
+  }
+
+  if (method === "MIXED") {
+    return provider === "VNPAY" ? "Tiền mặt + VNPay" : "Tiền mặt + VietQR";
+  }
+
+  return method || "Không xác định";
+};
+
+const escapeReceiptHtml = (value?: unknown) => {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
+const buildReceiptPrintHtml = (invoice: any) => {
+  const items = Array.isArray(invoice?.items) ? invoice.items : [];
+  const itemRows = items
+    .map((item: any) => {
+      const productName = escapeReceiptHtml(item.productName || "Sản phẩm");
+      const variantName = escapeReceiptHtml(item.variantName || "");
+      const quantity = Number(item.quantity || 0);
+      const price = Number(item.price || item.unitPrice || 0);
+      const lineTotal = Number(item.lineTotal || price * quantity);
+
+      return `
+        <tr>
+          <td>
+            <div class="item-name">${productName}</div>
+            ${variantName ? `<div class="item-variant">${variantName}</div>` : ""}
+          </td>
+          <td class="text-center">${quantity}</td>
+          <td class="text-end">${formatPrice(price)}</td>
+          <td class="text-end">${formatPrice(lineTotal)}</td>
+        </tr>`;
+    })
+    .join("");
+
+  const orderTime = invoice?.orderTime
+    ? new Date(invoice.orderTime).toLocaleString("vi-VN")
+    : new Date().toLocaleString("vi-VN");
+
+  return `<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <title>Hóa đơn #${escapeReceiptHtml(getReceiptOrderId(invoice))}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 12px;
+      font-family: Arial, sans-serif;
+      color: #111827;
+      background: #ffffff;
+      font-size: 12px;
+    }
+    .receipt { width: 80mm; max-width: 100%; margin: 0 auto; }
+    .text-center { text-align: center; }
+    .text-end { text-align: right; }
+    .brand { font-size: 16px; font-weight: 800; margin-bottom: 4px; }
+    .muted { color: #4b5563; }
+    .divider { border-top: 1px dashed #9ca3af; margin: 8px 0; }
+    .row { display: flex; justify-content: space-between; gap: 8px; margin: 4px 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+    th, td { padding: 4px 2px; vertical-align: top; border-bottom: 1px dashed #e5e7eb; }
+    th { font-size: 11px; color: #374151; }
+    .item-name { font-weight: 700; }
+    .item-variant { color: #6b7280; font-size: 11px; margin-top: 2px; }
+    .total-row { font-weight: 800; font-size: 13px; }
+    .thanks { margin-top: 10px; text-align: center; font-weight: 700; }
+    @media print {
+      body { padding: 0; }
+      .receipt { width: 80mm; }
+      @page { size: 80mm auto; margin: 4mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="receipt">
+    <div class="text-center">
+      <div class="brand">DOMINUS PERFUME</div>
+      <div class="muted">Hóa đơn bán hàng tại quầy</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="row"><span>Mã hóa đơn</span><strong>#${escapeReceiptHtml(getReceiptOrderId(invoice))}</strong></div>
+    <div class="row"><span>Thời gian</span><span>${escapeReceiptHtml(orderTime)}</span></div>
+    <div class="row"><span>Khách hàng</span><span>${escapeReceiptHtml(invoice?.customerName || "Khách tại quầy")}</span></div>
+    <div class="row"><span>SĐT</span><span>${escapeReceiptHtml(invoice?.customerPhone || "")}</span></div>
+    <div class="row"><span>Thanh toán</span><strong>${escapeReceiptHtml(getReceiptPaymentLabel(invoice))}</strong></div>
+
+    <div class="divider"></div>
+
+    <table>
+      <thead>
+        <tr>
+          <th class="text-start">Sản phẩm</th>
+          <th>SL</th>
+          <th class="text-end">Đơn giá</th>
+          <th class="text-end">T.Tiền</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemRows || `<tr><td colspan="4" class="text-center muted">Không có dữ liệu sản phẩm</td></tr>`}
+      </tbody>
+    </table>
+
+    <div class="divider"></div>
+
+    <div class="row"><span>Tiền hàng</span><span>${formatPrice(Number(invoice?.totalAmount || 0))} ₫</span></div>
+    <div class="row"><span>Giảm giá</span><span>-${formatPrice(Number(invoice?.discountAmount || 0))} ₫</span></div>
+    <div class="row total-row"><span>Thành tiền</span><span>${formatPrice(getReceiptFinalAmount(invoice))} ₫</span></div>
+    <div class="row"><span>Đã nhận tiền mặt</span><span>${formatPrice(Number(invoice?.cashGiven || 0))} ₫</span></div>
+    <div class="row"><span>Đã nhận chuyển khoản</span><span>${formatPrice(Number(invoice?.transferAmount || 0))} ₫</span></div>
+    <div class="row"><span>Tiền thừa</span><span>${formatPrice(Number(invoice?.changeAmount || 0))} ₫</span></div>
+
+    <div class="divider"></div>
+
+    <div class="thanks">Cảm ơn quý khách!</div>
+  </div>
+</body>
+</html>`;
+};
+
+const printInvoiceWithoutRoute = (invoice: any) => {
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+
+  document.body.appendChild(iframe);
+
+  const printDocument = iframe.contentDocument || iframe.contentWindow?.document;
+
+  if (!printDocument) {
+    document.body.removeChild(iframe);
+    setPosError("Không thể mở trình in hóa đơn trên trình duyệt này.");
+    return;
+  }
+
+  printDocument.open();
+  printDocument.write(buildReceiptPrintHtml(invoice));
+  printDocument.close();
+
+  const removeIframe = () => {
+    setTimeout(() => {
+      if (iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe);
+      }
+    }, 800);
+  };
+
+  setTimeout(() => {
+    iframe.contentWindow?.focus();
+    iframe.contentWindow?.print();
+    removeIframe();
+  }, 250);
+};
+
+const completePaymentOnCurrentPage = async (invoiceSnapshot: any) => {
+  posStore.setCompletedOrderReceipt(invoiceSnapshot);
+
+  showVietQrModal.value = false;
+  vietQrOrderId.value = null;
+  pendingVietQrInvoiceSnapshot.value = null;
+  showCashModal.value = false;
+  displayCash.value = "";
+  customerPhoneInput.value = "";
+  closeTransferModal();
+
+  /*
+   * Thanh toán xong chỉ dọn giỏ hiện tại, không điều hướng sang trang in.
+   * Hóa đơn vừa thanh toán được giữ ở lastCompletedOrder để nhân viên bấm In nếu cần.
+   */
+  posStore.resetLocalOrderOnly();
+  await posStore.fetchProducts();
+  await posStore.fetchHeldOrders();
+
+  showPosToast("Thanh toán thành công. Bấm In hóa đơn nếu khách cần.");
+};
+
+const handlePrintLatestInvoice = () => {
+  const invoice = latestCompletedInvoice.value;
+
+  if (!invoice) {
+    setPosError("Không có hóa đơn vừa thanh toán để in.");
+    return;
+  }
+
+  printInvoiceWithoutRoute(invoice);
+};
+
+const handleContinueAfterPayment = () => {
+  posStore.clearCompletedOrderReceipt();
+  posStore.startNewOrder();
+};
+
 const processCashPayment = async () => {
   if (heldOrderCannotCheckout.value) {
     setPosError(heldOrderCannotCheckoutMessage);
@@ -2095,22 +2383,7 @@ const processCashPayment = async () => {
   const backendData = getCheckoutData(checkoutResult);
   const invoiceSnapshot = buildInvoiceSnapshot(backendData);
 
-  sessionStorage.setItem("pos_latest_invoice", JSON.stringify(invoiceSnapshot));
-
-  showCashModal.value = false;
-  displayCash.value = "";
-  customerPhoneInput.value = "";
-  closeTransferModal();
-
-  posStore.startNewOrder();
-
-  router.push({
-    name: "PosPaymentResult",
-    query: {
-      orderId: invoiceSnapshot.orderId,
-      paymentMethod: "CASH",
-    },
-  });
+  await completePaymentOnCurrentPage(invoiceSnapshot);
 };
 </script>
 
@@ -2225,6 +2498,84 @@ const processCashPayment = async () => {
   background-color: #f3c63f;
   border-color: #f3c63f;
   color: #0b1120;
+}
+
+.payment-success-box {
+  background: rgba(22, 163, 74, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.payment-success-title {
+  color: #86efac;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.payment-success-subtitle,
+.payment-success-note {
+  color: #94a3b8;
+  font-size: 0.72rem;
+}
+
+.payment-success-badge {
+  background: rgba(34, 197, 94, 0.16);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  color: #bbf7d0;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 900;
+  padding: 3px 7px;
+}
+
+.payment-success-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #cbd5e1;
+  font-size: 0.74rem;
+  margin-top: 5px;
+}
+
+.payment-success-row strong {
+  color: #f8fafc;
+  text-align: right;
+}
+
+.payment-success-total {
+  border-top: 1px dashed rgba(148, 163, 184, 0.25);
+  padding-top: 6px;
+}
+
+.payment-success-total span,
+.payment-success-total strong {
+  color: #f3c63f;
+  font-weight: 900;
+}
+
+.btn-print-receipt,
+.btn-new-order-after-pay {
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 0.76rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.btn-print-receipt {
+  background: #f3c63f;
+  border: 1px solid #f3c63f;
+  color: #0b1120;
+}
+
+.btn-new-order-after-pay {
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  color: #e2e8f0;
+}
+
+.btn-print-receipt:hover,
+.btn-new-order-after-pay:hover {
+  filter: brightness(1.08);
 }
 
 .customer-box {

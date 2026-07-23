@@ -123,26 +123,6 @@
         class="dropdown-menu-custom position-absolute start-0 end-0 mx-3 bg-white rounded-4 shadow-lg border border-slate-200 overflow-hidden animate__animated animate__fadeInUp animate__faster"
         style="z-index: 1100; bottom: 85px"
       >
-        <div class="p-2">
-          <button
-            class="dropdown-item-custom-btn w-100 text-start bg-transparent border-0 p-2 rounded-3 text-slate-700 fw-medium mb-1"
-          >
-            <i class="bi bi-person me-2"></i> Hồ sơ cá nhân
-          </button>
-          <button
-            class="dropdown-item-custom-btn w-100 text-start bg-transparent border-0 p-2 rounded-3 text-slate-700 fw-medium mb-1"
-          >
-            <i class="bi bi-shield-lock me-2"></i> Đổi mật khẩu
-          </button>
-          <hr class="my-1 border-slate-200" />
-          <button
-            @click="handleShiftHandover"
-            class="dropdown-item-custom-btn w-100 text-start bg-transparent border-0 p-2 rounded-3 text-slate-700 fw-bold mb-1"
-            style="color: #0284c7 !important"
-          >
-            <i class="bi bi-clock-history me-2"></i> Bàn giao ca làm việc
-          </button>
-        </div>
 
         <div class="p-2 border-top border-slate-100 bg-slate-50">
           <button
