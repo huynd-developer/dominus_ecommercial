@@ -1,6 +1,7 @@
 package org.example.datn_sd69.modules.review.dto.response;
 
 import java.time.LocalDateTime;
+import java.util.List; // ĐÃ THÊM import này
 
 public record PublicProductReviewResponse(
         Integer reviewId,
@@ -13,6 +14,9 @@ public record PublicProductReviewResponse(
         String customerName,
         Integer rating,
         String comment,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+
+        // ĐÃ THÊM: List chứa các link ảnh/video trả về cho Frontend
+        List<String> mediaFiles
 ) {
 }

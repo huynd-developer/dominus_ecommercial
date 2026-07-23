@@ -103,6 +103,29 @@
         <div v-else class="review-comment empty-comment">
           Khách hàng không để lại bình luận.
         </div>
+
+        <!-- ĐÃ THÊM: Khu vực hiển thị Ảnh/Video đánh giá -->
+        <div v-if="review.mediaFiles && review.mediaFiles.length > 0" class="review-media-list mt-3">
+          <div v-for="(media, index) in review.mediaFiles" :key="index" class="media-item">
+            <!-- Nếu là Video -->
+            <video 
+              v-if="media.type === 'video' || (media.url && media.url.match(/\.(mp4|webm|ogg)$/i)) || (typeof media === 'string' && media.match(/\.(mp4|webm|ogg)$/i))"
+              :src="media.url || media"
+              controls
+              class="media-preview"
+            ></video>
+            
+            <!-- Nếu là Ảnh -->
+            <img 
+              v-else
+              :src="media.url || media" 
+              class="media-preview img-thumbnail-custom" 
+              alt="Ảnh đánh giá" 
+              @click="openMedia(media.url || media)"
+            />
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -136,6 +159,15 @@
     <div v-if="errorMessage" class="review-error">
       {{ errorMessage }}
     </div>
+
+    <!-- ĐÃ THÊM: Popup xem ảnh to -->
+    <div v-if="showMediaModal" class="media-modal-backdrop" @click="showMediaModal = false">
+      <div class="media-modal-content" @click.stop>
+        <button class="btn-close-modal" @click="showMediaModal = false">×</button>
+        <img :src="selectedMediaUrl" class="img-fluid" alt="Ảnh phóng to" />
+      </div>
+    </div>
+
   </section>
 </template>
 
@@ -166,6 +198,16 @@ const pageNumber = ref(0);
 const pageSize = ref(5);
 const totalPages = ref(0);
 const totalElements = ref(0);
+
+// ĐÃ THÊM: Biến quản lý trạng thái hiển thị ảnh to
+const selectedMediaUrl = ref<string | undefined>("");
+const showMediaModal = ref(false);
+
+// ĐÃ THÊM: Hàm mở ảnh to
+const openMedia = (url: string) => {
+  selectedMediaUrl.value = url;
+  showMediaModal.value = true;
+};
 
 const extractContent = <T,>(data: PageResponse<T> | T[]): T[] => {
   if (Array.isArray(data)) {
@@ -230,6 +272,7 @@ const fetchReviews = async (page = pageNumber.value) => {
     ]);
 
     summary.value = summaryRes.data;
+    // Chú ý: Dữ liệu review.mediaFiles phải được Backend trả về sẵn ở đây
     reviews.value = extractContent<PublicProductReviewResponse>(reviewsRes.data);
 
     emit("summary-loaded", summaryRes.data);
@@ -499,5 +542,95 @@ watch(
     padding-right: 0;
     padding-bottom: 18px;
   }
+}
+
+/* =========================================
+   ĐÃ THÊM: CSS cho phần hiển thị Ảnh/Video 
+   ========================================= */
+.review-media-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.media-item {
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+  position: relative;
+}
+
+.media-item:hover {
+  transform: scale(1.05);
+  border-color: #bd9a5f;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.media-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* CSS cho Popup xem ảnh to */
+.media-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999999; 
+  padding: 20px;
+  backdrop-filter: blur(4px);
+}
+
+.media-modal-content {
+  position: relative;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.media-modal-content img {
+  max-width: 100%;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+
+.btn-close-modal {
+  position: absolute;
+  top: -45px;
+  right: -10px;
+  background: rgba(255,255,255,0.2);
+  color: white;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 24px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.btn-close-modal:hover {
+  background: #dc2626; 
 }
 </style>

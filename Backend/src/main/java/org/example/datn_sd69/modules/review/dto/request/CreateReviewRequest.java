@@ -1,9 +1,12 @@
 package org.example.datn_sd69.modules.review.dto.request;
+
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import org.springframework.web.multipart.MultipartFile;
+import java.util.List;
 
 public record CreateReviewRequest(
 
@@ -17,6 +20,9 @@ public record CreateReviewRequest(
         Integer rating,
 
         @Size(max = 1000, message = "Bình luận tối đa 1000 ký tự")
-        String comment
+        String comment,
+
+        // ĐÃ THÊM: Hứng danh sách file từ Frontend gửi lên
+        List<MultipartFile> mediaFiles
 ) {
 }

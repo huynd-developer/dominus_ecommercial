@@ -1,92 +1,100 @@
 <template>
-  <Transition name="fade">
-    <div v-if="modelValue" class="modal-backdrop" @click="closeModal">
-      <div class="modal-dialog" @click.stop>
-        <div class="modal-header">
-          <h5 class="fw-bold mb-0">Đánh giá sản phẩm</h5>
-          <button type="button" class="btn-close" @click="closeModal"></button>
-        </div>
-
-        <div class="modal-body" v-if="item">
-          <!-- Thông tin sản phẩm -->
-          <div class="product-info-mini mb-4">
-            <img :src="item.image || fallbackImage" class="mini-img" alt="Product" />
-            <div class="mini-details">
-              <div class="mini-name">{{ item.productName }}</div>
-              <div class="mini-variant text-muted small">Phân loại: {{ item.capacity || 'Đang cập nhật' }}</div>
-            </div>
+  <Teleport to="body">
+    <Transition name="fade">
+      <!-- 1. Nhúng CSS trực tiếp vào đây để chống mất style, dùng @mousedown.self -->
+      <div 
+        v-if="modelValue" 
+        style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 1050;" 
+        @mousedown.self="closeModal"
+      >
+        <!-- 2. Hộp trắng chứa form -->
+        <div style="background: #fff; width: 100%; max-width: 500px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); display: flex; flex-direction: column; max-height: 90vh;">
+          
+          <div class="modal-header" style="padding: 16px; border-bottom: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: center;">
+            <h5 class="fw-bold mb-0">Đánh giá sản phẩm</h5>
+            <button type="button" class="btn-close" @click="closeModal"></button>
           </div>
 
-          <!-- Đánh giá sao -->
-          <div class="rating-section text-center mb-4">
-            <div class="mb-2 fw-bold">Chất lượng sản phẩm</div>
-            <div class="stars-container">
-              <i
-                v-for="star in 5"
-                :key="star"
-                class="bi star-icon"
-                :class="star <= rating ? 'bi-star-fill text-warning' : 'bi-star text-muted'"
-                @click="rating = star"
-                @mouseover="hoverRating = star"
-                @mouseleave="hoverRating = 0"
-                :style="{ color: star <= (hoverRating || rating) ? '#bd9a5f !important' : '' }"
-              ></i>
-            </div>
-            <div class="rating-text text-muted small mt-1">{{ getRatingText(rating) }}</div>
-          </div>
-
-          <!-- Nhập nội dung -->
-          <div class="review-content mb-3">
-            <textarea
-              v-model="comment"
-              class="form-control review-textarea"
-              rows="4"
-              placeholder="Hãy chia sẻ nhận xét của bạn về sản phẩm này nhé (tối thiểu 10 ký tự)..."
-            ></textarea>
-          </div>
-
-          <!-- Upload Ảnh/Video -->
-          <div class="media-upload-section">
-            <div class="media-preview-list">
-              <!-- Hiển thị các file đã chọn -->
-              <div v-for="(media, index) in previewUrls" :key="index" class="media-preview-item">
-                <img v-if="media.type === 'image'" :src="media.url" class="preview-media" />
-                <video v-else-if="media.type === 'video'" :src="media.url" class="preview-media"></video>
-                <button class="btn-remove-media" @click="removeMedia(index)">
-                  <i class="bi bi-x"></i>
-                </button>
-              </div>
-
-              <!-- Nút thêm file (Ẩn khi đã chọn đủ 5 file) -->
-              <div v-if="selectedFiles.length < 5" class="upload-btn-wrapper" @click="triggerFileInput">
-                <i class="bi bi-camera fs-4 text-muted"></i>
-                <span class="small text-muted mt-1">Thêm Ảnh/Video</span>
-                <input
-                  ref="fileInput"
-                  type="file"
-                  multiple
-                  accept="image/*, video/*"
-                  class="d-none"
-                  @change="handleFileSelect"
-                />
+          <!-- modal-body có thanh cuộn nếu nội dung dài -->
+          <div class="modal-body" v-if="item" style="padding: 16px; overflow-y: auto;">
+            <!-- Thông tin sản phẩm -->
+            <div class="product-info-mini mb-4">
+              <img :src="item.image || fallbackImage" class="mini-img" alt="Product" />
+              <div class="mini-details">
+                <div class="mini-name">{{ item.productName }}</div>
+                <div class="mini-variant text-muted small">Phân loại: {{ item.capacity || 'Đang cập nhật' }}</div>
               </div>
             </div>
-            <div class="small text-muted mt-2">Tối đa 5 file. Giới hạn dung lượng: 5MB/file.</div>
-          </div>
-        </div>
 
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" @click="closeModal" :disabled="loading">
-            Trở lại
-          </button>
-          <button type="button" class="btn btn-primary btn-submit" @click="handleSubmit" :disabled="loading || !isValid">
-            <span v-if="loading" class="spinner-border spinner-border-sm me-1"></span>
-            Hoàn thành
-          </button>
+            <!-- Đánh giá sao -->
+            <div class="rating-section text-center mb-4">
+              <div class="mb-2 fw-bold">Chất lượng sản phẩm</div>
+              <div class="stars-container">
+                <i
+                  v-for="star in 5"
+                  :key="star"
+                  class="bi star-icon"
+                  :class="star <= rating ? 'bi-star-fill text-warning' : 'bi-star text-muted'"
+                  @click="rating = star"
+                  @mouseover="hoverRating = star"
+                  @mouseleave="hoverRating = 0"
+                  :style="{ color: star <= (hoverRating || rating) ? '#bd9a5f !important' : '' }"
+                ></i>
+              </div>
+              <div class="rating-text text-muted small mt-1">{{ getRatingText(rating) }}</div>
+            </div>
+
+            <!-- Nhập nội dung -->
+            <div class="review-content mb-3">
+              <textarea
+                v-model="comment"
+                class="form-control review-textarea"
+                rows="4"
+                placeholder="Hãy chia sẻ nhận xét của bạn về sản phẩm này nhé (tối thiểu 10 ký tự)..."
+              ></textarea>
+            </div>
+
+            <!-- Upload Ảnh/Video -->
+            <div class="media-upload-section">
+              <div class="media-preview-list">
+                <div v-for="(media, index) in previewUrls" :key="index" class="media-preview-item">
+                  <img v-if="media.type === 'image'" :src="media.url" class="preview-media" />
+                  <video v-else-if="media.type === 'video'" :src="media.url" class="preview-media"></video>
+                  <button class="btn-remove-media" @click="removeMedia(index)">
+                    <i class="bi bi-x"></i>
+                  </button>
+                </div>
+
+                <div v-if="selectedFiles.length < 5" class="upload-btn-wrapper" @click="triggerFileInput">
+                  <i class="bi bi-camera fs-4 text-muted"></i>
+                  <span class="small text-muted mt-1">Thêm Ảnh/Video</span>
+                  <input
+                    ref="fileInput"
+                    type="file"
+                    multiple
+                    accept="image/*, video/*"
+                    class="d-none"
+                    @change="handleFileSelect"
+                  />
+                </div>
+              </div>
+              <div class="small text-muted mt-2">Tối đa 5 file. Giới hạn dung lượng: 5MB/file.</div>
+            </div>
+          </div>
+
+          <div class="modal-footer" style="padding: 16px; border-top: 1px solid #dee2e6; display: flex; justify-content: flex-end; gap: 8px;">
+            <button type="button" class="btn btn-outline-secondary" @click="closeModal" :disabled="loading">
+              Trở lại
+            </button>
+            <button type="button" class="btn btn-primary btn-submit" @click="handleSubmit" :disabled="loading || !isValid">
+              <span v-if="loading" class="spinner-border spinner-border-sm me-1"></span>
+              Hoàn thành
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  </Transition>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -357,5 +365,17 @@ const handleSubmit = () => {
 }
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
+}
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999; /* Tăng hẳn lên nóc nhà */
 }
 </style>

@@ -1,12 +1,12 @@
 package org.example.datn_sd69.modules.review.controller;
 
-
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.modules.review.dto.request.CreateReviewRequest;
 import org.example.datn_sd69.modules.review.service.CustomerReviewService;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -21,9 +21,10 @@ public class CustomerReviewController {
 
     private final CustomerReviewService customerReviewService;
 
-    @PostMapping
+    // ĐÃ SỬA: Thêm consumes và đổi @RequestBody thành @ModelAttribute
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> createReview(
-            @Valid @RequestBody CreateReviewRequest request
+            @Valid @ModelAttribute CreateReviewRequest request
     ) {
         return ResponseEntity
                 .status(HttpStatus.CREATED)

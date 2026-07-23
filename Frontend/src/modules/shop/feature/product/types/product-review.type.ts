@@ -20,11 +20,13 @@ export interface PublicProductReviewResponse {
   productName: string;
   brandName: string | null;
   sku: string | null;
-
   customerName: string;
   rating: number;
   comment: string | null;
   createdAt: string;
+  
+  // ĐÃ THÊM: Bổ sung trường này để hết lỗi đỏ
+  mediaFiles?: any[]; 
 }
 
 export interface ProductReviewSummaryResponse {
