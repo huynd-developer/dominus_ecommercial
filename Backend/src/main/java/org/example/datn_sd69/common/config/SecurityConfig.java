@@ -65,6 +65,7 @@ public class SecurityConfig {
                                 "/api/concentrations/**",
                                 "/api/fragrance-families/**",
                                 "/api/capacities/**",
+                                "/api/v1/products/**",
                                 "/api/products/**",
                                 "/api/shop/products/**",
                                 "/api/bottle-types/**",
