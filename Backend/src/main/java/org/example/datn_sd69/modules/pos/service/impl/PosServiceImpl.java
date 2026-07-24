@@ -1485,7 +1485,7 @@ public class PosServiceImpl implements PosService {
         }
 
         if (!canReceivePosTransfer(targetEmployee)) {
-            throw new RuntimeException("Chỉ được chuyển đơn lưu tạm cho nhân viên thu ngân.");
+            throw new RuntimeException("Nhân viên nhận phiếu không có quyền xử lý POS.");
         }
     }
 
@@ -1663,12 +1663,7 @@ public class PosServiceImpl implements PosService {
 
         String roleName = user.getRole().getName().trim().toUpperCase(Locale.ROOT);
 
-        /*
-         * Nghiệp vụ mới:
-         * Chỉ cho chuyển đơn lưu tạm cho nhân viên thu ngân.
-         * MANAGER/OWNER vẫn có quyền chuyển/hủy, nhưng không được là người nhận đơn.
-         */
-        return "CASHIER".equals(roleName) || "ROLE_CASHIER".equals(roleName);
+        return "CASHIER".equals(roleName) || "ROLE_CASHIER".equals(roleName) || "MANAGER".equals(roleName) || "ROLE_MANAGER".equals(roleName) || "OWNER".equals(roleName) || "ROLE_OWNER".equals(roleName);
     }
 
     @Override
@@ -1829,6 +1824,93 @@ public class PosServiceImpl implements PosService {
         applyHeldOrderPermissions(response, savedOrder, currentEmployee);
 
         return response;
+    }
+
+    /**
+     * Hủy hóa đơn POS đã nhận tiền mặt một phần.
+     *
+     * Không dùng cancelPendingPayment() cho MIXED vì hàm đó đưa đơn về HOLD để sửa,
+     * còn MIXED đã có tiền mặt phải xử lý theo nghiệp vụ hủy + hoàn tiền.
+     */
+    @Override
+    @Transactional
+    public Map<String, Object> cancelPartialPaidOrder(Integer orderId, String cashierEmail) {
+        if (orderId == null) {
+            throw new RuntimeException("Mã hóa đơn không hợp lệ.");
+        }
+
+        Employee currentEmployee = resolveCashier(cashierEmail);
+
+        Order order = orderRepository.findDetailById(orderId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy hóa đơn cần hủy."));
+
+        if (!isCounterOrder(order)) {
+            throw new RuntimeException("Chỉ được hủy hóa đơn tại quầy.");
+        }
+
+        if (order.getStatus() == null || order.getStatus() != ORDER_STATUS_PENDING) {
+            throw new RuntimeException("Chỉ được hủy hóa đơn tại quầy đang chờ thanh toán.");
+        }
+
+        if (!isSameCashier(order, currentEmployee) && !isManagerOrOwner(currentEmployee)) {
+            throw new RuntimeException("Bạn không có quyền hủy hóa đơn của nhân viên khác.");
+        }
+
+        String paymentMethod = order.getPaymentMethod() == null
+                ? ""
+                : order.getPaymentMethod().trim().toUpperCase(Locale.ROOT);
+
+        boolean partialPaidPayment = PAYMENT_MIXED.equals(paymentMethod)
+                || PAYMENT_MIXED_VNPAY.equals(paymentMethod)
+                || PAYMENT_MIXED_VIETQR.equals(paymentMethod);
+
+        if (!partialPaidPayment) {
+            throw new RuntimeException(
+                    "Hóa đơn này chưa ghi nhận tiền mặt một phần. Nếu chỉ là VNPay/VietQR chưa thanh toán, hãy dùng chức năng hủy thanh toán online."
+            );
+        }
+
+        List<OrderItem> orderItems = orderItemRepository.findByOrderIdWithVariant(order.getId());
+
+        if (orderItems.isEmpty()) {
+            throw new RuntimeException("Hóa đơn không có sản phẩm.");
+        }
+
+        /*
+         * Hóa đơn MIXED pending đã giữ/trừ kho khi tạo thanh toán online.
+         * Hủy hóa đơn phải hoàn kho đúng một lần.
+         */
+        for (OrderItem item : orderItems) {
+            ProductVariant variant = item.getProductVariant();
+            Integer quantity = item.getQuantity();
+
+            if (variant == null || quantity == null || quantity <= 0) {
+                continue;
+            }
+
+            int currentStock = variant.getStockQuantity() != null
+                    ? variant.getStockQuantity()
+                    : 0;
+
+            variant.setStockQuantity(currentStock + quantity);
+            variantRepository.save(variant);
+        }
+
+        /*
+         * Voucher chỉ tăng usedCount khi đơn hoàn thành,
+         * nên hóa đơn đang pending không cần giảm usedCount.
+         */
+        order.setStatus(ORDER_STATUS_CANCELLED);
+        order.setCompletedAt(null);
+
+        Order savedOrder = orderRepository.save(order);
+
+        return Map.of(
+                "success", true,
+                "orderId", savedOrder.getId(),
+                "status", "CANCELLED",
+                "message", "Đã hủy hóa đơn #" + savedOrder.getId() + ". Vui lòng hoàn lại tiền mặt đã nhận cho khách."
+        );
     }
 
     @Override
