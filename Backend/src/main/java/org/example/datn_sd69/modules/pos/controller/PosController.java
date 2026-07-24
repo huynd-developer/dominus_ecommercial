@@ -332,6 +332,27 @@ public class PosController {
         );
     }
 
+    /**
+     * Hủy hóa đơn POS đã nhận tiền mặt một phần.
+     *
+     * Dùng khi khách đưa một phần tiền mặt, sau đó chọn VNPay/VietQR
+     * nhưng quay lại và muốn hủy hóa đơn. Nhân viên phải hoàn lại tiền mặt
+     * cho khách trước khi xác nhận hủy ở FE.
+     *
+     * PATCH /api/admin/pos/orders/{orderId}/cancel-partial-paid
+     */
+    @PatchMapping("/orders/{orderId}/cancel-partial-paid")
+    public ResponseEntity<Map<String, Object>> cancelPartialPaidOrder(
+            @PathVariable Integer orderId,
+            Authentication authentication
+    ) {
+        String cashierEmail = getCurrentEmail(authentication);
+
+        return ResponseEntity.ok(
+                posService.cancelPartialPaidOrder(orderId, cashierEmail)
+        );
+    }
+
     @PostMapping("/orders/{orderId}/retry-payment")
     public ResponseEntity<PosOrderResponse> retryPendingPayment(
             @PathVariable Integer orderId,

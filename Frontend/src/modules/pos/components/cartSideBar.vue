@@ -1677,11 +1677,8 @@ const preparePartialCashTransferRetry = (preferredOrderId?: number | string | nu
 
 const handleCancelOrder = async () => {
   /*
-   * Giữ logic cũ của nút header:
-   * - Nếu đang mở đơn lưu tạm thì nút đang hiển thị "Đóng"
-   *   => chỉ đóng đơn khỏi form POS, không gọi hủy pending payment.
-   * - Nếu không phải đơn lưu tạm nhưng có pending VNPay/VietQR
-   *   => mới hủy yêu cầu thanh toán online để quay lại sửa/chọn lại phương thức.
+   * Giữ logic cũ của nút header khi đang mở đơn lưu tạm:
+   * nút đang hiển thị "Đóng" thì chỉ đóng form POS, không hủy đơn lưu tạm.
    */
   if (posStore.activeHeldOrderId) {
     customerPhoneInput.value = "";
@@ -1689,6 +1686,66 @@ const handleCancelOrder = async () => {
     showCashModal.value = false;
     closeTransferModal();
     posStore.closeHeldOrderLocal();
+    return;
+  }
+
+  /*
+   * Case đã nhận tiền mặt một phần:
+   * - Nếu mới ghi nhận tiền mặt local, chưa tạo VNPay/VietQR pending: chỉ cần hoàn tiền và dọn form.
+   * - Nếu đã tạo VNPay/VietQR pending: phải gọi BE hủy hóa đơn để hoàn kho,
+   *   không được dùng cancelPendingPaymentForEdit vì hàm đó chỉ để quay lại sửa đơn chưa nhận tiền.
+   */
+  if (posStore.hasPartialCashPayment) {
+    const refundAmount = Number(posStore.cashPaid || 0);
+    const orderId =
+      posStore.activePendingPaymentOrderId || posStore.pendingVietQrOrderId || null;
+
+    const confirmResult = await Swal.fire({
+      icon: "warning",
+      title: "Hủy hóa đơn đã nhận tiền?",
+      html: `Hóa đơn đã nhận <b>${formatPrice(
+        refundAmount
+      )} ₫</b> tiền mặt.<br/>Hãy hoàn lại tiền mặt cho khách trước khi hủy.`,
+      showCancelButton: true,
+      confirmButtonText: "Đã hoàn tiền và hủy",
+      cancelButtonText: "Không hủy",
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#334155",
+      background: "#0f172a",
+      color: "#f8fafc",
+      reverseButtons: true,
+      focusCancel: true,
+    });
+
+    if (!confirmResult.isConfirmed) {
+      return;
+    }
+
+    if (orderId) {
+      const result = await posStore.cancelPartialPaidOrder(orderId);
+
+      if (!result) {
+        setPosError(
+          posStore.errorMsg ||
+            "Không thể hủy hóa đơn đã nhận tiền mặt một phần."
+        );
+        return;
+      }
+    } else {
+      posStore.startNewOrder();
+    }
+
+    customerPhoneInput.value = "";
+    displayCash.value = "";
+    showCashModal.value = false;
+    showVietQrModal.value = false;
+    vietQrOrderId.value = null;
+    pendingVietQrInvoiceSnapshot.value = null;
+    closeTransferModal();
+
+    showPosToast(
+      `Đã hủy hóa đơn và hoàn lại ${formatPrice(refundAmount)} ₫ tiền mặt cho khách.`
+    );
     return;
   }
 

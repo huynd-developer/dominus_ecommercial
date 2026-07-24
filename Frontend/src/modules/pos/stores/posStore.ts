@@ -1353,6 +1353,61 @@ export const usePosStore = defineStore("posStore", {
       };
     },
 
+    async cancelPartialPaidOrder(orderId?: number | string | null) {
+      const targetOrderId =
+        orderId || this.activePendingPaymentOrderId || this.pendingVietQrOrderId;
+
+      if (this.cashPaid <= 0) {
+        this.errorMsg = "Đơn chưa nhận tiền mặt một phần nên không cần hủy theo luồng hoàn tiền.";
+        return false;
+      }
+
+      /*
+       * Nếu mới ghi nhận tiền mặt local nhưng chưa tạo hóa đơn pending ở BE,
+       * chỉ cần dọn form POS. Nhân viên đã xác nhận hoàn tiền ở CartSideBar.
+       */
+      if (!targetOrderId) {
+        this.resetLocalOrderOnly();
+        this.errorMsg = "Đã hủy đơn chưa tạo thanh toán online.";
+        return {
+          success: true,
+          data: null,
+        };
+      }
+
+      this.isLoading = true;
+      this.errorMsg = "";
+
+      try {
+        const { data } = await api.patch(
+          `/admin/pos/orders/${targetOrderId}/cancel-partial-paid`
+        );
+
+        this.removeProcessingOrderCard(targetOrderId);
+        this.resetLocalOrderOnly();
+        await this.fetchProducts();
+        await this.fetchHeldOrders();
+
+        this.errorMsg =
+          data?.message ||
+          `Đã hủy hóa đơn #${targetOrderId}. Vui lòng hoàn lại tiền mặt đã nhận cho khách.`;
+
+        return {
+          success: true,
+          data,
+        };
+      } catch (error: any) {
+        this.errorMsg = getBackendMessage(
+          error,
+          "Hủy hóa đơn đã nhận tiền mặt một phần thất bại. Vui lòng kiểm tra trạng thái hóa đơn."
+        );
+
+        return false;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
     async cancelPendingPaymentForEdit(orderId?: number | string | null) {
       const targetOrderId =
         orderId || this.activePendingPaymentOrderId || this.pendingVietQrOrderId;

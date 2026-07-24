@@ -123,4 +123,5 @@ public interface PosService {
             String clientIp
     );
     PosOrderResponse cancelPendingPayment(Integer orderId, String cashierEmail);
+    Map<String, Object> cancelPartialPaidOrder(Integer orderId, String cashierEmail);
 }
