@@ -626,66 +626,6 @@ const getTransferProviderFromPaymentMethod = (
   return "VIETQR";
 };
 
-const cloneCartItems = (items?: CartItem[] | null): CartItem[] => {
-  if (!Array.isArray(items)) {
-    return [];
-  }
-
-  return items
-    .filter((item) => item?.product?.sku && Number(item.quantity || 0) > 0)
-    .map((item) => ({
-      product: { ...item.product },
-      quantity: Number(item.quantity || 1),
-    }));
-};
-
-const mergeCartItemsBySku = (
-  baseItems: CartItem[],
-  incomingItems: CartItem[]
-): CartItem[] => {
-  const mergedMap = new Map<string, CartItem>();
-
-  const appendItem = (item: CartItem) => {
-    const sku = String(item?.product?.sku || "")
-      .trim()
-      .toLowerCase();
-
-    if (!sku) {
-      return;
-    }
-
-    const quantity = Math.max(Number(item.quantity || 1), 1);
-    const existing = mergedMap.get(sku);
-
-    if (!existing) {
-      mergedMap.set(sku, {
-        product: { ...item.product },
-        quantity,
-      });
-      return;
-    }
-
-    const maxStock = Math.max(
-      Number(existing.product.stockQuantity || 0),
-      Number(item.product.stockQuantity || 0),
-      existing.quantity + quantity
-    );
-
-    existing.quantity = Math.min(existing.quantity + quantity, maxStock);
-    existing.product = {
-      ...existing.product,
-      ...item.product,
-      stockQuantity: maxStock,
-    };
-  };
-
-  cloneCartItems(baseItems).forEach(appendItem);
-  cloneCartItems(incomingItems).forEach(appendItem);
-
-  return Array.from(mergedMap.values());
-};
-
-
 const sortVouchersByBest = (vouchers: PosVoucher[]): PosVoucher[] => {
   return [...vouchers].sort((a, b) => {
     if (a.eligible !== b.eligible) {
@@ -2807,13 +2747,6 @@ export const usePosStore = defineStore("posStore", {
         return false;
       }
 
-      const unsavedCartBeforeOpen = cloneCartItems(this.cart);
-      const unsavedCustomerPhoneBeforeOpen = normalizePhone(this.customer?.phone);
-      const shouldMergeUnsavedCart =
-        unsavedCartBeforeOpen.length > 0 &&
-        !this.activeHeldOrderId &&
-        !this.activePendingPaymentOrderId;
-
       this.isLoading = true;
       this.errorMsg = "";
 
@@ -2844,21 +2777,12 @@ export const usePosStore = defineStore("posStore", {
           this.mapOrderItemToCartItem(item)
         );
 
-        const heldCustomerPhone = normalizePhone(data.customerPhone);
-
         /*
-         * Nếu user đang chọn thêm sản phẩm rồi mới click đơn lưu tạm cùng SĐT,
-         * không được làm mất giỏ đang chọn. Merge vào đơn để bấm Lưu tạm là cập nhật.
+         * Mở đơn lưu tạm chỉ load đúng sản phẩm đang có trong đơn đó.
+         * Không tự gộp giỏ hiện tại vào đơn lưu tạm, tránh nhân viên bấm nhầm
+         * làm sản phẩm mới chui vào đơn lưu tạm cũ.
          */
-        const canMergeUnsavedCart =
-          shouldMergeUnsavedCart &&
-          (!unsavedCustomerPhoneBeforeOpen ||
-            !heldCustomerPhone ||
-            unsavedCustomerPhoneBeforeOpen === heldCustomerPhone);
-
-        this.cart = canMergeUnsavedCart
-          ? mergeCartItemsBySku(heldCart, unsavedCartBeforeOpen)
-          : heldCart;
+        this.cart = heldCart;
 
         this.customer = {
           customerId: data.customerId,
@@ -2915,9 +2839,7 @@ export const usePosStore = defineStore("posStore", {
           await this.fetchAvailableVouchers();
         }
 
-        this.errorMsg = canMergeUnsavedCart
-          ? `Đã mở đơn lưu tạm #${this.activeHeldOrderId} và gộp sản phẩm đang chọn. Bấm Lưu tạm để cập nhật đơn.`
-          : `Đã mở đơn lưu tạm #${this.activeHeldOrderId}. Có thể thêm/sửa sản phẩm và voucher, khách hàng được giữ nguyên.`;
+        this.errorMsg = `Đã mở đơn lưu tạm #${this.activeHeldOrderId}. Có thể thêm/sửa sản phẩm và voucher, khách hàng được giữ nguyên.`;
 
         return {
           success: true,
