@@ -1,13 +1,7 @@
 package org.example.datn_sd69.modules.review.service.impl;
 
 import lombok.RequiredArgsConstructor;
-import org.example.datn_sd69.entity.Brand;
-import org.example.datn_sd69.entity.Order;
-import org.example.datn_sd69.entity.OrderItem;
-import org.example.datn_sd69.entity.Product;
-import org.example.datn_sd69.entity.ProductVariant;
-import org.example.datn_sd69.entity.Review;
-import org.example.datn_sd69.entity.User;
+import org.example.datn_sd69.entity.*;
 import org.example.datn_sd69.modules.review.dto.response.ProductReviewSummaryResponse;
 import org.example.datn_sd69.modules.review.dto.response.PublicProductReviewResponse;
 import org.example.datn_sd69.modules.review.service.PublicProductReviewService;
@@ -20,6 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -135,6 +130,13 @@ public class PublicProductReviewServiceImpl implements PublicProductReviewServic
         Brand brand = product != null ? product.getBrand() : null;
         User user = review.getUser();
 
+        List<String> mediaUrls = new ArrayList<>();
+        if (review.getReviewMedias() != null && !review.getReviewMedias().isEmpty()) {
+            mediaUrls = review.getReviewMedias().stream()
+                    .map(ReviewMedia::getMediaUrl) // Gọi đúng tên hàm getMediaUrl() của Entity vừa tạo
+                    .toList();
+        }
+
         return new PublicProductReviewResponse(
                 review.getId(),
                 product != null ? product.getId() : null,
@@ -146,7 +148,8 @@ public class PublicProductReviewServiceImpl implements PublicProductReviewServic
                 maskCustomerName(user != null ? user.getName() : null),
                 review.getRating(),
                 review.getComment(),
-                review.getCreatedAt()
+                review.getCreatedAt(),
+                mediaUrls // ĐÃ THÊM: Truyền list ảnh vào DTO
         );
     }
 

@@ -423,7 +423,7 @@ const fetchNormalProducts = async () => {
   try {
     productLoading.value = true;
 
-    const res = await api.get("/products", {
+    const res = await api.get("/v1/products", { // <--- ĐÃ SỬA THÀNH /v1/products
       params: {
         page: 0,
         size: 12,

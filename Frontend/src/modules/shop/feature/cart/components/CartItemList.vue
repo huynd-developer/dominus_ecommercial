@@ -30,21 +30,17 @@
         <img
           :src="getItemImage(item)"
           class="item-img"
-          :alt="item.productName || item.sku || 'Sản phẩm'"
+          :alt="item.productName || 'Sản phẩm'"
           @error="handleImageError"
         />
 
         <div class="item-info">
           <div class="name-row">
             <h4 class="item-name">
-              {{ item.productName || item.sku || "Sản phẩm" }}
+              {{ item.productName || "Sản phẩm" }}
             </h4>
 
             <div class="badge-row">
-              <span v-if="item.sku" class="sku-badge">
-                {{ item.sku }}
-              </span>
-
               <span v-if="item.hasPromotion" class="flash-sale-badge">
                 Flash Sale -{{ formatDiscount(item.discountPercent) }}%
               </span>
@@ -200,20 +196,8 @@ interface CartItem {
 
   quantity?: number | null;
 
-  /**
-   * Giá thực tế BE trả về để tính tiền.
-   * Nếu có Flash Sale thì price = salePrice.
-   */
   price?: number | null;
-
-  /**
-   * Giá gốc.
-   */
   originalPrice?: number | null;
-
-  /**
-   * Giá Flash Sale.
-   */
   salePrice?: number | null;
 
   discountPercent?: number | null;
@@ -257,7 +241,7 @@ const FALLBACK_IMAGE =
       <rect width="100%" height="100%" fill="#f3f4f6"/>
       <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
         fill="#9ca3af" font-family="Arial" font-size="20">
-        No Image
+        Không có ảnh
       </text>
     </svg>
   `);
@@ -550,17 +534,6 @@ const formatDiscount = (value?: number | null) => {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-}
-
-.sku-badge {
-  width: fit-content;
-  background: #f8fafc;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 600;
 }
 
 .flash-sale-badge {

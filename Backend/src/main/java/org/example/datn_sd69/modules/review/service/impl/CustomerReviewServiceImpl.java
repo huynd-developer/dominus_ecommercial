@@ -1,6 +1,7 @@
 package org.example.datn_sd69.modules.review.service.impl;
 
-
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.Brand;
 import org.example.datn_sd69.entity.Order;
@@ -8,6 +9,7 @@ import org.example.datn_sd69.entity.OrderItem;
 import org.example.datn_sd69.entity.Product;
 import org.example.datn_sd69.entity.ProductVariant;
 import org.example.datn_sd69.entity.Review;
+import org.example.datn_sd69.entity.ReviewMedia; // ĐÃ THÊM
 import org.example.datn_sd69.entity.User;
 import org.example.datn_sd69.modules.review.dto.request.CreateReviewRequest;
 import org.example.datn_sd69.modules.review.dto.response.ReviewResponse;
@@ -22,10 +24,13 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile; // ĐÃ THÊM
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList; // ĐÃ THÊM
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @Service
@@ -39,6 +44,7 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
     private final OrderItemRepository orderItemRepository;
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
+    private final Cloudinary cloudinary;
 
     @Override
     @Transactional
@@ -82,6 +88,40 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
         review.setComment(normalizeComment(request.comment()));
         review.setCreatedAt(LocalDateTime.now());
         review.setIsDeleted(false);
+
+        // ĐÃ THÊM: Xử lý danh sách file upload
+        if (request.mediaFiles() != null && !request.mediaFiles().isEmpty()) {
+            for (MultipartFile file : request.mediaFiles()) {
+                if (!file.isEmpty()) {
+                    try {
+                        // GỌI CLOUDINARY UPLOAD Y HỆT BÊN PRODUCT[cite: 16]
+                        Map uploadResult = cloudinary.uploader().upload(
+                                file.getBytes(),
+                                ObjectUtils.emptyMap()
+                        );
+
+                        // Lấy URL trả về từ Cloudinary[cite: 16]
+                        String fileUrl = uploadResult.get("secure_url").toString();
+
+                        ReviewMedia media = new ReviewMedia();
+                        media.setReview(review);
+                        media.setMediaUrl(fileUrl);
+
+                        // Phân loại là video hay ảnh
+                        String contentType = file.getContentType();
+                        if (contentType != null && contentType.startsWith("video/")) {
+                            media.setMediaType("video");
+                        } else {
+                            media.setMediaType("image");
+                        }
+
+                        review.getReviewMedias().add(media);
+                    } catch (Exception e) {
+                        throw new RuntimeException("Lỗi upload file lên Cloudinary: " + e.getMessage());
+                    }
+                }
+            }
+        }
 
         Review savedReview = reviewRepository.save(review);
 
@@ -188,6 +228,14 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
         Product product = variant != null ? variant.getProduct() : null;
         Brand brand = product != null ? product.getBrand() : null;
 
+        // ĐÃ THÊM: Map danh sách URL ảnh để nhét vào Response
+        List<String> mediaUrls = new ArrayList<>();
+        if (review.getReviewMedias() != null && !review.getReviewMedias().isEmpty()) {
+            mediaUrls = review.getReviewMedias().stream()
+                    .map(ReviewMedia::getMediaUrl)
+                    .toList();
+        }
+
         return new ReviewResponse(
                 review.getId(),
                 orderItem != null ? orderItem.getId() : null,
@@ -202,7 +250,8 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
 
                 review.getRating(),
                 review.getComment(),
-                review.getCreatedAt()
+                review.getCreatedAt(),
+                mediaUrls // ĐÃ THÊM trường này vào DTO
         );
     }
 
@@ -211,6 +260,7 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
             OrderItem orderItem,
             Integer currentUserId
     ) {
+        // ... (Giữ nguyên không thay đổi)
         ProductVariant variant = orderItem.getProductVariant();
         Product product = variant != null ? variant.getProduct() : null;
         Brand brand = product != null ? product.getBrand() : null;
@@ -255,6 +305,7 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
     }
 
     private User getCurrentUser() {
+        // ... (Giữ nguyên không thay đổi)
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication == null || !authentication.isAuthenticated()) {
