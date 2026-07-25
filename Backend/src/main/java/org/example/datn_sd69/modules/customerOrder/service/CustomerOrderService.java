@@ -11,4 +11,6 @@ public interface CustomerOrderService {
     CustomerOrderResponse getOrderDetail(Integer orderId);
 
     void cancelOrder(Integer orderId);
+    void requestReturnOrder(Integer orderId, String reason);
+    void cancelReturnRequest(Integer orderId);
 }

@@ -68,6 +68,14 @@
         >
           Đã hủy
         </div>
+
+        <div 
+          class="tab-item" 
+          :class="{ active: currentTab === 6 }" 
+          @click="currentTab = 6"
+        >
+          Hoàn hàng
+        </div>
       </div>
 
       <div v-if="store.orderLoading" class="text-center py-5">
@@ -401,6 +409,27 @@
                     <i class="bi bi-cart-plus me-1"></i> Mua lại
                   </button>
 
+                  <button
+                    v-if="order.status === 3"
+                    type="button"
+                    class="btn btn-outline-danger btn-sm"
+                    :disabled="store.orderLoading"
+                    @click="requestReturn(order)"
+                  >
+                    Yêu cầu hoàn hàng
+                  </button>
+
+                  <!-- ĐÃ THÊM NÚT HỦY YÊU CẦU HOÀN HÀNG -->
+                  <button
+                    v-if="order.status === 6"
+                    type="button"
+                    class="btn btn-outline-secondary btn-sm"
+                    :disabled="store.orderLoading"
+                    @click="cancelReturnRequest(order)"
+                  >
+                    Hủy yêu cầu hoàn hàng
+                  </button>
+
                   <span
                     v-if="!order.canCancel && order.status !== 3 && order.status !== 4"
                     class="text-muted small align-self-center"
@@ -687,53 +716,6 @@ const submitReview = async (payload: {
     showError(error, "Không gửi được đánh giá");
   } finally {
     submittingReview.value = false;
-  }
-};
-
-const cancelOrder = async (order: CustomerOrderResponse) => {
-  const { value: reason, isConfirmed } = await Swal.fire({
-    title: "Lý do hủy đơn hàng?",
-    text: "Vui lòng cho chúng tôi biết lý do bạn muốn hủy đơn này:",
-    input: "radio",
-    inputOptions: {
-      "Thay đổi thông tin": "Tôi muốn cập nhật địa chỉ / sđt nhận hàng",
-      "Thay đổi sản phẩm": "Tôi muốn thêm/bớt sản phẩm hoặc đổi phân loại",
-      "Thay đổi phương thức thanh toán": "Tôi muốn thay đổi phương thức thanh toán",
-      "Đổi ý": "Tôi không còn nhu cầu mua nữa",
-      "Giao hàng lâu": "Thời gian giao hàng dự kiến quá lâu",
-      "Khác": "Lý do khác",
-    },
-    inputValidator: (value) => {
-      if (!value) {
-        return "Vui lòng chọn một lý do để tiếp tục!";
-      }
-    },
-    showCancelButton: true,
-    confirmButtonColor: "#dc2626", 
-    cancelButtonColor: "#f8fafc", // Đổi nút Hủy thành màu nền xám nhạt cho sang
-    confirmButtonText: "Xác nhận hủy",
-    cancelButtonText: "Quay lại",
-    reverseButtons: true,
-    // THÊM ĐOẠN CUSTOM CLASS NÀY VÀO:
-    customClass: {
-      popup: 'swal-custom-popup',
-      title: 'swal-custom-title',
-      cancelButton: 'swal-custom-cancel',
-      confirmButton: 'swal-custom-confirm'
-    }
-  });
-
-  if (isConfirmed) {
-    try {
-      store.orderLoading = true;
-      await store.cancelOrder(order);
-      await fetchOrdersAndReviews();
-      toast("success", "Đã hủy đơn hàng thành công!");
-    } catch (error) {
-      showError(error, "Không thể hủy đơn hàng lúc này. Vui lòng thử lại.");
-    } finally {
-      store.orderLoading = false;
-    }
   }
 };
 
@@ -1045,6 +1027,136 @@ const toast = (
     timer: 1800,
     timerProgressBar: true,
   });
+};
+
+// Hàm xử lý Hủy đơn hàng (Đã dọn dẹp lại cho chuẩn Form Luxury)
+const cancelOrder = async (order: CustomerOrderResponse) => {
+  const { value: reason, isConfirmed } = await Swal.fire({
+    title: "Hủy đơn hàng?",
+    text: "Vui lòng chọn lý do bạn muốn hủy đơn hàng này:",
+    input: "radio",
+    inputOptions: {
+      "Thay đổi thông tin": "Tôi muốn cập nhật địa chỉ / SĐT nhận hàng",
+      "Thay đổi sản phẩm": "Tôi muốn đổi phân loại hoặc số lượng",
+      "Thay đổi thanh toán": "Tôi muốn đổi phương thức thanh toán",
+      "Đổi ý": "Tôi không còn nhu cầu mua nữa",
+      "Giao hàng lâu": "Thời gian chuẩn bị/giao hàng quá lâu",
+      "Khác": "Lý do khác",
+    },
+    inputValidator: (value) => {
+      if (!value) {
+        return "Vui lòng chọn một lý do để tiếp tục!";
+      }
+    },
+    showCancelButton: true,
+    confirmButtonText: "Xác nhận hủy",
+    cancelButtonText: "Quay lại",
+    reverseButtons: true,
+    // Bắt buộc giữ bộ class này để nó ăn CSS xịn
+    customClass: {
+      popup: 'swal-custom-popup',
+      title: 'swal-custom-title',
+      cancelButton: 'swal-custom-cancel',
+      confirmButton: 'swal-custom-confirm'
+    }
+  });
+
+  if (isConfirmed) {
+    try {
+      store.orderLoading = true;
+      await store.cancelOrder(order);
+      await fetchOrdersAndReviews();
+      toast("success", "Đã hủy đơn hàng thành công!");
+    } catch (error) {
+      showError(error, "Không thể hủy đơn hàng lúc này. Vui lòng thử lại.");
+    } finally {
+      store.orderLoading = false;
+    }
+  }
+};
+
+// ĐÃ SỬA: Hàm xử lý khi khách bấm Yêu cầu hoàn hàng
+const requestReturn = async (order: CustomerOrderResponse) => {
+  const { isConfirmed, value: reason } = await Swal.fire({
+    title: "Yêu cầu hoàn trả?",
+    text: "Vui lòng chọn lý do hoàn trả đơn hàng:",
+    input: "radio", // Chuyển từ "text" sang "radio"
+    inputOptions: {
+      "Thiếu hàng": "Thiếu sản phẩm, phụ kiện, quà tặng",
+      "Bể vỡ": "Sản phẩm bị bể vỡ, tràn đổ do vận chuyển",
+      "Sai hàng": "Giao sai sản phẩm (sai mẫu mã, dung tích...)",
+      "Hàng lỗi": "Sản phẩm bị lỗi (vòi xịt hỏng, mùi lạ...)",
+      "Hàng giả": "Nghi ngờ sản phẩm không chính hãng",
+      "Khác": "Lý do khác"
+    },
+    inputValidator: (value) => {
+      if (!value) {
+        return "Vui lòng chọn một lý do để tiếp tục!";
+      }
+    },
+    showCancelButton: true,
+    confirmButtonColor: "#dc2626", 
+    cancelButtonColor: "#f8fafc", // Chỉnh màu nút hủy cho xuyệt tông với Hủy đơn
+    confirmButtonText: "Gửi yêu cầu",
+    cancelButtonText: "Quay lại",
+    reverseButtons: true,
+    // Bê nguyên bộ class CSS của Hủy đơn sang để nó tự động đẹp
+    customClass: {
+      popup: 'swal-custom-popup',
+      title: 'swal-custom-title',
+      cancelButton: 'swal-custom-cancel',
+      confirmButton: 'swal-custom-confirm'
+    }
+  });
+
+  if (isConfirmed) {
+    try {
+      store.orderLoading = true;
+      // Vẫn gọi API như bình thường, nó sẽ tự động gửi cái 'reason' khách vừa chọn
+      await api.put(`/customer/orders/${order.orderId}/request-return`, { reason }); 
+      await fetchOrdersAndReviews();
+      toast("success", "Đã gửi yêu cầu hoàn hàng thành công!");
+    } catch (error) {
+      showError(error, "Không thể gửi yêu cầu hoàn hàng lúc này.");
+    } finally {
+      store.orderLoading = false;
+    }
+  }
+};
+
+// Hàm xử lý Hủy yêu cầu hoàn hàng
+const cancelReturnRequest = async (order: CustomerOrderResponse) => {
+  const result = await Swal.fire({
+    title: "Rút lại yêu cầu?",
+    text: "Bạn có chắc chắn muốn hủy yêu cầu hoàn hàng/đổi trả này không? Đơn hàng sẽ trở về trạng thái Hoàn thành.",
+    icon: "question",
+    showCancelButton: true,
+    confirmButtonColor: "#bd9a5f",
+    cancelButtonColor: "#f8fafc",
+    confirmButtonText: "Đồng ý",
+    cancelButtonText: "Quay lại",
+    reverseButtons: true,
+    customClass: {
+      popup: 'swal-custom-popup',
+      title: 'swal-custom-title',
+      cancelButton: 'swal-custom-cancel',
+      confirmButton: 'swal-custom-confirm'
+    }
+  });
+
+  if (result.isConfirmed) {
+    try {
+      store.orderLoading = true;
+      // Gọi API sang Backend để đổi trạng thái từ 6 về lại 3
+      await api.put(`/customer/orders/${order.orderId}/cancel-return`); 
+      await fetchOrdersAndReviews();
+      toast("success", "Đã hủy yêu cầu hoàn trả thành công!");
+    } catch (error) {
+      showError(error, "Không thể thao tác lúc này.");
+    } finally {
+      store.orderLoading = false;
+    }
+  }
 };
 </script>
 
@@ -1538,4 +1650,130 @@ code {
 }
 }
 
+/*  */
+</style>
+
+<style>
+/* 
+  BẮT BUỘC KHÔNG DÙNG SCOPED Ở ĐÂY
+  GIAO DIỆN LUXURY POPUP (HỢP VIBE XANH NAVY + VÀNG ĐỒNG CỦA WEB)
+*/
+.swal-custom-popup {
+  border-radius: 16px !important;
+  font-family: inherit !important;
+  padding: 0 0 24px 0 !important; /* Xóa padding trên để làm thanh Header */
+  overflow: hidden !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Tiêu đề nền Dark Navy, chữ Gold chuẩn Vibe */
+.swal-custom-popup .swal2-title {
+  background-color: #06132b !important; 
+  color: #bd9a5f !important; 
+  padding: 20px 24px !important;
+  margin: 0 0 16px 0 !important;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+  border-bottom: 3px solid #bd9a5f !important;
+}
+
+.swal-custom-popup .swal2-html-container {
+  color: #475569 !important;
+  font-size: 15px !important;
+  margin: 0 24px !important;
+  text-align: left !important;
+}
+
+/* Ép danh sách thành Grid 1 cột dọc (Trị dứt điểm bệnh dồn hàng ngang) */
+.swal-custom-popup .swal2-radio {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 12px !important;
+  margin: 20px 24px !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+/* Style mỗi option thành 1 khối (Card) bo góc tinh tế */
+.swal-custom-popup .swal2-radio label {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  background: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 10px !important;
+  padding: 14px 16px !important;
+  margin: 0 !important;
+  cursor: pointer !important;
+  transition: all 0.25s ease !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Hiệu ứng phát sáng màu vàng đồng khi di chuột vào option */
+.swal-custom-popup .swal2-radio label:hover {
+  background: #fffaf0 !important;
+  border-color: #bd9a5f !important;
+  box-shadow: 0 4px 8px rgba(189, 154, 95, 0.1) !important;
+}
+
+/* Chỉnh nút tick Radio to rõ và đổi màu */
+.swal-custom-popup .swal2-radio input[type="radio"] {
+  width: 20px !important;
+  height: 20px !important;
+  margin: 0 14px 0 0 !important;
+  accent-color: #bd9a5f !important;
+  flex-shrink: 0 !important;
+  cursor: pointer !important;
+}
+
+/* Chỉnh chữ bên trong Option */
+.swal-custom-popup .swal2-radio .swal2-label {
+  margin: 0 !important;
+  font-size: 15px !important;
+  color: #1e293b !important;
+  font-weight: 500 !important;
+  text-align: left !important;
+  line-height: 1.4 !important;
+  cursor: pointer !important;
+}
+
+/* Khối căn chỉnh 2 nút bấm ở dưới cùng */
+.swal-custom-popup .swal2-actions {
+  gap: 12px !important;
+  margin-top: 10px !important;
+  padding: 0 24px !important;
+}
+
+.swal-custom-cancel {
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 12px 24px !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+}
+
+.swal-custom-cancel:hover {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+.swal-custom-confirm {
+  background-color: #bd9a5f !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 12px 24px !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+}
+
+.swal-custom-confirm:hover {
+  background-color: #a3824e !important;
+  box-shadow: 0 4px 12px rgba(189, 154, 95, 0.3) !important;
+}
 </style>

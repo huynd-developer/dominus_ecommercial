@@ -386,11 +386,11 @@ public class OrderAdminServiceImpl implements OrderAdminService {
             }
 
             case 7 -> {
+                restoreStock(order.getId()); // Đã có sẵn: Hoàn lại kho
 
-                restoreStock(order.getId());
+                revertLoyaltyPoints(order); // ĐÃ THÊM: Trừ lại điểm tích lũy của khách
 
                 order.setStatus(7);
-
             }
 
             default -> throw new RuntimeException("Trạng thái không hợp lệ.");
@@ -574,5 +574,30 @@ public class OrderAdminServiceImpl implements OrderAdminService {
 
         orderRepository.save(order);
 
+    }
+
+    // ĐÃ THÊM: Hàm thu hồi điểm tích lũy khi khách hoàn hàng
+    private void revertLoyaltyPoints(Order order) {
+        // Nếu đơn này chưa từng được cộng điểm, hoặc khách vãng lai (null) thì bỏ qua
+        if (!Boolean.TRUE.equals(order.getLoyaltyPointsApplied()) || order.getCustomer() == null) {
+            return;
+        }
+
+        Customer customer = order.getCustomer();
+        int currentPoint = customer.getLoyaltyPoints() == null ? 0 : customer.getLoyaltyPoints();
+        int earnedPoint = order.getLoyaltyPointsEarned() == null ? 0 : order.getLoyaltyPointsEarned();
+
+        // Trừ điểm, nếu lỡ âm thì đưa về 0 cho an toàn
+        int newPoint = currentPoint - earnedPoint;
+        if (newPoint < 0) {
+            newPoint = 0;
+        }
+
+        customer.setLoyaltyPoints(newPoint);
+        customerRepository.save(customer);
+
+        // Reset lại log trong hóa đơn
+        order.setLoyaltyPointsEarned(0);
+        order.setLoyaltyPointsApplied(false);
     }
 }
