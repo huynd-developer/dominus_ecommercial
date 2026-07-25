@@ -1,7 +1,9 @@
 <template>
   <nav class="shop-navbar">
     <div class="container">
-      <ul class="nav justify-content-center align-items-center flex-nowrap overflow-auto h-100">
+      <ul
+        class="nav justify-content-center align-items-center flex-nowrap overflow-auto h-100"
+      >
         <!-- Brands Dropdown -->
         <li class="nav-item nav-dropdown-wrapper">
           <RouterLink to="/products" class="nav-link menu-link">
@@ -19,10 +21,25 @@
               <RouterLink
                 v-for="brand in brands"
                 :key="brand.id"
-                :to="{ path: '/products', query: { brandId: String(brand.id) } }"
+                :to="{
+                  path: '/products',
+                  query: { brandId: String(brand.id) },
+                }"
                 class="brand-item"
               >
-                <span class="brand-monogram">{{ getBrandMonogram(brand.name) }}</span>
+                <span class="brand-logo-circle">
+                  <img
+                    v-if="getBrandLogoUrl(brand)"
+                    :src="getBrandLogoUrl(brand)"
+                    :alt="brand.name"
+                    class="brand-logo-img"
+                  />
+
+                  <span v-else class="brand-monogram">
+                    {{ getBrandMonogram(brand.name) }}
+                  </span>
+                </span>
+
                 <span class="brand-name">{{ brand.name }}</span>
                 <i class="bi bi-arrow-right-short"></i>
               </RouterLink>
@@ -30,26 +47,60 @@
           </div>
         </li>
 
-        <li class="nav-item">
-          <RouterLink to="/products?gender=Nam" class="nav-link menu-link">
+        <!-- Gender Dropdown -->
+        <li class="nav-item nav-dropdown-wrapper">
+          <RouterLink to="/products" class="nav-link menu-link">
             Giới tính
+            <i class="bi bi-chevron-down ms-1 nav-chevron"></i>
           </RouterLink>
+
+          <div class="simple-dropdown">
+            <RouterLink
+              :to="{ path: '/products', query: { gender: 'Nam' } }"
+              class="simple-dropdown-item"
+            >
+              Nước hoa Nam
+            </RouterLink>
+
+            <RouterLink
+              :to="{ path: '/products', query: { gender: 'Nữ' } }"
+              class="simple-dropdown-item"
+            >
+              Nước hoa Nữ
+            </RouterLink>
+
+            <RouterLink
+              :to="{ path: '/products', query: { gender: 'Unisex' } }"
+              class="simple-dropdown-item"
+            >
+              Nước hoa Unisex
+            </RouterLink>
+          </div>
         </li>
 
         <li class="nav-item">
-          <RouterLink to="/products?niche=true" class="nav-link menu-link">
+          <RouterLink
+            :to="{ path: '/products', query: { niche: 'true' } }"
+            class="nav-link menu-link"
+          >
             Niche
           </RouterLink>
         </li>
 
         <li class="nav-item">
-          <RouterLink to="/products?capacity=10ml" class="nav-link menu-link">
-            Chiết 10ml
+          <RouterLink
+            :to="{ path: '/products', query: { bottleType: 'chiet' } }"
+            class="nav-link menu-link"
+          >
+            Chiết
           </RouterLink>
         </li>
 
         <li class="nav-item">
-          <RouterLink to="/products?flashSale=true" class="nav-link menu-link flash-sale-link">
+          <RouterLink
+            :to="{ path: '/products', query: { flashSale: 'true' } }"
+            class="nav-link menu-link flash-sale-link"
+          >
             Flash Sale
           </RouterLink>
         </li>
@@ -59,54 +110,104 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { RouterLink } from 'vue-router';
+import { onMounted, ref } from "vue";
+import { RouterLink } from "vue-router";
+import api from "@/common/api";
 
-// Cập nhật lại Interface (Có thể thêm các trường khác nếu BE trả về như logo, description...)
 interface Brand {
   id: number;
   name: string;
+  logoUrl?: string | null;
 }
 
-// 1. Khởi tạo mảng rỗng thay vì fix cứng dữ liệu
 const brands = ref<Brand[]>([]);
 
-// 2. Hàm gọi API lấy dữ liệu
+const extractBrandContent = (responseData: any): Brand[] => {
+  if (Array.isArray(responseData)) {
+    return responseData;
+  }
+
+  if (Array.isArray(responseData?.data)) {
+    return responseData.data;
+  }
+
+  if (Array.isArray(responseData?.content)) {
+    return responseData.content;
+  }
+
+  if (Array.isArray(responseData?.data?.content)) {
+    return responseData.data.content;
+  }
+
+  return [];
+};
+
+const getTotalPages = (responseData: any): number => {
+  return Number(
+    responseData?.data?.totalPages ?? responseData?.totalPages ?? 1
+  );
+};
+
 const fetchBrands = async () => {
   try {
-    // Gọi thẳng vào API Public của ông. Tui để size=10 để menu không bị dài quá nếu có hàng trăm brand.
-    const response = await fetch('http://localhost:8080/api/brands?size=10');
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
+    const size = 100;
+    let page = 0;
+    let totalPages = 1;
+    const allBrands: Brand[] = [];
 
-    const result = await response.json();
+    do {
+      const res = await api.get("/brands", {
+        params: {
+          page,
+          size,
+        },
+      });
 
-    // 3. Móc đúng vào mảng 'content' vì BE trả về dữ liệu phân trang (Page<Brand>)
-    if (result.data && result.data.content) {
-      brands.value = result.data.content;
-    }
+      const pageBrands = extractBrandContent(res.data);
+      allBrands.push(...pageBrands);
+
+      totalPages = getTotalPages(res.data);
+      page++;
+    } while (page < totalPages);
+
+    brands.value = allBrands;
   } catch (error) {
-    console.error('Lỗi khi tải danh sách thương hiệu từ BE:', error);
+    console.error("Lỗi khi tải danh sách thương hiệu từ BE:", error);
+    brands.value = [];
   }
 };
 
 onMounted(() => {
-  // Thực thi hàm lấy dữ liệu khi component vừa render xong
   fetchBrands();
 });
 
-// 4. Hàm cắt chữ cái đầu (Tui thêm check an toàn phòng trường hợp name bị rỗng)
 const getBrandMonogram = (brandName: string) => {
-  if (!brandName) return ''; 
-  
+  if (!brandName) return "";
+
   return brandName
-    .split(' ')
+    .split(" ")
     .map((word) => word.charAt(0))
-    .join('')
+    .join("")
     .slice(0, 2)
     .toUpperCase();
+};
+
+const getBrandLogoUrl = (brand: Brand) => {
+  const rawUrl = brand.logoUrl?.trim();
+
+  if (!rawUrl) {
+    return "";
+  }
+
+  if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+    return rawUrl;
+  }
+
+  if (rawUrl.startsWith("/")) {
+    return `http://localhost:8080${rawUrl}`;
+  }
+
+  return `http://localhost:8080/${rawUrl}`;
 };
 </script>
 
@@ -182,6 +283,63 @@ const getBrandMonogram = (brandName: string) => {
   background: #b31320;
 }
 
+/* SIMPLE DROPDOWN */
+.simple-dropdown {
+  position: absolute;
+  top: calc(100% + 1px);
+  left: 50%;
+  z-index: 2400;
+  min-width: 220px;
+  padding: 10px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid rgba(189, 154, 95, 0.18);
+  box-shadow: 0 20px 50px rgba(5, 16, 36, 0.16);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, 12px);
+  pointer-events: none;
+  transition: all 0.22s ease;
+}
+
+.simple-dropdown::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
+  border-left: 1px solid rgba(189, 154, 95, 0.18);
+  border-top: 1px solid rgba(189, 154, 95, 0.18);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.nav-dropdown-wrapper:hover .simple-dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+
+.simple-dropdown-item {
+  min-height: 42px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  color: var(--aura-black);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 800;
+  transition: all 0.2s ease;
+}
+
+.simple-dropdown-item:hover {
+  background: rgba(189, 154, 95, 0.09);
+  color: var(--aura-gold);
+}
+
 /* BRAND DROPDOWN */
 .brand-dropdown {
   position: absolute;
@@ -247,6 +405,36 @@ const getBrandMonogram = (brandName: string) => {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: 18px;
   row-gap: 10px;
+  max-height: 360px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 10px;
+}
+
+/* Scrollbar Chrome / Edge */
+.brand-grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.brand-grid::-webkit-scrollbar-track {
+  background: rgba(189, 154, 95, 0.08);
+  border-radius: 999px;
+}
+
+.brand-grid::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #d8bb76, #9d7939);
+  border-radius: 999px;
+  border: 2px solid #fffaf2;
+}
+
+.brand-grid::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #cda65c, #7c5a24);
+}
+
+/* Scrollbar Firefox */
+.brand-grid {
+  scrollbar-width: thin;
+  scrollbar-color: #bd9a5f rgba(189, 154, 95, 0.08);
 }
 
 .brand-item {
@@ -267,19 +455,36 @@ const getBrandMonogram = (brandName: string) => {
   transform: translateX(2px);
 }
 
-.brand-monogram {
-  width: 44px;
-  height: 44px;
+.brand-logo-circle {
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
   flex-shrink: 0;
   border: 1px solid rgba(189, 154, 95, 0.34);
-  color: var(--aura-gold);
   background: #fffaf2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+}
+
+.brand-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 6px;
+  display: block;
+}
+
+.brand-monogram {
+  width: 100%;
+  height: 100%;
+  color: var(--aura-gold);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--aura-serif);
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 800;
 }
 
@@ -322,6 +527,19 @@ const getBrandMonogram = (brandName: string) => {
   .brand-dropdown::before {
     left: 42px;
   }
+
+  .simple-dropdown {
+    left: 0;
+    transform: translate(0, 12px);
+  }
+
+  .nav-dropdown-wrapper:hover .simple-dropdown {
+    transform: translate(0, 0);
+  }
+
+  .simple-dropdown::before {
+    left: 42px;
+  }
 }
 
 @media (max-width: 767.98px) {
@@ -350,6 +568,10 @@ const getBrandMonogram = (brandName: string) => {
 
   .brand-name {
     font-size: 18px;
+  }
+
+  .simple-dropdown {
+    min-width: 210px;
   }
 }
 </style>

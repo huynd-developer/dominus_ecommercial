@@ -23,153 +23,229 @@
     </div>
 
     <div class="filter-group">
-      <div class="group-title">Giới tính</div>
+      <button
+        type="button"
+        class="group-title"
+        :aria-expanded="isGroupOpen('genders')"
+        @click="toggleGroup('genders')"
+      >
+        <span>Giới tính</span>
 
-      <div class="checkbox-list row">
-        <label class="custom-checkbox">
-          <input
-            v-model="selectedFilters.genders"
-            type="checkbox"
-            value="Nam"
-            @change="emitFilter"
-          />
-          <span class="checkmark"></span>
-          Nam
-        </label>
+        <svg
+          class="chevron"
+          :class="{ collapsed: !isGroupOpen('genders') }"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <polyline points="18 15 12 9 6 15" />
+        </svg>
+      </button>
 
-        <label class="custom-checkbox">
-          <input
-            v-model="selectedFilters.genders"
-            type="checkbox"
-            value="Nữ"
-            @change="emitFilter"
-          />
-          <span class="checkmark"></span>
-          Nữ
-        </label>
+      <Transition name="filter-collapse">
+        <div v-show="isGroupOpen('genders')" class="checkbox-list col">
+          <label class="custom-checkbox">
+            <input
+              v-model="selectedFilters.genders"
+              type="checkbox"
+              value="Nam"
+              @change="emitFilter"
+            />
+            <span class="checkmark"></span>
+            <span class="checkbox-text">Nam</span>
+          </label>
 
-        <label class="custom-checkbox">
-          <input
-            v-model="selectedFilters.genders"
-            type="checkbox"
-            value="Unisex"
-            @change="emitFilter"
-          />
-          <span class="checkmark"></span>
-          Unisex
-        </label>
-      </div>
+          <label class="custom-checkbox">
+            <input
+              v-model="selectedFilters.genders"
+              type="checkbox"
+              value="Nữ"
+              @change="emitFilter"
+            />
+            <span class="checkmark"></span>
+            <span class="checkbox-text">Nữ</span>
+          </label>
+
+          <label class="custom-checkbox">
+            <input
+              v-model="selectedFilters.genders"
+              type="checkbox"
+              value="Unisex"
+              @change="emitFilter"
+            />
+            <span class="checkmark"></span>
+            <span class="checkbox-text">Unisex</span>
+          </label>
+        </div>
+      </Transition>
     </div>
 
     <div class="filter-group">
-      <div class="group-title">
-        Dung tích
-        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <button
+        type="button"
+        class="group-title"
+        :aria-expanded="isGroupOpen('capacities')"
+        @click="toggleGroup('capacities')"
+      >
+        <span>Dung tích</span>
+
+        <svg
+          class="chevron"
+          :class="{ collapsed: !isGroupOpen('capacities') }"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <polyline points="18 15 12 9 6 15" />
         </svg>
-      </div>
+      </button>
 
-      <div class="checkbox-list col">
-        <label
-          v-for="item in capacities"
-          :key="item.id"
-          class="custom-checkbox"
-        >
-          <input
-            v-model="selectedFilters.capacities"
-            type="checkbox"
-            :value="formatCapacityValue(item)"
-            @change="emitFilter"
-          />
-          <span class="checkmark"></span>
-          {{ formatCapacityValue(item) }}
-        </label>
-      </div>
+      <Transition name="filter-collapse">
+        <div v-show="isGroupOpen('capacities')" class="checkbox-list col scrollable-list">
+          <label
+            v-for="item in capacities"
+            :key="item.id || formatCapacityValue(item)"
+            class="custom-checkbox"
+          >
+            <input
+              v-model="selectedFilters.capacities"
+              type="checkbox"
+              :value="formatCapacityValue(item)"
+              @change="emitFilter"
+            />
+            <span class="checkmark"></span>
+            <span class="checkbox-text">{{ formatCapacityValue(item) }}</span>
+          </label>
+        </div>
+      </Transition>
     </div>
 
     <div class="filter-group">
-      <div class="group-title">
-        Nồng độ
-        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <button
+        type="button"
+        class="group-title"
+        :aria-expanded="isGroupOpen('concentrations')"
+        @click="toggleGroup('concentrations')"
+      >
+        <span>Nồng độ</span>
+
+        <svg
+          class="chevron"
+          :class="{ collapsed: !isGroupOpen('concentrations') }"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <polyline points="18 15 12 9 6 15" />
         </svg>
-      </div>
+      </button>
 
-      <div class="checkbox-list col">
-        <label
-          v-for="item in concentrations"
-          :key="item.id"
-          class="custom-checkbox"
-        >
-          <input
-            v-model="selectedFilters.concentrations"
-            type="checkbox"
-            :value="item.name"
-            @change="emitFilter"
-          />
-          <span class="checkmark"></span>
-          {{ item.name }}
-        </label>
-      </div>
+      <Transition name="filter-collapse">
+        <div v-show="isGroupOpen('concentrations')" class="checkbox-list col scrollable-list">
+          <label
+            v-for="item in concentrations"
+            :key="item.id"
+            class="custom-checkbox"
+          >
+            <input
+              v-model="selectedFilters.concentrations"
+              type="checkbox"
+              :value="item.name"
+              @change="emitFilter"
+            />
+            <span class="checkmark"></span>
+            <span class="checkbox-text">{{ item.name }}</span>
+          </label>
+        </div>
+      </Transition>
     </div>
 
     <div class="filter-group">
-      <div class="group-title">
-        Nhóm hương
-        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <button
+        type="button"
+        class="group-title"
+        :aria-expanded="isGroupOpen('fragranceFamilies')"
+        @click="toggleGroup('fragranceFamilies')"
+      >
+        <span>Nhóm hương</span>
+
+        <svg
+          class="chevron"
+          :class="{ collapsed: !isGroupOpen('fragranceFamilies') }"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <polyline points="18 15 12 9 6 15" />
         </svg>
-      </div>
+      </button>
 
-      <div class="checkbox-list col">
-        <label
-          v-for="item in fragranceFamilies"
-          :key="item.id"
-          class="custom-checkbox"
-        >
-          <input
-            v-model="selectedFilters.fragranceFamilies"
-            type="checkbox"
-            :value="item.name"
-            @change="emitFilter"
-          />
-          <span class="checkmark"></span>
-          {{ item.name }}
-        </label>
-      </div>
+      <Transition name="filter-collapse">
+        <div v-show="isGroupOpen('fragranceFamilies')" class="checkbox-list col scrollable-list">
+          <label
+            v-for="item in fragranceFamilies"
+            :key="item.id"
+            class="custom-checkbox"
+          >
+            <input
+              v-model="selectedFilters.fragranceFamilies"
+              type="checkbox"
+              :value="item.name"
+              @change="emitFilter"
+            />
+            <span class="checkmark"></span>
+            <span class="checkbox-text">{{ item.name }}</span>
+          </label>
+        </div>
+      </Transition>
     </div>
 
     <div class="filter-group">
-      <div class="group-title">
-        Loại chai
-        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <button
+        type="button"
+        class="group-title"
+        :aria-expanded="isGroupOpen('bottleTypes')"
+        @click="toggleGroup('bottleTypes')"
+      >
+        <span>Loại chai</span>
+
+        <svg
+          class="chevron"
+          :class="{ collapsed: !isGroupOpen('bottleTypes') }"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <polyline points="18 15 12 9 6 15" />
         </svg>
-      </div>
+      </button>
 
-      <div class="checkbox-list col">
-        <label
-          v-for="item in bottleTypes"
-          :key="item.id"
-          class="custom-checkbox"
-        >
-          <input
-            v-model="selectedFilters.bottleTypes"
-            type="checkbox"
-            :value="item.name"
-            @change="emitFilter"
-          />
-          <span class="checkmark"></span>
-          {{ item.name }}
-        </label>
-      </div>
+      <Transition name="filter-collapse">
+        <div v-show="isGroupOpen('bottleTypes')" class="checkbox-list col scrollable-list">
+          <label
+            v-for="item in bottleTypes"
+            :key="item.id"
+            class="custom-checkbox"
+          >
+            <input
+              v-model="selectedFilters.bottleTypes"
+              type="checkbox"
+              :value="item.name"
+              @change="emitFilter"
+            />
+            <span class="checkmark"></span>
+            <span class="checkbox-text">{{ item.name }}</span>
+          </label>
+        </div>
+      </Transition>
     </div>
 
-    <button
-      type="button"
-      class="btn-clear-filter"
-      @click="clearFilters"
-    >
+    <button type="button" class="btn-clear-filter" @click="clearFilters">
       Xóa bộ lọc
     </button>
   </aside>
@@ -183,6 +259,11 @@ interface FilterOption {
   id: number;
   name?: string;
   value?: number | string;
+  label?: number | string;
+  capacityValue?: number | string;
+  capacityName?: number | string;
+  CapacityValue?: number | string;
+  CapacityName?: number | string;
 }
 
 interface SelectedFilters {
@@ -192,6 +273,13 @@ interface SelectedFilters {
   concentrations: string[];
   fragranceFamilies: string[];
 }
+
+type FilterGroupKey =
+  | "genders"
+  | "bottleTypes"
+  | "capacities"
+  | "concentrations"
+  | "fragranceFamilies";
 
 const emit = defineEmits<{
   (e: "filter-change", filters: SelectedFilters): void;
@@ -210,6 +298,22 @@ const selectedFilters = reactive<SelectedFilters>({
   fragranceFamilies: [],
 });
 
+const expandedGroups = reactive<Record<FilterGroupKey, boolean>>({
+  genders: true,
+  capacities: true,
+  concentrations: true,
+  fragranceFamilies: true,
+  bottleTypes: true,
+});
+
+const toggleGroup = (group: FilterGroupKey) => {
+  expandedGroups[group] = !expandedGroups[group];
+};
+
+const isGroupOpen = (group: FilterGroupKey) => {
+  return expandedGroups[group];
+};
+
 const extractArrayData = <T,>(data: any): T[] => {
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.content)) return data.content;
@@ -219,14 +323,51 @@ const extractArrayData = <T,>(data: any): T[] => {
   return [];
 };
 
-const formatCapacityValue = (item: FilterOption) => {
-  const raw = item.value ?? item.name ?? "";
+const getTotalPages = (data: any) => {
+  const totalPages = Number(data?.data?.totalPages ?? data?.totalPages ?? 1);
 
-  if (raw === "") {
+  return Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1;
+};
+
+const fetchAllFilterOptions = async <T,>(url: string): Promise<T[]> => {
+  const size = 100;
+  let page = 0;
+  let totalPages = 1;
+  const result: T[] = [];
+
+  do {
+    const res = await api.get(url, {
+      params: {
+        page,
+        size,
+      },
+    });
+
+    result.push(...extractArrayData<T>(res.data));
+
+    totalPages = getTotalPages(res.data);
+    page++;
+  } while (page < totalPages);
+
+  return result;
+};
+
+const formatCapacityValue = (item: FilterOption) => {
+  const raw =
+    item.value ??
+    item.capacityValue ??
+    item.CapacityValue ??
+    item.name ??
+    item.capacityName ??
+    item.CapacityName ??
+    item.label ??
+    "";
+
+  if (raw === "" || raw == null) {
     return "N/A";
   }
 
-  const text = String(raw);
+  const text = String(raw).trim();
 
   return text.toLowerCase().includes("ml") ? text : `${text}ml`;
 };
@@ -253,37 +394,18 @@ const clearFilters = () => {
 
 const fetchFilters = async () => {
   try {
-    const [bottleRes, capRes, concRes, fragRes] = await Promise.all([
-      api.get("/bottle-types", {
-        params: {
-          page: 0,
-          size: 50,
-        },
-      }),
-      api.get("/capacities", {
-        params: {
-          page: 0,
-          size: 50,
-        },
-      }),
-      api.get("/concentrations", {
-        params: {
-          page: 0,
-          size: 50,
-        },
-      }),
-      api.get("/fragrance-families", {
-        params: {
-          page: 0,
-          size: 50,
-        },
-      }),
-    ]);
+    const [bottleList, capacityList, concentrationList, fragranceFamilyList] =
+      await Promise.all([
+        fetchAllFilterOptions<FilterOption>("/bottle-types"),
+        fetchAllFilterOptions<FilterOption>("/capacities"),
+        fetchAllFilterOptions<FilterOption>("/concentrations"),
+        fetchAllFilterOptions<FilterOption>("/fragrance-families"),
+      ]);
 
-    bottleTypes.value = extractArrayData<FilterOption>(bottleRes.data);
-    capacities.value = extractArrayData<FilterOption>(capRes.data);
-    concentrations.value = extractArrayData<FilterOption>(concRes.data);
-    fragranceFamilies.value = extractArrayData<FilterOption>(fragRes.data);
+    bottleTypes.value = bottleList;
+    capacities.value = capacityList;
+    concentrations.value = concentrationList;
+    fragranceFamilies.value = fragranceFamilyList;
   } catch (error) {
     console.error("Lỗi khi tải bộ lọc từ API:", error);
   }
@@ -304,14 +426,14 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 25px;
+  margin-bottom: 26px;
   padding-bottom: 15px;
   border-bottom: 1px solid #e2e8f0;
 }
 
 .filter-header h3 {
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 800;
   margin: 0;
   color: #0a142f;
   letter-spacing: 0.5px;
@@ -321,27 +443,44 @@ onMounted(() => {
   width: 20px;
   height: 20px;
   color: #0a142f;
+  flex-shrink: 0;
 }
 
 .filter-group {
-  margin-bottom: 25px;
+  margin-bottom: 24px;
 }
 
 .group-title {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0 0 14px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 15px;
+  font-weight: 700;
   cursor: pointer;
   color: #0a142f;
+  text-align: left;
+}
+
+.group-title span {
+  line-height: 1.3;
 }
 
 .chevron {
   width: 16px;
   height: 16px;
   color: #0a142f;
+  flex-shrink: 0;
+  transition: transform 0.22s ease;
+}
+
+.chevron.collapsed {
+  transform: rotate(180deg);
 }
 
 .checkbox-list {
@@ -353,19 +492,47 @@ onMounted(() => {
   flex-direction: column;
 }
 
-.checkbox-list.row {
-  justify-content: space-between;
+.scrollable-list {
+  max-height: 260px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 6px;
+}
+
+.scrollable-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollable-list::-webkit-scrollbar-track {
+  background: rgba(10, 20, 47, 0.05);
+  border-radius: 999px;
+}
+
+.scrollable-list::-webkit-scrollbar-thumb {
+  background: rgba(10, 20, 47, 0.22);
+  border-radius: 999px;
+}
+
+.scrollable-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(10, 20, 47, 0.35);
 }
 
 .custom-checkbox {
   display: flex;
   align-items: center;
   position: relative;
+  min-height: 24px;
   padding-left: 28px;
   cursor: pointer;
   font-size: 13px;
   user-select: none;
   color: #4a5568;
+  line-height: 1.35;
+}
+
+.checkbox-text {
+  display: inline-block;
+  line-height: 1.35;
 }
 
 .custom-checkbox input {
@@ -378,13 +545,14 @@ onMounted(() => {
 
 .checkmark {
   position: absolute;
-  top: -2px;
+  top: 50%;
   left: 0;
   height: 18px;
   width: 18px;
   background-color: white;
   border: 1px solid #cbd5e0;
   border-radius: 4px;
+  transform: translateY(-50%);
   transition: 0.2s;
 }
 
@@ -412,6 +580,17 @@ onMounted(() => {
   border: solid white;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
+}
+
+.filter-collapse-enter-active,
+.filter-collapse-leave-active {
+  transition: all 0.2s ease;
+}
+
+.filter-collapse-enter-from,
+.filter-collapse-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .btn-clear-filter {

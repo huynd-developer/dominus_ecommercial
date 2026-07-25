@@ -178,6 +178,13 @@ interface FlashSaleProductResponse {
   discountPercent: number;
   salePrice: number;
   stockQuantity: number | null;
+
+  imageUrl?: string | null;
+  image?: string | null;
+  thumbnailUrl?: string | null;
+  mainImage?: string | null;
+  productImages?: any[];
+  images?: any[];
 }
 
 interface ProductCardVariant {
@@ -187,6 +194,10 @@ interface ProductCardVariant {
   price?: number;
   stockQuantity?: number;
   status?: number;
+  imageUrl?: string;
+  image?: string;
+  images?: string[];
+  productImages?: any[];
 }
 
 interface ProductCardItem {
@@ -199,6 +210,10 @@ interface ProductCardItem {
   brand: string;
   color?: string;
   imageUrl?: string;
+  image?: string;
+  mainImage?: string;
+  images?: string[];
+  productImages?: any[];
 
   salePrice: number;
   originalPrice: number;
@@ -221,6 +236,8 @@ const specialProducts = ref<ProductCardItem[]>([]);
 
 const flashSaleLoading = ref(false);
 const productLoading = ref(false);
+
+const BACKEND_URL = "http://localhost:8080";
 
 let flashSaleRefreshTimer: ReturnType<typeof window.setInterval> | null = null;
 
@@ -267,22 +284,162 @@ const formatBrand = (raw: any) => {
   return raw?.brand?.name || raw?.brandName || raw?.brand || "Premium";
 };
 
-const resolveProductImage = (raw: any) => {
-  return (
-    raw?.imageUrl ||
-    raw?.image ||
-    raw?.thumbnailUrl ||
-    raw?.mainImage ||
-    raw?.images?.[0]?.url ||
-    raw?.images?.[0]?.imageUrl ||
-    ""
+const normalizeImageUrl = (url: unknown) => {
+  const rawUrl = String(url || "").trim();
+
+  if (!rawUrl) {
+    return "";
+  }
+
+  if (
+    rawUrl.startsWith("http://") ||
+    rawUrl.startsWith("https://") ||
+    rawUrl.startsWith("data:image") ||
+    rawUrl.startsWith("blob:")
+  ) {
+    return rawUrl;
+  }
+
+  if (rawUrl.startsWith("/")) {
+    return `${BACKEND_URL}${rawUrl}`;
+  }
+
+  return `${BACKEND_URL}/${rawUrl}`;
+};
+
+const getImageUrlFromObject = (value: any) => {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return normalizeImageUrl(value);
+  }
+
+  return normalizeImageUrl(
+    value?.imageUrl ??
+      value?.ImageUrl ??
+      value?.url ??
+      value?.Url ??
+      value?.mediaUrl ??
+      value?.MediaUrl ??
+      value?.path ??
+      value?.Path ??
+      value?.fileUrl ??
+      value?.FileUrl ??
+      value?.thumbnailUrl ??
+      value?.ThumbnailUrl ??
+      value?.mainImageUrl ??
+      value?.MainImageUrl ??
+      value?.mainImage ??
+      value?.MainImage ??
+      ""
   );
 };
 
+const appendImage = (images: string[], value: any) => {
+  const imageUrl = getImageUrlFromObject(value);
+
+  if (imageUrl && !images.includes(imageUrl)) {
+    images.push(imageUrl);
+  }
+};
+
+const appendImageList = (images: string[], value: any) => {
+  if (!value) {
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => appendImage(images, item));
+    return;
+  }
+
+  appendImage(images, value);
+};
+
+const getVariantImageList = (variant: any) => {
+  const images: string[] = [];
+
+  appendImage(images, variant?.mainImage);
+  appendImage(images, variant?.mainImageUrl);
+  appendImage(images, variant?.MainImageUrl);
+  appendImage(images, variant?.thumbnailUrl);
+  appendImage(images, variant?.ThumbnailUrl);
+  appendImage(images, variant?.imageUrl);
+  appendImage(images, variant?.ImageUrl);
+  appendImage(images, variant?.image);
+  appendImage(images, variant?.Image);
+
+  appendImageList(images, variant?.images);
+  appendImageList(images, variant?.Images);
+  appendImageList(images, variant?.imageList);
+  appendImageList(images, variant?.ImageList);
+  appendImageList(images, variant?.productImages);
+  appendImageList(images, variant?.ProductImages);
+  appendImageList(images, variant?.productImageList);
+  appendImageList(images, variant?.ProductImageList);
+
+  return images;
+};
+
+const resolveProductImages = (raw: any) => {
+  const images: string[] = [];
+
+  appendImage(images, raw?.mainImage);
+  appendImage(images, raw?.mainImageUrl);
+  appendImage(images, raw?.MainImageUrl);
+  appendImage(images, raw?.thumbnailUrl);
+  appendImage(images, raw?.ThumbnailUrl);
+  appendImage(images, raw?.imageUrl);
+  appendImage(images, raw?.ImageUrl);
+  appendImage(images, raw?.image);
+  appendImage(images, raw?.Image);
+
+  appendImageList(images, raw?.images);
+  appendImageList(images, raw?.Images);
+  appendImageList(images, raw?.galleryImages);
+  appendImageList(images, raw?.GalleryImages);
+  appendImageList(images, raw?.imageList);
+  appendImageList(images, raw?.ImageList);
+  appendImageList(images, raw?.productImages);
+  appendImageList(images, raw?.ProductImages);
+  appendImageList(images, raw?.productImageList);
+  appendImageList(images, raw?.ProductImageList);
+
+  const variants =
+    raw?.variants ||
+    raw?.productVariants ||
+    raw?.productVariantList ||
+    [];
+
+  if (Array.isArray(variants)) {
+    variants.forEach((variant: any) => {
+      getVariantImageList(variant).forEach((imageUrl) => {
+        if (imageUrl && !images.includes(imageUrl)) {
+          images.push(imageUrl);
+        }
+      });
+    });
+  }
+
+  return images;
+};
+
+const resolveProductImage = (raw: any) => {
+  return resolveProductImages(raw)[0] || "";
+};
+
 const mapNormalProduct = (p: any): ProductCardItem => {
+  const rawVariants =
+    p?.variants ||
+    p?.productVariants ||
+    p?.productVariantList ||
+    [];
+
   const firstVariant =
-    Array.isArray(p.variants) && p.variants.length > 0
-      ? p.variants[0]
+    Array.isArray(rawVariants) && rawVariants.length > 0
+      ? rawVariants[0]
       : null;
 
   const basePrice = toNumber(
@@ -319,6 +476,9 @@ const mapNormalProduct = (p: any): ProductCardItem => {
     1
   );
 
+  const productImages = resolveProductImages(p);
+  const productImage = productImages[0] || "";
+
   return {
     id: productId,
     productId,
@@ -328,7 +488,16 @@ const mapNormalProduct = (p: any): ProductCardItem => {
     name: p.name || p.productName || "Sản phẩm",
     brand: formatBrand(p),
     color: p.color || "#0a192f",
-    imageUrl: resolveProductImage(p),
+
+    imageUrl: productImage,
+    image: productImage,
+    mainImage: productImage,
+    images: productImages,
+    productImages: productImages.map((imageUrl, index) => ({
+      id: index + 1,
+      imageUrl,
+      url: imageUrl,
+    })),
 
     salePrice,
     originalPrice: basePrice,
@@ -348,6 +517,14 @@ const mapNormalProduct = (p: any): ProductCardItem => {
             price: salePrice,
             stockQuantity,
             status: toNumber(firstVariant?.status, 1),
+            imageUrl: productImage,
+            image: productImage,
+            images: productImages,
+            productImages: productImages.map((imageUrl, index) => ({
+              id: index + 1,
+              imageUrl,
+              url: imageUrl,
+            })),
           },
         ]
       : undefined,
@@ -361,6 +538,9 @@ const mapFlashSaleProduct = (item: FlashSaleProductResponse): ProductCardItem =>
   const salePrice = toNumber(item.salePrice, 0);
   const originalPrice = toNumber(item.originalPrice, 0);
 
+  const productImages = resolveProductImages(item);
+  const productImage = productImages[0] || resolveProductImage(item);
+
   return {
     id: productId,
     productId,
@@ -370,6 +550,16 @@ const mapFlashSaleProduct = (item: FlashSaleProductResponse): ProductCardItem =>
     name: item.productName || "Sản phẩm Flash Sale",
     brand: item.promotionName || "Flash Sale",
     color: "#0a192f",
+
+    imageUrl: productImage,
+    image: productImage,
+    mainImage: productImage,
+    images: productImages,
+    productImages: productImages.map((imageUrl, index) => ({
+      id: index + 1,
+      imageUrl,
+      url: imageUrl,
+    })),
 
     salePrice,
     originalPrice,
@@ -390,6 +580,14 @@ const mapFlashSaleProduct = (item: FlashSaleProductResponse): ProductCardItem =>
         price: salePrice,
         stockQuantity,
         status: 1,
+        imageUrl: productImage,
+        image: productImage,
+        images: productImages,
+        productImages: productImages.map((imageUrl, index) => ({
+          id: index + 1,
+          imageUrl,
+          url: imageUrl,
+        })),
       },
     ],
   };
@@ -423,7 +621,7 @@ const fetchNormalProducts = async () => {
   try {
     productLoading.value = true;
 
-    const res = await api.get("/v1/products", { // <--- ĐÃ SỬA THÀNH /v1/products
+    const res = await api.get("/v1/products", {
       params: {
         page: 0,
         size: 12,

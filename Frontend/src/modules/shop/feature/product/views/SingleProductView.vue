@@ -45,6 +45,8 @@ const router = useRouter();
 const product = ref<any>(null);
 const isLoading = ref(true);
 
+const BACKEND_URL = "http://localhost:8080";
+
 interface FlashSaleProductResponse {
   promotionId: number;
   promotionName: string;
@@ -110,12 +112,139 @@ const normalizeSku = (value: unknown) => {
     .toLowerCase();
 };
 
-const extractCapacity = (variant: any, flashSale?: FlashSaleProductResponse | null) => {
+const normalizeImageUrl = (url: unknown) => {
+  const rawUrl = String(url || "").trim();
+
+  if (!rawUrl) {
+    return "";
+  }
+
+  if (
+    rawUrl.startsWith("http://") ||
+    rawUrl.startsWith("https://") ||
+    rawUrl.startsWith("data:image") ||
+    rawUrl.startsWith("blob:")
+  ) {
+    return rawUrl;
+  }
+
+  if (rawUrl.startsWith("/")) {
+    return `${BACKEND_URL}${rawUrl}`;
+  }
+
+  return `${BACKEND_URL}/${rawUrl}`;
+};
+
+const getImageUrlFromObject = (item: any) => {
+  if (!item) {
+    return "";
+  }
+
+  if (typeof item === "string") {
+    return normalizeImageUrl(item);
+  }
+
+  return normalizeImageUrl(
+    item?.imageUrl ??
+      item?.ImageUrl ??
+      item?.url ??
+      item?.Url ??
+      item?.mediaUrl ??
+      item?.MediaUrl ??
+      item?.path ??
+      item?.Path ??
+      item?.fileUrl ??
+      item?.FileUrl ??
+      ""
+  );
+};
+
+const getPlaceholderImage = () => {
+  return (
+    "data:image/svg+xml;utf8," +
+    encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300">
+        <rect width="100%" height="100%" fill="#f3f4f6"/>
+        <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
+          fill="#9ca3af" font-family="Arial" font-size="20">
+          No Image
+        </text>
+      </svg>
+    `)
+  );
+};
+
+const extractProductImages = (productData: any, variants: any[]) => {
+  const imageUrls: string[] = [];
+
+  const addImage = (url: unknown) => {
+    const normalizedUrl = getImageUrlFromObject(url);
+
+    if (normalizedUrl && !imageUrls.includes(normalizedUrl)) {
+      imageUrls.push(normalizedUrl);
+    }
+  };
+
+  addImage(productData?.imageUrl);
+  addImage(productData?.ImageUrl);
+  addImage(productData?.thumbnailUrl);
+  addImage(productData?.ThumbnailUrl);
+  addImage(productData?.mainImageUrl);
+  addImage(productData?.MainImageUrl);
+  addImage(productData?.image);
+
+  const productImageSources =
+    productData?.images ||
+    productData?.Images ||
+    productData?.productImages ||
+    productData?.ProductImages ||
+    productData?.imageList ||
+    productData?.ImageList ||
+    productData?.productImageList ||
+    productData?.ProductImageList ||
+    productData?.mediaFiles ||
+    [];
+
+  if (Array.isArray(productImageSources)) {
+    productImageSources.forEach((imageItem: any) => {
+      addImage(imageItem);
+    });
+  }
+
+  if (Array.isArray(variants)) {
+    variants.forEach((variant: any) => {
+      addImage(variant?.imageUrl);
+      addImage(variant?.ImageUrl);
+      addImage(variant?.thumbnailUrl);
+      addImage(variant?.ThumbnailUrl);
+      addImage(variant?.image);
+
+      const variantImages =
+        variant?.images ||
+        variant?.Images ||
+        variant?.productImages ||
+        variant?.ProductImages ||
+        [];
+
+      if (Array.isArray(variantImages)) {
+        variantImages.forEach((imageItem: any) => {
+          addImage(imageItem);
+        });
+      }
+    });
+  }
+
+  return imageUrls;
+};
+
+const extractCapacity = (
+  variant: any,
+  flashSale?: FlashSaleProductResponse | null
+) => {
   if (!variant && !flashSale) return "N/A";
 
   let value = null;
 
-  // Bổ sung `capacityName` thần thánh vào đây
   if (variant?.capacityName != null) {
     value = variant.capacityName;
   } else if (variant?.capacity && typeof variant.capacity === "object") {
@@ -134,7 +263,6 @@ const extractCapacity = (variant: any, flashSale?: FlashSaleProductResponse | nu
     return "N/A";
   }
 
-  // Xử lý cắt bỏ đuôi thập phân ".0" (VD: "50.0" -> 50)
   const numeric = parseFloat(String(value).replace("ml", ""));
 
   if (!Number.isNaN(numeric) && numeric > 0) {
@@ -145,7 +273,10 @@ const extractCapacity = (variant: any, flashSale?: FlashSaleProductResponse | nu
   return text.toLowerCase().includes("ml") ? text : `${text}ml`;
 };
 
-const normalizeStock = (variant: any, flashSale?: FlashSaleProductResponse | null) => {
+const normalizeStock = (
+  variant: any,
+  flashSale?: FlashSaleProductResponse | null
+) => {
   return Number(
     flashSale?.stockQuantity ??
       variant?.stock ??
@@ -291,13 +422,6 @@ const mapVariant = (
     sku: variant?.sku || variant?.SKU || flashSale?.sku || "",
     capacity: extractCapacity(variant, flashSale),
 
-    /**
-     * Giá hiển thị:
-     * - Có Flash Sale: price = salePrice
-     * - Không Flash Sale: price = giá gốc
-     *
-     * FE chỉ hiển thị. Khi cart/checkout, BE vẫn phải tự tính lại Flash Sale.
-     */
     price: salePrice,
     salePrice,
     originalPrice,
@@ -319,6 +443,8 @@ const mapVariant = (
           variant?.bottleType ||
           flashSale?.bottleType ||
           "",
+
+    imageUrl: getImageUrlFromObject(variant),
   };
 };
 
@@ -339,6 +465,9 @@ const mapProduct = (
 
   const firstVariant = mappedVariants[0];
 
+  const productImages = extractProductImages(p, mappedVariants);
+  const mainImage = productImages[0] || getPlaceholderImage();
+
   return {
     ...p,
 
@@ -350,22 +479,17 @@ const mapProduct = (
         ? p?.brand?.name
         : p?.brandName || p?.brand || "Premium",
 
-    image:
-      p?.imageUrl ||
-      p?.ImageUrl ||
-      p?.image ||
-      "data:image/svg+xml;utf8," +
-        encodeURIComponent(`
-          <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300">
-            <rect width="100%" height="100%" fill="#f3f4f6"/>
-            <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
-              fill="#9ca3af" font-family="Arial" font-size="20">
-              No Image
-            </text>
-          </svg>
-        `),
-
-    imageUrl: p?.imageUrl || p?.ImageUrl || p?.image || "",
+    image: mainImage,
+    imageUrl: mainImage,
+    mainImage,
+    images: productImages,
+    imageList: productImages,
+    galleryImages: productImages,
+    productImages: productImages.map((imageUrl, index) => ({
+      id: index + 1,
+      imageUrl,
+      url: imageUrl,
+    })),
 
     description: p?.description || p?.Description || "",
     rating: Number(p?.rating || 0),
@@ -414,19 +538,17 @@ const loadProductDetail = async () => {
     product.value = null;
 
     const [productRes, flashSaleIndex] = await Promise.all([
-      // SỬA Ở ĐÂY: Thêm /v1 vào trước /products
-      api.get(`/v1/products/${productId}`), 
+      api.get(`/v1/products/${productId}`),
       fetchActiveFlashSaleIndex(),
     ]);
 
     const productData = extractObjectData(productRes.data);
 
-    // Lấy luôn danh sách biến thể từ API chi tiết sản phẩm, không cần gọi thêm API /variants cho đỡ lỗi 500
-    const variantData = 
-        productData?.variants || 
-        productData?.productVariants || 
-        productData?.productVariantList || 
-        [];
+    const variantData =
+      productData?.variants ||
+      productData?.productVariants ||
+      productData?.productVariantList ||
+      [];
 
     product.value = mapProduct(productData, variantData, flashSaleIndex);
   } catch (error: any) {

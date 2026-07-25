@@ -33,6 +33,7 @@
             :src="productImage"
             class="main-image"
             :alt="product?.name || 'Sản phẩm'"
+            @error="handleImageError"
           />
 
           <button
@@ -56,15 +57,24 @@
           </button>
         </div>
 
-        <div class="thumbnail-list">
-          <div
-            v-for="index in 4"
-            :key="index"
+        <div
+          v-if="productGalleryImages.length > 0"
+          class="thumbnail-list"
+        >
+          <button
+            v-for="(image, index) in productGalleryImages"
+            :key="`${image}-${index}`"
+            type="button"
             class="thumb"
-            :class="{ active: index === 1 }"
+            :class="{ active: image === productImage }"
+            @click="selectGalleryImage(image)"
           >
-            <img :src="productImage" :alt="product?.name || 'Sản phẩm'" />
-          </div>
+            <img
+              :src="image"
+              :alt="`${product?.name || 'Sản phẩm'} - ảnh ${index + 1}`"
+              @error="handleImageError"
+            />
+          </button>
         </div>
       </div>
 
@@ -487,6 +497,8 @@ const reviewSummary = ref<ProductReviewSummaryResponse | null>(null);
 
 const isFavorited = ref(false);
 const isFavoriteLoading = ref(false);
+const selectedImageUrl = ref("");
+const BACKEND_URL = "http://localhost:8080";
 
 const getCurrentRole = () => {
   return String(
@@ -507,22 +519,176 @@ const isCustomerLoggedIn = () => {
   return hasToken() && getCurrentRole() === "USER";
 };
 
-const productImage = computed(() => {
+const getPlaceholderImage = () => {
   return (
-    props.product?.image ||
-    props.product?.imageUrl ||
     "data:image/svg+xml;utf8," +
-      encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="400" height="400">
-          <rect width="100%" height="100%" fill="#f3f4f6"/>
-          <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
-            fill="#9ca3af" font-family="Arial" font-size="24">
-            No Image
-          </text>
-        </svg>
-      `)
+    encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="400" height="400">
+        <rect width="100%" height="100%" fill="#f3f4f6"/>
+        <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
+          fill="#9ca3af" font-family="Arial" font-size="24">
+          No Image
+        </text>
+      </svg>
+    `)
   );
+};
+
+const normalizeImageUrl = (url: unknown) => {
+  const rawUrl = String(url || "").trim();
+
+  if (!rawUrl) {
+    return "";
+  }
+
+  if (
+    rawUrl.startsWith("http://") ||
+    rawUrl.startsWith("https://") ||
+    rawUrl.startsWith("data:image") ||
+    rawUrl.startsWith("blob:")
+  ) {
+    return rawUrl;
+  }
+
+  if (rawUrl.startsWith("/")) {
+    return `${BACKEND_URL}${rawUrl}`;
+  }
+
+  return `${BACKEND_URL}/${rawUrl}`;
+};
+
+const getImageUrlFromObject = (value: any) => {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return normalizeImageUrl(value);
+  }
+
+  return normalizeImageUrl(
+    value?.imageUrl ??
+      value?.ImageUrl ??
+      value?.url ??
+      value?.Url ??
+      value?.mediaUrl ??
+      value?.MediaUrl ??
+      value?.path ??
+      value?.Path ??
+      value?.fileUrl ??
+      value?.FileUrl ??
+      ""
+  );
+};
+
+const appendImage = (images: string[], value: any) => {
+  const imageUrl = getImageUrlFromObject(value);
+
+  if (imageUrl && !images.includes(imageUrl)) {
+    images.push(imageUrl);
+  }
+};
+
+const appendImageList = (images: string[], value: any) => {
+  if (!value) {
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => appendImage(images, item));
+    return;
+  }
+
+  appendImage(images, value);
+};
+
+const getVariantImageList = (variant: any) => {
+  const images: string[] = [];
+
+  appendImage(images, variant?.mainImage);
+  appendImage(images, variant?.mainImageUrl);
+  appendImage(images, variant?.thumbnailUrl);
+  appendImage(images, variant?.imageUrl);
+  appendImage(images, variant?.ImageUrl);
+  appendImage(images, variant?.image);
+
+  appendImageList(images, variant?.images);
+  appendImageList(images, variant?.Images);
+  appendImageList(images, variant?.imageList);
+  appendImageList(images, variant?.ImageList);
+  appendImageList(images, variant?.productImages);
+  appendImageList(images, variant?.ProductImages);
+
+  return images;
+};
+
+const productGalleryImages = computed(() => {
+  const images: string[] = [];
+  const productData = props.product;
+
+  appendImage(images, productData?.mainImage);
+  appendImage(images, productData?.mainImageUrl);
+  appendImage(images, productData?.thumbnailUrl);
+  appendImage(images, productData?.imageUrl);
+  appendImage(images, productData?.ImageUrl);
+  appendImage(images, productData?.image);
+
+  appendImageList(images, productData?.images);
+  appendImageList(images, productData?.Images);
+  appendImageList(images, productData?.galleryImages);
+  appendImageList(images, productData?.imageList);
+  appendImageList(images, productData?.ImageList);
+  appendImageList(images, productData?.productImages);
+  appendImageList(images, productData?.ProductImages);
+  appendImageList(images, productData?.productImageList);
+  appendImageList(images, productData?.ProductImageList);
+
+  if (selectedVariant.value) {
+    getVariantImageList(selectedVariant.value).forEach((imageUrl) => {
+      if (!images.includes(imageUrl)) {
+        images.push(imageUrl);
+      }
+    });
+  }
+
+  if (Array.isArray(productData?.variants)) {
+    productData.variants.forEach((variant: any) => {
+      getVariantImageList(variant).forEach((imageUrl) => {
+        if (!images.includes(imageUrl)) {
+          images.push(imageUrl);
+        }
+      });
+    });
+  }
+
+  return images;
 });
+
+const productImage = computed(() => {
+  if (
+    selectedImageUrl.value &&
+    productGalleryImages.value.includes(selectedImageUrl.value)
+  ) {
+    return selectedImageUrl.value;
+  }
+
+  return productGalleryImages.value[0] || getPlaceholderImage();
+});
+
+const selectGalleryImage = (imageUrl: string) => {
+  selectedImageUrl.value = imageUrl;
+};
+
+const handleImageError = (event: Event) => {
+  const target = event.target as HTMLImageElement | null;
+
+  if (!target) {
+    return;
+  }
+
+  target.onerror = null;
+  target.src = getPlaceholderImage();
+};
 
 const brandText = computed(() => {
   if (typeof props.product?.brand === "object") {
@@ -891,6 +1057,22 @@ const handleReviewSummaryLoaded = (summary: ProductReviewSummaryResponse) => {
 const selectVariant = (variant: any) => {
   selectedVariant.value = variant;
   quantity.value = 1;
+
+  const variantImages = getVariantImageList(variant);
+  const firstVariantImage = variantImages.find(
+    (imageUrl): imageUrl is string => Boolean(imageUrl)
+  );
+
+  if (firstVariantImage) {
+    selectedImageUrl.value = firstVariantImage;
+  } else if (
+    selectedImageUrl.value &&
+    !productGalleryImages.value.includes(selectedImageUrl.value)
+  ) {
+    selectedImageUrl.value = productGalleryImages.value[0] || "";
+  }
+
+  loadFavoriteStatus();
 };
 
 const decreaseQty = () => {
@@ -1251,6 +1433,8 @@ watch(
       selectedVariant.value = null;
       quantity.value = 1;
     }
+
+    selectedImageUrl.value = productGalleryImages.value[0] || "";
   },
   {
     immediate: true,
@@ -1331,6 +1515,8 @@ watch(
 
 .main-image {
   width: 100%;
+  max-height: 430px;
+  object-fit: contain;
   mix-blend-mode: multiply;
 }
 
@@ -1372,10 +1558,13 @@ watch(
 .thumbnail-list {
   display: flex;
   gap: 15px;
+  overflow-x: auto;
+  padding-bottom: 4px;
 }
 
 .thumb {
   width: calc(25% - 11.25px);
+  min-width: 92px;
   border-radius: 8px;
   border: 1px solid #eaeaea;
   cursor: pointer;
@@ -1391,11 +1580,17 @@ watch(
 .thumb img {
   max-width: 100%;
   max-height: 100%;
+  object-fit: contain;
   mix-blend-mode: multiply;
+  pointer-events: none;
 }
 
 .thumb.active {
   border: 2px solid #0a142f;
+}
+
+.thumb:hover {
+  border-color: #c69c6d;
 }
 
 .product-info {
