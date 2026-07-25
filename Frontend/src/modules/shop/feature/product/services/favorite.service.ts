@@ -30,6 +30,33 @@ export interface FavoriteItemResponse {
   createdAt: string;
 }
 
+const getCurrentUserRole = (): string => {
+  try {
+    const currentUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
+
+    return String(
+      currentUser.role ||
+        currentUser.roleName ||
+        currentUser.authority ||
+        currentUser.authorities?.[0]?.authority ||
+        ""
+    )
+      .toUpperCase()
+      .replace("ROLE_", "");
+  } catch {
+    return "";
+  }
+};
+
+const canUseCustomerFavoriteApi = (): boolean => {
+  const token =
+    localStorage.getItem("token") ||
+    localStorage.getItem("accessToken") ||
+    localStorage.getItem("jwtToken");
+
+  return !!token && getCurrentUserRole() === "USER";
+};
+
 export const favoriteService = {
   getFavorites() {
     return api.get<FavoriteItemResponse[]>("/customer/favorites");
@@ -42,9 +69,34 @@ export const favoriteService = {
   },
 
   checkFavorite(productVariantId: number) {
-    return api.get<FavoriteCheckResponse>(
-      `/customer/favorites/check/${productVariantId}`
-    );
+    if (!canUseCustomerFavoriteApi()) {
+      return Promise.resolve({
+        data: {
+          productVariantId,
+          favorited: false,
+        },
+      } as any);
+    }
+
+    return api
+      .get<FavoriteCheckResponse>(
+        `/customer/favorites/check/${productVariantId}`
+      )
+      .catch((error) => {
+        if (
+          error?.response?.status === 401 ||
+          error?.response?.status === 403
+        ) {
+          return {
+            data: {
+              productVariantId,
+              favorited: false,
+            },
+          } as any;
+        }
+
+        throw error;
+      });
   },
 
   removeByVariant(productVariantId: number) {

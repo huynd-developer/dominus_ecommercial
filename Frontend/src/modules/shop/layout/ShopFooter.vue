@@ -1,126 +1,206 @@
 <template>
   <footer class="shop-footer text-center">
-    <div class="container py-5">
-      <RouterLink to="/" class="text-decoration-none d-inline-block">
-        <div class="footer-logo">AURA</div>
-        <div class="footer-logo-sub">PERFUME</div>
-      </RouterLink>
+    <div class="container footer-container">
+      <div class="footer-logo-box mx-auto">
+        <img :src="logoAura" alt="DOMINUS PERFUME" class="footer-logo-img" />
+      </div>
 
-      <div class="footer-gold-line mx-auto my-4"></div>
+      <div class="footer-gold-line mx-auto"></div>
 
-      <p class="footer-slogan fst-italic mb-4">
+      <p class="footer-slogan fst-italic">
         Tinh hoa hương thơm – Đẳng cấp vượt thời gian.
       </p>
 
-      <div class="social-list d-flex justify-content-center align-items-center gap-3 mb-4">
-        <a href="#" class="social-icon" aria-label="Facebook">
+      <div
+        class="social-list d-flex justify-content-center align-items-center gap-3"
+      >
+        <span class="social-icon" aria-label="Facebook">
           <i class="bi bi-facebook"></i>
-        </a>
+        </span>
 
-        <a href="#" class="social-icon" aria-label="Instagram">
+        <span class="social-icon" aria-label="Instagram">
           <i class="bi bi-instagram"></i>
-        </a>
+        </span>
 
-        <a href="#" class="social-icon" aria-label="Youtube">
+        <span class="social-icon" aria-label="Youtube">
           <i class="bi bi-youtube"></i>
-        </a>
+        </span>
 
-        <a href="#" class="social-icon" aria-label="Tiktok">
+        <span class="social-icon" aria-label="Tiktok">
           <i class="bi bi-tiktok"></i>
-        </a>
+        </span>
       </div>
 
-      <div class="footer-divider mx-auto mb-4"></div>
+      <div class="footer-divider mx-auto"></div>
 
-      <div class="footer-links d-flex justify-content-center align-items-center flex-wrap gap-3">
-        <RouterLink to="/about" class="footer-link">Về chúng tôi</RouterLink>
+      <div
+        class="footer-info d-flex justify-content-center align-items-center flex-wrap gap-3"
+      >
+        <span class="footer-info-item">Về chúng tôi</span>
         <span class="footer-separator">|</span>
-        <RouterLink to="/policy" class="footer-link">Chính sách</RouterLink>
+        <span class="footer-info-item">Chính sách</span>
         <span class="footer-separator">|</span>
-        <RouterLink to="/contact" class="footer-link">Liên hệ</RouterLink>
+        <span class="footer-info-item">Liên hệ</span>
+      </div>
+
+      <div class="footer-contact mt-3">
+        <span>DOMINUS PERFUME</span>
+        <span class="footer-dot">•</span>
+        <span>Nước hoa chính hãng</span>
+        <span class="footer-dot">•</span>
+        <span>Hà Nội, Việt Nam</span>
+      </div>
+
+      <div class="footer-copy mt-2">
+        © 2026 DOMINUS PERFUME. All rights reserved.
       </div>
     </div>
   </footer>
 </template>
 
 <script setup lang="ts">
-import { RouterLink } from 'vue-router';
+import logoAura from "@/assets/logo.png";
 </script>
 
 <style scoped>
 .shop-footer {
-  background: #030d1a;
+  background: radial-gradient(
+      circle at top center,
+      rgba(189, 154, 95, 0.08),
+      transparent 34%
+    ),
+    #030d1a;
   color: rgba(255, 255, 255, 0.78);
+  border-top: 1px solid rgba(189, 154, 95, 0.16);
 }
 
-.footer-logo {
-  font-family: Georgia, 'Times New Roman', serif;
-  color: #bd9a5f;
-  font-size: 42px;
-  letter-spacing: 12px;
-  line-height: 1;
+.footer-container {
+  padding-top: 34px;
+  padding-bottom: 28px;
 }
 
-.footer-logo-sub {
-  color: #bd9a5f;
-  font-size: 11px;
-  letter-spacing: 7px;
-  margin-top: 8px;
+.footer-logo-box {
+  width: 360px;
+  max-width: 90vw;
+  height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+
+.footer-logo-img {
+  width: 260px;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  transform: none;
+  filter: drop-shadow(0 8px 22px rgba(189, 154, 95, 0.22));
 }
 
 .footer-gold-line {
-  width: 240px;
+  width: 210px;
   height: 1px;
-  background: rgba(189, 154, 95, 0.45);
+  margin-top: 18px;
+  margin-bottom: 18px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(189, 154, 95, 0.72),
+    transparent
+  );
 }
 
 .footer-slogan {
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 15px;
+  margin-bottom: 20px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 14px;
+  letter-spacing: 0.2px;
+}
+
+.social-list {
+  margin-bottom: 22px;
 }
 
 .social-icon {
-  width: 38px;
-  height: 38px;
-  border: 1px solid rgba(189, 154, 95, 0.75);
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(189, 154, 95, 0.72);
   border-radius: 50%;
   color: #bd9a5f;
-  text-decoration: none;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  transition: all 0.2s ease;
+  cursor: default;
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .social-icon i {
-  font-size: 17px;
+  font-size: 16px;
   line-height: 1;
-}
-
-.social-icon:hover {
-  background: #bd9a5f;
-  color: #030d1a;
-  transform: translateY(-2px);
 }
 
 .footer-divider {
   max-width: 520px;
-  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  margin-bottom: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.footer-link {
-  color: rgba(255, 255, 255, 0.82);
-  text-decoration: none;
+.footer-info {
+  color: rgba(255, 255, 255, 0.86);
   font-size: 14px;
-  transition: color 0.2s ease;
+  font-weight: 600;
 }
 
-.footer-link:hover {
-  color: #bd9a5f;
+.footer-info-item {
+  cursor: default;
 }
 
 .footer-separator {
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.28);
+}
+
+.footer-contact {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 13px;
+}
+
+.footer-dot {
+  margin: 0 8px;
+  color: rgba(189, 154, 95, 0.72);
+}
+
+.footer-copy {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 12px;
+}
+
+@media (max-width: 575.98px) {
+  .footer-container {
+    padding-top: 28px;
+    padding-bottom: 24px;
+  }
+
+  .footer-logo-box {
+    width: 260px;
+    height: 76px;
+  }
+
+  .footer-logo-img {
+    width: 210px;
+    transform: none;
+  }
+
+  .footer-contact {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .footer-dot {
+    display: none;
+  }
 }
 </style>

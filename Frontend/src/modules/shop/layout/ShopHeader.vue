@@ -44,7 +44,9 @@
         </div>
 
         <div class="col-8 col-lg-3 order-2 order-lg-3">
-          <div class="d-flex align-items-center justify-content-end gap-3 gap-lg-4">
+          <div
+            class="d-flex align-items-center justify-content-end gap-3 gap-lg-4"
+          >
             <div class="account-dropdown-wrapper">
               <button
                 type="button"
@@ -66,18 +68,26 @@
                   {{ isAuthenticated ? displayName : "Tài khoản" }}
                 </span>
 
-                <i class="bi bi-chevron-down account-chevron d-none d-md-inline"></i>
+                <i
+                  class="bi bi-chevron-down account-chevron d-none d-md-inline"
+                ></i>
               </button>
 
               <div class="account-dropdown">
                 <div v-if="!isAuthenticated" class="guest-dropdown">
                   <p class="dropdown-title mb-3">Tài khoản khách hàng</p>
 
-                  <RouterLink to="/login" class="btn dropdown-login-btn w-100 mb-2">
+                  <RouterLink
+                    to="/login"
+                    class="btn dropdown-login-btn w-100 mb-2"
+                  >
                     Đăng nhập
                   </RouterLink>
 
-                  <RouterLink to="/register" class="btn dropdown-register-btn w-100">
+                  <RouterLink
+                    to="/register"
+                    class="btn dropdown-register-btn w-100"
+                  >
                     Đăng ký
                   </RouterLink>
                 </div>
@@ -117,7 +127,10 @@
 
                   <RouterLink
                     v-if="isUserRole"
-                    :to="{ path: '/customer/profile', query: { tab: 'profile' } }"
+                    :to="{
+                      path: '/customer/profile',
+                      query: { tab: 'profile' },
+                    }"
                     class="account-menu-item"
                   >
                     <i class="bi bi-person-circle"></i>
@@ -126,7 +139,10 @@
 
                   <RouterLink
                     v-if="isUserRole"
-                    :to="{ path: '/customer/profile', query: { tab: 'password' } }"
+                    :to="{
+                      path: '/customer/profile',
+                      query: { tab: 'password' },
+                    }"
                     class="account-menu-item"
                   >
                     <i class="bi bi-lock"></i>
@@ -135,7 +151,10 @@
 
                   <RouterLink
                     v-if="isUserRole"
-                    :to="{ path: '/customer/profile', query: { tab: 'favorites' } }"
+                    :to="{
+                      path: '/customer/profile',
+                      query: { tab: 'favorites' },
+                    }"
                     class="account-menu-item"
                   >
                     <i class="bi bi-heart"></i>
@@ -144,7 +163,10 @@
 
                   <RouterLink
                     v-if="isUserRole"
-                    :to="{ path: '/customer/profile', query: { tab: 'orders' } }"
+                    :to="{
+                      path: '/customer/profile',
+                      query: { tab: 'orders' },
+                    }"
                     class="account-menu-item"
                   >
                     <i class="bi bi-receipt"></i>
@@ -182,6 +204,7 @@
             </div>
 
             <RouterLink
+              v-if="!isStaffRole"
               to="/cart"
               class="header-action cart-action d-flex align-items-center gap-2 text-decoration-none position-relative"
             >
@@ -191,9 +214,9 @@
 
               <span class="d-none d-md-inline">Giỏ hàng</span>
 
-           <span class="cart-badge">
-  {{ cartBadgeText }}
-</span>
+              <span class="cart-badge">
+                {{ cartBadgeText }}
+              </span>
             </RouterLink>
           </div>
         </div>
@@ -256,7 +279,9 @@ const cartBadgeText = computed(() => {
 });
 
 const displayName = computed(() => {
-  return headerName.value || name.value || localStorage.getItem("name") || "Khách";
+  return (
+    headerName.value || name.value || localStorage.getItem("name") || "Khách"
+  );
 });
 
 const userInitial = computed(() => {
@@ -343,13 +368,13 @@ const handleSearch = () => {
   const trimmedKeyword = keyword.value.trim();
 
   if (!trimmedKeyword) {
-    router.push({ name: 'ProductList' }); // Về danh sách mặc định
+    router.push({ name: "ProductList" }); // Về danh sách mặc định
     return;
   }
 
   // Đẩy sang Component ProductDetailView kèm từ khóa
   router.push({
-    name: 'ProductList',
+    name: "ProductList",
     query: {
       keyword: trimmedKeyword,
     },
