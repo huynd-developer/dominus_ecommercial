@@ -89,7 +89,16 @@
         </template>
       </div>
     </div>
-
+    <div class="px-3 pb-3 flex-shrink-0">
+      <router-link
+        to="/"
+        class="online-shop-btn d-flex align-items-center justify-content-center gap-2 text-decoration-none fw-bold"
+        title="Chuyển sang trang bán hàng online"
+      >
+        <i class="bi bi-shop-window"></i>
+        <span>Trang bán hàng online</span>
+      </router-link>
+    </div>
     <div
       class="p-3 border-top border-slate-100 bg-slate-50 mt-auto flex-shrink-0 position-relative"
     >
@@ -123,7 +132,6 @@
         class="dropdown-menu-custom position-absolute start-0 end-0 mx-3 bg-white rounded-4 shadow-lg border border-slate-200 overflow-hidden animate__animated animate__fadeInUp animate__faster"
         style="z-index: 1100; bottom: 85px"
       >
-
         <div class="p-2 border-top border-slate-100 bg-slate-50">
           <button
             @click="handleLogout"
@@ -604,5 +612,26 @@ onUnmounted(() => {
 }
 .animate__faster {
   animation-duration: 0.2s;
+}
+.online-shop-btn {
+  min-height: 44px;
+  border-radius: 14px;
+  padding: 11px 14px;
+  background-color: #111111;
+  color: #ffffff !important;
+  border: 1px solid #111111;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+}
+
+.online-shop-btn:hover {
+  background-color: #ffffff;
+  color: #111111 !important;
+  transform: translateY(-1px);
+}
+
+.online-shop-btn i {
+  font-size: 1rem;
 }
 </style>
