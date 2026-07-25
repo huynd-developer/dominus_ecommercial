@@ -22,6 +22,7 @@
           <img
             :src="getProductImage(item)"
             :alt="item?.name || 'Sản phẩm'"
+            @error="handleImageError"
           />
 
           <button
@@ -135,6 +136,8 @@ const favoritedMap = ref<Record<number, boolean>>({});
 const favoriteLoadingMap = ref<Record<number, boolean>>({});
 const buyNowLoadingMap = ref<Record<number, boolean>>({});
 
+const BACKEND_URL = "http://localhost:8080";
+
 const getToken = () => {
   return localStorage.getItem("token");
 };
@@ -162,21 +165,141 @@ const getBrandName = (item: any) => {
   return item?.brandName || item?.brand || "Premium";
 };
 
-const getProductImage = (item: any) => {
+const getPlaceholderImage = () => {
   return (
-    item?.imageUrl ||
-    item?.image ||
     "data:image/svg+xml;utf8," +
-      encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300">
-          <rect width="100%" height="100%" fill="#f3f4f6"/>
-          <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
-            fill="#9ca3af" font-family="Arial" font-size="20">
-            No Image
-          </text>
-        </svg>
-      `)
+    encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300">
+        <rect width="100%" height="100%" fill="#f3f4f6"/>
+        <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
+          fill="#9ca3af" font-family="Arial" font-size="20">
+          No Image
+        </text>
+      </svg>
+    `)
   );
+};
+
+const normalizeImageUrl = (url: unknown) => {
+  const rawUrl = String(url || "").trim();
+
+  if (!rawUrl) {
+    return "";
+  }
+
+  if (
+    rawUrl.startsWith("http://") ||
+    rawUrl.startsWith("https://") ||
+    rawUrl.startsWith("data:image") ||
+    rawUrl.startsWith("blob:")
+  ) {
+    return rawUrl;
+  }
+
+  if (rawUrl.startsWith("/")) {
+    return `${BACKEND_URL}${rawUrl}`;
+  }
+
+  return `${BACKEND_URL}/${rawUrl}`;
+};
+
+const getImageUrlFromObject = (value: any) => {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return normalizeImageUrl(value);
+  }
+
+  return normalizeImageUrl(
+    value?.imageUrl ??
+      value?.ImageUrl ??
+      value?.url ??
+      value?.Url ??
+      value?.mediaUrl ??
+      value?.MediaUrl ??
+      value?.path ??
+      value?.Path ??
+      value?.fileUrl ??
+      value?.FileUrl ??
+      ""
+  );
+};
+
+const appendImage = (images: string[], value: any) => {
+  const imageUrl = getImageUrlFromObject(value);
+
+  if (imageUrl && !images.includes(imageUrl)) {
+    images.push(imageUrl);
+  }
+};
+
+const appendImageList = (images: string[], value: any) => {
+  if (!value) {
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => appendImage(images, item));
+    return;
+  }
+
+  appendImage(images, value);
+};
+
+const getProductImages = (item: any) => {
+  const images: string[] = [];
+
+  appendImage(images, item?.mainImage);
+  appendImage(images, item?.mainImageUrl);
+  appendImage(images, item?.thumbnailUrl);
+  appendImage(images, item?.imageUrl);
+  appendImage(images, item?.ImageUrl);
+  appendImage(images, item?.image);
+
+  appendImageList(images, item?.images);
+  appendImageList(images, item?.Images);
+  appendImageList(images, item?.galleryImages);
+  appendImageList(images, item?.imageList);
+  appendImageList(images, item?.ImageList);
+  appendImageList(images, item?.productImages);
+  appendImageList(images, item?.ProductImages);
+  appendImageList(images, item?.productImageList);
+  appendImageList(images, item?.ProductImageList);
+
+  if (Array.isArray(item?.variants)) {
+    item.variants.forEach((variant: any) => {
+      appendImage(images, variant?.mainImage);
+      appendImage(images, variant?.mainImageUrl);
+      appendImage(images, variant?.thumbnailUrl);
+      appendImage(images, variant?.imageUrl);
+      appendImage(images, variant?.ImageUrl);
+      appendImage(images, variant?.image);
+
+      appendImageList(images, variant?.images);
+      appendImageList(images, variant?.Images);
+      appendImageList(images, variant?.productImages);
+      appendImageList(images, variant?.ProductImages);
+    });
+  }
+
+  return images;
+};
+
+const getProductImage = (item: any) => {
+  return getProductImages(item)[0] || getPlaceholderImage();
+};
+
+const handleImageError = (event: Event) => {
+  const target = event.target as HTMLImageElement | null;
+
+  if (!target) {
+    return;
+  }
+
+  target.onerror = null;
+  target.src = getPlaceholderImage();
 };
 
 const normalizeStock = (variant: any) => {

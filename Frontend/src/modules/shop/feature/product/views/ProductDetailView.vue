@@ -1,6 +1,7 @@
 <template>
   <div class="page-wrapper">
     <ShopHeader />
+    <ShopNavbar />
 
     <div class="product-layout">
       <SidebarFilter @filter-change="handleFilterChange" />
@@ -31,6 +32,7 @@ import { useRoute, useRouter } from "vue-router";
 import api from "@/common/api";
 
 import ShopHeader from "@/modules/shop/layout/ShopHeader.vue";
+import ShopNavbar from "@/modules/shop/layout/ShopNavbar.vue";
 import SidebarFilter from "@/modules/shop/feature/product/components/SidebarFilter.vue";
 import ProductGrid from "@/modules/shop/feature/product/components/ProductGrid.vue";
 import ShopFooter from "@/modules/shop/layout/ShopFooter.vue";
@@ -41,9 +43,210 @@ const route = useRoute();
 const productList = ref<any[]>([]);
 const isLoading = ref(false);
 
+const BACKEND_URL = "http://localhost:8080";
+
+const getRouteQueryValue = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return value[0] || "";
+  }
+
+  return value ? String(value) : "";
+};
+
+const normalizeText = (value: unknown) => {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .trim();
+};
+
+const normalizeCapacityKey = (value: unknown) => {
+  return normalizeText(value).replace("ml", "").replace(/\s+/g, "").trim();
+};
+
+const getPlaceholderImage = () => {
+  return (
+    "data:image/svg+xml;utf8," +
+    encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300">
+        <rect width="100%" height="100%" fill="#f3f4f6"/>
+        <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
+          fill="#9ca3af" font-family="Arial" font-size="20">
+          No Image
+        </text>
+      </svg>
+    `)
+  );
+};
+
+const normalizeImageUrl = (url: unknown) => {
+  const rawUrl = String(url || "").trim();
+
+  if (!rawUrl) {
+    return "";
+  }
+
+  if (
+    rawUrl.startsWith("http://") ||
+    rawUrl.startsWith("https://") ||
+    rawUrl.startsWith("data:image") ||
+    rawUrl.startsWith("blob:")
+  ) {
+    return rawUrl;
+  }
+
+  if (rawUrl.startsWith("/")) {
+    return `${BACKEND_URL}${rawUrl}`;
+  }
+
+  return `${BACKEND_URL}/${rawUrl}`;
+};
+
+const getImageUrlFromObject = (value: any) => {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return normalizeImageUrl(value);
+  }
+
+  return normalizeImageUrl(
+    value?.imageUrl ??
+      value?.ImageUrl ??
+      value?.url ??
+      value?.Url ??
+      value?.mediaUrl ??
+      value?.MediaUrl ??
+      value?.path ??
+      value?.Path ??
+      value?.fileUrl ??
+      value?.FileUrl ??
+      value?.thumbnailUrl ??
+      value?.ThumbnailUrl ??
+      value?.mainImageUrl ??
+      value?.MainImageUrl ??
+      ""
+  );
+};
+
+const appendImage = (images: string[], value: any) => {
+  const imageUrl = getImageUrlFromObject(value);
+
+  if (imageUrl && !images.includes(imageUrl)) {
+    images.push(imageUrl);
+  }
+};
+
+const appendImageList = (images: string[], value: any) => {
+  if (!value) {
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => appendImage(images, item));
+    return;
+  }
+
+  appendImage(images, value);
+};
+
+const getVariantImageList = (variant: any) => {
+  const images: string[] = [];
+
+  appendImage(images, variant?.mainImage);
+  appendImage(images, variant?.mainImageUrl);
+  appendImage(images, variant?.MainImageUrl);
+  appendImage(images, variant?.thumbnailUrl);
+  appendImage(images, variant?.ThumbnailUrl);
+  appendImage(images, variant?.imageUrl);
+  appendImage(images, variant?.ImageUrl);
+  appendImage(images, variant?.image);
+  appendImage(images, variant?.Image);
+
+  appendImageList(images, variant?.images);
+  appendImageList(images, variant?.Images);
+  appendImageList(images, variant?.imageList);
+  appendImageList(images, variant?.ImageList);
+  appendImageList(images, variant?.productImages);
+  appendImageList(images, variant?.ProductImages);
+  appendImageList(images, variant?.productImageList);
+  appendImageList(images, variant?.ProductImageList);
+
+  return images;
+};
+
+const getProductImageList = (item: any, variants: any[]) => {
+  const images: string[] = [];
+
+  appendImage(images, item?.mainImage);
+  appendImage(images, item?.mainImageUrl);
+  appendImage(images, item?.MainImageUrl);
+  appendImage(images, item?.thumbnailUrl);
+  appendImage(images, item?.ThumbnailUrl);
+  appendImage(images, item?.imageUrl);
+  appendImage(images, item?.ImageUrl);
+  appendImage(images, item?.image);
+  appendImage(images, item?.Image);
+
+  appendImageList(images, item?.images);
+  appendImageList(images, item?.Images);
+  appendImageList(images, item?.galleryImages);
+  appendImageList(images, item?.GalleryImages);
+  appendImageList(images, item?.imageList);
+  appendImageList(images, item?.ImageList);
+  appendImageList(images, item?.productImages);
+  appendImageList(images, item?.ProductImages);
+  appendImageList(images, item?.productImageList);
+  appendImageList(images, item?.ProductImageList);
+
+  if (Array.isArray(variants)) {
+    variants.forEach((variant) => {
+      getVariantImageList(variant).forEach((imageUrl) => {
+        if (imageUrl && !images.includes(imageUrl)) {
+          images.push(imageUrl);
+        }
+      });
+    });
+  }
+
+  return images;
+};
+
+const selectedBrandId = computed(() => {
+  const rawBrandId = getRouteQueryValue(route.query.brandId);
+  const brandId = Number(rawBrandId);
+
+  return Number.isFinite(brandId) && brandId > 0 ? brandId : null;
+});
+
+const selectedGender = computed(() => {
+  return normalizeText(getRouteQueryValue(route.query.gender));
+});
+
+const selectedBottleTypeKeyword = computed(() => {
+  return normalizeText(getRouteQueryValue(route.query.bottleType));
+});
+
+const selectedCapacityKeyword = computed(() => {
+  return normalizeCapacityKey(getRouteQueryValue(route.query.capacity));
+});
+
+const selectedNicheOnly = computed(() => {
+  const value = normalizeText(getRouteQueryValue(route.query.niche));
+  return value === "true" || value === "1";
+});
+
+const selectedFlashSaleOnly = computed(() => {
+  const value = normalizeText(getRouteQueryValue(route.query.flashSale));
+  return value === "true" || value === "1";
+});
+
 // === STATE CHO PHÂN TRANG ===
 const currentPage = ref(1);
-const itemsPerPage = ref(6); // Số sản phẩm trên 1 trang (M có thể đổi thành 12, 16 tùy ý)
+const itemsPerPage = ref(6);
 
 const activeFilters = ref<any>({
   genders: [],
@@ -67,32 +270,48 @@ const extractArrayData = (data: any) => {
   return data?.data?.content || data?.data || data?.content || data || [];
 };
 
-const extractCapacity = (variant: any) => {
-  if (!variant) return "N/A";
-
-  let value = null;
+const getVariantCapacityRaw = (variant: any) => {
+  if (!variant) return "";
 
   if (variant.capacity && typeof variant.capacity === "object") {
-    value = variant.capacity.value ?? variant.capacity.name;
-  } else if (variant.capacityValue != null) {
-    value = variant.capacityValue;
-  } else if (variant.volume != null) {
-    value = variant.volume;
-  } else if (variant.capacity != null) {
-    value = variant.capacity;
+    return (
+      variant.capacity.value ??
+      variant.capacity.name ??
+      variant.capacity.capacityValue ??
+      variant.capacity.capacityName ??
+      variant.capacity.label ??
+      ""
+    );
   }
+
+  return (
+    variant.capacityValue ??
+    variant.CapacityValue ??
+    variant.capacityName ??
+    variant.CapacityName ??
+    variant.capacityLabel ??
+    variant.CapacityLabel ??
+    variant.volume ??
+    variant.Volume ??
+    variant.capacity ??
+    variant.Capacity ??
+    ""
+  );
+};
+
+const extractCapacity = (variant: any) => {
+  const value = getVariantCapacityRaw(variant);
 
   if (value == null || value === "") {
     return "N/A";
   }
 
-  const numeric = Number(value);
+  const text = String(value).trim();
+  const numeric = Number(text.replace("ml", "").replace("ML", "").trim());
 
   if (!Number.isNaN(numeric)) {
     return `${numeric}ml`;
   }
-
-  const text = String(value);
 
   return text.toLowerCase().includes("ml") ? text : `${text}ml`;
 };
@@ -110,12 +329,17 @@ const normalizeStock = (variant: any) => {
 
 const mapVariant = (variant: any) => {
   const stock = normalizeStock(variant);
+  const rawCapacity = getVariantCapacityRaw(variant);
+  const capacity = extractCapacity(variant);
+  const variantImages = getVariantImageList(variant);
+  const variantMainImage = variantImages[0] || "";
 
   return {
     ...variant,
     id: variant?.id || variant?.Id,
     sku: variant?.sku || variant?.SKU || "",
-    capacity: extractCapacity(variant),
+    capacity,
+    capacityKey: normalizeCapacityKey(rawCapacity || capacity),
     price: Number(variant?.price || variant?.Price || 0),
     stock,
     stockQuantity: stock,
@@ -123,6 +347,21 @@ const mapVariant = (variant: any) => {
       typeof variant?.bottleType === "object"
         ? variant?.bottleType?.name
         : variant?.bottleTypeName || variant?.bottleType || "",
+    discountPercent: Number(
+      variant?.discountPercent ??
+        variant?.discount ??
+        variant?.salePercent ??
+        0
+    ),
+
+    image: variantMainImage,
+    imageUrl: variantMainImage,
+    images: variantImages,
+    productImages: variantImages.map((imageUrl, index) => ({
+      id: index + 1,
+      imageUrl,
+      url: imageUrl,
+    })),
   };
 };
 
@@ -135,8 +374,8 @@ const mapProduct = (item: any) => {
 
   const mappedVariants = Array.isArray(rawVariants)
     ? rawVariants.map(mapVariant).sort((a: any, b: any) => {
-        const valA = parseFloat(String(a.capacity).replace("ml", "")) || 0;
-        const valB = parseFloat(String(b.capacity).replace("ml", "")) || 0;
+        const valA = Number(a.capacityKey || 0);
+        const valB = Number(b.capacityKey || 0);
         return valA - valB;
       })
     : [];
@@ -170,30 +409,54 @@ const mapProduct = (item: any) => {
       ? mappedVariants[0].price
       : Number(item?.price || item?.Price || 0);
 
+  const category =
+    typeof item?.category === "object"
+      ? item?.category?.name || item?.category?.Name || ""
+      : item?.categoryName || item?.category || item?.CategoryName || "";
+
+  const discountPercent = Number(
+    item?.discountPercent ??
+      item?.discount ??
+      item?.salePercent ??
+      item?.promotionPercent ??
+      0
+  );
+
+  const productImages = getProductImageList(item, mappedVariants);
+  const mainImage = productImages[0] || getPlaceholderImage();
+
   return {
     ...item,
     id: item?.id || item?.Id,
+    brandId: Number(
+      item?.brandId ??
+        item?.BrandId ??
+        item?.brand?.id ??
+        item?.brand?.Id ??
+        0
+    ),
     name: item?.name || item?.Name || "Sản phẩm",
-    image:
-      item?.imageUrl ||
-      item?.ImageUrl ||
-      item?.image ||
-      "data:image/svg+xml;utf8," +
-        encodeURIComponent(`
-          <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300">
-            <rect width="100%" height="100%" fill="#f3f4f6"/>
-            <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
-              fill="#9ca3af" font-family="Arial" font-size="20">
-              No Image
-            </text>
-          </svg>
-        `),
+
+    image: mainImage,
+    imageUrl: mainImage,
+    mainImage,
+    images: productImages,
+    imageList: productImages,
+    galleryImages: productImages,
+    productImages: productImages.map((imageUrl, index) => ({
+      id: index + 1,
+      imageUrl,
+      url: imageUrl,
+    })),
+
     brand:
       typeof item?.brand === "object"
         ? item?.brand?.name
         : item?.brandName || item?.brand || "Premium",
+    category,
     description: item?.description || item?.Description || "",
     price,
+    discountPercent,
     variants: mappedVariants,
     scents: mappedScents.filter(Boolean),
     gender: genderText,
@@ -212,7 +475,12 @@ const fetchProducts = async () => {
   try {
     isLoading.value = true;
 
-    const res = await api.get("/v1/products");
+    const res = await api.get("/v1/products", {
+      params: {
+        brandId: selectedBrandId.value || undefined,
+      },
+    });
+
     const rawData = extractArrayData(res.data);
 
     productList.value = Array.isArray(rawData)
@@ -220,6 +488,7 @@ const fetchProducts = async () => {
       : [];
   } catch (error) {
     console.error("Lỗi fetch API List:", error);
+    productList.value = [];
   } finally {
     isLoading.value = false;
   }
@@ -229,12 +498,137 @@ const filteredProductList = computed(() => {
   if (!productList.value) return [];
 
   return productList.value.filter((product: any) => {
-    if (activeFilters.value.genders?.length > 0) {
-      const filters = activeFilters.value.genders.map((gender: string) =>
-        gender.toLowerCase()
+    if (selectedBrandId.value) {
+      const productBrandId = Number(
+        product?.brandId ??
+          product?.BrandId ??
+          product?.brand?.id ??
+          product?.brand?.Id ??
+          0
       );
 
-      const productGender = String(product.gender || "").toLowerCase();
+      if (productBrandId > 0 && productBrandId !== selectedBrandId.value) {
+        return false;
+      }
+    }
+
+    if (selectedGender.value) {
+      const productGender = normalizeText(product.gender);
+
+      if (productGender !== selectedGender.value) {
+        return false;
+      }
+    }
+
+    if (selectedNicheOnly.value) {
+      const productCategory = normalizeText(
+        product?.category || product?.categoryName || ""
+      );
+
+      const isNiche =
+        product?.isNiche === true ||
+        product?.niche === true ||
+        Number(product?.isNiche) === 1 ||
+        Number(product?.niche) === 1 ||
+        normalizeText(product?.isNiche) === "true" ||
+        normalizeText(product?.niche) === "true" ||
+        productCategory.includes("niche");
+
+      if (!isNiche) {
+        return false;
+      }
+    }
+
+    if (selectedBottleTypeKeyword.value) {
+      const productBottleType = normalizeText(product.bottleType);
+
+      let hasBottleTypeMatch = productBottleType.includes(
+        selectedBottleTypeKeyword.value
+      );
+
+      if (!hasBottleTypeMatch && Array.isArray(product.variants)) {
+        hasBottleTypeMatch = product.variants.some((variant: any) => {
+          const variantBottleType = normalizeText(
+            typeof variant.bottleType === "object"
+              ? variant.bottleType?.name
+              : variant.bottleType || variant.bottleTypeName || ""
+          );
+
+          return variantBottleType.includes(selectedBottleTypeKeyword.value);
+        });
+      }
+
+      if (!hasBottleTypeMatch) {
+        return false;
+      }
+    }
+
+    if (selectedCapacityKeyword.value) {
+      if (!Array.isArray(product.variants) || product.variants.length === 0) {
+        return false;
+      }
+
+      const hasCapacityMatch = product.variants.some((variant: any) => {
+        const variantCapacity = normalizeCapacityKey(
+          variant.capacityKey ||
+            variant.capacity ||
+            variant.capacityName ||
+            variant.capacityValue ||
+            ""
+        );
+
+        return variantCapacity === selectedCapacityKeyword.value;
+      });
+
+      if (!hasCapacityMatch) {
+        return false;
+      }
+    }
+
+    if (selectedFlashSaleOnly.value) {
+      const productDiscount = Number(
+        product?.discountPercent ??
+          product?.discount ??
+          product?.salePercent ??
+          product?.promotionPercent ??
+          0
+      );
+
+      const hasVariantDiscount =
+        Array.isArray(product.variants) &&
+        product.variants.some((variant: any) => {
+          return (
+            Number(
+              variant?.discountPercent ??
+                variant?.discount ??
+                variant?.salePercent ??
+                variant?.promotionPercent ??
+                0
+            ) > 0
+          );
+        });
+
+      const isFlashSale =
+        product?.flashSale === true ||
+        product?.isFlashSale === true ||
+        Number(product?.flashSale) === 1 ||
+        Number(product?.isFlashSale) === 1 ||
+        normalizeText(product?.flashSale) === "true" ||
+        normalizeText(product?.isFlashSale) === "true" ||
+        productDiscount > 0 ||
+        hasVariantDiscount;
+
+      if (!isFlashSale) {
+        return false;
+      }
+    }
+
+    if (activeFilters.value.genders?.length > 0) {
+      const filters = activeFilters.value.genders.map((gender: string) =>
+        normalizeText(gender)
+      );
+
+      const productGender = normalizeText(product.gender);
 
       if (!filters.includes(productGender)) {
         return false;
@@ -243,11 +637,11 @@ const filteredProductList = computed(() => {
 
     if (activeFilters.value.fragranceFamilies?.length > 0) {
       const filters = activeFilters.value.fragranceFamilies.map(
-        (family: string) => family.toLowerCase()
+        (family: string) => normalizeText(family)
       );
 
       const productScents = (product.scents || []).map((scent: string) =>
-        scent.toLowerCase()
+        normalizeText(scent)
       );
 
       if (!filters.some((family: string) => productScents.includes(family))) {
@@ -257,12 +651,10 @@ const filteredProductList = computed(() => {
 
     if (activeFilters.value.concentrations?.length > 0) {
       const filters = activeFilters.value.concentrations.map(
-        (concentration: string) => concentration.toLowerCase()
+        (concentration: string) => normalizeText(concentration)
       );
 
-      const productConcentration = String(
-        product.concentration || ""
-      ).toLowerCase();
+      const productConcentration = normalizeText(product.concentration || "");
 
       if (!filters.includes(productConcentration)) {
         return false;
@@ -271,20 +663,20 @@ const filteredProductList = computed(() => {
 
     if (activeFilters.value.bottleTypes?.length > 0) {
       const filters = activeFilters.value.bottleTypes.map((bottle: string) =>
-        bottle.toLowerCase()
+        normalizeText(bottle)
       );
 
-      const productBottle = String(product.bottleType || "").toLowerCase();
+      const productBottle = normalizeText(product.bottleType);
 
       let hasMatch = filters.includes(productBottle);
 
       if (!hasMatch && Array.isArray(product.variants)) {
         const variantBottles = product.variants.map((variant: any) =>
-          String(
+          normalizeText(
             typeof variant.bottleType === "object"
               ? variant.bottleType?.name
               : variant.bottleType || ""
-          ).toLowerCase()
+          )
         );
 
         hasMatch = filters.some((filter: string) =>
@@ -303,14 +695,17 @@ const filteredProductList = computed(() => {
       }
 
       const filters = activeFilters.value.capacities.map((capacity: string) =>
-        capacity.toLowerCase().replace("ml", "").trim()
+        normalizeCapacityKey(capacity)
       );
 
       const productCapacities = product.variants.map((variant: any) =>
-        String(variant.capacity || "")
-          .toLowerCase()
-          .replace("ml", "")
-          .trim()
+        normalizeCapacityKey(
+          variant.capacityKey ||
+            variant.capacity ||
+            variant.capacityName ||
+            variant.capacityValue ||
+            ""
+        )
       );
 
       if (
@@ -353,6 +748,21 @@ watch(
   },
   {
     immediate: true,
+  }
+);
+
+watch(
+  () => [
+    route.query.brandId,
+    route.query.gender,
+    route.query.niche,
+    route.query.bottleType,
+    route.query.capacity,
+    route.query.flashSale,
+  ],
+  () => {
+    currentPage.value = 1;
+    fetchProducts();
   }
 );
 </script>
