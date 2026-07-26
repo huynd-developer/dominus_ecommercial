@@ -27,7 +27,7 @@ public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
     private final ProductVariantRepository productVariantRepository;
     private final ProductImageRepository productImageRepository;
-
+    private final ReviewRepository reviewRepository;
     private final BrandRepository brandRepository;
     private final CategoryRepository categoryRepository;
     private final ConcentrationRepository concentrationRepository;
@@ -627,6 +627,27 @@ public class ProductServiceImpl implements ProductService {
                         .toList();
 
         response.setVariants(variantDTOs);
+
+        // Điểm trung bình + số lượt đánh giá
+        Double avgRating =
+                reviewRepository.findAverageRatingByProductId(
+                        product.getId()
+                );
+
+        Long reviewCount =
+                reviewRepository.countReviewsByProductId(
+                        product.getId()
+                );
+
+        response.setRating(
+                avgRating != null
+                        ? Math.round(avgRating * 10) / 10.0
+                        : 0.0
+        );
+
+        response.setReviewCount(
+                reviewCount != null ? reviewCount : 0L
+        );
 
         return response;
     }

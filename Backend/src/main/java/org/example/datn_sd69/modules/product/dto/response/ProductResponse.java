@@ -30,6 +30,9 @@ public class ProductResponse {
 
     private Integer status;
 
+    private Double rating;
+    private Long reviewCount;
+
     private String primaryImageUrl;
 
     private List<ProductImageResponse> images;
