@@ -62,8 +62,11 @@
           </h3>
 
           <div class="card-rating">
-            <span class="stars">★★★★★</span>
-            <span class="score">{{ item?.rating || "5.0" }}</span>
+            <span class="stars">{{ getStarsDisplay(item) }}</span>
+
+            <span class="score">
+              {{ getRatingScore(item) }} | {{ getReviewCount(item) }} đánh giá
+            </span>
           </div>
 
           <div class="card-price-box">
@@ -164,6 +167,36 @@ const getBrandName = (item: any) => {
 
   return item?.brandName || item?.brand || "Premium";
 };
+
+/* ===== Hiển thị sao/đánh giá =====
+   Sao được tính động theo rating thay vì hardcode "★★★★★".
+   Khi sản phẩm chưa có đánh giá nào (hoặc API danh sách không trả về
+   rating), mặc định hiển thị 5 sao theo yêu cầu nghiệp vụ. */
+const DEFAULT_RATING = 5;
+
+const getRatingValue = (item: any) => {
+  const raw = Number(
+    item?.rating ?? item?.avgRating ?? item?.averageRating ?? 0
+  );
+
+  return raw > 0 ? raw : DEFAULT_RATING;
+};
+
+const getReviewCount = (item: any) => {
+  return Number(item?.reviewCount ?? item?.reviews ?? item?.totalReviews ?? 0);
+};
+
+const getRatingScore = (item: any) => {
+  return getRatingValue(item).toFixed(1);
+};
+
+const getStarsDisplay = (item: any) => {
+  const rounded = Math.round(getRatingValue(item));
+  const filled = Math.max(0, Math.min(5, rounded));
+
+  return "★".repeat(filled) + "☆".repeat(5 - filled);
+};
+/* ===== Hết phần sao/đánh giá ===== */
 
 const getPlaceholderImage = () => {
   return (

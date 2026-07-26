@@ -23,13 +23,18 @@
         </div>
 
         <div class="col-12 col-lg-6 order-3 order-lg-2 mt-3 mt-lg-0">
-          <div class="search-wrapper position-relative mx-auto">
+          <div
+            class="search-wrapper position-relative mx-auto"
+            ref="searchWrapperRef"
+          >
             <input
               v-model="keyword"
               type="text"
               class="form-control rounded-pill search-input"
               placeholder="Tìm kiếm nước hoa..."
               @keyup.enter="handleSearch"
+              @focus="handleSearchFocus"
+              @keydown.esc="closeSuggest"
             />
 
             <button
@@ -40,6 +45,60 @@
             >
               <i class="bi bi-search"></i>
             </button>
+
+            <!-- Dropdown gợi ý sản phẩm khi gõ -->
+            <Transition name="suggest-fade">
+              <div v-if="showSuggest" class="search-suggest">
+                <div v-if="suggestLoading" class="suggest-state">
+                  <span class="spinner-border spinner-border-sm me-2"></span>
+                  Đang tìm...
+                </div>
+
+                <div v-else-if="suggestList.length === 0" class="suggest-state">
+                  Không tìm thấy sản phẩm phù hợp.
+                </div>
+
+                <template v-else>
+                  <a
+                    v-for="item in suggestList"
+                    :key="item.id"
+                    href="#"
+                    class="suggest-item"
+                    @click.prevent="goToSuggest(item)"
+                  >
+                    <div class="suggest-img">
+                      <img
+                        v-if="item.image"
+                        :src="item.image"
+                        :alt="item.name"
+                        @error="handleSuggestImageError"
+                      />
+                      <i v-else class="bi bi-image"></i>
+                    </div>
+
+                    <div class="suggest-info">
+                      <p class="suggest-brand">{{ item.brand }}</p>
+                      <p class="suggest-name text-truncate">{{ item.name }}</p>
+                    </div>
+
+                    <div class="suggest-price">
+                      <span v-if="item.priceFrom" class="suggest-price-prefix">
+                        từ
+                      </span>
+                      {{ formatSuggestPrice(item.price) }}
+                    </div>
+                  </a>
+
+                  <button
+                    type="button"
+                    class="suggest-all"
+                    @click="handleSearch"
+                  >
+                    Xem tất cả kết quả <i class="bi bi-arrow-right ms-1"></i>
+                  </button>
+                </template>
+              </div>
+            </Transition>
           </div>
         </div>
 
@@ -246,6 +305,298 @@ const { cartCount } = storeToRefs(cartStore);
 const logoLoadFailed = ref(false);
 const keyword = ref("");
 
+/* ===================== GỢI Ý TÌM KIẾM (THÊM MỚI) ===================== */
+
+const SEARCH_BACKEND_URL = "http://localhost:8080";
+const SUGGEST_DEBOUNCE_MS = 350;
+const SUGGEST_SIZE = 6; // số sản phẩm hiển thị trong dropdown
+const SUGGEST_FETCH_SIZE = 50; // số bản ghi tải về để lọc lại ở client
+
+interface SuggestItem {
+  id: number;
+  name: string;
+  brand: string;
+  image: string;
+  price: number;
+  priceFrom: boolean;
+}
+
+const suggestList = ref<SuggestItem[]>([]);
+const suggestLoading = ref(false);
+const showSuggest = ref(false);
+const searchWrapperRef = ref<HTMLElement | null>(null);
+
+let suggestTimer: ReturnType<typeof window.setTimeout> | undefined;
+let suggestSeq = 0;
+
+const formatSuggestPrice = (value: number) => {
+  return new Intl.NumberFormat("vi-VN").format(Number(value || 0)) + " đ";
+};
+
+const normalizeSuggestImage = (url: unknown) => {
+  const rawUrl = String(url || "").trim();
+
+  if (!rawUrl) {
+    return "";
+  }
+
+  if (
+    rawUrl.startsWith("http://") ||
+    rawUrl.startsWith("https://") ||
+    rawUrl.startsWith("data:image") ||
+    rawUrl.startsWith("blob:")
+  ) {
+    return rawUrl;
+  }
+
+  if (rawUrl.startsWith("/")) {
+    return `${SEARCH_BACKEND_URL}${rawUrl}`;
+  }
+
+  return `${SEARCH_BACKEND_URL}/${rawUrl}`;
+};
+
+const resolveSuggestImage = (raw: any): string => {
+  const directImage =
+    raw?.mainImage ??
+    raw?.mainImageUrl ??
+    raw?.MainImageUrl ??
+    raw?.thumbnailUrl ??
+    raw?.ThumbnailUrl ??
+    raw?.imageUrl ??
+    raw?.ImageUrl ??
+    raw?.image ??
+    raw?.Image;
+
+  if (directImage) {
+    return normalizeSuggestImage(directImage);
+  }
+
+  const imageList =
+    raw?.images ||
+    raw?.Images ||
+    raw?.productImages ||
+    raw?.ProductImages ||
+    raw?.productImageList ||
+    raw?.ProductImageList ||
+    [];
+
+  if (Array.isArray(imageList) && imageList.length > 0) {
+    const firstImage = imageList[0];
+
+    const url =
+      typeof firstImage === "string"
+        ? firstImage
+        : firstImage?.imageUrl ??
+          firstImage?.ImageUrl ??
+          firstImage?.url ??
+          firstImage?.path;
+
+    if (url) {
+      return normalizeSuggestImage(url);
+    }
+  }
+
+  const variants =
+    raw?.variants || raw?.productVariants || raw?.productVariantList || [];
+
+  if (Array.isArray(variants) && variants.length > 0) {
+    const variantImage =
+      variants[0]?.mainImage ??
+      variants[0]?.imageUrl ??
+      variants[0]?.ImageUrl ??
+      variants[0]?.image;
+
+    if (variantImage) {
+      return normalizeSuggestImage(variantImage);
+    }
+  }
+
+  return "";
+};
+
+const resolveSuggestRows = (data: any): any[] => {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (Array.isArray(data?.content)) {
+    return data.content;
+  }
+
+  if (Array.isArray(data?.data?.content)) {
+    return data.data.content;
+  }
+
+  if (Array.isArray(data?.data)) {
+    return data.data;
+  }
+
+  return [];
+};
+
+const mapSuggestItem = (p: any): SuggestItem => {
+  const rawVariants =
+    p?.variants || p?.productVariants || p?.productVariantList || [];
+
+  const variantList = Array.isArray(rawVariants) ? rawVariants : [];
+
+  // Giá của từng dung tích (10ml / 50ml / 100ml ...)
+  const variantPrices = variantList
+    .map((v: any) => Number(v?.salePrice ?? v?.price ?? 0))
+    .filter((n: number) => n > 0);
+
+  const discountPercent = Number(p.discountPercent ?? p.discount ?? 0);
+
+  let price = 0;
+  let priceFrom = false;
+
+  if (variantPrices.length > 0) {
+    // Trang chi tiết mặc định chọn dung tích nhỏ nhất => lấy giá thấp nhất
+    price = Math.min(...variantPrices);
+
+    // Nhiều mức giá khác nhau => hiển thị dạng "từ ..."
+    priceFrom = Math.max(...variantPrices) > price;
+  } else {
+    const basePrice =
+      Number(p.minPrice ?? 0) ||
+      Number(p.salePrice ?? 0) ||
+      Number(p.price ?? 0) ||
+      Number(p.originalPrice ?? 0) ||
+      0;
+
+    price =
+      discountPercent > 0 && Number(p.salePrice ?? 0) <= 0
+        ? basePrice - (basePrice * discountPercent) / 100
+        : basePrice;
+  }
+
+  return {
+    id: Number(p.productId ?? p.id ?? 0),
+    name: p.name || p.productName || "Sản phẩm",
+    brand: p?.brand?.name || p?.brandName || p?.brand || "Premium",
+    image: resolveSuggestImage(p),
+    price,
+    priceFrom,
+  };
+};
+
+const matchSuggestKeyword = (p: any, lowerText: string) => {
+  const name = String(p?.name || p?.productName || "").toLowerCase();
+
+  const brand = String(
+    p?.brand?.name || p?.brandName || p?.brand || ""
+  ).toLowerCase();
+
+  return name.includes(lowerText) || brand.includes(lowerText);
+};
+
+const fetchSuggest = async (searchText: string) => {
+  const currentSeq = ++suggestSeq;
+  suggestLoading.value = true;
+
+  try {
+    // Nếu backend dùng tên param khác (search / name / q) thì sửa đúng dòng này
+    const res = await api.get("/v1/products", {
+      params: {
+        keyword: searchText,
+        page: 0,
+        size: SUGGEST_FETCH_SIZE,
+      },
+    });
+
+    if (currentSeq !== suggestSeq) {
+      return; // kết quả cũ về trễ, bỏ qua
+    }
+
+    const rows = resolveSuggestRows(res.data);
+    const lowerText = searchText.toLowerCase();
+
+    // Lọc lại ở client phòng khi backend chưa lọc theo từ khoá
+    const matched = rows.filter((p: any) => matchSuggestKeyword(p, lowerText));
+
+    // Nếu backend đã lọc đúng thì "matched" vẫn giữ nguyên kết quả
+    const finalRows = matched.length > 0 ? matched : [];
+
+    suggestList.value = finalRows.slice(0, SUGGEST_SIZE).map(mapSuggestItem);
+  } catch (error) {
+    if (currentSeq !== suggestSeq) {
+      return;
+    }
+
+    console.error("Lỗi gợi ý tìm kiếm:", error);
+    suggestList.value = [];
+  } finally {
+    if (currentSeq === suggestSeq) {
+      suggestLoading.value = false;
+    }
+  }
+};
+
+const handleSearchFocus = () => {
+  if (keyword.value.trim()) {
+    showSuggest.value = true;
+  }
+};
+
+const closeSuggest = () => {
+  showSuggest.value = false;
+};
+
+const goToSuggest = (item: SuggestItem) => {
+  closeSuggest();
+
+  if (item.id > 0) {
+    router.push({
+      name: "SingleProduct",
+      params: {
+        id: item.id,
+      },
+    });
+  }
+};
+
+const handleSuggestImageError = (event: Event) => {
+  const target = event.target as HTMLImageElement | null;
+
+  if (target) {
+    target.style.display = "none";
+  }
+};
+
+const handleSuggestClickOutside = (event: MouseEvent) => {
+  if (
+    searchWrapperRef.value &&
+    !searchWrapperRef.value.contains(event.target as Node)
+  ) {
+    showSuggest.value = false;
+  }
+};
+
+watch(keyword, (value) => {
+  const trimmedKeyword = value.trim();
+
+  if (suggestTimer) {
+    window.clearTimeout(suggestTimer);
+  }
+
+  if (!trimmedKeyword) {
+    showSuggest.value = false;
+    suggestList.value = [];
+    suggestLoading.value = false;
+    suggestSeq += 1;
+    return;
+  }
+
+  showSuggest.value = true;
+
+  suggestTimer = window.setTimeout(() => {
+    fetchSuggest(trimmedKeyword);
+  }, SUGGEST_DEBOUNCE_MS);
+});
+
+/* =================== HẾT PHẦN GỢI Ý TÌM KIẾM =================== */
+
 const userRank = ref("Bronze");
 const userPoints = ref(0);
 
@@ -365,6 +716,8 @@ const handleProfileUpdated = (event: Event) => {
 };
 
 const handleSearch = () => {
+  showSuggest.value = false; // đóng dropdown gợi ý khi submit
+
   const trimmedKeyword = keyword.value.trim();
 
   if (!trimmedKeyword) {
@@ -419,6 +772,7 @@ const handleLogout = () => {
 onMounted(() => {
   window.addEventListener("customer-profile-updated", handleProfileUpdated);
   window.addEventListener("cart-updated", handleCartUpdated);
+  document.addEventListener("mousedown", handleSuggestClickOutside);
 
   fetchCustomerProfile();
   refreshCartCount();
@@ -427,6 +781,11 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("customer-profile-updated", handleProfileUpdated);
   window.removeEventListener("cart-updated", handleCartUpdated);
+  document.removeEventListener("mousedown", handleSuggestClickOutside);
+
+  if (suggestTimer) {
+    window.clearTimeout(suggestTimer);
+  }
 });
 
 watch(
@@ -542,6 +901,137 @@ watch(
 .search-button i {
   font-size: 18px;
 }
+
+/* ============ DROPDOWN GỢI Ý TÌM KIẾM (THÊM MỚI) ============ */
+
+.search-suggest {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  right: 0;
+  z-index: 3000;
+  padding: 8px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid rgba(189, 154, 95, 0.2);
+  box-shadow: 0 24px 60px rgba(5, 16, 36, 0.28);
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.suggest-state {
+  padding: 22px 14px;
+  text-align: center;
+  color: #777777;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.suggest-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 10px;
+  text-decoration: none;
+  transition: background 0.2s ease;
+}
+
+.suggest-item:hover {
+  background: #fffaf2;
+}
+
+.suggest-img {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid rgba(6, 19, 43, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.suggest-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.suggest-img i {
+  color: #cbd5e0;
+  font-size: 18px;
+}
+
+.suggest-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.suggest-brand {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #8c8c8c;
+}
+
+.suggest-name {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--aura-black);
+}
+
+.suggest-price {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--aura-black);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.suggest-price-prefix {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8c8c8c;
+  margin-right: 2px;
+}
+
+.suggest-all {
+  width: 100%;
+  margin-top: 4px;
+  padding: 12px;
+  border: none;
+  border-top: 1px solid rgba(189, 154, 95, 0.14);
+  background: transparent;
+  color: var(--aura-gold);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.suggest-all:hover {
+  color: var(--aura-gold-hover);
+}
+
+.suggest-fade-enter-active,
+.suggest-fade-leave-active {
+  transition: all 0.18s ease;
+}
+
+.suggest-fade-enter-from,
+.suggest-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* ============ HẾT PHẦN DROPDOWN GỢI Ý ============ */
 
 .header-action {
   color: rgba(255, 255, 255, 0.92);
