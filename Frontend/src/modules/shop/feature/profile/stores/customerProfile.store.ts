@@ -561,20 +561,20 @@ export const useCustomerProfileStore = defineStore("customerProfile", {
         return;
       }
 
-      const result = await Swal.fire({
-        title: `Hủy đơn hàng #${order.orderId}?`,
-        text: "Sau khi hủy, hệ thống sẽ hoàn lại tồn kho cho sản phẩm trong đơn.",
-        icon: "warning",
-        showCancelButton: true,
-        confirmButtonText: "Hủy đơn",
-        cancelButtonText: "Không",
-        confirmButtonColor: "#dc3545",
-        cancelButtonColor: "#6c757d",
-      });
+      // const result = await Swal.fire({
+      //   title: `Hủy đơn hàng #${order.orderId}?`,
+      //   text: "Sau khi hủy, hệ thống sẽ hoàn lại tồn kho cho sản phẩm trong đơn.",
+      //   icon: "warning",
+      //   showCancelButton: true,
+      //   confirmButtonText: "Hủy đơn",
+      //   cancelButtonText: "Không",
+      //   confirmButtonColor: "#dc3545",
+      //   cancelButtonColor: "#6c757d",
+      // });
 
-      if (!result.isConfirmed) {
-        return;
-      }
+      // if (!result.isConfirmed) {
+      //   return;
+      // }
 
       this.orderLoading = true;
       this.clearMessage();

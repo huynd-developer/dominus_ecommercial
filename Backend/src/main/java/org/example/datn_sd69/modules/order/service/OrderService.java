@@ -214,12 +214,16 @@ public class OrderService {
                 vnp_Params.put("vnp_TmnCode", vnp_TmnCode);
                 vnp_Params.put("vnp_Amount", String.valueOf(amount));
                 vnp_Params.put("vnp_CurrCode", "VND");
-                vnp_Params.put("vnp_TxnRef", String.valueOf(savedOrder.getId()));
+
+                // ĐÃ SỬA: Thêm timestamp vào TxnRef để VNPay không báo lỗi trùng mã giao dịch khi khách thanh toán lại
+                vnp_Params.put("vnp_TxnRef", savedOrder.getId() + "_" + System.currentTimeMillis());
+
                 vnp_Params.put("vnp_OrderInfo", "Thanh toan don hang " + savedOrder.getId());
                 vnp_Params.put("vnp_OrderType", "other");
                 vnp_Params.put("vnp_Locale", "vn");
                 vnp_Params.put("vnp_ReturnUrl", vnp_ReturnUrl);
 
+                // ... [GIỮ NGUYÊN PHẦN TẠO CHỮ KÝ VÀ TRẢ VỀ URL NHƯ CŨ] ...
                 jakarta.servlet.http.HttpServletRequest httpRequest = ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.currentRequestAttributes()).getRequest();
                 vnp_Params.put("vnp_IpAddr", org.example.datn_sd69.common.config.VNPayConfig.getIpAddress(httpRequest));
 
@@ -295,7 +299,11 @@ public class OrderService {
 
             if (signValue.equals(vnp_SecureHash)) {
                 String responseCode = params.get("vnp_ResponseCode");
-                Integer orderId = Integer.parseInt(params.get("vnp_TxnRef"));
+
+                // ĐÃ SỬA: Tách mã Order ID thực tế từ chuỗi TxnRef (VD: 15_169999999 -> 15)
+                String txnRef = params.get("vnp_TxnRef");
+                Integer orderId = Integer.parseInt(txnRef.split("_")[0]);
+
                 Order order = orderRepo.findById(orderId).orElse(null);
 
                 if (order != null) {
@@ -440,5 +448,67 @@ public class OrderService {
             orderRepo.saveAll(abandonedOrders);
             System.out.println("[HỆ THỐNG] Đã tự động hủy " + abandonedOrders.size() + " đơn hàng quá hạn thanh toán.");
         }
+    }
+
+    @Transactional
+    public Map<String, Object> generateVnPayUrl(Integer orderId) {
+        Order order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy đơn hàng"));
+
+        if (order.getStatus() != ORDER_STATUS_PENDING) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Đơn hàng không ở trạng thái chờ thanh toán");
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        try {
+            long amount = order.getFinalAmount().longValue() * 100;
+            Map<String, String> vnp_Params = new java.util.HashMap<>();
+            vnp_Params.put("vnp_Version", "2.1.0");
+            vnp_Params.put("vnp_Command", "pay");
+            vnp_Params.put("vnp_TmnCode", vnp_TmnCode);
+            vnp_Params.put("vnp_Amount", String.valueOf(amount));
+            vnp_Params.put("vnp_CurrCode", "VND");
+            vnp_Params.put("vnp_TxnRef", order.getId() + "_" + System.currentTimeMillis()); // Luôn tạo mã giao dịch mới
+            vnp_Params.put("vnp_OrderInfo", "Thanh toan don hang " + order.getId());
+            vnp_Params.put("vnp_OrderType", "other");
+            vnp_Params.put("vnp_Locale", "vn");
+            vnp_Params.put("vnp_ReturnUrl", vnp_ReturnUrl);
+
+            jakarta.servlet.http.HttpServletRequest httpRequest = ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.currentRequestAttributes()).getRequest();
+            vnp_Params.put("vnp_IpAddr", org.example.datn_sd69.common.config.VNPayConfig.getIpAddress(httpRequest));
+
+            java.util.Calendar cld = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Etc/GMT+7"));
+            java.text.SimpleDateFormat formatter = new java.text.SimpleDateFormat("yyyyMMddHHmmss");
+            vnp_Params.put("vnp_CreateDate", formatter.format(cld.getTime()));
+            cld.add(java.util.Calendar.MINUTE, 15);
+            vnp_Params.put("vnp_ExpireDate", formatter.format(cld.getTime()));
+
+            java.util.List<String> fieldNames = new java.util.ArrayList<>(vnp_Params.keySet());
+            java.util.Collections.sort(fieldNames);
+            StringBuilder hashData = new StringBuilder();
+            StringBuilder query = new StringBuilder();
+            java.util.Iterator<String> itr = fieldNames.iterator();
+            while (itr.hasNext()) {
+                String fieldName = itr.next();
+                String fieldValue = vnp_Params.get(fieldName);
+                if ((fieldValue != null) && (fieldValue.length() > 0)) {
+                    hashData.append(fieldName).append('=').append(java.net.URLEncoder.encode(fieldValue, java.nio.charset.StandardCharsets.US_ASCII));
+                    query.append(java.net.URLEncoder.encode(fieldName, java.nio.charset.StandardCharsets.US_ASCII)).append('=').append(java.net.URLEncoder.encode(fieldValue, java.nio.charset.StandardCharsets.US_ASCII));
+                    if (itr.hasNext()) {
+                        query.append('&');
+                        hashData.append('&');
+                    }
+                }
+            }
+            String queryUrl = query.toString();
+            String vnp_SecureHash = org.example.datn_sd69.common.config.VNPayConfig.hmacSHA512(secretKey, hashData.toString());
+            queryUrl += "&vnp_SecureHash=" + vnp_SecureHash;
+
+            response.put("paymentUrl", vnp_PayUrl + "?" + queryUrl);
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Lỗi khi tạo lại link thanh toán VNPay");
+        }
+        return response;
     }
 }

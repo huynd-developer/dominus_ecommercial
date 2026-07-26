@@ -391,6 +391,16 @@
                   </button>
 
                   <button
+                    v-if="order.status === 0 && order.paymentMethod === 'VNPAY'"
+                    class="btn btn-sm text-white"
+                    style="background-color: #10b981; border-color: #10b981;"
+                    :disabled="store.orderLoading"
+                    @click="repayVnpayOrder(order)"
+                  >
+                    <i class="bi bi-credit-card me-1"></i> Thanh toán VNPay ngay
+                  </button>
+
+                  <button
                     v-if="order.canCancel"
                     class="btn btn-outline-danger btn-sm"
                     :disabled="store.orderLoading"
@@ -722,20 +732,28 @@ const submitReview = async (payload: {
 const handleReorder = async (order: any) => {
   const result = await Swal.fire({
     title: "Mua lại đơn hàng?",
-    text: "Sản phẩm sẽ được thêm vào giỏ và chuyển đến trang thanh toán ngay.",
+    text: "Các sản phẩm trong đơn này sẽ được thêm vào giỏ hàng của bạn.",
     icon: "question",
     showCancelButton: true,
     confirmButtonColor: "#bd9a5f",
-    cancelButtonColor: "#6c757d",
-    confirmButtonText: "Mua lại ngay",
-    cancelButtonText: "Hủy",
+    cancelButtonColor: "#f8fafc",
+    confirmButtonText: "Thêm vào giỏ",
+    cancelButtonText: "Quay lại",
     reverseButtons: true,
+    // T ốp luôn bộ class giao diện xịn vào thông báo này cho đồng bộ với mấy nút kia
+    customClass: {
+      popup: 'swal-custom-popup',
+      title: 'swal-custom-title',
+      cancelButton: 'swal-custom-cancel',
+      confirmButton: 'swal-custom-confirm'
+    }
   });
 
   if (result.isConfirmed) {
     try {
       store.orderLoading = true;
 
+      // Gọi API thêm từng sản phẩm vào giỏ
       const addPromises = order.items.map((item: any) => {
         const variantId = item.productVariantId || item.variantId || item.productId;
         
@@ -747,9 +765,13 @@ const handleReorder = async (order: any) => {
 
       await Promise.all(addPromises);
 
-      toast("success", "Đang chuyển đến trang thanh toán...");
+      // QUAN TRỌNG: Kích hoạt event này để cục badge số lượng trên thanh Header tự động nhảy số
+      window.dispatchEvent(new Event("cart-updated"));
+
+      toast("success", "Đã thêm sản phẩm vào giỏ hàng!");
       
-      router.push("/checkout"); 
+      // ĐÃ SỬA: Chuyển hướng về trang Giỏ hàng thay vì trang Thanh toán
+      router.push("/cart"); 
       
     } catch (error) {
       showError(error, "Không thể thêm sản phẩm vào giỏ hàng lúc này. Vui lòng thử lại.");
@@ -1064,7 +1086,7 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
   if (isConfirmed) {
     try {
       store.orderLoading = true;
-      await store.cancelOrder(order);
+      await api.patch(`/customer/orders/${order.orderId}/cancel`);
       await fetchOrdersAndReviews();
       toast("success", "Đã hủy đơn hàng thành công!");
     } catch (error) {
@@ -1156,6 +1178,26 @@ const cancelReturnRequest = async (order: CustomerOrderResponse) => {
     } finally {
       store.orderLoading = false;
     }
+  }
+};
+
+// HÀM XỬ LÝ THANH TOÁN LẠI ĐƠN VNPAY
+const repayVnpayOrder = async (order: CustomerOrderResponse) => {
+  try {
+    store.orderLoading = true;
+    // Cần đảm bảo bạn đã khai báo route này trong Controller của Backend
+    const res = await api.get(`/v1/orders/${order.orderId}/vnpay-url`);
+    
+    if (res.data?.paymentUrl) {
+      toast("success", "Đang chuyển hướng đến VNPay...");
+      window.location.href = res.data.paymentUrl; // Đá sang VNPay
+    } else {
+      showError(null, "Không lấy được đường dẫn thanh toán từ hệ thống.");
+    }
+  } catch (error) {
+    showError(error, "Không thể tạo lại phiên thanh toán lúc này. Vui lòng thử lại sau.");
+  } finally {
+    store.orderLoading = false;
   }
 };
 </script>
