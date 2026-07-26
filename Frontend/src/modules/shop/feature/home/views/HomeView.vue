@@ -430,6 +430,21 @@ const resolveProductImage = (raw: any) => {
   return resolveProductImages(raw)[0] || "";
 };
 
+/* ===== Giá hiển thị (SỬA) =====
+   Trước đây ưu tiên đọc "p.price" (một giá đại diện do backend trả,
+   thường là giá dung tích lớn nhất) khiến giá ở trang chủ (vd 3.500.000 đ)
+   lệch với giá ở trang danh sách /products và ô tìm kiếm (vd 380.000 đ,
+   giá dung tích nhỏ nhất). Giờ ưu tiên giá THẤP NHẤT trong variants,
+   đồng bộ với logic ProductGrid.vue và SearchBar. */
+const resolveMinVariantPrice = (rawVariants: any[]): number => {
+  const variantPrices = rawVariants
+    .map((v: any) => toNumber(v?.salePrice ?? v?.price, 0))
+    .filter((n: number) => n > 0);
+
+  return variantPrices.length > 0 ? Math.min(...variantPrices) : 0;
+};
+/* ===== Hết phần sửa giá ===== */
+
 const mapNormalProduct = (p: any): ProductCardItem => {
   const rawVariants =
     p?.variants ||
@@ -437,15 +452,18 @@ const mapNormalProduct = (p: any): ProductCardItem => {
     p?.productVariantList ||
     [];
 
+  const variantList = Array.isArray(rawVariants) ? rawVariants : [];
+
   const firstVariant =
-    Array.isArray(rawVariants) && rawVariants.length > 0
-      ? rawVariants[0]
-      : null;
+    variantList.length > 0 ? variantList[0] : null;
+
+  const minVariantPrice = resolveMinVariantPrice(variantList);
 
   const basePrice = toNumber(
-    p.price ??
-      firstVariant?.price ??
-      p.minPrice ??
+    minVariantPrice ||
+      firstVariant?.price ||
+      p.minPrice ||
+      p.price ||
       p.originalPrice,
     0
   );
@@ -503,6 +521,7 @@ const mapNormalProduct = (p: any): ProductCardItem => {
     originalPrice: basePrice,
     discountPercent,
 
+    // Mặc định 5 sao khi API danh sách không trả về rating
     rating: toNumber(p.rating, 5),
     reviewCount: toNumber(p.reviewCount ?? p.reviews, 0),
 
@@ -565,6 +584,7 @@ const mapFlashSaleProduct = (item: FlashSaleProductResponse): ProductCardItem =>
     originalPrice,
     discountPercent: toNumber(item.discountPercent, 0),
 
+    // Mặc định 5 sao vì API Flash Sale không trả về rating
     rating: 5,
     reviewCount: 0,
 

@@ -52,9 +52,10 @@
       </h3>
 
       <div class="rating-row d-flex align-items-center gap-2 mb-2">
-        <span class="stars">★★★★★</span>
+        <span class="stars">{{ starsDisplay }}</span>
+
         <span class="review-count">
-          {{ product.rating }} | {{ product.reviewCount }} đánh giá
+          {{ ratingDisplay }} | {{ product.reviewCount || 0 }} đánh giá
         </span>
       </div>
 
@@ -341,6 +342,30 @@ const shortBrand = computed(() =>
     .slice(0, 8)
     .toUpperCase()
 );
+
+/* ===== Hiển thị sao/đánh giá =====
+   Sao được tính động theo product.rating thay vì hardcode "★★★★★".
+   Khi sản phẩm chưa có đánh giá nào (hoặc API danh sách không trả về
+   rating), mặc định hiển thị 5 sao theo yêu cầu nghiệp vụ. */
+const DEFAULT_RATING = 5;
+
+const ratingValue = computed(() => {
+  const raw = Number(props.product.rating || 0);
+
+  return raw > 0 ? raw : DEFAULT_RATING;
+});
+
+const ratingDisplay = computed(() => {
+  return ratingValue.value.toFixed(1);
+});
+
+const starsDisplay = computed(() => {
+  const rounded = Math.round(ratingValue.value);
+  const filled = Math.max(0, Math.min(5, rounded));
+
+  return "★".repeat(filled) + "☆".repeat(5 - filled);
+});
+/* ===== Hết phần sao/đánh giá ===== */
 
 const getBottleStyle = (color?: string): Record<string, string> => ({
   "--bottle-color": color || "#0a192f",
