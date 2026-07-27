@@ -546,48 +546,48 @@ export const useCustomerProfileStore = defineStore("customerProfile", {
       }
     },
 
-    async cancelOrder(order: CustomerOrderResponse) {
-      if (!order || !Number.isInteger(order.orderId) || order.orderId <= 0) {
-        this.setError("orderId không hợp lệ");
-        return;
-      }
+    // async cancelOrder(order: CustomerOrderResponse) {
+    //   if (!order || !Number.isInteger(order.orderId) || order.orderId <= 0) {
+    //     this.setError("orderId không hợp lệ");
+    //     return;
+    //   }
 
-      if (order.canCancel !== true) {
-        this.setError(
-          order.statusText
-            ? `Không thể hủy đơn hàng ở trạng thái: ${order.statusText}`
-            : "Chỉ được hủy đơn hàng khi đơn đang chờ xác nhận"
-        );
-        return;
-      }
+    //   if (order.canCancel !== true) {
+    //     this.setError(
+    //       order.statusText
+    //         ? `Không thể hủy đơn hàng ở trạng thái: ${order.statusText}`
+    //         : "Chỉ được hủy đơn hàng khi đơn đang chờ xác nhận"
+    //     );
+    //     return;
+    //   }
 
-      // const result = await Swal.fire({
-      //   title: `Hủy đơn hàng #${order.orderId}?`,
-      //   text: "Sau khi hủy, hệ thống sẽ hoàn lại tồn kho cho sản phẩm trong đơn.",
-      //   icon: "warning",
-      //   showCancelButton: true,
-      //   confirmButtonText: "Hủy đơn",
-      //   cancelButtonText: "Không",
-      //   confirmButtonColor: "#dc3545",
-      //   cancelButtonColor: "#6c757d",
-      // });
+    //   const result = await Swal.fire({
+    //     title: `Hủy đơn hàng #${order.orderId}?`,
+    //     text: "Sau khi hủy, hệ thống sẽ hoàn lại tồn kho cho sản phẩm trong đơn.",
+    //     icon: "warning",
+    //     showCancelButton: true,
+    //     confirmButtonText: "Hủy đơn",
+    //     cancelButtonText: "Không",
+    //     confirmButtonColor: "#dc3545",
+    //     cancelButtonColor: "#6c757d",
+    //   });
 
-      // if (!result.isConfirmed) {
-      //   return;
-      // }
+    //   if (!result.isConfirmed) {
+    //     return;
+    //   }
 
-      this.orderLoading = true;
-      this.clearMessage();
+    //   this.orderLoading = true;
+    //   this.clearMessage();
 
-      try {
-        await customerProfileService.cancelOrder(order.orderId);
-        this.setSuccess("Hủy đơn hàng thành công");
-        await this.fetchOrders();
-      } catch (error: any) {
-        this.setError(getErrorMessage(error));
-      } finally {
-        this.orderLoading = false;
-      }
-    },
+    //   try {
+    //     await customerProfileService.cancelOrder(order.orderId);
+    //     this.setSuccess("Hủy đơn hàng thành công");
+    //     await this.fetchOrders();
+    //   } catch (error: any) {
+    //     this.setError(getErrorMessage(error));
+    //   } finally {
+    //     this.orderLoading = false;
+    //   }
+    // },
   },
 });

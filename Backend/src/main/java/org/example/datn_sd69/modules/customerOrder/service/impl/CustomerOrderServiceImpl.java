@@ -31,18 +31,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CustomerOrderServiceImpl implements CustomerOrderService {
 
-    /**
-     * Trạng thái đơn hàng:
-     *
-     * 0 = Chờ xác nhận
-     * 1 = Đã xác nhận / Đang chuẩn bị hàng
-     * 2 = Đang giao hàng
-     * 3 = Hoàn thành
-     * 4 = Đã hủy
-     * 5 = Giao hàng thất bại
-     * 6 = Yêu cầu hoàn hàng / đổi trả
-     * 7 = Hoàn hàng / đổi trả hoàn tất
-     */
     private static final int STATUS_PENDING = 0;
     private static final int STATUS_CONFIRMED = 1;
     private static final int STATUS_SHIPPING = 2;
@@ -119,7 +107,6 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         orderRepository.save(order);
     }
 
-    // --- ĐÃ THÊM: API cho khách yêu cầu hoàn hàng ---
     @Override
     @Transactional
     public void requestReturnOrder(Integer orderId, String reason) {
@@ -133,22 +120,14 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                         "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn."
                 ));
 
-        // Chỉ cho phép hoàn khi đơn đang ở trạng thái 3 (Hoàn thành)
         if (order.getStatus() != STATUS_COMPLETED) {
             throw badRequest("Chỉ có thể yêu cầu hoàn hàng đối với đơn hàng đã hoàn thành.");
         }
 
-        // Chuyển sang trạng thái 6 (Yêu cầu hoàn hàng)
         order.setStatus(STATUS_RETURN_REQUESTED);
-
-        // Ghi chú: Nếu Entity Order của m có trường lưu lý do (ví dụ: returnReason),
-        // m có thể uncomment dòng dưới đây và gán giá trị biến 'reason' vào.
-        // order.setReturnReason(reason);
-
         orderRepository.save(order);
     }
 
-    // --- ĐÃ THÊM: API cho khách HỦY yêu cầu hoàn hàng ---
     @Override
     @Transactional
     public void cancelReturnRequest(Integer orderId) {
@@ -162,14 +141,11 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                         "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn."
                 ));
 
-        // Kiểm tra xem đơn có đang ở trạng thái 6 (Yêu cầu hoàn trả) không
         if (order.getStatus() != STATUS_RETURN_REQUESTED) {
             throw badRequest("Đơn hàng không ở trạng thái yêu cầu hoàn hàng.");
         }
 
-        // Chuyển ngược lại về trạng thái 3 (Hoàn thành)
         order.setStatus(STATUS_COMPLETED);
-
         orderRepository.save(order);
     }
 

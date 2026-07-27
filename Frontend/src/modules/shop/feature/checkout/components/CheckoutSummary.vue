@@ -21,6 +21,7 @@
             :alt="item.productName || item.sku || 'Sản phẩm'"
             @error="handleImageError"
           />
+          
         </div>
 
         <div class="mini-info">
@@ -393,7 +394,35 @@ const getItemKey = (item: any) => {
 };
 
 const getItemImage = (item: any) => {
-  return item?.image || item?.imageUrl || item?.thumbnailUrl || FALLBACK_IMAGE;
+  if (!item) return FALLBACK_IMAGE;
+
+  // 1. Quét trực tiếp ở cấp ngoài cùng
+  let url = item.image || item.imageUrl || item.thumbnailUrl || item.mainImage;
+
+  // 2. Đào sâu vào trong productVariant (cấu trúc thường gặp của Giỏ hàng)
+  if (!url && item.productVariant) {
+    url = item.productVariant.imageUrl || item.productVariant.image || item.productVariant.mainImage;
+    
+    // Đào tiếp vào product chứa variant đó
+    if (!url && item.productVariant.product) {
+      url = item.productVariant.product.mainImage || item.productVariant.product.imageUrl;
+      
+      // Nếu ảnh nằm trong mảng productImages
+      if (!url && item.productVariant.product.productImages?.length > 0) {
+        url = item.productVariant.product.productImages[0].imageUrl;
+      }
+    }
+  }
+
+  // 3. Đào vào product (nếu API cấu trúc bọc qua product)
+  if (!url && item.product) {
+    url = item.product.mainImage || item.product.imageUrl;
+    if (!url && item.product.productImages?.length > 0) {
+      url = item.product.productImages[0].imageUrl;
+    }
+  }
+
+  return url ? url : FALLBACK_IMAGE;
 };
 
 const handleImageError = (event: Event) => {

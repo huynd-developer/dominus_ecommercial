@@ -49,10 +49,7 @@ public class OrderRequest {
     )
     private String voucherCode;
 
-    // ... các trường cũ (customerName, phone, address...)
-
-    // --- THÊM PHẦN THÔNG TIN VAT ---
-    private Boolean isVatRequired; // Khách có bật toggle yêu cầu VAT không
+    private Boolean isVatRequired;
     private String taxCode;
     private String vatEmail;
     private String companyName;

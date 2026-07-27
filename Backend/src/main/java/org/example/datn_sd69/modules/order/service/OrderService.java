@@ -7,6 +7,7 @@ import org.example.datn_sd69.entity.CartItem;
 import org.example.datn_sd69.entity.Customer;
 import org.example.datn_sd69.entity.Order;
 import org.example.datn_sd69.entity.OrderItem;
+import org.example.datn_sd69.entity.ProductImage;
 import org.example.datn_sd69.entity.ProductVariant;
 import org.example.datn_sd69.entity.Voucher;
 import org.example.datn_sd69.modules.order.dto.request.OrderRequest;
@@ -51,7 +52,8 @@ public class OrderService {
     private final CustomerRepository customerRepo;
     private final VoucherRepository voucherRepo;
 
-    // ----- CẤU HÌNH VNPAY -----
+    private final jakarta.persistence.EntityManager entityManager;
+
     @org.springframework.beans.factory.annotation.Value("${vnpay.tmnCode}")
     private String vnp_TmnCode;
 
@@ -63,7 +65,6 @@ public class OrderService {
 
     @org.springframework.beans.factory.annotation.Value("${vnpay.onlineReturnUrl}")
     private String vnp_ReturnUrl;
-    // --------------------------
 
     @Transactional
     public Map<String, Object> placeOrder(Integer customerId, OrderRequest request) {
@@ -132,18 +133,15 @@ public class OrderService {
         order.setCustomerName(normalizeText(request.getCustomerName(), "Tên người nhận"));
         order.setCustomerPhone(normalizeNoWhitespace(request.getCustomerPhone(), "Số điện thoại"));
 
-        // --- ĐOẠN CHỮA CHÁY GỘP THÔNG TIN VAT VÀO ĐỊA CHỈ GIAO HÀNG ---
         String finalShippingAddress = normalizeText(request.getShippingAddress(), "Địa chỉ giao hàng");
 
         if (Boolean.TRUE.equals(request.getIsVatRequired())) {
-            // Nối chuỗi thông tin VAT
             String vatInfo = String.format(" | [YÊU CẦU XUẤT VAT] MST: %s - Email: %s - Cty: %s - ĐC: %s",
                     request.getTaxCode().trim(),
                     request.getVatEmail().trim(),
                     request.getCompanyName().trim(),
                     request.getCompanyAddress().trim());
 
-            // Check an toàn tránh tràn 500 ký tự của DB
             if ((finalShippingAddress + vatInfo).length() > 500) {
                 finalShippingAddress = (finalShippingAddress + vatInfo).substring(0, 500);
             } else {
@@ -151,9 +149,7 @@ public class OrderService {
             }
         }
 
-        order.setShippingAddress(finalShippingAddress); // Lưu cục text đã gộp vào DB
-        // -------------------------------------------------------------
-
+        order.setShippingAddress(finalShippingAddress);
         order.setTotalAmount(totalAmount);
         order.setDiscountAmount(discountAmount);
         order.setFinalAmount(finalAmount);
@@ -162,7 +158,6 @@ public class OrderService {
         order.setCreatedAt(LocalDateTime.now());
         order.setLoyaltyPointsApplied(false);
         order.setLoyaltyPointsEarned(0);
-
 
         if (appliedVoucher != null) {
             order.setVoucher(appliedVoucher);
@@ -180,6 +175,23 @@ public class OrderService {
             variant.setStockQuantity(variant.getStockQuantity() - item.getQuantity());
             variantRepo.save(variant);
 
+            String itemImage = item.getThumbnailUrl();
+            if ((itemImage == null || itemImage.trim().isEmpty()) && variant.getProduct() != null) {
+                try {
+                    itemImage = entityManager.createQuery(
+                                    "SELECT img.imageUrl FROM ProductImage img WHERE img.product.id = :productId",
+                                    String.class
+                            )
+                            .setParameter("productId", variant.getProduct().getId())
+                            .setMaxResults(1)
+                            .getResultStream()
+                            .findFirst()
+                            .orElse(null);
+                } catch (Exception e) {
+                    System.out.println("=== LỖI QUERY ẢNH ĐẶT HÀNG: " + e.getMessage());
+                }
+            }
+
             OrderItem orderItem = new OrderItem();
             orderItem.setOrder(savedOrder);
             orderItem.setProductVariant(variant);
@@ -188,7 +200,8 @@ public class OrderService {
             orderItem.setDiscountAmount(BigDecimal.ZERO);
             orderItem.setFinalPrice(variant.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
             orderItem.setNote(normalizeOptionalNote(request.getNote()));
-            orderItem.setImage(item.getThumbnailUrl());
+            orderItem.setImage(itemImage);
+
             orderItemRepo.save(orderItem);
         }
 
@@ -204,7 +217,6 @@ public class OrderService {
         response.put("discountAmount", savedOrder.getDiscountAmount());
         response.put("finalAmount", savedOrder.getFinalAmount());
 
-        // PHÂN LUỒNG TRẢ VỀ CHO TỪNG PHƯƠNG THỨC
         if (PAYMENT_METHOD_VNPAY.equals(savedOrder.getPaymentMethod())) {
             try {
                 long amount = savedOrder.getFinalAmount().longValue() * 100;
@@ -214,18 +226,23 @@ public class OrderService {
                 vnp_Params.put("vnp_TmnCode", vnp_TmnCode);
                 vnp_Params.put("vnp_Amount", String.valueOf(amount));
                 vnp_Params.put("vnp_CurrCode", "VND");
-
-                // ĐÃ SỬA: Thêm timestamp vào TxnRef để VNPay không báo lỗi trùng mã giao dịch khi khách thanh toán lại
                 vnp_Params.put("vnp_TxnRef", savedOrder.getId() + "_" + System.currentTimeMillis());
-
                 vnp_Params.put("vnp_OrderInfo", "Thanh toan don hang " + savedOrder.getId());
                 vnp_Params.put("vnp_OrderType", "other");
                 vnp_Params.put("vnp_Locale", "vn");
                 vnp_Params.put("vnp_ReturnUrl", vnp_ReturnUrl);
 
-                // ... [GIỮ NGUYÊN PHẦN TẠO CHỮ KÝ VÀ TRẢ VỀ URL NHƯ CŨ] ...
                 jakarta.servlet.http.HttpServletRequest httpRequest = ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.currentRequestAttributes()).getRequest();
-                vnp_Params.put("vnp_IpAddr", org.example.datn_sd69.common.config.VNPayConfig.getIpAddress(httpRequest));
+
+                // Lấy IP trực tiếp siêu tốc, bypass DNS Timeout
+                String ipAddr = httpRequest.getHeader("X-FORWARDED-FOR");
+                if (ipAddr == null || ipAddr.isEmpty()) {
+                    ipAddr = httpRequest.getRemoteAddr();
+                }
+                if (ipAddr != null && ipAddr.equals("0:0:0:0:0:0:0:1")) {
+                    ipAddr = "127.0.0.1";
+                }
+                vnp_Params.put("vnp_IpAddr", ipAddr);
 
                 java.util.Calendar cld = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Etc/GMT+7"));
                 java.text.SimpleDateFormat formatter = new java.text.SimpleDateFormat("yyyyMMddHHmmss");
@@ -269,9 +286,6 @@ public class OrderService {
         return response;
     }
 
-    /**
-     * HÀM NHẬN CALLBACK TỪ VNPAY ĐÃ UPDATE XỬ LÝ HỦY ĐƠN HÀNG
-     */
     @Transactional
     public Map<String, Object> verifyVnPayReturn(Map<String, String> params) {
         Map<String, Object> response = new LinkedHashMap<>();
@@ -300,7 +314,6 @@ public class OrderService {
             if (signValue.equals(vnp_SecureHash)) {
                 String responseCode = params.get("vnp_ResponseCode");
 
-                // ĐÃ SỬA: Tách mã Order ID thực tế từ chuỗi TxnRef (VD: 15_169999999 -> 15)
                 String txnRef = params.get("vnp_TxnRef");
                 Integer orderId = Integer.parseInt(txnRef.split("_")[0]);
 
@@ -308,22 +321,17 @@ public class OrderService {
 
                 if (order != null) {
                     if ("00".equals(responseCode)) {
-                        // Khách thanh toán thành công
-                        order.setStatus(ORDER_STATUS_CONFIRMED); // 1: Đã xác nhận
+                        order.setStatus(ORDER_STATUS_CONFIRMED);
                         orderRepo.save(order);
                         response.put("success", true);
                         response.put("message", "Thanh toán VNPay thành công");
-
                     } else if ("24".equals(responseCode)) {
-                        // Khách bấm nút Hủy trên giao diện VNPay
-                        order.setStatus(ORDER_STATUS_CANCELLED); // 4: Đã hủy
+                        order.setStatus(ORDER_STATUS_CANCELLED);
                         orderRepo.save(order);
                         response.put("success", false);
                         response.put("message", "Khách hàng đã hủy giao dịch");
-
                     } else {
-                        // Khách thanh toán lỗi (thẻ hết tiền, ngân hàng lỗi...)
-                        order.setStatus(ORDER_STATUS_CANCELLED); // 4: Đã hủy
+                        order.setStatus(ORDER_STATUS_CANCELLED);
                         orderRepo.save(order);
                         response.put("success", false);
                         response.put("message", "Giao dịch không thành công (Mã lỗi: " + responseCode + ")");
@@ -352,9 +360,7 @@ public class OrderService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dữ liệu đặt hàng không được để trống");
         }
 
-        // --- BẮT LỖI PHẦN HÓA ĐƠN VAT ---
         if (Boolean.TRUE.equals(request.getIsVatRequired())) {
-            // Check Mã số thuế (Thường từ 10-14 số)
             if (request.getTaxCode() == null || request.getTaxCode().trim().isEmpty()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã số thuế không được để trống khi yêu cầu xuất VAT");
             }
@@ -362,7 +368,6 @@ public class OrderService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã số thuế không hợp lệ");
             }
 
-            // Check Email nhận hóa đơn
             if (request.getVatEmail() == null || request.getVatEmail().trim().isEmpty()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email nhận hóa đơn không được để trống");
             }
@@ -370,12 +375,10 @@ public class OrderService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Định dạng email nhận hóa đơn không đúng");
             }
 
-            // Check Tên công ty
             if (request.getCompanyName() == null || request.getCompanyName().trim().isEmpty()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tên công ty không được để trống");
             }
 
-            // Check Địa chỉ công ty
             if (request.getCompanyAddress() == null || request.getCompanyAddress().trim().isEmpty()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Địa chỉ công ty không được để trống");
             }
@@ -414,17 +417,10 @@ public class OrderService {
         return note == null ? null : note.trim();
     }
 
-    /**
-     * HÀM CHẠY NGẦM: TỰ ĐỘNG HỦY ĐƠN HÀNG "TREO" (Khách ấn Back hoặc tắt trình duyệt)
-     * Chạy mỗi 15 phút (900000 milliseconds)
-     */
     @org.springframework.scheduling.annotation.Scheduled(fixedRate = 900000)
     @Transactional
     public void autoCancelAbandonedOrders() {
-        // Lấy thời điểm 15 phút trước
         LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(15);
-
-        // Tìm tất cả đơn hàng đang PENDING (0) và tạo trước thời điểm cutoffTime
         List<Order> abandonedOrders = orderRepo.findAll().stream()
                 .filter(o -> o.getStatus() == ORDER_STATUS_PENDING
                         && o.getCreatedAt() != null
@@ -433,17 +429,7 @@ public class OrderService {
 
         if (!abandonedOrders.isEmpty()) {
             for (Order order : abandonedOrders) {
-                order.setStatus(ORDER_STATUS_CANCELLED); // Đổi thành trạng thái Hủy
-
-                // MỞ RỘNG (Tuỳ chọn): Nếu m muốn hoàn lại số lượng tồn kho khi đơn bị hủy
-                /*
-                List<OrderItem> items = orderItemRepo.findByOrder(order);
-                for (OrderItem item : items) {
-                    ProductVariant variant = item.getProductVariant();
-                    variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
-                    variantRepo.save(variant);
-                }
-                */
+                order.setStatus(ORDER_STATUS_CANCELLED);
             }
             orderRepo.saveAll(abandonedOrders);
             System.out.println("[HỆ THỐNG] Đã tự động hủy " + abandonedOrders.size() + " đơn hàng quá hạn thanh toán.");
@@ -468,14 +454,23 @@ public class OrderService {
             vnp_Params.put("vnp_TmnCode", vnp_TmnCode);
             vnp_Params.put("vnp_Amount", String.valueOf(amount));
             vnp_Params.put("vnp_CurrCode", "VND");
-            vnp_Params.put("vnp_TxnRef", order.getId() + "_" + System.currentTimeMillis()); // Luôn tạo mã giao dịch mới
+            vnp_Params.put("vnp_TxnRef", order.getId() + "_" + System.currentTimeMillis());
             vnp_Params.put("vnp_OrderInfo", "Thanh toan don hang " + order.getId());
             vnp_Params.put("vnp_OrderType", "other");
             vnp_Params.put("vnp_Locale", "vn");
             vnp_Params.put("vnp_ReturnUrl", vnp_ReturnUrl);
 
             jakarta.servlet.http.HttpServletRequest httpRequest = ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.currentRequestAttributes()).getRequest();
-            vnp_Params.put("vnp_IpAddr", org.example.datn_sd69.common.config.VNPayConfig.getIpAddress(httpRequest));
+
+            // Lấy IP trực tiếp siêu tốc, bypass DNS Timeout
+            String ipAddr = httpRequest.getHeader("X-FORWARDED-FOR");
+            if (ipAddr == null || ipAddr.isEmpty()) {
+                ipAddr = httpRequest.getRemoteAddr();
+            }
+            if (ipAddr != null && ipAddr.equals("0:0:0:0:0:0:0:1")) {
+                ipAddr = "127.0.0.1";
+            }
+            vnp_Params.put("vnp_IpAddr", ipAddr);
 
             java.util.Calendar cld = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Etc/GMT+7"));
             java.text.SimpleDateFormat formatter = new java.text.SimpleDateFormat("yyyyMMddHHmmss");

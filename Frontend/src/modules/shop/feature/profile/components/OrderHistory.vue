@@ -26,52 +26,52 @@
     <div class="card-body">
       <!-- THANH TAB TRẠNG THÁI -->
       <div v-if="!store.orderLoading" class="status-tabs mb-4">
-        <div 
-          class="tab-item" 
-          :class="{ active: currentTab === 'ALL' }" 
+        <div
+          class="tab-item"
+          :class="{ active: currentTab === 'ALL' }"
           @click="currentTab = 'ALL'"
         >
           Tất cả
         </div>
-        <div 
-          class="tab-item" 
-          :class="{ active: currentTab === 0 }" 
+        <div
+          class="tab-item"
+          :class="{ active: currentTab === 0 }"
           @click="currentTab = 0"
         >
           Chờ xác nhận
         </div>
-        <div 
-          class="tab-item" 
-          :class="{ active: currentTab === 1 }" 
+        <div
+          class="tab-item"
+          :class="{ active: currentTab === 1 }"
           @click="currentTab = 1"
         >
           Đã xác nhận
         </div>
-        <div 
-          class="tab-item" 
-          :class="{ active: currentTab === 2 }" 
+        <div
+          class="tab-item"
+          :class="{ active: currentTab === 2 }"
           @click="currentTab = 2"
         >
           Đang giao
         </div>
-        <div 
-          class="tab-item" 
-          :class="{ active: currentTab === 3 }" 
+        <div
+          class="tab-item"
+          :class="{ active: currentTab === 3 }"
           @click="currentTab = 3"
         >
           Hoàn thành
         </div>
-        <div 
-          class="tab-item" 
-          :class="{ active: currentTab === 4 }" 
+        <div
+          class="tab-item"
+          :class="{ active: currentTab === 4 }"
           @click="currentTab = 4"
         >
           Đã hủy
         </div>
 
-        <div 
-          class="tab-item" 
-          :class="{ active: currentTab === 6 }" 
+        <div
+          class="tab-item"
+          :class="{ active: currentTab === 6 }"
           @click="currentTab = 6"
         >
           Hoàn hàng
@@ -159,7 +159,9 @@
 
                   <div class="info-item">
                     <span>Thanh toán</span>
-                    <strong>{{ formatPaymentMethod(order.paymentMethod) }}</strong>
+                    <strong>{{
+                      formatPaymentMethod(order.paymentMethod)
+                    }}</strong>
                   </div>
 
                   <div class="info-item">
@@ -170,28 +172,45 @@
 
                 <!-- BẮT ĐẦU KHỐI THEO DÕI ĐƠN HÀNG (FAKE TRACKING) -->
                 <div class="tracking-container mt-2 mb-4">
-                  <h6 class="fw-bold mb-3"><i class="bi bi-truck me-2"></i>Theo dõi kiện hàng</h6>
+                  <h6 class="fw-bold mb-3">
+                    <i class="bi bi-truck me-2"></i>Theo dõi kiện hàng
+                  </h6>
                   <div class="timeline">
-                    <div 
-                      v-for="(track, index) in getTrackingHistory(order)" 
+                    <div
+                      v-for="(track, index) in getTrackingHistory(order)"
                       :key="index"
                       class="timeline-item"
-                      :class="{ 'is-active': track.active, 'is-cancel': track.isCancel }"
+                      :class="{
+                        'is-active': track.active,
+                        'is-cancel': track.isCancel,
+                      }"
                     >
                       <div class="timeline-time">
-                        <div class="t-date">{{ formatTrackingTime(track.time).date }}</div>
-                        <div class="t-time">{{ formatTrackingTime(track.time).time }}</div>
+                        <div class="t-date">
+                          {{ formatTrackingTime(track.time).date }}
+                        </div>
+                        <div class="t-time">
+                          {{ formatTrackingTime(track.time).time }}
+                        </div>
                       </div>
-                      
+
                       <div class="timeline-marker">
                         <div class="dot"></div>
-                        <div v-if="index !== getTrackingHistory(order).length - 1" class="line"></div>
+                        <div
+                          v-if="index !== getTrackingHistory(order).length - 1"
+                          class="line"
+                        ></div>
                       </div>
-                      
+
                       <div class="timeline-content">
                         <div class="t-title">{{ track.title }}</div>
                         <div class="t-desc">{{ track.desc }}</div>
-                        <img v-if="track.img" :src="track.img" class="tracking-img mt-2" alt="Bằng chứng giao hàng">
+                        <img
+                          v-if="track.img"
+                          :src="track.img"
+                          class="tracking-img mt-2"
+                          alt="Bằng chứng giao hàng"
+                        />
                       </div>
                     </div>
                   </div>
@@ -206,15 +225,11 @@
                   >
                     <div class="product-block">
                       <img
-                        v-if="item.image"
-                        :src="item.image"
+                        :src="getItemImage(item)"
                         class="item-img"
-                        alt="item"
+                        :alt="item.productName || 'Sản phẩm'"
+                        @error="handleImageError"
                       />
-                      <!-- ĐÃ SỬA: Việt hóa chữ "No" thành "Không có ảnh" -->
-                      <div v-else class="item-img placeholder-img" style="text-align: center; line-height: 1.2;">
-                        Không<br>có ảnh
-                      </div>
 
                       <div class="product-info">
                         <div class="product-name">
@@ -245,12 +260,16 @@
                         <div class="date-line">
                           <span>
                             NSX:
-                            <strong>{{ formatDateOnly(getManufacturingDate(item)) }}</strong>
+                            <strong>{{
+                              formatDateOnly(getManufacturingDate(item))
+                            }}</strong>
                           </span>
 
                           <span>
                             HSD:
-                            <strong>{{ formatDateOnly(getExpirationDate(item)) }}</strong>
+                            <strong>{{
+                              formatDateOnly(getExpirationDate(item))
+                            }}</strong>
                           </span>
                         </div>
 
@@ -274,16 +293,23 @@
 
                             <span class="ms-2 small text-muted">
                               {{
-                                getMyReviewByOrderItemId(item.orderItemId)?.rating
+                                getMyReviewByOrderItemId(item.orderItemId)
+                                  ?.rating
                               }}/5
                             </span>
                           </div>
 
                           <div
-                            v-if="getMyReviewByOrderItemId(item.orderItemId)?.comment"
+                            v-if="
+                              getMyReviewByOrderItemId(item.orderItemId)
+                                ?.comment
+                            "
                             class="small review-comment"
                           >
-                            "{{ getMyReviewByOrderItemId(item.orderItemId)?.comment }}"
+                            "{{
+                              getMyReviewByOrderItemId(item.orderItemId)
+                                ?.comment
+                            }}"
                           </div>
 
                           <div class="small text-muted mt-1">
@@ -291,7 +317,7 @@
                             {{
                               formatDate(
                                 getMyReviewByOrderItemId(item.orderItemId)
-                                  ?.createdAt
+                                  ?.createdAt,
                               )
                             }}
                           </div>
@@ -299,7 +325,8 @@
 
                         <div
                           v-else-if="
-                            getReviewState(order.orderId, item.orderItemId)?.message
+                            getReviewState(order.orderId, item.orderItemId)
+                              ?.message
                           "
                           class="small mt-1"
                           :class="
@@ -331,7 +358,9 @@
                           reviewLoadingByOrder[order.orderId] ||
                           !canReview(order.orderId, item.orderItemId)
                         "
-                        @click.stop="openReview(order.orderId, item.orderItemId)"
+                        @click.stop="
+                          openReview(order.orderId, item.orderItemId)
+                        "
                       >
                         <span
                           v-if="reviewLoadingByOrder[order.orderId]"
@@ -393,7 +422,7 @@
                   <button
                     v-if="order.status === 0 && order.paymentMethod === 'VNPAY'"
                     class="btn btn-sm text-white"
-                    style="background-color: #10b981; border-color: #10b981;"
+                    style="background-color: #10b981; border-color: #10b981"
                     :disabled="store.orderLoading"
                     @click="repayVnpayOrder(order)"
                   >
@@ -413,7 +442,7 @@
                   <button
                     v-if="order.status === 4 || order.status === 3"
                     class="btn btn-primary btn-sm px-3 text-white"
-                    style="background-color: #bd9a5f; border-color: #bd9a5f;"
+                    style="background-color: #bd9a5f; border-color: #bd9a5f"
                     @click="handleReorder(order)"
                   >
                     <i class="bi bi-cart-plus me-1"></i> Mua lại
@@ -441,13 +470,16 @@
                   </button>
 
                   <span
-                    v-if="!order.canCancel && order.status !== 3 && order.status !== 4"
+                    v-if="
+                      !order.canCancel &&
+                      order.status !== 3 &&
+                      order.status !== 4
+                    "
                     class="text-muted small align-self-center"
                   >
                     Đơn hàng không còn được hủy
                   </span>
                 </div>
-
               </div>
             </div>
           </Transition>
@@ -466,7 +498,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { useRouter } from "vue-router"; 
+import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import ReviewModal from "./ReviewModal.vue";
 import { customerProfileService } from "../services/customerProfile.service";
@@ -479,10 +511,10 @@ import type {
 } from "../types/profile.type";
 
 const store = useCustomerProfileStore();
-const router = useRouter(); 
+const router = useRouter();
 
 // Biến lưu trạng thái Tab hiện tại
-const currentTab = ref<number | 'ALL'>('ALL');
+const currentTab = ref<number | "ALL">("ALL");
 
 const reviewLoading = ref(false);
 const submittingReview = ref(false);
@@ -491,33 +523,48 @@ const selectedReviewItem = ref<ReviewableOrderItemResponse | null>(null);
 const myReviews = ref<ReviewResponse[]>([]);
 const openedOrderId = ref<number | null>(null);
 
-const reviewableMap = reactive<Record<number, ReviewableOrderItemResponse[]>>({});
+const reviewableMap = reactive<Record<number, ReviewableOrderItemResponse[]>>(
+  {},
+);
 const reviewLoadingByOrder = reactive<Record<number, boolean>>({});
 
 // ĐÃ THÊM: Hàm "phù phép" ID thành Mã đơn hàng (VD: DH-000015)
 const generateOrderCode = (id: number | string | null | undefined) => {
   if (!id) return "N/A";
-  return `DH-${String(id).padStart(6, '0')}`;
+  return `DH-${String(id).padStart(6, "0")}`;
 };
 
 // Lọc đơn hàng theo Tab
 const filteredOrders = computed(() => {
-  if (currentTab.value === 'ALL') {
+  if (currentTab.value === "ALL") {
     return store.orders;
   }
-  return store.orders.filter((order: CustomerOrderResponse) => order.status === currentTab.value);
+  return store.orders.filter(
+    (order: CustomerOrderResponse) => order.status === currentTab.value,
+  );
 });
 
 const completedOrders = computed(() => {
-  return store.orders.filter((order: CustomerOrderResponse) => order.status === 3);
+  return store.orders.filter(
+    (order: CustomerOrderResponse) => order.status === 3,
+  );
 });
 
 onMounted(() => {
   fetchOrdersAndReviews();
 });
 
-const toggleOrder = (orderId: number) => {
+const toggleOrder = async (orderId: number) => {
   openedOrderId.value = openedOrderId.value === orderId ? null : orderId;
+
+  if (openedOrderId.value === orderId) {
+    const order = store.orders.find(o => o.orderId === orderId);
+    
+    // Lazy Load: Chỉ gọi API tải trạng thái review khi khách click mở đơn hoàn thành
+    if (order && order.status === 3 && !reviewableMap[orderId]) {
+      await loadReviewableItems(orderId, false);
+    }
+  }
 };
 
 const isOrderOpen = (orderId: number) => {
@@ -578,7 +625,8 @@ const fetchOrdersAndReviews = async () => {
   try {
     await store.fetchOrders();
     await fetchMyReviews();
-    await loadCompletedReviewStates();
+    
+    // Đã gỡ await loadCompletedReviewStates() ở đây để chống treo trang
 
     if (
       openedOrderId.value &&
@@ -606,8 +654,8 @@ const loadCompletedReviewStates = async () => {
   try {
     await Promise.all(
       completedOrders.value.map((order: CustomerOrderResponse) =>
-        loadReviewableItems(order.orderId, false)
-      )
+        loadReviewableItems(order.orderId, false),
+      ),
     );
   } finally {
     reviewLoading.value = false;
@@ -637,7 +685,7 @@ const getMyReviewByOrderItemId = (orderItemId: number) => {
 
 const getReviewState = (orderId: number, orderItemId: number) => {
   return reviewableMap[orderId]?.find(
-    (item) => item.orderItemId === orderItemId
+    (item) => item.orderItemId === orderItemId,
   );
 };
 
@@ -698,17 +746,17 @@ const submitReview = async (payload: {
 
     // 1. Tạo FormData để chứa dữ liệu
     const formData = new FormData();
-    formData.append('orderItemId', String(orderItemId));
-    formData.append('rating', String(payload.rating));
-    
+    formData.append("orderItemId", String(orderItemId));
+    formData.append("rating", String(payload.rating));
+
     if (payload.comment) {
-      formData.append('comment', payload.comment);
+      formData.append("comment", payload.comment);
     }
 
     // 2. Nhét từng file ảnh/video vào FormData
     if (payload.files && payload.files.length > 0) {
       payload.files.forEach((file) => {
-        formData.append('mediaFiles', file); // 'mediaFiles' là tên key, nhớ dặn Backend hứng đúng tên này nhé
+        formData.append("mediaFiles", file); // 'mediaFiles' là tên key, nhớ dặn Backend hứng đúng tên này nhé
       });
     }
 
@@ -742,11 +790,11 @@ const handleReorder = async (order: any) => {
     reverseButtons: true,
     // T ốp luôn bộ class giao diện xịn vào thông báo này cho đồng bộ với mấy nút kia
     customClass: {
-      popup: 'swal-custom-popup',
-      title: 'swal-custom-title',
-      cancelButton: 'swal-custom-cancel',
-      confirmButton: 'swal-custom-confirm'
-    }
+      popup: "swal-custom-popup",
+      title: "swal-custom-title",
+      cancelButton: "swal-custom-cancel",
+      confirmButton: "swal-custom-confirm",
+    },
   });
 
   if (result.isConfirmed) {
@@ -755,11 +803,12 @@ const handleReorder = async (order: any) => {
 
       // Gọi API thêm từng sản phẩm vào giỏ
       const addPromises = order.items.map((item: any) => {
-        const variantId = item.productVariantId || item.variantId || item.productId;
-        
+        const variantId =
+          item.productVariantId || item.variantId || item.productId;
+
         return api.post("/v1/customer/cart/add", {
           productVariantId: Number(variantId),
-          quantity: Number(item.quantity || 1)
+          quantity: Number(item.quantity || 1),
         });
       });
 
@@ -769,12 +818,14 @@ const handleReorder = async (order: any) => {
       window.dispatchEvent(new Event("cart-updated"));
 
       toast("success", "Đã thêm sản phẩm vào giỏ hàng!");
-      
+
       // ĐÃ SỬA: Chuyển hướng về trang Giỏ hàng thay vì trang Thanh toán
-      router.push("/cart"); 
-      
+      router.push("/cart");
     } catch (error) {
-      showError(error, "Không thể thêm sản phẩm vào giỏ hàng lúc này. Vui lòng thử lại.");
+      showError(
+        error,
+        "Không thể thêm sản phẩm vào giỏ hàng lúc này. Vui lòng thử lại.",
+      );
     } finally {
       store.orderLoading = false;
     }
@@ -787,46 +838,48 @@ const getTrackingHistory = (order: any) => {
 
   history.push({
     time: new Date(baseDate),
-    title: 'Đơn hàng đã đặt',
-    desc: 'Đơn hàng đang chờ shop xác nhận.',
-    active: order.status === 0
+    title: "Đơn hàng đã đặt",
+    desc: "Đơn hàng đang chờ shop xác nhận.",
+    active: order.status === 0,
   });
 
   if (order.status >= 1 && order.status !== 4) {
     history.push({
-      time: new Date(baseDate + 2 * 60 * 60 * 1000), 
-      title: 'Đang chuẩn bị hàng',
-      desc: 'Người bán đang chuẩn bị kiện hàng của bạn.',
-      active: order.status === 1
+      time: new Date(baseDate + 2 * 60 * 60 * 1000),
+      title: "Đang chuẩn bị hàng",
+      desc: "Người bán đang chuẩn bị kiện hàng của bạn.",
+      active: order.status === 1,
     });
   }
 
   if (order.status >= 2 && order.status !== 4) {
     history.push({
-      time: new Date(baseDate + 14 * 60 * 60 * 1000), 
-      title: 'Đã giao cho ĐVVC',
-      desc: 'Kiện hàng đã rời trung tâm phân loại và đang trên đường giao.',
-      active: order.status === 2
+      time: new Date(baseDate + 14 * 60 * 60 * 1000),
+      title: "Đã giao cho ĐVVC",
+      desc: "Kiện hàng đã rời trung tâm phân loại và đang trên đường giao.",
+      active: order.status === 2,
     });
   }
 
   if (order.status === 3) {
     history.push({
-      time: order.completedAt ? new Date(order.completedAt) : new Date(baseDate + 48 * 60 * 60 * 1000),
-      title: 'Đã giao',
-      desc: `Kiện hàng của bạn đã được giao. Người nhận: ${order.customerName || 'Bạn'}`,
-      img: 'https://images.unsplash.com/photo-1615460549969-36fa19521a4f?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80', 
-      active: true
+      time: order.completedAt
+        ? new Date(order.completedAt)
+        : new Date(baseDate + 48 * 60 * 60 * 1000),
+      title: "Đã giao",
+      desc: `Kiện hàng của bạn đã được giao. Người nhận: ${order.customerName || "Bạn"}`,
+      img: "https://images.unsplash.com/photo-1615460549969-36fa19521a4f?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
+      active: true,
     });
   }
 
   if (order.status === 4) {
     history.push({
-      time: new Date(baseDate + 30 * 60 * 1000), 
-      title: 'Đã hủy',
-      desc: 'Đơn hàng đã được hủy bỏ.',
+      time: new Date(baseDate + 30 * 60 * 1000),
+      title: "Đã hủy",
+      desc: "Đơn hàng đã được hủy bỏ.",
       active: true,
-      isCancel: true
+      isCancel: true,
     });
   }
 
@@ -835,9 +888,12 @@ const getTrackingHistory = (order: any) => {
 
 const formatTrackingTime = (dateStr: string | number | Date) => {
   const date = new Date(dateStr);
-  const day = date.getDate().toString().padStart(2, '0');
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const time = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  const day = date.getDate().toString().padStart(2, "0");
+  const month = (date.getMonth() + 1).toString().padStart(2, "0");
+  const time = date.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   return { date: `${day} tháng ${month}`, time };
 };
 
@@ -1038,7 +1094,7 @@ const showError = (error: any, fallback: string) => {
 
 const toast = (
   icon: "success" | "error" | "warning" | "info",
-  title: string
+  title: string,
 ) => {
   Swal.fire({
     toast: true,
@@ -1063,7 +1119,7 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
       "Thay đổi thanh toán": "Tôi muốn đổi phương thức thanh toán",
       "Đổi ý": "Tôi không còn nhu cầu mua nữa",
       "Giao hàng lâu": "Thời gian chuẩn bị/giao hàng quá lâu",
-      "Khác": "Lý do khác",
+      Khác: "Lý do khác",
     },
     inputValidator: (value) => {
       if (!value) {
@@ -1076,11 +1132,11 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
     reverseButtons: true,
     // Bắt buộc giữ bộ class này để nó ăn CSS xịn
     customClass: {
-      popup: 'swal-custom-popup',
-      title: 'swal-custom-title',
-      cancelButton: 'swal-custom-cancel',
-      confirmButton: 'swal-custom-confirm'
-    }
+      popup: "swal-custom-popup",
+      title: "swal-custom-title",
+      cancelButton: "swal-custom-cancel",
+      confirmButton: "swal-custom-confirm",
+    },
   });
 
   if (isConfirmed) {
@@ -1109,7 +1165,7 @@ const requestReturn = async (order: CustomerOrderResponse) => {
       "Sai hàng": "Giao sai sản phẩm (sai mẫu mã, dung tích...)",
       "Hàng lỗi": "Sản phẩm bị lỗi (vòi xịt hỏng, mùi lạ...)",
       "Hàng giả": "Nghi ngờ sản phẩm không chính hãng",
-      "Khác": "Lý do khác"
+      Khác: "Lý do khác",
     },
     inputValidator: (value) => {
       if (!value) {
@@ -1117,25 +1173,27 @@ const requestReturn = async (order: CustomerOrderResponse) => {
       }
     },
     showCancelButton: true,
-    confirmButtonColor: "#dc2626", 
+    confirmButtonColor: "#dc2626",
     cancelButtonColor: "#f8fafc", // Chỉnh màu nút hủy cho xuyệt tông với Hủy đơn
     confirmButtonText: "Gửi yêu cầu",
     cancelButtonText: "Quay lại",
     reverseButtons: true,
     // Bê nguyên bộ class CSS của Hủy đơn sang để nó tự động đẹp
     customClass: {
-      popup: 'swal-custom-popup',
-      title: 'swal-custom-title',
-      cancelButton: 'swal-custom-cancel',
-      confirmButton: 'swal-custom-confirm'
-    }
+      popup: "swal-custom-popup",
+      title: "swal-custom-title",
+      cancelButton: "swal-custom-cancel",
+      confirmButton: "swal-custom-confirm",
+    },
   });
 
   if (isConfirmed) {
     try {
       store.orderLoading = true;
       // Vẫn gọi API như bình thường, nó sẽ tự động gửi cái 'reason' khách vừa chọn
-      await api.put(`/customer/orders/${order.orderId}/request-return`, { reason }); 
+      await api.put(`/customer/orders/${order.orderId}/request-return`, {
+        reason,
+      });
       await fetchOrdersAndReviews();
       toast("success", "Đã gửi yêu cầu hoàn hàng thành công!");
     } catch (error) {
@@ -1159,18 +1217,18 @@ const cancelReturnRequest = async (order: CustomerOrderResponse) => {
     cancelButtonText: "Quay lại",
     reverseButtons: true,
     customClass: {
-      popup: 'swal-custom-popup',
-      title: 'swal-custom-title',
-      cancelButton: 'swal-custom-cancel',
-      confirmButton: 'swal-custom-confirm'
-    }
+      popup: "swal-custom-popup",
+      title: "swal-custom-title",
+      cancelButton: "swal-custom-cancel",
+      confirmButton: "swal-custom-confirm",
+    },
   });
 
   if (result.isConfirmed) {
     try {
       store.orderLoading = true;
       // Gọi API sang Backend để đổi trạng thái từ 6 về lại 3
-      await api.put(`/customer/orders/${order.orderId}/cancel-return`); 
+      await api.put(`/customer/orders/${order.orderId}/cancel-return`);
       await fetchOrdersAndReviews();
       toast("success", "Đã hủy yêu cầu hoàn trả thành công!");
     } catch (error) {
@@ -1187,7 +1245,7 @@ const repayVnpayOrder = async (order: CustomerOrderResponse) => {
     store.orderLoading = true;
     // Cần đảm bảo bạn đã khai báo route này trong Controller của Backend
     const res = await api.get(`/v1/orders/${order.orderId}/vnpay-url`);
-    
+
     if (res.data?.paymentUrl) {
       toast("success", "Đang chuyển hướng đến VNPay...");
       window.location.href = res.data.paymentUrl; // Đá sang VNPay
@@ -1195,10 +1253,54 @@ const repayVnpayOrder = async (order: CustomerOrderResponse) => {
       showError(null, "Không lấy được đường dẫn thanh toán từ hệ thống.");
     }
   } catch (error) {
-    showError(error, "Không thể tạo lại phiên thanh toán lúc này. Vui lòng thử lại sau.");
+    showError(
+      error,
+      "Không thể tạo lại phiên thanh toán lúc này. Vui lòng thử lại sau.",
+    );
   } finally {
     store.orderLoading = false;
   }
+};
+
+const FALLBACK_IMAGE =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300">
+      <rect width="100%" height="100%" fill="#f3f4f6"/>
+      <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
+        fill="#9ca3af" font-family="Arial" font-size="20">
+        Không có ảnh
+      </text>
+    </svg>
+  `);
+
+const handleImageError = (event: Event) => {
+  const target = event.target as HTMLImageElement;
+  target.src = FALLBACK_IMAGE;
+};
+
+const getItemImage = (item: any) => {
+  if (!item) return FALLBACK_IMAGE;
+  let url = item.image || item.imageUrl || item.thumbnailUrl || item.mainImage;
+
+  if (!url && item.productVariant) {
+    url = item.productVariant.imageUrl || item.productVariant.image;
+    if (!url && item.productVariant.product) {
+      url =
+        item.productVariant.product.mainImage ||
+        item.productVariant.product.imageUrl;
+      if (!url && item.productVariant.product.productImages?.length > 0) {
+        url = item.productVariant.product.productImages[0].imageUrl;
+      }
+    }
+  }
+  if (!url && item.product) {
+    url = item.product.mainImage || item.product.imageUrl;
+    if (!url && item.product.productImages?.length > 0) {
+      url = item.product.productImages[0].imageUrl;
+    }
+  }
+  return url ? url : FALLBACK_IMAGE;
 };
 </script>
 
@@ -1635,61 +1737,61 @@ code {
   CSS FIX GIAO DIỆN SWEETALERT2 (KHÔNG SCOPED)
   Do SweetAlert2 render thẻ HTML ở ngoài cùng của body nên phải để un-scoped 
 */
-.swal-custom-popup {
-  border-radius: 16px !important;
-  padding: 2em 1.5em !important;
-  font-family: inherit !important;
-}
+  .swal-custom-popup {
+    border-radius: 16px !important;
+    padding: 2em 1.5em !important;
+    font-family: inherit !important;
+  }
 
-.swal-custom-title {
-  font-size: 22px !important;
-  color: #06132b !important; /* Xanh đen đồng bộ web */
-}
+  .swal-custom-title {
+    font-size: 22px !important;
+    color: #06132b !important; /* Xanh đen đồng bộ web */
+  }
 
-/* Ép các tùy chọn Radio xếp dọc, căn trái */
-.swal2-radio {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: flex-start !important;
-  gap: 12px !important;
-  text-align: left !important;
-  margin-top: 1.5em !important;
-  background: #f8fafc;
-  padding: 16px;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-}
+  /* Ép các tùy chọn Radio xếp dọc, căn trái */
+  .swal2-radio {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    text-align: left !important;
+    margin-top: 1.5em !important;
+    background: #f8fafc;
+    padding: 16px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+  }
 
-.swal2-radio label {
-  display: flex !important;
-  align-items: center !important;
-  font-size: 15px !important;
-  color: #475569 !important;
-  width: 100% !important;
-  cursor: pointer;
-  margin: 0 !important;
-}
+  .swal2-radio label {
+    display: flex !important;
+    align-items: center !important;
+    font-size: 15px !important;
+    color: #475569 !important;
+    width: 100% !important;
+    cursor: pointer;
+    margin: 0 !important;
+  }
 
-/* Đổi màu dấu chấm radio thành màu vàng đồng của web */
-.swal2-radio input[type="radio"] {
-  margin-right: 12px !important;
-  accent-color: #bd9a5f !important; 
-  width: 18px !important;
-  height: 18px !important;
-  cursor: pointer;
-}
+  /* Đổi màu dấu chấm radio thành màu vàng đồng của web */
+  .swal2-radio input[type="radio"] {
+    margin-right: 12px !important;
+    accent-color: #bd9a5f !important;
+    width: 18px !important;
+    height: 18px !important;
+    cursor: pointer;
+  }
 
-.swal-custom-cancel {
-  color: #64748b !important;
-  border: 1px solid #e2e8f0 !important;
-  font-weight: 600 !important;
-  box-shadow: none !important;
-}
+  .swal-custom-cancel {
+    color: #64748b !important;
+    border: 1px solid #e2e8f0 !important;
+    font-weight: 600 !important;
+    box-shadow: none !important;
+  }
 
-.swal-custom-confirm {
-  font-weight: 600 !important;
-  box-shadow: 0 4px 10px rgba(220, 38, 38, 0.2) !important;
-}
+  .swal-custom-confirm {
+    font-weight: 600 !important;
+    box-shadow: 0 4px 10px rgba(220, 38, 38, 0.2) !important;
+  }
 }
 
 /*  */
@@ -1706,13 +1808,15 @@ code {
   padding: 0 0 24px 0 !important; /* Xóa padding trên để làm thanh Header */
   overflow: hidden !important;
   border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
 }
 
 /* Tiêu đề nền Dark Navy, chữ Gold chuẩn Vibe */
 .swal-custom-popup .swal2-title {
-  background-color: #06132b !important; 
-  color: #bd9a5f !important; 
+  background-color: #06132b !important;
+  color: #bd9a5f !important;
   padding: 20px 24px !important;
   margin: 0 0 16px 0 !important;
   font-size: 22px !important;

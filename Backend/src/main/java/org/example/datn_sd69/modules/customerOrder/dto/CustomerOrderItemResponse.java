@@ -21,27 +21,16 @@ public record CustomerOrderItemResponse(
 
         Integer quantity,
 
-        /**
-         * Giá gốc tại thời điểm đặt hàng.
-         */
         BigDecimal originalPrice,
 
-        /**
-         * Số tiền giảm trên 1 sản phẩm tại thời điểm đặt hàng.
-         */
         BigDecimal discountAmount,
 
-        /**
-         * Giá cuối cùng trên 1 sản phẩm tại thời điểm đặt hàng.
-         */
         BigDecimal finalPrice,
 
-        /**
-         * Thành tiền dòng = finalPrice * quantity.
-         */
         BigDecimal lineTotal,
 
         String note,
+
         String image
 ) {
 }

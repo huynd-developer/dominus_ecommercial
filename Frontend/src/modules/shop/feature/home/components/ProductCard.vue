@@ -947,33 +947,33 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
 }
 
+/* 1. KHUNG CHỨA ẢNH: Ép thành hình vuông chuẩn 1:1 */
 .product-image-wrapper {
-  height: 235px;
-  padding: 14px;
+  width: 100%;
+  aspect-ratio: 1 / 1; /* Điểm mấu chốt: Ép tỷ lệ 1:1 vuông vức cho mọi ảnh */
+  background-color: #f9fafb; /* Lót nền xám nhạt để đồng bộ với các ảnh bị thiếu nền */
+  border-radius: 16px 16px 0 0; /* Bo góc phần trên khớp với khung ngoài của product-card */
+  overflow: hidden; /* Giữ ảnh không bị tràn ra ngoài khi zoom */
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(
-      circle at center,
-      rgba(189, 154, 95, 0.08),
-      transparent 52%
-    ),
-    #ffffff;
-  overflow: hidden;
+  /* Đã xóa bỏ height cố định (235px) và padding (14px) gây méo layout cũ */
 }
 
+/* 2. HÌNH ẢNH SẢN PHẨM: Tự động lấp đầy khung vuông */
 .product-real-image {
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* Tự động zoom và cắt viền để lấp đầy khung, tuyệt đối không làm méo hình */
   object-position: center;
   display: block;
-  transition: transform 0.28s ease;
+  transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1); /* Đổi sang timing function mượt hơn */
 }
+
+/* 3. HIỆU ỨNG HOVER ZOOM ẢNH */
 .product-card:hover .product-real-image {
-  transform: scale(1.02);
+  transform: scale(1.08); /* Tăng độ zoom từ 1.02 lên 1.08 cho hiệu ứng rõ rệt, sang trọng hơn */
 }
 
 .product-bottle {
