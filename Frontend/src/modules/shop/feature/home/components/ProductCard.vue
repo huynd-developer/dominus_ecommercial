@@ -55,7 +55,7 @@
         <span class="stars">{{ starsDisplay }}</span>
 
         <span class="review-count">
-          {{ ratingDisplay }} | {{ product.reviewCount || 0 }} đánh giá
+          {{ ratingDisplay }} | {{ normalizedReviewCount }} đánh giá
         </span>
       </div>
 
@@ -262,6 +262,7 @@ interface Product {
   originalPrice: number;
   discountPercent: number;
   rating: number;
+  averageRating?: number;
   reviewCount: number;
 
   imageUrl?: string;
@@ -344,15 +345,50 @@ const shortBrand = computed(() =>
 );
 
 /* ===== Hiển thị sao/đánh giá =====
-   Sao được tính động theo product.rating thay vì hardcode "★★★★★".
-   Khi sản phẩm chưa có đánh giá nào (hoặc API danh sách không trả về
-   rating), mặc định hiển thị 5 sao theo yêu cầu nghiệp vụ. */
+   Quy tắc nghiệp vụ:
+   - Chưa có đánh giá: mặc định hiển thị 5.0 và 5 sao.
+   - Đã có đánh giá: hiển thị đúng điểm trung bình theo lượt đánh giá.
+   - Ưu tiên averageRating nếu API danh sách trả về field này. */
 const DEFAULT_RATING = 5;
+const MAX_RATING = 5;
+
+const toFiniteNumber = (value: unknown, fallback = 0) => {
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue) ? numberValue : fallback;
+};
+
+const clampRating = (value: unknown) => {
+  return Math.min(MAX_RATING, Math.max(0, toFiniteNumber(value, 0)));
+};
+
+const normalizedReviewCount = computed(() => {
+  const count = toFiniteNumber(props.product.reviewCount, 0);
+
+  return Math.max(0, Math.floor(count));
+});
+
+const rawAverageRating = computed(() => {
+  return clampRating(props.product.averageRating ?? props.product.rating ?? 0);
+});
+
+const hasReviewCountSource = computed(() => {
+  return (
+    props.product.reviewCount !== null &&
+    props.product.reviewCount !== undefined
+  );
+});
+
+const hasActualReviews = computed(() => {
+  if (hasReviewCountSource.value) {
+    return normalizedReviewCount.value > 0;
+  }
+
+  return rawAverageRating.value > 0;
+});
 
 const ratingValue = computed(() => {
-  const raw = Number(props.product.rating || 0);
-
-  return raw > 0 ? raw : DEFAULT_RATING;
+  return hasActualReviews.value ? rawAverageRating.value : DEFAULT_RATING;
 });
 
 const ratingDisplay = computed(() => {
@@ -361,9 +397,9 @@ const ratingDisplay = computed(() => {
 
 const starsDisplay = computed(() => {
   const rounded = Math.round(ratingValue.value);
-  const filled = Math.max(0, Math.min(5, rounded));
+  const filled = Math.max(0, Math.min(MAX_RATING, rounded));
 
-  return "★".repeat(filled) + "☆".repeat(5 - filled);
+  return "★".repeat(filled) + "☆".repeat(MAX_RATING - filled);
 });
 /* ===== Hết phần sao/đánh giá ===== */
 
