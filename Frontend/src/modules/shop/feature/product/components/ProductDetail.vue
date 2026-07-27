@@ -774,8 +774,35 @@ const selectedSkuText = computed(() => {
   );
 });
 
-const averageRating = computed(() => {
-  return Number(
+/* ===== Hiển thị sao/đánh giá =====
+   Quy tắc nghiệp vụ:
+   - Chưa có đánh giá: mặc định hiển thị 5.0 và 5 sao.
+   - Đã có đánh giá: hiển thị đúng điểm trung bình theo lượt đánh giá.
+   - reviewSummary từ ProductReviews được ưu tiên vì là dữ liệu mới nhất. */
+const DEFAULT_RATING = 5;
+const MAX_RATING = 5;
+
+const toFiniteNumber = (value: unknown, fallback = 0) => {
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue) ? numberValue : fallback;
+};
+
+const clampRating = (value: unknown) => {
+  return Math.min(MAX_RATING, Math.max(0, toFiniteNumber(value, 0)));
+};
+
+const reviewCount = computed(() => {
+  const count = toFiniteNumber(
+    reviewSummary.value?.reviewCount ?? props.product?.reviewCount,
+    0
+  );
+
+  return Math.max(0, Math.floor(count));
+});
+
+const rawAverageRating = computed(() => {
+  return clampRating(
     reviewSummary.value?.averageRating ??
       props.product?.averageRating ??
       props.product?.rating ??
@@ -783,18 +810,33 @@ const averageRating = computed(() => {
   );
 });
 
+const hasReviewCountSource = computed(() => {
+  return (
+    (reviewSummary.value?.reviewCount !== null &&
+      reviewSummary.value?.reviewCount !== undefined) ||
+    (props.product?.reviewCount !== null &&
+      props.product?.reviewCount !== undefined)
+  );
+});
+
+const hasActualReviews = computed(() => {
+  if (hasReviewCountSource.value) {
+    return reviewCount.value > 0;
+  }
+
+  return rawAverageRating.value > 0;
+});
+
+const averageRating = computed(() => {
+  return hasActualReviews.value ? rawAverageRating.value : DEFAULT_RATING;
+});
+
 const averageRatingText = computed(() => {
   return averageRating.value.toFixed(1);
 });
 
-const reviewCount = computed(() => {
-  return Number(
-    reviewSummary.value?.reviewCount ?? props.product?.reviewCount ?? 0
-  );
-});
-
 const roundedAverage = computed(() => {
-  return Math.round(averageRating.value);
+  return Math.min(MAX_RATING, Math.max(0, Math.round(averageRating.value)));
 });
 
 const normalizeStock = (variant: any) => {

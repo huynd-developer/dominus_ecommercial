@@ -210,8 +210,31 @@ interface CartItem {
   note?: string | null;
 
   image?: string | null;
+  Image?: string | null;
   imageUrl?: string | null;
+  ImageUrl?: string | null;
   thumbnailUrl?: string | null;
+  ThumbnailUrl?: string | null;
+  mainImage?: string | null;
+  MainImage?: string | null;
+  mainImageUrl?: string | null;
+  MainImageUrl?: string | null;
+  productImage?: string | null;
+  productImageUrl?: string | null;
+  variantImage?: string | null;
+  variantImageUrl?: string | null;
+  images?: any[] | null;
+  Images?: any[] | null;
+  imageList?: any[] | null;
+  ImageList?: any[] | null;
+  productImages?: any[] | null;
+  ProductImages?: any[] | null;
+  product?: any;
+  Product?: any;
+  variant?: any;
+  Variant?: any;
+  productVariant?: any;
+  ProductVariant?: any;
 
   manufacturingDate?: string | null;
   expirationDate?: string | null;
@@ -233,6 +256,8 @@ defineEmits<{
   (e: "update-qty", item: CartItem, quantity: number): void;
   (e: "remove-item", cartItemId: number): void;
 }>();
+
+const BACKEND_URL = "http://localhost:8080";
 
 const FALLBACK_IMAGE =
   "data:image/svg+xml;utf8," +
@@ -299,40 +324,187 @@ const formatDateTime = (value?: string | null) => {
   });
 };
 
-const getItemImage = (item: any) => {
-  if (!item) return FALLBACK_IMAGE;
+const isEmptyImageValue = (value: unknown) => {
+  if (value === null || value === undefined) {
+    return true;
+  }
 
-  // 1. Quét trực tiếp ở cấp ngoài cùng
-  let url = item.image || item.imageUrl || item.thumbnailUrl || item.mainImage;
+  const text = String(value).trim();
 
-  // 2. Đào sâu vào trong productVariant (cấu trúc thường gặp của Giỏ hàng)
-  if (!url && item.productVariant) {
-    url = item.productVariant.imageUrl || item.productVariant.image || item.productVariant.mainImage;
-    
-    // Đào tiếp vào product chứa variant đó
-    if (!url && item.productVariant.product) {
-      url = item.productVariant.product.mainImage || item.productVariant.product.imageUrl;
-      
-      // Nếu ảnh nằm trong mảng productImages
-      if (!url && item.productVariant.product.productImages?.length > 0) {
-        url = item.productVariant.product.productImages[0].imageUrl;
+  return (
+    text === "" ||
+    text === "-" ||
+    text.toUpperCase() === "N/A" ||
+    text.toUpperCase() === "NULL" ||
+    text.toUpperCase() === "UNDEFINED"
+  );
+};
+
+const normalizeImageUrl = (value: unknown) => {
+  if (isEmptyImageValue(value)) {
+    return "";
+  }
+
+  const rawUrl = String(value).trim();
+
+  if (
+    rawUrl.startsWith("http://") ||
+    rawUrl.startsWith("https://") ||
+    rawUrl.startsWith("data:image") ||
+    rawUrl.startsWith("blob:")
+  ) {
+    return rawUrl;
+  }
+
+  if (rawUrl.startsWith("/")) {
+    return `${BACKEND_URL}${rawUrl}`;
+  }
+
+  return `${BACKEND_URL}/${rawUrl}`;
+};
+
+const getImageUrlFromValue = (value: any, visited = new WeakSet<object>()): string => {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    return normalizeImageUrl(value);
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const imageUrl = getImageUrlFromValue(item, visited);
+
+      if (imageUrl) {
+        return imageUrl;
+      }
+    }
+
+    return "";
+  }
+
+  if (typeof value === "object") {
+    if (visited.has(value)) {
+      return "";
+    }
+
+    visited.add(value);
+
+    const candidates = [
+      value?.image,
+      value?.Image,
+      value?.imageUrl,
+      value?.ImageUrl,
+      value?.url,
+      value?.Url,
+      value?.mediaUrl,
+      value?.MediaUrl,
+      value?.path,
+      value?.Path,
+      value?.fileUrl,
+      value?.FileUrl,
+      value?.thumbnailUrl,
+      value?.ThumbnailUrl,
+      value?.mainImage,
+      value?.MainImage,
+      value?.mainImageUrl,
+      value?.MainImageUrl,
+      value?.productImage,
+      value?.productImageUrl,
+      value?.ProductImageUrl,
+      value?.variantImage,
+      value?.variantImageUrl,
+      value?.VariantImageUrl,
+
+      value?.images,
+      value?.Images,
+      value?.imageList,
+      value?.ImageList,
+      value?.galleryImages,
+      value?.GalleryImages,
+      value?.productImages,
+      value?.ProductImages,
+      value?.productImageList,
+      value?.ProductImageList,
+      value?.variantImages,
+      value?.VariantImages,
+      value?.files,
+      value?.Files,
+
+      value?.product,
+      value?.Product,
+      value?.variant,
+      value?.Variant,
+      value?.productVariant,
+      value?.ProductVariant,
+      value?.variants,
+      value?.Variants,
+      value?.productVariants,
+      value?.ProductVariants,
+    ];
+
+    for (const candidate of candidates) {
+      const imageUrl = getImageUrlFromValue(candidate, visited);
+
+      if (imageUrl) {
+        return imageUrl;
       }
     }
   }
 
-  // 3. Đào vào product (nếu API cấu trúc bọc qua product)
-  if (!url && item.product) {
-    url = item.product.mainImage || item.product.imageUrl;
-    if (!url && item.product.productImages?.length > 0) {
-      url = item.product.productImages[0].imageUrl;
+  return "";
+};
+
+const getItemImage = (item: CartItem) => {
+  const candidates = [
+    item?.image,
+    item?.Image,
+    item?.imageUrl,
+    item?.ImageUrl,
+    item?.thumbnailUrl,
+    item?.ThumbnailUrl,
+    item?.mainImage,
+    item?.MainImage,
+    item?.mainImageUrl,
+    item?.MainImageUrl,
+    item?.productImage,
+    item?.productImageUrl,
+    item?.variantImage,
+    item?.variantImageUrl,
+    item?.images,
+    item?.Images,
+    item?.imageList,
+    item?.ImageList,
+    item?.productImages,
+    item?.ProductImages,
+    item?.product,
+    item?.Product,
+    item?.variant,
+    item?.Variant,
+    item?.productVariant,
+    item?.ProductVariant,
+  ];
+
+  for (const candidate of candidates) {
+    const imageUrl = getImageUrlFromValue(candidate);
+
+    if (imageUrl) {
+      return imageUrl;
     }
   }
 
-  return url ? url : FALLBACK_IMAGE;
+  return FALLBACK_IMAGE;
 };
 
 const handleImageError = (event: Event) => {
-  const target = event.target as HTMLImageElement;
+  const target = event.target as HTMLImageElement | null;
+
+  if (!target) {
+    return;
+  }
+
+  target.onerror = null;
   target.src = FALLBACK_IMAGE;
 };
 

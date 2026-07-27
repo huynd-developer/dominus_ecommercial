@@ -14,6 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+
 import java.time.LocalDate;
 
 import java.util.*;
@@ -36,6 +37,7 @@ public class ProductServiceImpl implements ProductService {
     private final FragranceFamilyRepository fragranceFamilyRepository;
 
     private final Cloudinary cloudinary;
+
     @Override
     public ProductResponse createProduct(ProductRequest request) {
 
@@ -127,6 +129,7 @@ public class ProductServiceImpl implements ProductService {
 
         return getProductById(savedProduct.getId());
     }
+
     @Override
     public ProductResponse updateProduct(
             Integer id,
@@ -223,6 +226,7 @@ public class ProductServiceImpl implements ProductService {
 
         return getProductById(id);
     }
+
     @Override
     @Transactional(readOnly = true)
     public ProductResponse getProductById(Integer id) {
@@ -288,6 +292,7 @@ public class ProductServiceImpl implements ProductService {
 
         return result;
     }
+
     @Override
     public void deleteProduct(Integer id) {
 
@@ -300,6 +305,7 @@ public class ProductServiceImpl implements ProductService {
 
         productRepository.save(product);
     }
+
     @Override
     @Transactional
     public String uploadImage(
@@ -355,6 +361,7 @@ public class ProductServiceImpl implements ProductService {
 
         return imageUrl;
     }
+
     @Override
     @Transactional
     public void deleteProductImage(
@@ -397,6 +404,7 @@ public class ProductServiceImpl implements ProductService {
             }
         }
     }
+
     @Override
     @Transactional
     public void setPrimaryImage(

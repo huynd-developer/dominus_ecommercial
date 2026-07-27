@@ -196,8 +196,6 @@ public class CartService {
         res.setCartItemId(item.getId());
         res.setQuantity(item.getQuantity());
         res.setNote(item.getNote());
-        res.setThumbnailUrl(item.getThumbnailUrl());
-        res.setImageUrl(item.getThumbnailUrl());
 
         ProductVariant variant = item.getProductVariant();
 
@@ -212,6 +210,11 @@ public class CartService {
 
         res.setProductVariantId(variant.getId());
         res.setSku(variant.getSku());
+
+        String cartImageUrl = resolveCartImageUrl(item, variant);
+        res.setImageUrl(cartImageUrl);
+        res.setThumbnailUrl(cartImageUrl);
+
         res.setStockQuantity(variant.getStockQuantity());
         res.setManufacturingDate(variant.getManufacturingDate());
         res.setExpirationDate(variant.getExpirationDate());
@@ -264,6 +267,66 @@ public class CartService {
         return res;
     }
 
+<<<<<<< HEAD
+=======
+    /**
+     * Lấy ảnh hiển thị cho item trong giỏ hàng.
+     *
+     * Thứ tự ưu tiên:
+     * 1. thumbnailUrl đã lưu trong CartItem nếu FE cũ có truyền lên.
+     * 2. Ảnh đầu tiên của Product đang gắn với ProductVariant.
+     *
+     * Không cập nhật CartItem trong DB ở đây để tránh ảnh hưởng logic thêm/sửa/xóa giỏ hàng.
+     */
+    private String resolveCartImageUrl(CartItem item, ProductVariant variant) {
+        String savedThumbnailUrl = normalizeImageValue(
+                item == null ? null : item.getThumbnailUrl()
+        );
+
+        if (savedThumbnailUrl != null) {
+            return savedThumbnailUrl;
+        }
+
+        if (variant == null || variant.getId() == null) {
+            return null;
+        }
+
+        return cartItemRepo.findFirstProductImageUrlByVariantId(variant.getId())
+                .map(this::normalizeImageValue)
+                .orElse(null);
+    }
+
+    private String normalizeImageValue(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String trimmed = value.trim();
+
+        if (trimmed.isEmpty()
+                || "-".equals(trimmed)
+                || "N/A".equalsIgnoreCase(trimmed)
+                || "NULL".equalsIgnoreCase(trimmed)
+                || "UNDEFINED".equalsIgnoreCase(trimmed)) {
+            return null;
+        }
+
+        return trimmed;
+    }
+
+    /**
+     * Set giá cho cart.
+     *
+     * Có Flash Sale active:
+     * - originalPrice = ProductVariant.Price
+     * - salePrice = giá sau giảm
+     * - price = salePrice
+     *
+     * Không có Flash Sale:
+     * - originalPrice = ProductVariant.Price
+     * - price = originalPrice
+     */
+>>>>>>> ca82c4495ec3e8172d3d0ea8e37eec889b889694
     private void applyCurrentPrice(CartItemResponse res, ProductVariant variant) {
         BigDecimal originalPrice = variant.getPrice() == null
                 ? BigDecimal.ZERO
