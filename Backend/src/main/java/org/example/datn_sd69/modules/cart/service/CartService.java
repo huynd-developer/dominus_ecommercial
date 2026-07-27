@@ -267,8 +267,7 @@ public class CartService {
         return res;
     }
 
-<<<<<<< HEAD
-=======
+
     /**
      * Lấy ảnh hiển thị cho item trong giỏ hàng.
      *
@@ -326,7 +325,6 @@ public class CartService {
      * - originalPrice = ProductVariant.Price
      * - price = originalPrice
      */
->>>>>>> ca82c4495ec3e8172d3d0ea8e37eec889b889694
     private void applyCurrentPrice(CartItemResponse res, ProductVariant variant) {
         BigDecimal originalPrice = variant.getPrice() == null
                 ? BigDecimal.ZERO

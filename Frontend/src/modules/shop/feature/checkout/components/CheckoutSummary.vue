@@ -21,7 +21,6 @@
             :alt="item.productName || item.sku || 'Sản phẩm'"
             @error="handleImageError"
           />
-          
         </div>
 
         <div class="mini-info">
@@ -343,6 +342,7 @@ const emit = defineEmits<{
   (e: "cancel-voucher"): void;
 }>();
 
+// ĐÃ SỬA: Chuyển sang "Không có ảnh" tiếng Việt
 const FALLBACK_IMAGE =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(`
@@ -350,7 +350,7 @@ const FALLBACK_IMAGE =
       <rect width="100%" height="100%" fill="#f3f4f6"/>
       <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
         fill="#9ca3af" font-family="Arial" font-size="16">
-        No Image
+        Không có ảnh
       </text>
     </svg>
   `);
@@ -393,29 +393,21 @@ const getItemKey = (item: any) => {
   );
 };
 
+// ĐÃ SỬA: Hàm lấy link ảnh đào sâu chống xịt
 const getItemImage = (item: any) => {
   if (!item) return FALLBACK_IMAGE;
+  let url = item?.image || item?.imageUrl || item?.thumbnailUrl || item?.mainImage;
 
-  // 1. Quét trực tiếp ở cấp ngoài cùng
-  let url = item.image || item.imageUrl || item.thumbnailUrl || item.mainImage;
-
-  // 2. Đào sâu vào trong productVariant (cấu trúc thường gặp của Giỏ hàng)
-  if (!url && item.productVariant) {
-    url = item.productVariant.imageUrl || item.productVariant.image || item.productVariant.mainImage;
-    
-    // Đào tiếp vào product chứa variant đó
+  if (!url && item?.productVariant) {
+    url = item.productVariant.imageUrl || item.productVariant.image;
     if (!url && item.productVariant.product) {
       url = item.productVariant.product.mainImage || item.productVariant.product.imageUrl;
-      
-      // Nếu ảnh nằm trong mảng productImages
       if (!url && item.productVariant.product.productImages?.length > 0) {
         url = item.productVariant.product.productImages[0].imageUrl;
       }
     }
   }
-
-  // 3. Đào vào product (nếu API cấu trúc bọc qua product)
-  if (!url && item.product) {
+  if (!url && item?.product) {
     url = item.product.mainImage || item.product.imageUrl;
     if (!url && item.product.productImages?.length > 0) {
       url = item.product.productImages[0].imageUrl;

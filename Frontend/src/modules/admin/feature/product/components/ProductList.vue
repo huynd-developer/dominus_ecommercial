@@ -1,4 +1,3 @@
-```vue
 <script setup lang="ts">
 import { computed } from 'vue'
 
@@ -16,307 +15,128 @@ const emit = defineEmits<{
   (e: 'stop-selling', id: number): void
 }>()
 
-const API_URL =
-  import.meta.env.VITE_API_URL || ''
+const API_URL = import.meta.env.VITE_API_URL || ''
 
-const calculateTotalStock = (
-  variants?: ProductVariant[]
-) =>
-  variants?.reduce(
-    (sum, item) =>
-      sum + (item.stockQuantity || 0),
-    0
-  ) ?? 0
+const calculateTotalStock = (variants?: ProductVariant[]) =>
+  variants?.reduce((sum, item) => sum + (item.stockQuantity || 0), 0) ?? 0
 
-const getStockClass = (
-  stock: number
-) => {
+const getStockClass = (stock: number) => {
   if (stock === 0) {
     return 'danger'
   }
-
   if (stock < 10) {
     return 'warning'
   }
-
   return 'success'
 }
 
-const getImageUrl = (
-  url?: string
-) => {
+const getImageUrl = (url?: string) => {
   if (!url) {
     return ''
   }
-
-  return url.startsWith('http')
-    ? url
-    : `${API_URL}${url}`
+  return url.startsWith('http') ? url : `${API_URL}${url}`
 }
 
-const onImageError = (
-  event: Event
-) => {
-  const img =
-    event.target as HTMLImageElement
+// Đã thay thế placehold.co bị lỗi bằng SVG nội bộ siêu mượt
+const FALLBACK_IMAGE = "data:image/svg+xml;utf8," + encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+    <rect width="100%" height="100%" fill="#f1f5f9"/>
+    <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#94a3b8" font-family="Arial" font-size="14">Không có ảnh</text>
+  </svg>
+`);
 
-  img.src =
-    'https://placehold.co/200x200?text=No+Image'
+const onImageError = (event: Event) => {
+  const img = event.target as HTMLImageElement
+  img.src = FALLBACK_IMAGE
 }
 
 const rows = computed(() =>
-  props.paginatedData.map(
-    (product) => {
-      const stock =
-        calculateTotalStock(
-          product.variants
-        )
-
-      return {
-        ...product,
-        stock,
-        stockClass:
-          getStockClass(stock)
-      }
+  props.paginatedData.map((product) => {
+    const stock = calculateTotalStock(product.variants)
+    return {
+      ...product,
+      stock,
+      stockClass: getStockClass(stock)
     }
-  )
+  })
 )
 </script>
 
 <template>
   <div class="table-wrapper">
-
-    <table
-      class="table align-middle product-table"
-    >
-
+    <table class="table align-middle product-table">
       <thead>
-
         <tr>
-          <th width="90">
-            Ảnh
-          </th>
-
-          <th>
-            Sản phẩm
-          </th>
-
-          <th>
-            Thương hiệu
-          </th>
-
-          <th>
-            Danh mục
-          </th>
-
-          <th>
-            Nồng độ
-          </th>
-
-          <th class="text-center">
-            Tồn kho
-          </th>
-
-          <th class="text-center">
-            Trạng thái
-          </th>
-
-          <th
-            width="140"
-            class="text-center"
-          >
-            Thao tác
-          </th>
+          <th width="90">Ảnh</th>
+          <th>Sản phẩm</th>
+          <th>Thương hiệu</th>
+          <th>Danh mục</th>
+          <th>Nồng độ</th>
+          <th class="text-center">Tồn kho</th>
+          <th class="text-center">Trạng thái</th>
+          <th width="140" class="text-center">Thao tác</th>
         </tr>
-
       </thead>
-
       <tbody>
-
-        <tr
-          v-if="rows.length === 0"
-        >
-          <td
-            colspan="8"
-            class="empty"
-          >
-            <i
-              class="bi bi-box-seam"
-            ></i>
-
-            <p>
-              Chưa có sản phẩm
-            </p>
+        <tr v-if="rows.length === 0">
+          <td colspan="8" class="empty">
+            <i class="bi bi-box-seam"></i>
+            <p>Chưa có sản phẩm</p>
           </td>
         </tr>
-
-        <tr
-          v-for="product in rows"
-          :key="product.id"
-        >
-
+        <tr v-for="product in rows" :key="product.id">
           <td>
-
             <div class="image-box">
-
               <img
-                v-if="
-                  product.primaryImageUrl
-                "
-                :src="
-                  getImageUrl(
-                    product.primaryImageUrl
-                  )
-                "
+                v-if="product.primaryImageUrl"
+                :src="getImageUrl(product.primaryImageUrl)"
                 loading="lazy"
                 decoding="async"
-                @error="
-                  onImageError
-                "
+                @error="onImageError"
               >
-
-              <div
-                v-else
-                class="image-placeholder"
-              >
-                <i
-                  class="bi bi-image"
-                ></i>
+              <div v-else class="image-placeholder">
+                <i class="bi bi-image"></i>
               </div>
-
             </div>
-
           </td>
-
           <td>
-
-            <div
-              class="product-info"
-            >
-
-              <div
-                class="product-name"
-              >
-                {{ product.name }}
+            <div class="product-info">
+              <div class="product-name">{{ product.name }}</div>
+              <div class="product-sub">
+                {{ product.variants?.length || 0 }} biến thể
               </div>
-
-              <div
-                class="product-sub"
-              >
-                {{
-                  product.variants
-                    ?.length || 0
-                }}
-                biến thể
-              </div>
-
             </div>
-
           </td>
-
-          <td>
-            {{
-              product.brandName
-            }}
-          </td>
-
-          <td>
-            {{
-              product.categoryName
-            }}
-          </td>
-
-          <td>
-            {{
-              product.concentrationName
-            }}
-          </td>
-
-          <td
-            class="text-center"
-          >
-
-            <span
-              class="stock-badge"
-              :class="
-                product.stockClass
-              "
-            >
-              {{
-                product.stock
-              }}
+          <td>{{ product.brandName }}</td>
+          <td>{{ product.categoryName }}</td>
+          <td>{{ product.concentrationName }}</td>
+          <td class="text-center">
+            <span class="stock-badge" :class="product.stockClass">
+              {{ product.stock }}
             </span>
-
           </td>
-
-          <td
-            class="text-center"
-          >
-
-            <span
-              class="status"
-              :class="
-                product.status === 1
-                  ? 'active'
-                  : 'inactive'
-              "
-            >
-              {{
-                product.status === 1
-                  ? 'Đang bán'
-                  : 'Ngừng bán'
-              }}
+          <td class="text-center">
+            <span class="status" :class="product.status === 1 ? 'active' : 'inactive'">
+              {{ product.status === 1 ? 'Đang bán' : 'Ngừng bán' }}
             </span>
-
           </td>
-
           <td>
-
-            <div
-              class="actions"
-            >
-
-              <button
-                class="icon-btn edit"
-                @click="
-                  emit(
-                    'edit',
-                    product
-                  )
-                "
-              >
-                <i
-                  class="bi bi-pencil"
-                ></i>
+            <div class="actions">
+              <button class="icon-btn edit" @click="emit('edit', product)">
+                <i class="bi bi-pencil"></i>
               </button>
-
               <button
-                v-if="
-                  product.status === 1
-                "
+                v-if="product.status === 1"
                 class="icon-btn delete"
-                @click="
-                  emit(
-                    'stop-selling',
-                    product.id
-                  )
-                "
+                @click="emit('stop-selling', product.id)"
               >
-                <i
-                  class="bi bi-eye-slash"
-                ></i>
+                <i class="bi bi-eye-slash"></i>
               </button>
-
             </div>
-
           </td>
-
         </tr>
-
       </tbody>
-
     </table>
-
   </div>
 </template>
 
@@ -488,4 +308,3 @@ const rows = computed(() =>
     margin-bottom:10px;
 }
 </style>
-```
