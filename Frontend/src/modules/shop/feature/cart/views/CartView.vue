@@ -40,6 +40,10 @@ import CartSummary from "../components/CartSummary.vue";
 interface CartItem {
   cartItemId: number;
   productVariantId?: number;
+  variantId?: number;
+  id?: number;
+  productId?: number;
+  ProductId?: number;
   sku?: string | null;
   productName?: string | null;
   capacity?: string | null;
@@ -48,8 +52,34 @@ interface CartItem {
   price?: number | null;
   stockQuantity?: number | null;
   note?: string | null;
+
+  image?: string | null;
+  Image?: string | null;
   imageUrl?: string | null;
+  ImageUrl?: string | null;
   thumbnailUrl?: string | null;
+  ThumbnailUrl?: string | null;
+  mainImage?: string | null;
+  MainImage?: string | null;
+  mainImageUrl?: string | null;
+  MainImageUrl?: string | null;
+  productImage?: string | null;
+  productImageUrl?: string | null;
+  variantImage?: string | null;
+  variantImageUrl?: string | null;
+  images?: any[] | null;
+  Images?: any[] | null;
+  imageList?: any[] | null;
+  ImageList?: any[] | null;
+  productImages?: any[] | null;
+  ProductImages?: any[] | null;
+  product?: any;
+  Product?: any;
+  variant?: any;
+  Variant?: any;
+  productVariant?: any;
+  ProductVariant?: any;
+
   manufacturingDate?: string | null;
   expirationDate?: string | null;
   variantStatus?: number | null;
@@ -250,13 +280,275 @@ const resetVoucher = () => {
   }
 };
 
+const extractCartItems = (payload: any): CartItem[] => {
+  const candidates = [
+    payload,
+    payload?.data,
+    payload?.content,
+    payload?.items,
+    payload?.cartItems,
+    payload?.cartItemList,
+    payload?.cart?.items,
+    payload?.cart?.cartItems,
+    payload?.data?.content,
+    payload?.data?.items,
+    payload?.data?.cartItems,
+    payload?.data?.cartItemList,
+    payload?.data?.cart?.items,
+    payload?.data?.cart?.cartItems,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
+  return [];
+};
+
+const getItemProductId = (item: CartItem) => {
+  return Number(
+    item?.productId ??
+      item?.ProductId ??
+      item?.product?.productId ??
+      item?.product?.id ??
+      item?.Product?.productId ??
+      item?.Product?.id ??
+      0
+  );
+};
+
+const getItemVariantId = (item: CartItem) => {
+  return Number(
+    item?.productVariantId ??
+      item?.variantId ??
+      item?.productVariant?.productVariantId ??
+      item?.productVariant?.variantId ??
+      item?.productVariant?.id ??
+      item?.ProductVariant?.productVariantId ??
+      item?.ProductVariant?.variantId ??
+      item?.ProductVariant?.id ??
+      item?.variant?.productVariantId ??
+      item?.variant?.variantId ??
+      item?.variant?.id ??
+      item?.Variant?.productVariantId ??
+      item?.Variant?.variantId ??
+      item?.Variant?.id ??
+      0
+  );
+};
+
+const isEmptyImageValue = (value: unknown) => {
+  if (value === null || value === undefined) {
+    return true;
+  }
+
+  const text = String(value).trim();
+
+  return (
+    text === "" ||
+    text === "-" ||
+    text.toUpperCase() === "N/A" ||
+    text.toUpperCase() === "NULL" ||
+    text.toUpperCase() === "UNDEFINED"
+  );
+};
+
+const extractImageValue = (value: any, visited = new WeakSet<object>()): string => {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    return isEmptyImageValue(value) ? "" : String(value).trim();
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const image = extractImageValue(item, visited);
+
+      if (image) {
+        return image;
+      }
+    }
+
+    return "";
+  }
+
+  if (typeof value === "object") {
+    if (visited.has(value)) {
+      return "";
+    }
+
+    visited.add(value);
+
+    const candidates = [
+      value?.image,
+      value?.Image,
+      value?.imageUrl,
+      value?.ImageUrl,
+      value?.url,
+      value?.Url,
+      value?.mediaUrl,
+      value?.MediaUrl,
+      value?.path,
+      value?.Path,
+      value?.fileUrl,
+      value?.FileUrl,
+      value?.thumbnailUrl,
+      value?.ThumbnailUrl,
+      value?.mainImage,
+      value?.MainImage,
+      value?.mainImageUrl,
+      value?.MainImageUrl,
+      value?.productImage,
+      value?.productImageUrl,
+      value?.ProductImageUrl,
+      value?.variantImage,
+      value?.variantImageUrl,
+      value?.VariantImageUrl,
+      value?.images,
+      value?.Images,
+      value?.imageList,
+      value?.ImageList,
+      value?.galleryImages,
+      value?.GalleryImages,
+      value?.productImages,
+      value?.ProductImages,
+      value?.productImageList,
+      value?.ProductImageList,
+      value?.variantImages,
+      value?.VariantImages,
+      value?.product,
+      value?.Product,
+      value?.variant,
+      value?.Variant,
+      value?.productVariant,
+      value?.ProductVariant,
+      value?.variants,
+      value?.Variants,
+      value?.productVariants,
+      value?.ProductVariants,
+    ];
+
+    for (const candidate of candidates) {
+      const image = extractImageValue(candidate, visited);
+
+      if (image) {
+        return image;
+      }
+    }
+  }
+
+  return "";
+};
+
+const getProductVariants = (productData: any) => {
+  const candidates = [
+    productData?.variants,
+    productData?.Variants,
+    productData?.productVariants,
+    productData?.ProductVariants,
+    productData?.productVariantList,
+    productData?.ProductVariantList,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
+  return [];
+};
+
+const findMatchingVariant = (productData: any, variantId: number) => {
+  if (!variantId) {
+    return null;
+  }
+
+  return (
+    getProductVariants(productData).find((variant: any) => {
+      const currentVariantId = Number(
+        variant?.productVariantId ?? variant?.variantId ?? variant?.id ?? variant?.Id ?? 0
+      );
+
+      return currentVariantId === variantId;
+    }) || null
+  );
+};
+
+const productDetailCache = new Map<number, any>();
+
+const fetchProductDetail = async (productId: number) => {
+  if (!productId) {
+    return null;
+  }
+
+  if (productDetailCache.has(productId)) {
+    return productDetailCache.get(productId);
+  }
+
+  try {
+    const res = await api.get(`/v1/products/${productId}`);
+    const data = res.data?.data ?? res.data;
+
+    productDetailCache.set(productId, data);
+    return data;
+  } catch (error) {
+    console.warn("Không thể lấy ảnh sản phẩm cho giỏ hàng:", productId, error);
+    productDetailCache.set(productId, null);
+    return null;
+  }
+};
+
+const enrichCartItemImage = async (item: CartItem): Promise<CartItem> => {
+  if (!item || extractImageValue(item)) {
+    return item;
+  }
+
+  const productId = getItemProductId(item);
+
+  if (!productId) {
+    return item;
+  }
+
+  const productData = await fetchProductDetail(productId);
+
+  if (!productData) {
+    return item;
+  }
+
+  const matchedVariant = findMatchingVariant(productData, getItemVariantId(item));
+  const imageUrl = extractImageValue(matchedVariant) || extractImageValue(productData);
+
+  if (!imageUrl) {
+    return item;
+  }
+
+  return {
+    ...item,
+    imageUrl: item.imageUrl || imageUrl,
+    product: item.product ?? productData,
+    productVariant: item.productVariant ?? matchedVariant ?? undefined,
+  };
+};
+
+const enrichCartItemsWithImages = async (items: CartItem[]) => {
+  const enrichedItems = await Promise.all(items.map((item) => enrichCartItemImage(item)));
+
+  return enrichedItems;
+};
+
 const loadCart = async () => {
   try {
     isLoading.value = true;
 
     const res = await api.get("/v1/customer/cart/my-cart");
+    const items = extractCartItems(res.data);
 
-    cartItems.value = Array.isArray(res.data) ? res.data : [];
+    cartItems.value = await enrichCartItemsWithImages(items);
 
     if (!canCheckout.value) {
       resetVoucher();
