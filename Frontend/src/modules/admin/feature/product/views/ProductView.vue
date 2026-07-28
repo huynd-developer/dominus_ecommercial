@@ -332,16 +332,15 @@ const stopSelling = async (
       class="table-wrapper"
     >
       <ProductList
-        :paginated-data="
-          paginatedData
-        "
-        :brand-list="
-          store.brandList
-        "
+        :paginated-data="paginatedData"
+        :brand-list="store.brandList"
+        :category-list="store.categoryList"
+        :concentration-list="store.concentrationList"
+        :fragrance-family-list="store.fragranceFamilyList"
+        :capacity-list="store.capacityList"
+        :bottle-type-list="store.bottleTypeList"
         @edit="openEditModal"
-        @stop-selling="
-          stopSelling
-        "
+        @stop-selling="stopSelling"
       />
     </div>
 

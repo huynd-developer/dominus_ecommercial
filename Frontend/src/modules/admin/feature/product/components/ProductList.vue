@@ -27,10 +27,8 @@ const toggleRow = (id: number) => {
 };
 
 const formatPrice = (price: number) => {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-  }).format(price);
+  // Dùng en-US để lấy dấu phẩy phân cách hàng nghìn, sau đó ghép thêm chữ VNĐ
+  return new Intl.NumberFormat("en-US").format(price) + " VNĐ";
 };
 
 const calculateTotalStock = (variants?: ProductVariant[]) =>

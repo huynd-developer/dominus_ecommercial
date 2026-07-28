@@ -9,6 +9,7 @@
         :isUpdating="isUpdating"
         @update-qty="updateQty"
         @remove-item="removeItem"
+        @update-variant="updateVariant" 
       />
 
       <CartSummary
@@ -696,6 +697,38 @@ const goToCheckout = async () => {
 onMounted(() => {
   loadCart();
 });
+
+const updateVariant = async (item: CartItem, newVariantId: number) => {
+  if (!item?.cartItemId || !newVariantId) return;
+  
+  // Nếu khách chọn lại đúng cái đang dùng thì bỏ qua
+  if (getItemVariantId(item) === newVariantId) return;
+
+  try {
+    isUpdating.value = true;
+
+    // Cập nhật lại giỏ hàng với Variant ID mới. 
+    await api.put(`/v1/customer/cart/update/${item.cartItemId}`, {
+      productVariantId: newVariantId,
+      quantity: item.quantity // Giữ nguyên số lượng hiện tại
+    });
+
+    resetVoucher(); // Đổi hàng thì giá thay đổi -> Phải bắt khách add lại voucher
+    await showToast("success", "Đã đổi phân loại sản phẩm");
+    
+    // Bắt buộc gọi lại loadCart() để tải lại data, ảnh và giá mới từ server
+    await loadCart(); 
+  } catch (err: any) {
+    console.error("Lỗi cập nhật biến thể:", err);
+    await showError(
+      "Không thể đổi loại sản phẩm",
+      err?.response?.data?.message || err?.response?.data || "Vui lòng thử lại sau."
+    );
+    await loadCart(); // Lỗi cũng load lại cho chắc data
+  } finally {
+    isUpdating.value = false;
+  }
+};
 </script>
 
 <style scoped>
