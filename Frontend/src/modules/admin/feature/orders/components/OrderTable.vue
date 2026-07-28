@@ -29,23 +29,15 @@
         </template>
 
         <template v-if="column.key === 'orderType'">
-<<<<<<< HEAD
-          <a-tag :color="record.orderType === 'ONLINE' ? 'blue' : 'green'">
-=======
           <a-tag
             class="order-type-tag"
             :color="record.orderType === 'ONLINE' ? 'blue' : 'green'"
           >
->>>>>>> 06b47cefecadd9a7ecc1637ce0a0c537c028a37e
             <i
               class="bi"
               :class="record.orderType === 'ONLINE' ? 'bi-truck' : 'bi-shop'"
             ></i>
-<<<<<<< HEAD
-            {{ record.orderType === "ONLINE" ? " Online" : " Tại quầy" }}
-=======
             {{ record.orderType === "ONLINE" ? "Online" : "Tại quầy" }}
->>>>>>> 06b47cefecadd9a7ecc1637ce0a0c537c028a37e
           </a-tag>
         </template>
 
@@ -56,55 +48,16 @@
         </template>
 
         <template v-if="column.key === 'finalAmount'">
-<<<<<<< HEAD
-          <span class="fw-bold text-danger">{{
-            money(record.finalAmount)
-          }}</span>
-=======
           <span class="amount-text">
             {{ money(record.finalAmount) }}
           </span>
->>>>>>> 06b47cefecadd9a7ecc1637ce0a0c537c028a37e
         </template>
 
         <template v-if="column.key === 'status'">
-<<<<<<< HEAD
-          <div
-            style="
-              display: flex;
-              flex-direction: column;
-              gap: 4px;
-              align-items: flex-start;
-            "
-          >
-            <OrderStatusBadge
-              :status="record.status"
-              :status-text="record.statusText"
-            />
-
-            <!-- Hiện lý do nếu trạng thái là 6 (Yêu cầu hoàn) hoặc 7 (Hoàn hàng hoàn tất) -->
-            <span
-              v-if="
-                (record.status === 6 || record.status === 7) &&
-                (record.returnReason || record.cancelReason)
-              "
-              style="
-                font-size: 12px;
-                color: #dc3545;
-                font-style: italic;
-                max-width: 150px;
-                white-space: normal;
-              "
-            >
-              Lý do: {{ record.returnReason || record.cancelReason }}
-            </span>
-          </div>
-=======
           <OrderStatusBadge
             :status="record.status"
             :status-text="record.statusText"
           />
->>>>>>> 06b47cefecadd9a7ecc1637ce0a0c537c028a37e
         </template>
 
         <template v-if="column.key === 'createdAt'">
@@ -114,15 +67,9 @@
         </template>
 
         <template v-if="column.key === 'action'">
-<<<<<<< HEAD
-          <a-space>
-            <!-- Nút Xem chi tiết (Lúc nào cũng có) -->
-            <a-button
-=======
           <div class="action-cell">
             <a-button
               class="detail-btn"
->>>>>>> 06b47cefecadd9a7ecc1637ce0a0c537c028a37e
               type="default"
               size="small"
               @click="emit('viewDetail', record.orderId)"
@@ -228,24 +175,12 @@ function formatDate(date?: string | null) {
 
 function formatPaymentMethod(method?: string) {
   if (!method) return "Không xác định";
-<<<<<<< HEAD
-  const upper = method.toUpperCase();
-
-  if (upper.includes("COD")) return "Thanh toán khi nhận hàng (COD)";
-  if (upper.includes("VIETQR") || upper.includes("QR"))
-    return "Chuyển khoản VietQR";
-  if (upper.includes("VNPAY")) return "Thanh toán qua VNPay";
-  if (upper.includes("MOMO")) return "Thanh toán qua MoMo";
-
-  if (upper.includes("CASH")) return "Tiền mặt (Tại quầy)";
-=======
 
   const upper = method.toUpperCase().trim();
 
   if (upper === "MIXED_VIETQR") return "Tiền mặt + VietQR";
   if (upper === "MIXED_VNPAY") return "Tiền mặt + VNPay";
   if (upper === "MIXED_CASH") return "Thanh toán hỗn hợp";
->>>>>>> 06b47cefecadd9a7ecc1637ce0a0c537c028a37e
   if (upper.includes("MIXED")) return "Thanh toán hỗn hợp";
 
   if (upper.includes("COD")) return "Thanh toán tiền mặt";
@@ -254,35 +189,21 @@ function formatPaymentMethod(method?: string) {
   if (upper.includes("MOMO")) return "MoMo";
   if (upper.includes("CASH")) return "Tiền mặt";
   if (upper === "HOLD") return "Phiếu treo";
-<<<<<<< HEAD
-  if (upper.includes("BANK") || upper.includes("TRANSFER"))
-    return "Chuyển khoản ngân hàng";
-=======
   if (upper.includes("BANK") || upper.includes("TRANSFER")) return "Chuyển khoản";
->>>>>>> 06b47cefecadd9a7ecc1637ce0a0c537c028a37e
 
   return method;
 }
 
 function getPaymentColor(method?: string) {
   if (!method) return "default";
-<<<<<<< HEAD
-  const upper = method.toUpperCase();
-
-=======
 
   const upper = method.toUpperCase().trim();
 
   if (upper.includes("MIXED")) return "geekblue";
->>>>>>> 06b47cefecadd9a7ecc1637ce0a0c537c028a37e
   if (upper.includes("COD") || upper.includes("CASH")) return "orange";
   if (upper.includes("VNPAY")) return "blue";
   if (upper.includes("MOMO")) return "magenta";
   if (upper.includes("VIETQR") || upper.includes("QR")) return "purple";
-<<<<<<< HEAD
-  if (upper.includes("MIXED")) return "geekblue";
-=======
->>>>>>> 06b47cefecadd9a7ecc1637ce0a0c537c028a37e
   if (upper === "HOLD") return "volcano";
 
   return "cyan";
@@ -305,20 +226,19 @@ function getAvailableActions(status: number) {
         { status: 3, label: "Hoàn thành", type: "primary", danger: false },
         { status: 5, label: "Giao thất bại", type: "default", danger: true },
       ];
-    case 6:
+    case 3:
       return [
-        { status: 7, label: "Hoàn tất", type: "primary", danger: false }, // Nút duyệt
-        { status: 3, label: "Hủy yêu cầu", type: "primary", danger: true },
+        { status: 6, label: "Yêu cầu hoàn", type: "dashed", danger: true },
       ];
     case 6:
-      return [{ status: 7, label: "Hoàn tất", type: "primary", danger: false }];
+      return [
+        { status: 7, label: "Hoàn tất", type: "primary", danger: false },
+      ];
     default:
       return [];
   }
 }
 </script>
-<<<<<<< HEAD
-=======
 
 <style scoped>
 .order-table-card {
@@ -445,4 +365,3 @@ function getAvailableActions(status: number) {
   border-radius: 16px;
 }
 </style>
->>>>>>> 06b47cefecadd9a7ecc1637ce0a0c537c028a37e
