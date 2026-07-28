@@ -9,6 +9,7 @@
         :isUpdating="isUpdating"
         @update-qty="updateQty"
         @remove-item="removeItem"
+        @update-variant="updateVariant" 
       />
 
       <CartSummary
@@ -504,16 +505,15 @@ const fetchProductDetail = async (productId: number) => {
 };
 
 const enrichCartItemImage = async (item: CartItem): Promise<CartItem> => {
-  if (!item || extractImageValue(item)) {
-    return item;
-  }
+  // BỎ DÒNG ĐI TẮT CHECK ẢNH ĐI.
+  if (!item) return item;
 
   const productId = getItemProductId(item);
-
   if (!productId) {
     return item;
   }
 
+  // LUÔN GỌI API ĐỂ LẤY FULL DATA SẢN PHẨM (ĐỂ LẤY LIST BIẾN THỂ)
   const productData = await fetchProductDetail(productId);
 
   if (!productData) {
@@ -523,14 +523,12 @@ const enrichCartItemImage = async (item: CartItem): Promise<CartItem> => {
   const matchedVariant = findMatchingVariant(productData, getItemVariantId(item));
   const imageUrl = extractImageValue(matchedVariant) || extractImageValue(productData);
 
-  if (!imageUrl) {
-    return item;
-  }
-
   return {
     ...item,
-    imageUrl: item.imageUrl || imageUrl,
-    product: item.product ?? productData,
+    // Ưu tiên ảnh gốc của giỏ hàng, nếu không có thì lấy ảnh vừa fetch
+    imageUrl: extractImageValue(item) || imageUrl, 
+    // Quan trọng nhất: Bơm full data (chứa variants) vào item!
+    product: item.product ?? productData, 
     productVariant: item.productVariant ?? matchedVariant ?? undefined,
   };
 };
@@ -696,6 +694,38 @@ const goToCheckout = async () => {
 onMounted(() => {
   loadCart();
 });
+
+const updateVariant = async (item: CartItem, newVariantId: number) => {
+  if (!item?.cartItemId || !newVariantId) return;
+  
+  // Nếu khách chọn lại đúng cái đang dùng thì bỏ qua
+  if (getItemVariantId(item) === newVariantId) return;
+
+  try {
+    isUpdating.value = true;
+
+    // Cập nhật lại giỏ hàng với Variant ID mới. 
+    await api.put(`/v1/customer/cart/update/${item.cartItemId}`, {
+      productVariantId: newVariantId,
+      quantity: item.quantity // Giữ nguyên số lượng hiện tại
+    });
+
+    resetVoucher(); // Đổi hàng thì giá thay đổi -> Phải bắt khách add lại voucher
+    await showToast("success", "Đã đổi phân loại sản phẩm");
+    
+    // Bắt buộc gọi lại loadCart() để tải lại data, ảnh và giá mới từ server
+    await loadCart(); 
+  } catch (err: any) {
+    console.error("Lỗi cập nhật biến thể:", err);
+    await showError(
+      "Không thể đổi loại sản phẩm",
+      err?.response?.data?.message || err?.response?.data || "Vui lòng thử lại sau."
+    );
+    await loadCart(); // Lỗi cũng load lại cho chắc data
+  } finally {
+    isUpdating.value = false;
+  }
+};
 </script>
 
 <style scoped>

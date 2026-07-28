@@ -60,6 +60,11 @@ public class AdminOrderResponse {
 
     private Integer totalQuantity;
 
+    // --- BỔ SUNG CÁC TRƯỜNG DỮ LIỆU HOÀN HÀNG ---
+    private String returnReason;
+    private List<String> returnImages = new ArrayList<>();
+    private List<String> returnVideos = new ArrayList<>();
+
     private List<AdminOrderItemResponse> items = new ArrayList<>();
 
     @Data

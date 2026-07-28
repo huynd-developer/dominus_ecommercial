@@ -54,7 +54,7 @@
                 </div>
 
                 <div class="row g-4">
-                  <!-- Trạng thái (luôn cho phép sửa để có thể tắt) -->
+                  <!-- Trạng thái -->
                   <div class="col-lg-4">
                     <label class="form-label"
                       >Trạng thái <span class="text-danger">*</span></label
@@ -326,11 +326,13 @@
                         <td>
                           <div class="input-group">
                             <span class="input-group-text">₫</span>
+                            <!-- SỬ DỤNG HÀM formatDisplayPrice THAY VÌ VIẾT Intl TRỰC TIẾP -->
                             <input
-                              v-model.number="variant.price"
-                              type="number"
-                              min="0"
+                              :value="formatDisplayPrice(variant.price)"
+                              @input="onPriceInput(index, $event)"
+                              type="text"
                               class="form-control text-end"
+                              placeholder="0"
                             />
                           </div>
                         </td>
@@ -343,7 +345,6 @@
                           />
                         </td>
                         <td>
-                          <!-- Giới hạn NSX không được chọn ngày tương lai -->
                           <input
                             v-model="variant.manufacturingDate"
                             type="date"
@@ -352,7 +353,6 @@
                           />
                         </td>
                         <td>
-                          <!-- Giới hạn HSD không được chọn ngày quá khứ -->
                           <input
                             v-model="variant.expirationDate"
                             type="date"
@@ -473,7 +473,6 @@
             >
               <i class="bi bi-x-circle me-2"></i> Hủy
             </button>
-            <!-- Sửa isLoading thành globalLoading -->
             <button
               type="submit"
               class="btn btn-primary px-5"
@@ -532,8 +531,6 @@ const emit = defineEmits<{
 const appStore = useAppStore();
 const isEdit = ref(false);
 const API_URL = import.meta.env.VITE_API_URL || "";
-
-// Sinh ngày hiện tại định dạng YYYY-MM-DD để dùng cho max/min input date
 const today = computed(() => new Date().toISOString().split("T")[0]);
 
 interface ProductImageItem {
@@ -546,7 +543,8 @@ interface ProductImageItem {
 const imageList = ref<ProductImageItem[]>([]);
 const deletedImageIds = ref<number[]>([]);
 
-const formData = ref<ProductRequestDTO>({
+// ĐÃ SỬA: Ép kiểu 'any' cho formData để TypeScript không báo lỗi rỗng giá trị ban đầu
+const formData = ref<any>({
   name: "",
   description: "",
   brandId: 0,
@@ -587,6 +585,22 @@ const addVariant = () => {
     expirationDate: "",
     status: 1,
   });
+};
+
+// ĐÃ SỬA: Tách hàm hiển thị giá ra khỏi template HTML
+const formatDisplayPrice = (price?: number) => {
+  if (!price) return "";
+  return new Intl.NumberFormat("en-US").format(price);
+};
+
+// Hàm xử lý nhảy số tự động phẩy cho ô Giá Bán
+const onPriceInput = (index: any, event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const rawValue = input.value.replace(/\D/g, "");
+  const numericValue = rawValue ? Number(rawValue) : 0;
+  
+  formData.value.variants[index].price = numericValue;
+  input.value = rawValue ? new Intl.NumberFormat("en-US").format(numericValue) : "";
 };
 
 const formatDateForInput = (dateString?: string) => {
@@ -648,7 +662,7 @@ watch(
   { immediate: true },
 );
 
-const removeVariant = (index: number) => {
+const removeVariant = (index: any) => {
   formData.value.variants.splice(index, 1);
   if (formData.value.variants.length === 0) addVariant();
 };
@@ -688,61 +702,91 @@ const removeImage = (index: number) => {
   }
 };
 
+// HÀM VALIDATE ĐẦY ĐỦ VÀ CHẶT CHẼ
 const validateForm = () => {
-  if (imageList.value.length === 0) {
-    Swal.fire("Thiếu ảnh", "Vui lòng chọn ít nhất 1 ảnh", "warning");
+  if (!formData.value.name.trim()) {
+    Swal.fire("Thiếu dữ liệu", "Vui lòng nhập Tên sản phẩm.", "warning");
     return false;
   }
-  if (!formData.value.name.trim()) {
-    Swal.fire("Thiếu dữ liệu", "Vui lòng nhập tên sản phẩm", "warning");
+  if (formData.value.name.length > 255) {
+    Swal.fire("Lỗi dữ liệu", "Tên sản phẩm không được vượt quá 255 ký tự.", "warning");
     return false;
   }
   if (formData.value.brandId === 0) {
-    Swal.fire("Thiếu dữ liệu", "Chưa chọn thương hiệu", "warning");
+    Swal.fire("Thiếu dữ liệu", "Vui lòng chọn Thương hiệu.", "warning");
     return false;
   }
   if (formData.value.categoryId === 0) {
-    Swal.fire("Thiếu dữ liệu", "Chưa chọn danh mục", "warning");
+    Swal.fire("Thiếu dữ liệu", "Vui lòng chọn Danh mục.", "warning");
     return false;
   }
   if (formData.value.concentrationId === 0) {
-    Swal.fire("Thiếu dữ liệu", "Chưa chọn nồng độ", "warning");
-    return false;
-  }
-  if (formData.value.fragranceFamilyIds.length === 0) {
-    Swal.fire("Thiếu dữ liệu", "Vui lòng chọn ít nhất 1 nhóm hương", "warning");
+    Swal.fire("Thiếu dữ liệu", "Vui lòng chọn Nồng độ.", "warning");
     return false;
   }
 
-  for (const variant of formData.value.variants) {
+  if (formData.value.fragranceFamilyIds.length === 0) {
+    Swal.fire("Thiếu dữ liệu", "Vui lòng chọn ít nhất 1 Nhóm hương.", "warning");
+    return false;
+  }
+
+  if (formData.value.variants.length === 0) {
+    Swal.fire("Thiếu dữ liệu", "Phải có ít nhất 1 biến thể sản phẩm.", "warning");
+    return false;
+  }
+
+  const variantSet = new Set();
+  for (let i = 0; i < formData.value.variants.length; i++) {
+    const variant = formData.value.variants[i];
+    
     if (variant.capacityId === 0) {
-      Swal.fire("Thiếu dữ liệu", "Chưa chọn dung tích cho biến thể", "warning");
+      Swal.fire("Thiếu dữ liệu", `Biến thể dòng ${i + 1}: Vui lòng chọn Dung tích.`, "warning");
       return false;
     }
     if (variant.bottleTypeId === 0) {
-      Swal.fire("Thiếu dữ liệu", "Chưa chọn loại chai cho biến thể", "warning");
+      Swal.fire("Thiếu dữ liệu", `Biến thể dòng ${i + 1}: Vui lòng chọn Loại chai.`, "warning");
       return false;
     }
-    if (variant.price <= 0) {
-      Swal.fire("Thiếu dữ liệu", "Giá bán phải lớn hơn 0", "warning");
+
+    const variantKey = `${variant.capacityId}-${variant.bottleTypeId}`;
+    if (variantSet.has(variantKey)) {
+      Swal.fire(
+        "Trùng lặp biến thể", 
+        `Biến thể dòng ${i + 1} (Dung tích + Loại chai) đã tồn tại. Vui lòng gộp số lượng hoặc chọn loại khác.`, 
+        "warning"
+      );
+      return false;
+    }
+    variantSet.add(variantKey);
+
+    if (variant.price <= 0 || isNaN(variant.price)) {
+      Swal.fire("Lỗi dữ liệu", `Biến thể dòng ${i + 1}: Giá bán phải lớn hơn 0.`, "warning");
+      return false;
+    }
+    if (variant.stockQuantity < 0 || String(variant.stockQuantity) === "" || isNaN(variant.stockQuantity)) {
+      Swal.fire("Lỗi dữ liệu", `Biến thể dòng ${i + 1}: Tồn kho không được để trống và không được nhỏ hơn 0.`, "warning");
       return false;
     }
     if (!variant.manufacturingDate || !variant.expirationDate) {
-      Swal.fire("Thiếu dữ liệu", "Vui lòng nhập đầy đủ NSX và HSD", "warning");
+      Swal.fire("Thiếu dữ liệu", `Biến thể dòng ${i + 1}: Vui lòng nhập đầy đủ NSX và HSD.`, "warning");
       return false;
     }
-    if (variant.manufacturingDate && variant.expirationDate) {
-      const nsx = new Date(variant.manufacturingDate);
-      const hsd = new Date(variant.expirationDate);
-      if (nsx > hsd) {
-        Swal.fire(
-          "Lỗi ngày tháng",
-          "Ngày sản xuất không được sau Hạn sử dụng",
-          "warning",
-        );
-        return false;
-      }
+    
+    const nsx = new Date(variant.manufacturingDate);
+    const hsd = new Date(variant.expirationDate);
+    if (nsx >= hsd) {
+      Swal.fire(
+        "Lỗi ngày tháng", 
+        `Biến thể dòng ${i + 1}: Ngày sản xuất bắt buộc phải diễn ra TRƯỚC Hạn sử dụng.`, 
+        "warning"
+      );
+      return false;
     }
+  }
+
+  if (imageList.value.length === 0) {
+    Swal.fire("Thiếu ảnh", "Vui lòng upload ít nhất 1 ảnh cho sản phẩm.", "warning");
+    return false;
   }
 
   return true;
@@ -768,7 +812,7 @@ const saveData = async () => {
         sku: v.sku 
       })),
       fragranceFamilyIds: [...new Set(formData.value.fragranceFamilyIds.map(Number))]
-    } as ProductRequestDTO;
+    } as any; // ĐÃ SỬA: Ép kiểu any ở đây để an toàn đẩy đi
 
     if (isEdit.value && props.productSelected) {
       await productService.updateProduct(props.productSelected.id, payload);
@@ -795,7 +839,6 @@ const saveData = async () => {
       emit("refresh");
       emit("close");
       
-      // Bắn thông báo mượt mà ở góc màn hình bằng Swal
       Swal.fire({
         toast: true,
         position: 'top-end',
@@ -824,7 +867,6 @@ const saveData = async () => {
       emit("refresh");
       emit("close");
 
-      // Bắn thông báo mượt mà ở góc màn hình bằng Swal
       Swal.fire({
         toast: true,
         position: 'top-end',
@@ -1176,8 +1218,8 @@ textarea.form-control {
   font-size: 13px;
   border-radius: 12px;
 }
+.variant-table input[type="text"],
 .variant-table input[type="number"] {
-  text-align: right;
   font-weight: 600;
 }
 .btn-icon {

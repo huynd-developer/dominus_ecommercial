@@ -106,6 +106,15 @@ public class AdminOrderStatusServiceImpl implements AdminOrderStatusService {
     }
 
     private void completeOrder(Order order) {
+        Integer oldStatus = safeStatus(order);
+
+        // CHO PHÉP ADMIN TỪ CHỐI YÊU CẦU HOÀN (Chuyển từ trạng thái 6 về lại 3)
+        if (oldStatus == STATUS_RETURN_REQUESTED) {
+            order.setStatus(STATUS_COMPLETED);
+            orderRepository.save(order);
+            return;
+        }
+
         requireCurrentStatus(
                 order,
                 STATUS_SHIPPING,
@@ -120,12 +129,6 @@ public class AdminOrderStatusServiceImpl implements AdminOrderStatusService {
 
         orderRepository.save(order);
 
-        /*
-         * Giữ logic nghiệp vụ cũ:
-         * Khi đơn hoàn thành thì cộng điểm.
-         * LoyaltyPointService tự kiểm tra LoyaltyPointsApplied
-         * để tránh cộng điểm nhiều lần.
-         */
         loyaltyPointService.applyPointsWhenOrderCompleted(order);
 
         orderRepository.save(order);

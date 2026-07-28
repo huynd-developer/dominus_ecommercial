@@ -58,15 +58,27 @@
           </div>
 
           <div class="variant-grid">
-            <p class="item-variant">
-              Dung tích:
-              <strong>{{ item.capacity || "-" }}</strong>
-            </p>
-
-            <p class="item-variant">
-              Loại chai:
-              <strong>{{ item.bottleType || "-" }}</strong>
-            </p>
+            <template v-if="getVariantsList(item).length > 0">
+              <select
+                class="variant-select form-select form-select-sm"
+                :value="getVariantId(item)"
+                @change="(e) => $emit('update-variant', item, Number((e.target as HTMLSelectElement).value))"
+                :disabled="isUpdating"
+              >
+                <option
+                  v-for="v in getVariantsList(item)"
+                  :key="v.id || v.productVariantId || v.variantId"
+                  :value="v.id || v.productVariantId || v.variantId"
+                  :disabled="v.status === 0 || v.stockQuantity === 0"
+                >
+                  {{ v.capacity?.value || v.capacity }}ml - {{ v.bottleType?.name || v.bottleType }} ({{ formatCurrency(v.price) }})
+                </option>
+              </select>
+            </template>
+            <template v-else>
+              <p class="item-variant">Dung tích: <strong>{{ item.capacity || "-" }}</strong></p>
+              <p class="item-variant">Loại chai: <strong>{{ item.bottleType || "-" }}</strong></p>
+            </template>
           </div>
 
           <div class="date-grid">
@@ -189,6 +201,9 @@ interface CartItem {
   cartItemId: number;
   productVariantId?: number;
 
+  variantId?: number;
+  id?: number;
+
   sku?: string | null;
   productName?: string | null;
   capacity?: string | null;
@@ -255,7 +270,18 @@ defineProps<{
 defineEmits<{
   (e: "update-qty", item: CartItem, quantity: number): void;
   (e: "remove-item", cartItemId: number): void;
+  (e: "update-variant", item: CartItem, newVariantId: number): void;
 }>();
+
+const getVariantId = (item: CartItem) => {
+  return Number(item?.productVariantId ?? item?.variantId ?? item?.id ?? 0);
+};
+
+const getVariantsList = (item: CartItem) => {
+  const product = item?.product ?? item?.Product;
+  const variants = product?.variants ?? product?.productVariants ?? product?.Variants;
+  return Array.isArray(variants) ? variants : [];
+};
 
 const BACKEND_URL = "http://localhost:8080";
 
