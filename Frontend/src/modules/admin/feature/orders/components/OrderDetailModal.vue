@@ -7,12 +7,14 @@
             <h5 class="modal-title fw-bold mb-1">
               Chi tiết đơn hàng {{ order?.orderCode }}
             </h5>
-            <small class="text-muted">
-              Mã đơn #{{ order?.orderId }}
-            </small>
+            <small class="text-muted"> Mã đơn #{{ order?.orderId }} </small>
           </div>
 
-          <button type="button" class="btn-close" @click="$emit('close')"></button>
+          <button
+            type="button"
+            class="btn-close"
+            @click="$emit('close')"
+          ></button>
         </div>
 
         <div class="modal-body">
@@ -48,11 +50,13 @@
                     {{ formatOrderType(order.orderType) }}
                   </p>
                   <p class="mb-1">
-                    <strong>Thanh toán:</strong>
-                    {{ order.paymentMethod || "-" }}
+                    <strong>Thanh toán: </strong>
+                    <span class="payment-method-text">
+                      {{ formatPaymentMethod(order.paymentMethod) }}
+                    </span>
                   </p>
                   <p class="mb-1">
-                    <strong>Trạng thái:</strong>
+                    <strong>Trạng thái: </strong>
                     <OrderStatusBadge
                       :status="order.status"
                       :status-text="order.statusText"
@@ -327,9 +331,35 @@ function formatOrderType(type?: string | null) {
       return "-";
   }
 }
+function formatPaymentMethod(method?: string | null) {
+  if (!method) return "-";
+
+  const upper = method.toUpperCase().trim();
+
+  if (upper === "MIXED_VIETQR") return "Tiền mặt + VietQR";
+  if (upper === "MIXED_VNPAY") return "Tiền mặt + VNPay";
+  if (upper === "MIXED_CASH") return "Thanh toán hỗn hợp";
+  if (upper.includes("MIXED")) return "Thanh toán hỗn hợp";
+
+  if (upper.includes("COD")) return "COD - thanh toán khi nhận hàng";
+  if (upper.includes("VIETQR") || upper.includes("QR"))
+    return "Chuyển khoản VietQR";
+  if (upper.includes("VNPAY")) return "Thanh toán qua VNPay";
+  if (upper.includes("MOMO")) return "Thanh toán qua MoMo";
+  if (upper.includes("CASH")) return "Tiền mặt";
+  if (upper === "HOLD") return "Phiếu treo";
+  if (upper.includes("BANK") || upper.includes("TRANSFER"))
+    return "Chuyển khoản ngân hàng";
+
+  return method;
+}
 </script>
 
 <style scoped>
+.payment-method-text {
+  color: #0f172a;
+  font-weight: 600;
+}
 .modal {
   background: rgba(0, 0, 0, 0.1);
 }

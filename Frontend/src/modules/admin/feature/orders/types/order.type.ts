@@ -96,6 +96,13 @@ export interface OrderSearchParams {
   keyword?: string;
   status?: number | null;
   orderType?: string | null;
+
+  paymentMethod?: string | null;
+  fromDate?: string | null;
+  toDate?: string | null;
+  minAmount?: number | null;
+  maxAmount?: number | null;
+
   page?: number;
   size?: number;
 }

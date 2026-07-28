@@ -15,11 +15,28 @@ export const orderService = {
       {
         params: {
           keyword: params.keyword || undefined,
+
           status:
             params.status === null || params.status === undefined
               ? undefined
               : params.status,
+
           orderType: params.orderType || undefined,
+          paymentMethod: params.paymentMethod || undefined,
+
+          fromDate: params.fromDate || undefined,
+          toDate: params.toDate || undefined,
+
+          minAmount:
+            params.minAmount === null || params.minAmount === undefined
+              ? undefined
+              : params.minAmount,
+
+          maxAmount:
+            params.maxAmount === null || params.maxAmount === undefined
+              ? undefined
+              : params.maxAmount,
+
           page: params.page ?? 0,
           size: params.size ?? 10,
         },

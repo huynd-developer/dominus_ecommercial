@@ -16,8 +16,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Set;
@@ -54,19 +58,55 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final EntityManager entityManager;
-
+    private record KeywordDateRange(
+            String keyword,
+            LocalDateTime fromDateTime,
+            LocalDateTime toDateTime
+    ) {
+    }
     @Override
     @Transactional(readOnly = true)
     public Page<AdminOrderResponse> getOrders(
             String keyword,
             Integer status,
             String orderType,
+            String paymentMethod,
+            LocalDate fromDate,
+            LocalDate toDate,
+            BigDecimal minAmount,
+            BigDecimal maxAmount,
             Pageable pageable
     ) {
+        validateAmountRange(minAmount, maxAmount);
+        validateDateRange(fromDate, toDate);
+
+        KeywordDateRange keywordDateRange = resolveKeywordDateRange(keyword);
+
+        LocalDateTime requestFromDateTime =
+                fromDate == null ? null : fromDate.atStartOfDay();
+
+        LocalDateTime requestToDateTime =
+                toDate == null ? null : toDate.plusDays(1).atStartOfDay();
+
+        LocalDateTime finalFromDateTime =
+                requestFromDateTime != null
+                        ? requestFromDateTime
+                        : keywordDateRange.fromDateTime();
+
+        LocalDateTime finalToDateTime =
+                requestToDateTime != null
+                        ? requestToDateTime
+                        : keywordDateRange.toDateTime();
+
         return orderRepository.searchAdminOrders(
-                normalizeKeyword(keyword),
+                normalizeKeyword(keywordDateRange.keyword()),
                 normalizeSearchStatus(status),
                 normalizeOrderType(orderType),
+                normalizePaymentMethod(paymentMethod),
+                finalFromDateTime,
+                finalToDateTime,
+                minAmount,
+                maxAmount,
                 pageable
         ).map(order -> mapOrderToResponse(order, false));
     }
@@ -288,6 +328,52 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         return normalized;
     }
 
+    private String normalizePaymentMethod(String paymentMethod) {
+        if (paymentMethod == null || paymentMethod.trim().isEmpty()) {
+            return null;
+        }
+
+        String normalized = paymentMethod.trim().toUpperCase(Locale.ROOT);
+
+        if ("ALL".equals(normalized) || "TAT_CA".equals(normalized)) {
+            return null;
+        }
+
+        return normalized;
+    }
+
+    private void validateDateRange(LocalDate fromDate, LocalDate toDate) {
+        if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ngày bắt đầu không được sau ngày kết thúc"
+            );
+        }
+    }
+
+    private void validateAmountRange(BigDecimal minAmount, BigDecimal maxAmount) {
+        if (minAmount != null && minAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Số tiền tối thiểu không hợp lệ"
+            );
+        }
+
+        if (maxAmount != null && maxAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Số tiền tối đa không hợp lệ"
+            );
+        }
+
+        if (minAmount != null && maxAmount != null && minAmount.compareTo(maxAmount) > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Số tiền tối thiểu không được lớn hơn số tiền tối đa"
+            );
+        }
+    }
+
     private String normalizeKeyword(String keyword) {
         if (keyword == null) {
             return null;
@@ -295,7 +381,79 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         String trimmed = keyword.trim();
 
-        return trimmed.isEmpty() ? null : trimmed;
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+
+        String upper = trimmed.toUpperCase(Locale.ROOT);
+
+        if (upper.matches("^DH0*\\d+$")) {
+            String numberPart = upper.replaceFirst("^DH0*", "");
+
+            return numberPart.isEmpty() ? trimmed : numberPart;
+        }
+
+        if (trimmed.matches("^#0*\\d+$")) {
+            String numberPart = trimmed.replaceFirst("^#0*", "");
+
+            return numberPart.isEmpty() ? trimmed : numberPart;
+        }
+
+        return trimmed;
+    }
+
+    private KeywordDateRange resolveKeywordDateRange(String keyword) {
+        String normalizedKeyword = normalizeKeyword(keyword);
+
+        if (normalizedKeyword == null) {
+            return new KeywordDateRange(null, null, null);
+        }
+
+        String value = normalizedKeyword.trim();
+
+        DateTimeFormatter dateTimeFormatter =
+                DateTimeFormatter.ofPattern("HH:mm:ss dd/MM/yyyy");
+
+        DateTimeFormatter dateFormatterSlash =
+                DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+        DateTimeFormatter dateFormatterDash =
+                DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
+        try {
+            LocalDateTime dateTime = LocalDateTime.parse(value, dateTimeFormatter);
+
+            return new KeywordDateRange(
+                    null,
+                    dateTime,
+                    dateTime.plusSeconds(1)
+            );
+        } catch (DateTimeParseException ignored) {
+        }
+
+        try {
+            LocalDate date = LocalDate.parse(value, dateFormatterSlash);
+
+            return new KeywordDateRange(
+                    null,
+                    date.atStartOfDay(),
+                    date.plusDays(1).atStartOfDay()
+            );
+        } catch (DateTimeParseException ignored) {
+        }
+
+        try {
+            LocalDate date = LocalDate.parse(value, dateFormatterDash);
+
+            return new KeywordDateRange(
+                    null,
+                    date.atStartOfDay(),
+                    date.plusDays(1).atStartOfDay()
+            );
+        } catch (DateTimeParseException ignored) {
+        }
+
+        return new KeywordDateRange(normalizedKeyword, null, null);
     }
 
     private Integer safeStatus(Order order) {
