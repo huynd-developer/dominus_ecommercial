@@ -1,5 +1,4 @@
 <template>
-  <!-- ĐÃ SỬA: Thêm thuộc tính :locale để việt hóa chữ No data -->
   <a-table
     :columns="columns"
     :data-source="store.orders"
@@ -9,6 +8,12 @@
     :locale="{ emptyText: 'Không có dữ liệu' }"
   >
     <template #bodyCell="{ column, record }">
+      
+      <!-- ĐÃ THÊM: Format lại cột Mã đơn (Biến ID thành Mã code) -->
+      <template v-if="column.key === 'id'">
+        <span class="fw-bold text-dark">{{ formatOrderCode(record.id) }}</span>
+      </template>
+
       <!-- Loại đơn (Việt hóa) -->
       <template v-if="column.key === 'orderType'">
         <a-tag :color="record.orderType === 'ONLINE' ? 'blue' : 'green'">
@@ -20,7 +25,7 @@
         </a-tag>
       </template>
 
-      <!-- Thanh toán -->
+      <!-- Thanh toán (Đã chuẩn hóa 100% theo màn hình Checkout) -->
       <template v-if="column.key === 'paymentMethod'">
         <a-tag :color="getPaymentColor(record.paymentMethod)">
           {{ formatPaymentMethod(record.paymentMethod) }}
@@ -54,7 +59,7 @@
             Chi tiết
           </a-button>
 
-          <!-- Thao tác hủy đơn nhanh từ thầy yêu cầu -->
+          <!-- Thao tác hủy đơn nhanh -->
           <a-button
             v-if="record.status === 0"
             danger
@@ -88,8 +93,9 @@ import OrderStatusTag from "./OrderStatusTag.vue";
 const emit = defineEmits<{ (e: "detail", id: number): void }>();
 const store = useOrderStore();
 
+// Đã tăng width của cột id lên 100 để chứa đủ chữ DH-00000
 const columns = [
-  { title: "Mã đơn", dataIndex: "id", key: "id", width: 90 },
+  { title: "Mã đơn", dataIndex: "id", key: "id", width: 100 },
   { title: "Khách hàng", dataIndex: "customerName", key: "customerName" },
   { title: "SĐT", dataIndex: "customerPhone", key: "customerPhone" },
   { title: "Loại đơn", key: "orderType" },
@@ -99,6 +105,13 @@ const columns = [
   { title: "Ngày tạo", key: "createdAt" },
   { title: "Thao tác", key: "action", align: "center", width: 180 },
 ];
+
+// Hàm format mã đơn hàng từ ID
+function formatOrderCode(id: number) {
+  if (!id) return "";
+  // PadStart sẽ thêm số 0 vào trước cho đủ 5 ký tự. Ví dụ: 101 -> DH-00101
+  return `DH-${id.toString().padStart(5, '0')}`;
+}
 
 function money(value: number) {
   return new Intl.NumberFormat("vi-VN", {
@@ -119,7 +132,7 @@ function detail(id: number) {
 async function cancelOrder(id: number) {
   const result = await Swal.fire({
     title: "Xác nhận hủy đơn?",
-    text: `Bạn có chắc chắn muốn hủy đơn hàng #${id}?`,
+    text: `Bạn có chắc chắn muốn hủy đơn hàng ${formatOrderCode(id)}?`,
     icon: "warning",
     showCancelButton: true,
     confirmButtonText: "Vâng, hủy đơn",
@@ -131,7 +144,7 @@ async function cancelOrder(id: number) {
 
   try {
     await store.cancelOrder(id);
-    store.loadOrders(); // Tải lại danh sách
+    store.loadOrders(); 
     Swal.fire({
       icon: "success",
       title: "Đã hủy đơn",
@@ -157,15 +170,20 @@ function changeSize(page: number, size: number) {
   store.loadOrders();
 }
 
+// ĐÃ SỬA: Đồng bộ tên phương thức thanh toán chuẩn với Checkout
 function formatPaymentMethod(method?: string) {
   if (!method) return "Không xác định";
   const upper = method.toUpperCase();
   
   if (upper.includes("COD")) return "Thanh toán khi nhận hàng (COD)";
   if (upper.includes("VIETQR") || upper.includes("QR")) return "Chuyển khoản VietQR";
-  if (upper.includes("VNPAY")) return "Chuyển khoản VNPay";
-  if (upper.includes("MOMO")) return "Chuyển khoản MoMo";
-  if (upper.includes("CASH")) return "Tiền mặt";
+  if (upper.includes("VNPAY")) return "Thanh toán qua VNPay";
+  if (upper.includes("MOMO")) return "Thanh toán qua MoMo";
+  
+  // Xử lý thêm các trường hợp thanh toán tại quầy (nếu có)
+  if (upper.includes("CASH")) return "Tiền mặt (Tại quầy)";
+  if (upper.includes("MIXED")) return "Thanh toán hỗn hợp";
+  if (upper === "HOLD") return "Phiếu treo";
   if (upper.includes("BANK") || upper.includes("TRANSFER")) return "Chuyển khoản ngân hàng";
   
   return method; 
@@ -179,6 +197,8 @@ function getPaymentColor(method?: string) {
   if (upper.includes("VNPAY")) return "blue";
   if (upper.includes("MOMO")) return "magenta";
   if (upper.includes("VIETQR") || upper.includes("QR")) return "purple"; 
+  if (upper.includes("MIXED")) return "geekblue";
+  if (upper === "HOLD") return "volcano";
   
   return "cyan";
 }
