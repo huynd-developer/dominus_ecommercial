@@ -130,6 +130,9 @@ const showQrModal = ref(false);
 const showSuccessModal = ref(false);
 const qrCodeUrl = ref("");
 
+// BIẾN LƯU ID ĐƠN HÀNG VỪA TẠO (DÙNG ĐỂ TỰ ĐỘNG HỦY NẾU KHÁCH KHÔNG QUÉT MÃ)
+const createdOrderId = ref<number | null>(null);
+
 const successStatusText = ref("");
 const successMessage = ref(
   "Cảm ơn bạn đã mua sắm tại Dominus. Đơn hàng của bạn đang chờ cửa hàng xác nhận."
@@ -612,7 +615,6 @@ const loadCartSummary = async () => {
     if (cartItems.value.length === 0) {
       handleCancelVoucher();
 
-      // ĐÃ SỬA: Nếu giỏ hàng trống (thường là do ấn Back từ VNPay), đá về Lịch sử đơn hàng thay vì trang Sản phẩm
       await Swal.fire({
         icon: "info",
         title: "Đơn hàng đã được tạo",
@@ -725,6 +727,9 @@ const handlePlaceOrder = async () => {
   try {
     const res = await api.post("/v1/orders/checkout", submitData);
 
+    // BẮT ĐƯỢC ID ĐƠN HÀNG VỪA TẠO
+    createdOrderId.value = res.data?.orderId || null;
+
     localStorage.removeItem("applied_voucher");
 
     // LUỒNG 1: NẾU LÀ VNPAY -> CHUYỂN HƯỚNG SANG TRANG THANH TOÁN VNPay
@@ -744,16 +749,23 @@ const handlePlaceOrder = async () => {
     // LUỒNG CHUNG CHO VIETQR & COD: Chuẩn bị Data cho bảng Thành công
     const responseStatus = Number(res.data?.status ?? 0);
     const responseStatusText = getStatusText(responseStatus);
+    const finalDiscount = Number(res.data?.discountAmount ?? discountAmount.value);
 
     successStatusText.value = responseStatusText;
     successMessage.value = res.data?.message || "Cảm ơn bạn đã mua sắm tại Dominus. Đơn hàng của bạn đang chờ cửa hàng xác nhận.";
+    
+    // Dùng Spread Operator (...) để giải quyết triệt để lỗi TypeScript
     successDetails.value = [
       { label: "Mã đơn hàng", value: res.data?.orderId ? `#${res.data.orderId}` : "-" },
       { label: "Trạng thái", value: responseStatusText },
       { label: "Phương thức", value: formatPaymentMethod(res.data?.paymentMethod || submitData.paymentMethod) },
-      { label: "Mã giảm giá", value: res.data?.voucherCode || submitData.voucherCode || "Không có" },
+      
+      ...(finalDiscount > 0 ? [{ label: "Mã giảm giá", value: res.data?.voucherCode || submitData.voucherCode || "Không có" }] : []),
+      
       { label: "Tạm tính", value: formatCurrency(Number(res.data?.totalAmount ?? totalAmount.value)), money: true },
-      { label: "Giảm giá", value: `-${formatCurrency(Number(res.data?.discountAmount ?? discountAmount.value))}`, money: true },
+      
+      ...(finalDiscount > 0 ? [{ label: "Giảm giá", value: `-${formatCurrency(finalDiscount)}`, money: true }] : []),
+      
       { label: "Tổng thanh toán", value: formatCurrency(Number(res.data?.finalAmount ?? finalTotal.value)), money: true },
     ];
 
@@ -790,22 +802,18 @@ const confirmQrPayment = () => {
   }, 200);
 };
 
-// Hủy thanh toán QR và chuyển về trang Lịch sử đơn hàng
-const handleCancelQR = () => {
-  // 1. Tắt modal QR
+// ĐÃ SỬA: Không hủy đơn nữa mà thông báo cho khách có 15 phút
+const handleCancelQR = async () => {
   showQrModal.value = false; 
 
-  // 2. Bắn thông báo
-  Swal.fire({
-    toast: true,
-    position: 'top-end',
+  await Swal.fire({
     icon: 'info',
-    title: 'Đã hủy quá trình quét mã QR',
-    showConfirmButton: false,
-    timer: 2000
+    title: 'Chưa hoàn tất thanh toán',
+    text: 'Đơn hàng đã được tạo. Vui lòng thanh toán trong vòng 15 phút tại Lịch sử đơn hàng để không bị tự động hủy.',
+    confirmButtonColor: '#bd9a5f',
+    confirmButtonText: 'Đã hiểu'
   });
 
-  // 3. Đẩy về trang Lịch sử đơn hàng
   goToOrders();
 };
 
