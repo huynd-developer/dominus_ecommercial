@@ -96,8 +96,33 @@ export interface OrderSearchParams {
   keyword?: string;
   status?: number | null;
   orderType?: string | null;
+
+  fromDate?: string | null;
+  toDate?: string | null;
+
   page?: number;
   size?: number;
+}
+
+export interface OrderStatusCountParams {
+  keyword?: string | null;
+  orderType?: string | null;
+
+  fromDate?: string | null;
+  toDate?: string | null;
+}
+
+export interface AdminOrderStatusCountResponse {
+  total: number;
+
+  pending: number;
+  confirmed: number;
+  shipping: number;
+  completed: number;
+  cancelled: number;
+  deliveryFailed: number;
+  returnRequested: number;
+  returnCompleted: number;
 }
 
 export interface UpdateOrderStatusResponse {

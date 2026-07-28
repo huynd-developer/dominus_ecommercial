@@ -1,8 +1,12 @@
 package org.example.datn_sd69.modules.order.service;
 
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderResponse;
+import org.example.datn_sd69.modules.order.dto.response.AdminOrderStatusCountResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
 
 public interface AdminOrderService {
 
@@ -10,8 +14,19 @@ public interface AdminOrderService {
             String keyword,
             Integer status,
             String orderType,
+            String paymentMethod,
+            LocalDate fromDate,
+            LocalDate toDate,
+            BigDecimal minAmount,
+            BigDecimal maxAmount,
             Pageable pageable
     );
 
     AdminOrderResponse getOrderDetail(Integer orderId);
+    AdminOrderStatusCountResponse getStatusCounts(
+            String keyword,
+            String orderType,
+            LocalDate fromDate,
+            LocalDate toDate
+    );
 }

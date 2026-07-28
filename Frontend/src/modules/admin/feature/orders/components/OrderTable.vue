@@ -1,59 +1,82 @@
 <template>
-  <!-- SỬA 1: Bọc tất cả vào 1 thẻ div để tránh lỗi Fragment -->
-  <div class="order-table-wrapper">
+  <div class="order-table-card">
     <a-table
       :columns="columns"
-      :data-source="orders" 
+      :data-source="orders"
       :loading="loading"
       :pagination="false"
       row-key="orderId"
+      size="middle"
+      :scroll="{ x: 1100 }"
       :locale="{ emptyText: 'Không có dữ liệu' }"
     >
       <template #bodyCell="{ column, record }">
-        <!-- Format lại cột Mã đơn (Dùng luôn orderCode từ backend) -->
         <template v-if="column.key === 'orderCode'">
-          <span class="fw-bold text-dark">{{ record.orderCode }}</span>
+          <div class="order-code-cell">
+            <span class="order-code">{{ record.orderCode }}</span>
+          </div>
         </template>
 
-        <!-- Loại đơn (Việt hóa) -->
+        <template v-if="column.key === 'customer'">
+          <div class="customer-cell">
+            <span class="customer-name">
+              {{ record.customerName || "Khách vãng lai" }}
+            </span>
+            <span class="customer-phone">
+              {{ record.customerPhone || "-" }}
+            </span>
+          </div>
+        </template>
+
         <template v-if="column.key === 'orderType'">
-          <a-tag :color="record.orderType === 'ONLINE' ? 'blue' : 'green'">
-            <i class="bi" :class="record.orderType === 'ONLINE' ? 'bi-truck' : 'bi-shop'"></i>
-            {{ record.orderType === "ONLINE" ? " Online" : " Tại quầy" }}
+          <a-tag
+            class="order-type-tag"
+            :color="record.orderType === 'ONLINE' ? 'blue' : 'green'"
+          >
+            <i
+              class="bi"
+              :class="record.orderType === 'ONLINE' ? 'bi-truck' : 'bi-shop'"
+            ></i>
+            {{ record.orderType === "ONLINE" ? "Online" : "Tại quầy" }}
           </a-tag>
         </template>
 
-        <!-- Thanh toán -->
         <template v-if="column.key === 'paymentMethod'">
-          <a-tag :color="getPaymentColor(record.paymentMethod)">
+          <a-tag class="payment-tag" :color="getPaymentColor(record.paymentMethod)">
             {{ formatPaymentMethod(record.paymentMethod) }}
           </a-tag>
         </template>
 
-        <!-- Tiền -->
         <template v-if="column.key === 'finalAmount'">
-          <span class="fw-bold text-danger">{{ money(record.finalAmount) }}</span>
+          <span class="amount-text">
+            {{ money(record.finalAmount) }}
+          </span>
         </template>
 
-        <!-- Trạng thái -->
         <template v-if="column.key === 'status'">
-          <OrderStatusBadge :status="record.status" :status-text="record.statusText" />
+          <OrderStatusBadge
+            :status="record.status"
+            :status-text="record.statusText"
+          />
         </template>
 
-        <!-- Ngày -->
         <template v-if="column.key === 'createdAt'">
-          {{ formatDate(record.createdAt) }}
+          <div class="date-cell">
+            {{ formatDate(record.createdAt) }}
+          </div>
         </template>
 
-        <!-- Thao tác -->
         <template v-if="column.key === 'action'">
-          <a-space>
-            <!-- Nút Xem chi tiết (Lúc nào cũng có) -->
-            <a-button type="default" size="small" @click="emit('viewDetail', record.orderId)">
+          <div class="action-cell">
+            <a-button
+              class="detail-btn"
+              type="default"
+              size="small"
+              @click="emit('viewDetail', record.orderId)"
+            >
               Chi tiết
             </a-button>
 
-            <!-- Vòng lặp render các nút thao tác theo đúng trạng thái đơn hàng -->
             <a-button
               v-for="action in getAvailableActions(record.status)"
               :key="action.status"
@@ -64,135 +87,125 @@
             >
               {{ action.label }}
             </a-button>
-          </a-space>
+          </div>
         </template>
       </template>
     </a-table>
-
-    <div class="mt-4 text-end">
-      <a-pagination
-        :current="store.currentPage + 1"
-        :pageSize="store.pageSize"
-        :total="store.totalElements"
-        show-size-changer
-        @change="changePage"
-        @showSizeChange="changeSize"
-      />
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import Swal from "sweetalert2";
-import { useOrderStore } from "../stores/orderStore";
 import OrderStatusBadge from "./OrderStatusBadge.vue";
 
-// SỬA 3: Khai báo props để hứng data (orders, loading) từ component cha truyền xuống
-const props = defineProps<{
+defineProps<{
   orders: any[];
   loading: boolean;
 }>();
 
-// SỬA 4: Khai báo emits chuẩn với tên mà component cha đang vòi (viewDetail, changeStatus)
 const emit = defineEmits<{
   (e: "viewDetail", id: number): void;
   (e: "changeStatus", order: any, status: number): void;
 }>();
 
-const store = useOrderStore();
-
 const columns = [
-  { title: "Mã đơn", dataIndex: "orderCode", key: "orderCode", width: 110 },
-  { title: "Khách hàng", dataIndex: "customerName", key: "customerName" },
-  { title: "SĐT", dataIndex: "customerPhone", key: "customerPhone" },
-  { title: "Loại đơn", key: "orderType" },
-  { title: "Thanh toán", dataIndex: "paymentMethod", key: "paymentMethod" },
-  { title: "Tổng tiền", key: "finalAmount" },
-  { title: "Trạng thái", key: "status" },
-  { title: "Ngày tạo", key: "createdAt" },
-  { title: "Thao tác", key: "action", align: "center", width: 180 },
+  {
+    title: "Mã đơn",
+    key: "orderCode",
+    width: 130,
+  },
+  {
+    title: "Khách hàng",
+    key: "customer",
+    width: 190,
+  },
+  {
+    title: "Loại đơn",
+    key: "orderType",
+    width: 120,
+  },
+  {
+    title: "Thanh toán",
+    dataIndex: "paymentMethod",
+    key: "paymentMethod",
+    width: 210,
+  },
+  {
+    title: "Tổng tiền",
+    key: "finalAmount",
+    width: 140,
+    align: "right",
+  },
+  {
+    title: "Trạng thái",
+    key: "status",
+    width: 170,
+  },
+  {
+    title: "Ngày tạo",
+    key: "createdAt",
+    width: 160,
+  },
+  {
+    title: "Thao tác",
+    key: "action",
+    align: "right",
+    width: 220,
+  },
 ];
 
 function money(value: number) {
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
     currency: "VND",
-  }).format(value);
+  }).format(Number(value || 0));
 }
 
 function formatDate(date?: string | null) {
   if (!date) return "-";
-  return new Date(date).toLocaleString("vi-VN");
-}
 
-async function cancelOrder(id: number, code: string) {
-  const result = await Swal.fire({
-    title: "Xác nhận hủy đơn?",
-    text: `Bạn có chắc chắn muốn hủy đơn hàng ${code}?`,
-    icon: "warning",
-    showCancelButton: true,
-    confirmButtonText: "Vâng, hủy đơn",
-    cancelButtonText: "Đóng",
-    confirmButtonColor: "#dc3545",
+  return new Date(date).toLocaleString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
   });
-
-  if (!result.isConfirmed) return;
-
-  try {
-    await store.cancelOrder(id);
-    Swal.fire({
-      icon: "success",
-      title: "Đã hủy đơn",
-      timer: 1500,
-      showConfirmButton: false,
-    });
-  } catch (e: any) {
-    Swal.fire({
-      icon: "error",
-      title: "Lỗi",
-      text: e.response?.data?.message || "Có lỗi xảy ra",
-    });
-  }
-}
-
-function changePage(page: number) {
-  store.changePage(page - 1);
-}
-
-function changeSize(page: number, size: number) {
-  store.currentPage = 0;
-  store.pageSize = size;
-  store.loadOrders();
 }
 
 function formatPaymentMethod(method?: string) {
   if (!method) return "Không xác định";
-  const upper = method.toUpperCase();
-  
-  if (upper.includes("COD")) return "Thanh toán khi nhận hàng (COD)";
-  if (upper.includes("VIETQR") || upper.includes("QR")) return "Chuyển khoản VietQR";
-  if (upper.includes("VNPAY")) return "Thanh toán qua VNPay";
-  if (upper.includes("MOMO")) return "Thanh toán qua MoMo";
-  
-  if (upper.includes("CASH")) return "Tiền mặt (Tại quầy)";
+
+  const upper = method.toUpperCase().trim();
+
+  if (upper === "MIXED_VIETQR") return "Tiền mặt + VietQR";
+  if (upper === "MIXED_VNPAY") return "Tiền mặt + VNPay";
+  if (upper === "MIXED_CASH") return "Thanh toán hỗn hợp";
   if (upper.includes("MIXED")) return "Thanh toán hỗn hợp";
+
+  if (upper.includes("COD")) return "Thanh toán tiền mặt";
+  if (upper.includes("VIETQR") || upper.includes("QR")) return "Chuyển khoản VietQR";
+  if (upper.includes("VNPAY")) return "VNPay";
+  if (upper.includes("MOMO")) return "MoMo";
+  if (upper.includes("CASH")) return "Tiền mặt";
   if (upper === "HOLD") return "Phiếu treo";
-  if (upper.includes("BANK") || upper.includes("TRANSFER")) return "Chuyển khoản ngân hàng";
-  
-  return method; 
+  if (upper.includes("BANK") || upper.includes("TRANSFER")) return "Chuyển khoản";
+
+  return method;
 }
 
 function getPaymentColor(method?: string) {
   if (!method) return "default";
-  const upper = method.toUpperCase();
-  
+
+  const upper = method.toUpperCase().trim();
+
+  if (upper.includes("MIXED")) return "geekblue";
   if (upper.includes("COD") || upper.includes("CASH")) return "orange";
   if (upper.includes("VNPAY")) return "blue";
   if (upper.includes("MOMO")) return "magenta";
-  if (upper.includes("VIETQR") || upper.includes("QR")) return "purple"; 
-  if (upper.includes("MIXED")) return "geekblue";
+  if (upper.includes("VIETQR") || upper.includes("QR")) return "purple";
   if (upper === "HOLD") return "volcano";
-  
+
   return "cyan";
 }
 
@@ -226,3 +239,129 @@ function getAvailableActions(status: number) {
   }
 }
 </script>
+
+<style scoped>
+.order-table-card {
+  background: #ffffff;
+  border: 1px solid #edf0f3;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
+}
+
+.order-code-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.order-code {
+  color: #111827;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.order-id {
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.customer-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.customer-name {
+  color: #111827;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.customer-phone {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.order-type-tag,
+.payment-tag {
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.payment-tag {
+  max-width: 190px;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.amount-text {
+  color: #ef233c;
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.date-cell {
+  color: #374151;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.action-cell {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.detail-btn {
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.detail-btn:hover {
+  border-color: #bd9a5f;
+  color: #bd9a5f;
+}
+
+:deep(.ant-table) {
+  color: #111827;
+  font-size: 14px;
+}
+
+:deep(.ant-table-thead > tr > th) {
+  background: #f8fafc !important;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.35px;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+:deep(.ant-table-tbody > tr > td) {
+  padding: 14px 16px !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  vertical-align: middle;
+}
+
+:deep(.ant-table-tbody > tr:hover > td) {
+  background: #fffaf2 !important;
+}
+
+:deep(.ant-btn-sm) {
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+:deep(.ant-table-container) {
+  border-radius: 16px;
+}
+</style>

@@ -18,11 +18,43 @@
     </div>
 
     <OrderFilter
-      :keyword="keyword"
-      :status="status"
-      :order-type="orderType"
-      @search="handleSearch"
-    />
+  :keyword="keyword"
+  :status="status"
+  :order-type="orderType"
+  :from-date="fromDate"
+  :to-date="toDate"
+  @search="handleSearch"
+/>
+
+    <div class="order-filter-tabs mb-3">
+      <div class="order-status-tabs">
+        <button
+          v-for="item in statusTabs"
+          :key="String(item.value)"
+          type="button"
+          class="underline-tab"
+          :class="{ active: status === item.value }"
+          :disabled="loading"
+          @click="changeStatusTab(item.value)"
+        >
+          {{ item.label }}
+        </button>
+      </div>
+
+      <div class="order-type-tabs">
+        <button
+          v-for="item in orderTypeTabs"
+          :key="item.value"
+          type="button"
+          class="underline-tab type-tab"
+          :class="{ active: orderType === item.value }"
+          :disabled="loading"
+          @click="changeOrderTypeTab(item.value)"
+        >
+          {{ item.label }}
+        </button>
+      </div>
+    </div>
 
     <OrderTable
       :orders="orders"
@@ -106,10 +138,31 @@ const keyword = ref("");
 const status = ref<number | null>(null);
 const orderType = ref("");
 
+const fromDate = ref("");
+const toDate = ref("");
+
 const page = ref(0);
 const size = ref(10);
 const totalElements = ref(0);
 const totalPages = ref(0);
+
+const statusTabs = [
+  { label: "Tất cả", value: null },
+  { label: "Chờ xác nhận", value: 0 },
+  { label: "Đã xác nhận", value: 1 },
+  { label: "Đang giao", value: 2 },
+  { label: "Hoàn thành", value: 3 },
+  { label: "Đã hủy", value: 4 },
+  { label: "Giao thất bại", value: 5 },
+  { label: "Yêu cầu hoàn", value: 6 },
+  { label: "Hoàn hàng hoàn tất", value: 7 },
+];
+
+const orderTypeTabs = [
+  { label: "Tất cả đơn", value: "" },
+  { label: "Online", value: "ONLINE" },
+  { label: "Tại quầy", value: "IN_STORE" },
+];
 
 const safeTotalPages = computed(() => {
   if (totalElements.value <= 0) {
@@ -165,6 +218,9 @@ async function loadOrders() {
       keyword: keyword.value,
       status: status.value,
       orderType: orderType.value,
+
+      fromDate: fromDate.value,
+      toDate: toDate.value,
       page: page.value,
       size: size.value,
     });
@@ -238,10 +294,31 @@ function handleSearch(payload: {
   keyword: string;
   status: number | null;
   orderType: string;
+  fromDate: string;
+  toDate: string;
 }) {
   keyword.value = payload.keyword;
   status.value = payload.status;
   orderType.value = payload.orderType;
+  fromDate.value = payload.fromDate;
+  toDate.value = payload.toDate;
+
+  page.value = 0;
+  loadOrders();
+}
+
+function changeStatusTab(value: number | null) {
+  if (status.value === value) return;
+
+  status.value = value;
+  page.value = 0;
+  loadOrders();
+}
+
+function changeOrderTypeTab(value: string) {
+  if (orderType.value === value) return;
+
+  orderType.value = value;
   page.value = 0;
   loadOrders();
 }
@@ -362,6 +439,77 @@ function getStatusText(status: number) {
 </script>
 
 <style scoped>
+.order-filter-tabs {
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.order-status-tabs,
+.order-type-tabs {
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.order-status-tabs::-webkit-scrollbar,
+.order-type-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.order-status-tabs {
+  min-height: 58px;
+}
+
+.order-type-tabs {
+  min-height: 46px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.underline-tab {
+  position: relative;
+  min-width: 128px;
+  min-height: 58px;
+  padding: 0 20px;
+  border: none;
+  background: transparent;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 0.18s ease;
+}
+
+.order-type-tabs .underline-tab {
+  min-width: 116px;
+  min-height: 46px;
+  font-size: 13px;
+}
+
+.underline-tab:hover:not(:disabled) {
+  color: #bd9a5f;
+}
+
+.underline-tab.active {
+  color: #bd9a5f;
+  font-weight: 700;
+}
+
+.underline-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 3px;
+  background: #bd9a5f;
+}
+
+.underline-tab:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .order-pagination {
   display: flex;
   justify-content: space-between;
