@@ -21,7 +21,36 @@ export interface AdminOrderItemResponse {
   finalPrice: number;
   lineTotal: number;
   note?: string | null;
+
   imageUrl?: string | null;
+  ImageUrl?: string | null;
+
+  productImageUrl?: string | null;
+  ProductImageUrl?: string | null;
+
+  variantImageUrl?: string | null;
+  VariantImageUrl?: string | null;
+
+  thumbnailUrl?: string | null;
+  ThumbnailUrl?: string | null;
+
+  mainImageUrl?: string | null;
+  MainImageUrl?: string | null;
+
+  image?: string | null;
+  Image?: string | null;
+
+  productImage?: any;
+  ProductImage?: any;
+
+  images?: any[];
+  Images?: any[];
+
+  productImages?: any[];
+  ProductImages?: any[];
+
+  imageList?: any[];
+  ImageList?: any[];
 }
 
 export interface AdminOrderResponse {
