@@ -90,12 +90,15 @@
                   <tr v-for="item in order.items" :key="item.orderItemId">
                     <td>
                       <div class="d-flex align-items-center gap-2">
-                        <img
-                          :src="getImageUrl(item.imageUrl)"
-                          alt="product"
-                          class="rounded border"
-                          style="width: 48px; height: 48px; object-fit: cover"
-                        />
+                        <div class="order-product-image-box">
+                          <img
+                            :src="getOrderItemImageUrl(item)"
+                            :alt="item.productName || 'product'"
+                            class="order-product-image"
+                            @error="handleImageError"
+                          />
+                        </div>
+
                         <div>
                           <div class="fw-semibold">
                             {{ item.productName || "Sản phẩm" }}
@@ -106,6 +109,7 @@
                         </div>
                       </div>
                     </td>
+
                     <td>{{ item.sku || "-" }}</td>
                     <td>{{ item.capacity || "-" }}</td>
                     <td>{{ item.bottleType || "-" }}</td>
@@ -161,7 +165,10 @@
 </template>
 
 <script setup lang="ts">
-import type { AdminOrderResponse } from "../types/order.type";
+import type {
+  AdminOrderItemResponse,
+  AdminOrderResponse,
+} from "../types/order.type";
 import OrderStatusBadge from "./OrderStatusBadge.vue";
 
 defineProps<{
@@ -172,6 +179,8 @@ defineProps<{
 defineEmits<{
   close: [];
 }>();
+
+const BACKEND_URL = "http://localhost:8080";
 
 const FALLBACK_IMAGE =
   "data:image/svg+xml;utf8," +
@@ -184,15 +193,112 @@ const FALLBACK_IMAGE =
     </svg>
   `);
 
-function getImageUrl(value?: string | null) {
-  if (!value || !value.trim()) return FALLBACK_IMAGE;
+function normalizeImageUrl(value?: string | null) {
+  if (!value || !value.trim()) return "";
 
   const cleanValue = value.trim();
 
-  if (cleanValue.startsWith("http")) return cleanValue;
-  if (cleanValue.startsWith("/")) return `http://localhost:8080${cleanValue}`;
+  if (
+    cleanValue.startsWith("http://") ||
+    cleanValue.startsWith("https://") ||
+    cleanValue.startsWith("data:image") ||
+    cleanValue.startsWith("blob:")
+  ) {
+    return cleanValue;
+  }
 
-  return `http://localhost:8080/${cleanValue}`;
+  if (cleanValue.startsWith("/")) {
+    return `${BACKEND_URL}${cleanValue}`;
+  }
+
+  return `${BACKEND_URL}/${cleanValue}`;
+}
+
+function getImageUrlFromObject(value: any) {
+  if (!value) return "";
+
+  if (typeof value === "string") {
+    return normalizeImageUrl(value);
+  }
+
+  return normalizeImageUrl(
+    value.imageUrl ??
+      value.ImageUrl ??
+      value.productImageUrl ??
+      value.ProductImageUrl ??
+      value.variantImageUrl ??
+      value.VariantImageUrl ??
+      value.thumbnailUrl ??
+      value.ThumbnailUrl ??
+      value.mainImageUrl ??
+      value.MainImageUrl ??
+      value.image ??
+      value.Image ??
+      value.url ??
+      value.Url ??
+      value.path ??
+      value.Path ??
+      value.fileUrl ??
+      value.FileUrl ??
+      value.mediaUrl ??
+      value.MediaUrl ??
+      ""
+  );
+}
+
+function getFirstImageFromList(value: any) {
+  if (!Array.isArray(value)) return "";
+
+  for (const item of value) {
+    const imageUrl = getImageUrlFromObject(item);
+
+    if (imageUrl) {
+      return imageUrl;
+    }
+  }
+
+  return "";
+}
+
+function getOrderItemImageUrl(item: AdminOrderItemResponse) {
+  const directImage =
+    getImageUrlFromObject(item.imageUrl) ||
+    getImageUrlFromObject(item.ImageUrl) ||
+    getImageUrlFromObject(item.productImageUrl) ||
+    getImageUrlFromObject(item.ProductImageUrl) ||
+    getImageUrlFromObject(item.variantImageUrl) ||
+    getImageUrlFromObject(item.VariantImageUrl) ||
+    getImageUrlFromObject(item.thumbnailUrl) ||
+    getImageUrlFromObject(item.ThumbnailUrl) ||
+    getImageUrlFromObject(item.mainImageUrl) ||
+    getImageUrlFromObject(item.MainImageUrl) ||
+    getImageUrlFromObject(item.image) ||
+    getImageUrlFromObject(item.Image) ||
+    getImageUrlFromObject(item.productImage) ||
+    getImageUrlFromObject(item.ProductImage);
+
+  if (directImage) {
+    return directImage;
+  }
+
+  const listImage =
+    getFirstImageFromList(item.images) ||
+    getFirstImageFromList(item.Images) ||
+    getFirstImageFromList(item.productImages) ||
+    getFirstImageFromList(item.ProductImages) ||
+    getFirstImageFromList(item.imageList) ||
+    getFirstImageFromList(item.ImageList);
+
+  return listImage || FALLBACK_IMAGE;
+}
+
+function handleImageError(event: Event) {
+  const target = event.target as HTMLImageElement | null;
+
+  if (!target) return;
+
+  target.onerror = null;
+  target.src = FALLBACK_IMAGE;
 }
 
 function formatMoney(value?: number | null) {
@@ -226,5 +332,26 @@ function formatOrderType(type?: string | null) {
 <style scoped>
 .modal {
   background: rgba(0, 0, 0, 0.1);
+}
+
+.order-product-image-box {
+  width: 52px;
+  height: 52px;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+  background: #f8f9fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.order-product-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 3px;
+  display: block;
 }
 </style>
