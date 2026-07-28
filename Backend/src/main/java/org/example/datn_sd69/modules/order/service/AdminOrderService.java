@@ -1,6 +1,7 @@
 package org.example.datn_sd69.modules.order.service;
 
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderResponse;
+import org.example.datn_sd69.modules.order.dto.response.AdminOrderStatusCountResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -22,4 +23,10 @@ public interface AdminOrderService {
     );
 
     AdminOrderResponse getOrderDetail(Integer orderId);
+    AdminOrderStatusCountResponse getStatusCounts(
+            String keyword,
+            String orderType,
+            LocalDate fromDate,
+            LocalDate toDate
+    );
 }

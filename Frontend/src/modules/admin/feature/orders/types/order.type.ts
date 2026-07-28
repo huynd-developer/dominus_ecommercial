@@ -97,14 +97,32 @@ export interface OrderSearchParams {
   status?: number | null;
   orderType?: string | null;
 
-  paymentMethod?: string | null;
   fromDate?: string | null;
   toDate?: string | null;
-  minAmount?: number | null;
-  maxAmount?: number | null;
 
   page?: number;
   size?: number;
+}
+
+export interface OrderStatusCountParams {
+  keyword?: string | null;
+  orderType?: string | null;
+
+  fromDate?: string | null;
+  toDate?: string | null;
+}
+
+export interface AdminOrderStatusCountResponse {
+  total: number;
+
+  pending: number;
+  confirmed: number;
+  shipping: number;
+  completed: number;
+  cancelled: number;
+  deliveryFailed: number;
+  returnRequested: number;
+  returnCompleted: number;
 }
 
 export interface UpdateOrderStatusResponse {

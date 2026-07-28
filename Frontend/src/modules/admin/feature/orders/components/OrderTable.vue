@@ -183,7 +183,7 @@ function formatPaymentMethod(method?: string) {
   if (upper === "MIXED_CASH") return "Thanh toán hỗn hợp";
   if (upper.includes("MIXED")) return "Thanh toán hỗn hợp";
 
-  if (upper.includes("COD")) return "COD - nhận hàng";
+  if (upper.includes("COD")) return "Thanh toán tiền mặt";
   if (upper.includes("VIETQR") || upper.includes("QR")) return "Chuyển khoản VietQR";
   if (upper.includes("VNPAY")) return "VNPay";
   if (upper.includes("MOMO")) return "MoMo";

@@ -61,6 +61,29 @@ public class AdminOrderController {
         );
     }
 
+    @GetMapping("/status-counts")
+    public ResponseEntity<?> getStatusCounts(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String orderType,
+
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate fromDate,
+
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate toDate
+    ) {
+        return ResponseEntity.ok(
+                adminOrderService.getStatusCounts(
+                        keyword,
+                        orderType,
+                        fromDate,
+                        toDate
+                )
+        );
+    }
+
     @GetMapping({"/{orderId}", "/{orderId}/"})
     public ResponseEntity<?> getOrderDetail(@PathVariable Integer orderId) {
         return ResponseEntity.ok(

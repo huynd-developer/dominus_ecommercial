@@ -7,6 +7,7 @@ import org.example.datn_sd69.entity.OrderItem;
 import org.example.datn_sd69.entity.ProductVariant;
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderItemResponse;
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderResponse;
+import org.example.datn_sd69.modules.order.dto.response.AdminOrderStatusCountResponse;
 import org.example.datn_sd69.modules.order.service.AdminOrderService;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
@@ -500,5 +501,51 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         }
 
         return value + "ml";
+    }
+    @Override
+    @Transactional(readOnly = true)
+    public AdminOrderStatusCountResponse getStatusCounts(
+            String keyword,
+            String orderType,
+            LocalDate fromDate,
+            LocalDate toDate
+    ) {
+        validateDateRange(fromDate, toDate);
+
+        String normalizedKeyword = normalizeKeyword(keyword);
+        String normalizedOrderType = normalizeOrderType(orderType);
+
+        var fromDateTime = fromDate == null ? null : fromDate.atStartOfDay();
+        var toDateTime = toDate == null ? null : toDate.plusDays(1).atStartOfDay();
+
+        return new AdminOrderStatusCountResponse(
+                countOrderByStatus(normalizedKeyword, null, normalizedOrderType, fromDateTime, toDateTime),
+                countOrderByStatus(normalizedKeyword, STATUS_PENDING, normalizedOrderType, fromDateTime, toDateTime),
+                countOrderByStatus(normalizedKeyword, STATUS_CONFIRMED, normalizedOrderType, fromDateTime, toDateTime),
+                countOrderByStatus(normalizedKeyword, STATUS_SHIPPING, normalizedOrderType, fromDateTime, toDateTime),
+                countOrderByStatus(normalizedKeyword, STATUS_COMPLETED, normalizedOrderType, fromDateTime, toDateTime),
+                countOrderByStatus(normalizedKeyword, STATUS_CANCELLED, normalizedOrderType, fromDateTime, toDateTime),
+                countOrderByStatus(normalizedKeyword, STATUS_DELIVERY_FAILED, normalizedOrderType, fromDateTime, toDateTime),
+                countOrderByStatus(normalizedKeyword, STATUS_RETURN_REQUESTED, normalizedOrderType, fromDateTime, toDateTime),
+                countOrderByStatus(normalizedKeyword, STATUS_RETURN_COMPLETED, normalizedOrderType, fromDateTime, toDateTime)
+        );
+    }
+
+    private long countOrderByStatus(
+            String keyword,
+            Integer status,
+            String orderType,
+            java.time.LocalDateTime fromDateTime,
+            java.time.LocalDateTime toDateTime
+    ) {
+        Long count = orderRepository.countAdminOrdersForTabs(
+                keyword,
+                status,
+                orderType,
+                fromDateTime,
+                toDateTime
+        );
+
+        return count == null ? 0L : count;
     }
 }
