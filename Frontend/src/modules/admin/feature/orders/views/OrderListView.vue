@@ -112,26 +112,17 @@ const totalElements = ref(0);
 const totalPages = ref(0);
 
 const safeTotalPages = computed(() => {
-  if (totalElements.value <= 0) {
-    return 1;
-  }
-
+  if (totalElements.value <= 0) return 1;
   return Math.max(totalPages.value, 1);
 });
 
 const showingFrom = computed(() => {
-  if (totalElements.value <= 0 || orders.value.length === 0) {
-    return 0;
-  }
-
+  if (totalElements.value <= 0 || orders.value.length === 0) return 0;
   return page.value * size.value + 1;
 });
 
 const showingTo = computed(() => {
-  if (totalElements.value <= 0 || orders.value.length === 0) {
-    return 0;
-  }
-
+  if (totalElements.value <= 0 || orders.value.length === 0) return 0;
   return Math.min((page.value + 1) * size.value, totalElements.value);
 });
 
@@ -159,7 +150,6 @@ onMounted(() => {
 
 async function loadOrders() {
   loading.value = true;
-
   try {
     const rawData = await orderService.getOrders({
       keyword: keyword.value,
@@ -186,9 +176,7 @@ async function loadOrders() {
     await Swal.fire({
       icon: "error",
       title: "Không tải được danh sách đơn hàng",
-      text:
-        error?.response?.data?.message ||
-        "Vui lòng kiểm tra lại kết nối hoặc quyền truy cập.",
+      text: error?.response?.data?.message || "Vui lòng kiểm tra lại kết nối.",
       confirmButtonColor: "#bd9a5f",
     });
   } finally {
@@ -198,30 +186,12 @@ async function loadOrders() {
 
 function resolvePageData(rawData: any) {
   const data = rawData?.data?.data ?? rawData?.data ?? rawData;
-
-  const content = Array.isArray(data?.content)
-    ? data.content
-    : Array.isArray(data?.data?.content)
-    ? data.data.content
-    : Array.isArray(data?.data)
-    ? data.data
-    : Array.isArray(data)
-    ? data
-    : [];
-
-  const totalElementsValue = Number(
-    data?.totalElements ??
-      data?.page?.totalElements ??
-      data?.total ??
-      content.length ??
-      0
-  );
-
-  let totalPagesValue = Number(data?.totalPages ?? data?.page?.totalPages ?? 0);
+  const content = Array.isArray(data?.content) ? data.content : [];
+  const totalElementsValue = Number(data?.totalElements ?? content.length ?? 0);
+  let totalPagesValue = Number(data?.totalPages ?? 0);
 
   if (!Number.isFinite(totalPagesValue) || totalPagesValue <= 0) {
-    totalPagesValue =
-      totalElementsValue > 0 ? Math.ceil(totalElementsValue / size.value) : 0;
+    totalPagesValue = totalElementsValue > 0 ? Math.ceil(totalElementsValue / size.value) : 0;
   }
 
   const responsePage = Number(data?.number ?? data?.page?.number);
@@ -234,11 +204,7 @@ function resolvePageData(rawData: any) {
   };
 }
 
-function handleSearch(payload: {
-  keyword: string;
-  status: number | null;
-  orderType: string;
-}) {
+function handleSearch(payload: { keyword: string; status: number | null; orderType: string }) {
   keyword.value = payload.keyword;
   status.value = payload.status;
   orderType.value = payload.orderType;
@@ -249,7 +215,6 @@ function handleSearch(payload: {
 function goToPage(targetPage: number) {
   if (loading.value) return;
   if (targetPage < 0 || targetPage >= safeTotalPages.value) return;
-
   page.value = targetPage;
   loadOrders();
 }
@@ -263,7 +228,6 @@ async function openDetail(orderId: number) {
     selectedOrder.value = await orderService.getOrderDetail(orderId);
   } catch (error: any) {
     showDetailModal.value = false;
-
     await Swal.fire({
       icon: "error",
       title: "Không tải được chi tiết đơn hàng",
@@ -280,58 +244,88 @@ function closeDetail() {
   selectedOrder.value = null;
 }
 
-async function confirmChangeStatus(
-  order: AdminOrderResponse,
-  nextStatus: number
-) {
+async function confirmChangeStatus(order: AdminOrderResponse, nextStatus: number) {
   const nextStatusText = getStatusText(nextStatus);
 
+  let returnInfoHtml = "";
+  if (order.status === 6) {
+    const reason = (order as any).returnReason || "Không có lý do cụ thể";
+    const images: string[] = (order as any).returnImages || [];
+    const videos: string[] = (order as any).returnVideos || [];
+
+    let mediaHtml = "";
+    if (images.length > 0 || videos.length > 0) {
+      mediaHtml += `<div style="margin-top: 10px;"><b>Bằng chứng (Ảnh/Video):</b><div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;">`;
+      images.forEach((img) => {
+        mediaHtml += `<img src="${img}" style="width: 65px; height: 65px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; cursor: pointer;" onclick="window.open('${img}', '_blank')" />`;
+      });
+      videos.forEach((vid) => {
+        mediaHtml += `<video src="${vid}" style="width: 65px; height: 65px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc;" controls></video>`;
+      });
+      mediaHtml += `</div></div>`;
+    }
+
+    returnInfoHtml = `
+      <div style="margin-top: 12px; padding: 10px; background: #fffbeb; border: 1px dashed #f59e0b; border-radius: 8px; color: #b45309; text-align: left; font-size: 13px;">
+        <p style="margin-bottom: 4px;"><b>Lý do hoàn:</b> <span style="color: #dc2626">${reason}</span></p>
+        ${mediaHtml}
+      </div>
+    `;
+  }
+
+  let title = "Xác nhận cập nhật trạng thái?";
+  let confirmBtnText = "Cập nhật";
+  let confirmBtnColor = "#bd9a5f";
+
+  // Trường hợp bấm nút từ chối yêu cầu hoàn (về trạng thái 3)
+  if (order.status === 6 && nextStatus === 3) {
+    title = "Từ chối yêu cầu hoàn hàng?";
+    confirmBtnText = "Xác nhận từ chối";
+    confirmBtnColor = "#dc3545";
+  }
+
   const result = await Swal.fire({
-    icon: "question",
-    title: "Xác nhận cập nhật trạng thái?",
+    icon: order.status === 6 && nextStatus === 3 ? "warning" : "question",
+    title: title,
+    width: "40em",
     html: `
-      <div style="text-align:left">
+      <div style="text-align: left; font-size: 14px;">
         <p><b>Đơn hàng:</b> ${order.orderCode}</p>
         <p><b>Trạng thái hiện tại:</b> ${order.statusText}</p>
-        <p><b>Chuyển sang:</b> ${nextStatusText}</p>
+        <p><b>Chuyển sang:</b> <span style="color: ${confirmBtnColor}; font-weight: bold;">${nextStatusText}</span></p>
+        ${returnInfoHtml}
       </div>
     `,
     showCancelButton: true,
-    confirmButtonText: "Cập nhật",
+    confirmButtonText: confirmBtnText,
     cancelButtonText: "Hủy",
-    confirmButtonColor: "#bd9a5f",
+    confirmButtonColor: confirmBtnColor,
   });
 
   if (!result.isConfirmed) return;
 
   try {
-    const response = await orderService.updateOrderStatus(
-      order.orderId,
-      nextStatus
-    );
+    const response = await orderService.updateOrderStatus(order.orderId, nextStatus);
 
     await Swal.fire({
       icon: "success",
-      title: "Cập nhật thành công",
-      text: response.message || "Trạng thái đơn hàng đã được cập nhật.",
+      title: "Thành công",
+      text: (response as any)?.message || "Trạng thái đơn hàng đã được cập nhật.",
       confirmButtonColor: "#bd9a5f",
+      timer: 1500,
+      showConfirmButton: false,
     });
 
     await loadOrders();
 
-    if (
-      showDetailModal.value &&
-      selectedOrder.value?.orderId === order.orderId
-    ) {
+    if (showDetailModal.value && selectedOrder.value?.orderId === order.orderId) {
       selectedOrder.value = await orderService.getOrderDetail(order.orderId);
     }
   } catch (error: any) {
     await Swal.fire({
       icon: "error",
-      title: "Không thể cập nhật trạng thái",
-      text:
-        error?.response?.data?.message ||
-        "Trạng thái chuyển không hợp lệ hoặc đơn hàng không thể cập nhật.",
+      title: "Lỗi cập nhật",
+      text: error?.response?.data?.message || "Không thể thay đổi trạng thái đơn hàng.",
       confirmButtonColor: "#bd9a5f",
     });
   }
@@ -339,24 +333,15 @@ async function confirmChangeStatus(
 
 function getStatusText(status: number) {
   switch (status) {
-    case 0:
-      return "Chờ xác nhận";
-    case 1:
-      return "Đã xác nhận";
-    case 2:
-      return "Đang giao hàng";
-    case 3:
-      return "Hoàn thành";
-    case 4:
-      return "Đã hủy";
-    case 5:
-      return "Giao hàng thất bại";
-    case 6:
-      return "Yêu cầu hoàn hàng";
-    case 7:
-      return "Hoàn hàng hoàn tất";
-    default:
-      return "Không xác định";
+    case 0: return "Chờ xác nhận";
+    case 1: return "Đã xác nhận";
+    case 2: return "Đang giao hàng";
+    case 3: return "Hoàn thành";
+    case 4: return "Đã hủy";
+    case 5: return "Giao hàng thất bại";
+    case 6: return "Yêu cầu hoàn hàng";
+    case 7: return "Hoàn hàng hoàn tất";
+    default: return "Không xác định";
   }
 }
 </script>
@@ -371,36 +356,13 @@ function getStatusText(status: number) {
   background: #ffffff;
   border: 1px solid #e5e7eb;
   border-radius: 14px;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
 }
-
-.pagination-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #6b7280;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.pagination-total strong {
-  color: #111827;
-  font-weight: 800;
-}
-
-.pagination-range {
-  padding-left: 10px;
-  border-left: 1px solid #e5e7eb;
-}
-
 .pagination-actions {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-
-.pagination-btn,
-.pagination-number {
+.pagination-btn, .pagination-number {
   min-width: 34px;
   height: 34px;
   padding: 0 10px;
@@ -408,47 +370,14 @@ function getStatusText(status: number) {
   border: 1px solid #e5e7eb;
   background: #ffffff;
   color: #374151;
-  font-size: 13px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.18s ease;
 }
-
-.pagination-btn:hover:not(:disabled),
-.pagination-number:hover:not(:disabled) {
-  border-color: #bd9a5f;
-  color: #bd9a5f;
-  background: #fffaf2;
-}
-
 .pagination-number.active {
   border-color: #bd9a5f;
   background: #bd9a5f;
   color: #ffffff;
-  box-shadow: 0 6px 14px rgba(189, 154, 95, 0.28);
-}
-
-.pagination-btn:disabled,
-.pagination-number:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-@media (max-width: 767.98px) {
-  .order-pagination {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .pagination-info {
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-
-  .pagination-actions {
-    justify-content: center;
-  }
 }
 </style>

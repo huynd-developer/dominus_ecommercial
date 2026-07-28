@@ -505,16 +505,15 @@ const fetchProductDetail = async (productId: number) => {
 };
 
 const enrichCartItemImage = async (item: CartItem): Promise<CartItem> => {
-  if (!item || extractImageValue(item)) {
-    return item;
-  }
+  // BỎ DÒNG ĐI TẮT CHECK ẢNH ĐI.
+  if (!item) return item;
 
   const productId = getItemProductId(item);
-
   if (!productId) {
     return item;
   }
 
+  // LUÔN GỌI API ĐỂ LẤY FULL DATA SẢN PHẨM (ĐỂ LẤY LIST BIẾN THỂ)
   const productData = await fetchProductDetail(productId);
 
   if (!productData) {
@@ -524,14 +523,12 @@ const enrichCartItemImage = async (item: CartItem): Promise<CartItem> => {
   const matchedVariant = findMatchingVariant(productData, getItemVariantId(item));
   const imageUrl = extractImageValue(matchedVariant) || extractImageValue(productData);
 
-  if (!imageUrl) {
-    return item;
-  }
-
   return {
     ...item,
-    imageUrl: item.imageUrl || imageUrl,
-    product: item.product ?? productData,
+    // Ưu tiên ảnh gốc của giỏ hàng, nếu không có thì lấy ảnh vừa fetch
+    imageUrl: extractImageValue(item) || imageUrl, 
+    // Quan trọng nhất: Bơm full data (chứa variants) vào item!
+    product: item.product ?? productData, 
     productVariant: item.productVariant ?? matchedVariant ?? undefined,
   };
 };
