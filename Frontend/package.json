@@ -19,6 +19,7 @@
     "chart.js": "^4.5.1",
     "element-plus": "^2.14.2",
     "pinia": "^3.0.4",
+    "router": "^2.2.0",
     "sweetalert2": "^11.26.25",
     "vue": "^3.5.32",
     "vue-advanced-cropper": "^2.8.9",

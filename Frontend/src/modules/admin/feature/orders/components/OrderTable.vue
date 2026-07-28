@@ -1,100 +1,108 @@
 <template>
-  <a-table
-    :columns="columns"
-    :data-source="store.orders"
-    :loading="store.loading"
-    :pagination="false"
-    row-key="id"
-    :locale="{ emptyText: 'Không có dữ liệu' }"
-  >
-    <template #bodyCell="{ column, record }">
-      
-      <!-- Format lại cột Mã đơn (Biến ID thành Mã code) -->
-      <template v-if="column.key === 'id'">
-        <span class="fw-bold text-dark">{{ formatOrderCode(record.id) }}</span>
+  <!-- SỬA 1: Bọc tất cả vào 1 thẻ div để tránh lỗi Fragment -->
+  <div class="order-table-wrapper">
+    <a-table
+      :columns="columns"
+      :data-source="orders" 
+      :loading="loading"
+      :pagination="false"
+      row-key="orderId"
+      :locale="{ emptyText: 'Không có dữ liệu' }"
+    >
+      <template #bodyCell="{ column, record }">
+        <!-- Format lại cột Mã đơn (Dùng luôn orderCode từ backend) -->
+        <template v-if="column.key === 'orderCode'">
+          <span class="fw-bold text-dark">{{ record.orderCode }}</span>
+        </template>
+
+        <!-- Loại đơn (Việt hóa) -->
+        <template v-if="column.key === 'orderType'">
+          <a-tag :color="record.orderType === 'ONLINE' ? 'blue' : 'green'">
+            <i class="bi" :class="record.orderType === 'ONLINE' ? 'bi-truck' : 'bi-shop'"></i>
+            {{ record.orderType === "ONLINE" ? " Online" : " Tại quầy" }}
+          </a-tag>
+        </template>
+
+        <!-- Thanh toán -->
+        <template v-if="column.key === 'paymentMethod'">
+          <a-tag :color="getPaymentColor(record.paymentMethod)">
+            {{ formatPaymentMethod(record.paymentMethod) }}
+          </a-tag>
+        </template>
+
+        <!-- Tiền -->
+        <template v-if="column.key === 'finalAmount'">
+          <span class="fw-bold text-danger">{{ money(record.finalAmount) }}</span>
+        </template>
+
+        <!-- Trạng thái -->
+        <template v-if="column.key === 'status'">
+          <OrderStatusBadge :status="record.status" :status-text="record.statusText" />
+        </template>
+
+        <!-- Ngày -->
+        <template v-if="column.key === 'createdAt'">
+          {{ formatDate(record.createdAt) }}
+        </template>
+
+        <!-- Thao tác -->
+        <template v-if="column.key === 'action'">
+          <a-space>
+            <!-- Nút Xem chi tiết (Lúc nào cũng có) -->
+            <a-button type="default" size="small" @click="emit('viewDetail', record.orderId)">
+              Chi tiết
+            </a-button>
+
+            <!-- Vòng lặp render các nút thao tác theo đúng trạng thái đơn hàng -->
+            <a-button
+              v-for="action in getAvailableActions(record.status)"
+              :key="action.status"
+              size="small"
+              :type="action.type"
+              :danger="action.danger"
+              @click="emit('changeStatus', record, action.status)"
+            >
+              {{ action.label }}
+            </a-button>
+          </a-space>
+        </template>
       </template>
+    </a-table>
 
-      <!-- Loại đơn (Việt hóa) -->
-      <template v-if="column.key === 'orderType'">
-        <a-tag :color="record.orderType === 'ONLINE' ? 'blue' : 'green'">
-          <i
-            class="bi"
-            :class="record.orderType === 'ONLINE' ? 'bi-truck' : 'bi-shop'"
-          ></i>
-          {{ record.orderType === "ONLINE" ? " Online" : " Tại quầy" }}
-        </a-tag>
-      </template>
-
-      <!-- Thanh toán -->
-      <template v-if="column.key === 'paymentMethod'">
-        <a-tag :color="getPaymentColor(record.paymentMethod)">
-          {{ formatPaymentMethod(record.paymentMethod) }}
-        </a-tag>
-      </template>
-
-      <!-- Tiền -->
-      <template v-if="column.key === 'finalAmount'">
-        <span class="fw-bold text-danger">{{ money(record.finalAmount) }}</span>
-      </template>
-
-      <!-- Trạng thái -->
-      <template v-if="column.key === 'status'">
-        <OrderStatusTag :status="record.status" />
-      </template>
-
-      <!-- Ngày -->
-      <template v-if="column.key === 'createdAt'">
-        {{ formatDate(record.createdAt) }}
-      </template>
-
-      <!-- Thao tác -->
-      <template v-if="column.key === 'action'">
-        <a-space>
-          <a-button
-            type="primary"
-            ghost
-            size="small"
-            @click="detail(record.id)"
-          >
-            Chi tiết
-          </a-button>
-
-          <!-- Thao tác hủy đơn nhanh -->
-          <a-button
-            v-if="record.status === 0"
-            danger
-            size="small"
-            @click="cancelOrder(record.id)"
-          >
-            Hủy đơn
-          </a-button>
-        </a-space>
-      </template>
-    </template>
-  </a-table>
-
-  <div class="mt-4 text-end">
-    <a-pagination
-      :current="store.currentPage + 1"
-      :pageSize="store.pageSize"
-      :total="store.totalElements"
-      show-size-changer
-      @change="changePage"
-      @showSizeChange="changeSize"
-    />
+    <div class="mt-4 text-end">
+      <a-pagination
+        :current="store.currentPage + 1"
+        :pageSize="store.pageSize"
+        :total="store.totalElements"
+        show-size-changer
+        @change="changePage"
+        @showSizeChange="changeSize"
+      />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import Swal from "sweetalert2";
 import { useOrderStore } from "../stores/orderStore";
-import OrderStatusTag from "./OrderStatusTag.vue";
+import OrderStatusBadge from "./OrderStatusBadge.vue";
 
-const emit = defineEmits<{ (e: "detail", id: number): void }>();
+// SỬA 3: Khai báo props để hứng data (orders, loading) từ component cha truyền xuống
+const props = defineProps<{
+  orders: any[];
+  loading: boolean;
+}>();
+
+// SỬA 4: Khai báo emits chuẩn với tên mà component cha đang vòi (viewDetail, changeStatus)
+const emit = defineEmits<{
+  (e: "viewDetail", id: number): void;
+  (e: "changeStatus", order: any, status: number): void;
+}>();
+
 const store = useOrderStore();
 
 const columns = [
-  { title: "Mã đơn", dataIndex: "id", key: "id", width: 100 },
+  { title: "Mã đơn", dataIndex: "orderCode", key: "orderCode", width: 110 },
   { title: "Khách hàng", dataIndex: "customerName", key: "customerName" },
   { title: "SĐT", dataIndex: "customerPhone", key: "customerPhone" },
   { title: "Loại đơn", key: "orderType" },
@@ -105,11 +113,6 @@ const columns = [
   { title: "Thao tác", key: "action", align: "center", width: 180 },
 ];
 
-function formatOrderCode(id: number) {
-  if (!id) return "";
-  return `DH-${id.toString().padStart(5, '0')}`;
-}
-
 function money(value: number) {
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
@@ -117,18 +120,15 @@ function money(value: number) {
   }).format(value);
 }
 
-function formatDate(date: string) {
+function formatDate(date?: string | null) {
+  if (!date) return "-";
   return new Date(date).toLocaleString("vi-VN");
 }
 
-function detail(id: number) {
-  emit("detail", id);
-}
-
-async function cancelOrder(id: number) {
+async function cancelOrder(id: number, code: string) {
   const result = await Swal.fire({
     title: "Xác nhận hủy đơn?",
-    text: `Bạn có chắc chắn muốn hủy đơn hàng ${formatOrderCode(id)}?`,
+    text: `Bạn có chắc chắn muốn hủy đơn hàng ${code}?`,
     icon: "warning",
     showCancelButton: true,
     confirmButtonText: "Vâng, hủy đơn",
@@ -140,7 +140,6 @@ async function cancelOrder(id: number) {
 
   try {
     await store.cancelOrder(id);
-    store.loadOrders(); 
     Swal.fire({
       icon: "success",
       title: "Đã hủy đơn",
@@ -195,5 +194,35 @@ function getPaymentColor(method?: string) {
   if (upper === "HOLD") return "volcano";
   
   return "cyan";
+}
+
+function getAvailableActions(status: number) {
+  switch (status) {
+    case 0:
+      return [
+        { status: 1, label: "Xác nhận", type: "primary", danger: false },
+        { status: 4, label: "Hủy", type: "primary", danger: true },
+      ];
+    case 1:
+      return [
+        { status: 2, label: "Giao hàng", type: "primary", danger: false },
+        { status: 4, label: "Hủy", type: "primary", danger: true },
+      ];
+    case 2:
+      return [
+        { status: 3, label: "Hoàn thành", type: "primary", danger: false },
+        { status: 5, label: "Giao thất bại", type: "default", danger: true },
+      ];
+    case 3:
+      return [
+        { status: 6, label: "Yêu cầu hoàn", type: "dashed", danger: true },
+      ];
+    case 6:
+      return [
+        { status: 7, label: "Hoàn tất", type: "primary", danger: false },
+      ];
+    default:
+      return [];
+  }
 }
 </script>
