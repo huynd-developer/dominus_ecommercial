@@ -24,29 +24,57 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
             "cashier.user",
             "voucher"
     })
-    @Query("""
-        SELECT o
-        FROM Order o
-        WHERE
-            (
-                :keyword IS NULL
-                OR TRIM(:keyword) = ''
-                OR LOWER(o.customerName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                OR LOWER(o.customerPhone) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                OR CAST(o.id AS string) LIKE CONCAT('%', :keyword, '%')
-            )
-            AND (:status IS NULL OR o.status = :status)
-            AND (:orderType IS NULL OR o.orderType = :orderType)
-            AND (CAST(:startDate AS timestamp) IS NULL OR o.createdAt >= :startDate)
-            AND (CAST(:endDate AS timestamp) IS NULL OR o.createdAt <= :endDate)
-        ORDER BY o.createdAt DESC
-    """)
+    @Query(
+            value = """
+            SELECT o
+            FROM Order o
+            WHERE
+                (
+                    :keyword IS NULL
+                    OR TRIM(:keyword) = ''
+                    OR LOWER(COALESCE(o.customerName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                    OR LOWER(COALESCE(o.customerPhone, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                    OR CAST(o.id AS string) LIKE CONCAT('%', :keyword, '%')
+                )
+                AND (:status IS NULL OR o.status = :status)
+                AND (
+                    :orderType IS NULL
+                    OR TRIM(:orderType) = ''
+                    OR UPPER(COALESCE(o.orderType, '')) = UPPER(:orderType)
+                )
+                AND (
+                    o.paymentMethod IS NULL
+                    OR UPPER(o.paymentMethod) <> 'HOLD'
+                )
+            ORDER BY o.createdAt DESC
+        """,
+            countQuery = """
+            SELECT COUNT(o)
+            FROM Order o
+            WHERE
+                (
+                    :keyword IS NULL
+                    OR TRIM(:keyword) = ''
+                    OR LOWER(COALESCE(o.customerName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                    OR LOWER(COALESCE(o.customerPhone, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                    OR CAST(o.id AS string) LIKE CONCAT('%', :keyword, '%')
+                )
+                AND (:status IS NULL OR o.status = :status)
+                AND (
+                    :orderType IS NULL
+                    OR TRIM(:orderType) = ''
+                    OR UPPER(COALESCE(o.orderType, '')) = UPPER(:orderType)
+                )
+                AND (
+                    o.paymentMethod IS NULL
+                    OR UPPER(o.paymentMethod) <> 'HOLD'
+                )
+        """
+    )
     Page<Order> searchAdminOrders(
             @Param("keyword") String keyword,
             @Param("status") Integer status,
             @Param("orderType") String orderType,
-            @Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate,
             Pageable pageable
     );
 
@@ -94,6 +122,18 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
 
     Optional<Order> findByIdAndCustomer_UserId(Integer orderId, Integer customerId);
 
+    /**
+     * Danh sách phiếu treo tại quầy thật sự.
+     *
+     * Điều kiện bắt buộc:
+     * - status = 0
+     * - paymentMethod = HOLD
+     * - orderType = POS hoặc IN_STORE
+     *
+     * Nếu thiếu orderType, FE có thể hiển thị nhầm đơn không phải phiếu treo POS,
+     * sau đó khi bấm mở/hủy/chuyển service sẽ báo:
+     * "Đây không phải phiếu treo tại quầy."
+     */
     @EntityGraph(attributePaths = {
             "customer",
             "customer.user",
@@ -112,6 +152,10 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     """)
     List<Order> findHeldOrders(@Param("cashierId") Integer cashierId);
 
+    /**
+     * Lấy chi tiết đơn dùng chung cho màn quản lý đơn.
+     * Không dùng method này để mở/hủy/chuyển phiếu treo POS.
+     */
     @EntityGraph(attributePaths = {
             "customer",
             "customer.user",
@@ -126,6 +170,11 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     """)
     Optional<Order> findDetailById(@Param("orderId") Integer orderId);
 
+    /**
+     * Lấy đúng 1 phiếu treo tại quầy.
+     * Service open/update/checkout/cancel/transfer phiếu treo nên dùng method này,
+     * không dùng findDetailById().
+     */
     @EntityGraph(attributePaths = {
             "customer",
             "customer.user",
@@ -148,6 +197,10 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
             LocalDateTime createdAt
     );
 
+    /**
+     * Check trùng phiếu treo theo SĐT.
+     * Phải dùng cùng điều kiện với findHeldOrders().
+     */
     @EntityGraph(attributePaths = {
             "customer",
             "customer.user",
@@ -166,6 +219,10 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     """)
     List<Order> findActiveHeldOrdersByCustomerPhone(@Param("phone") String phone);
 
+    /**
+     * Đơn tại quầy đang chờ thanh toán online.
+     * Đây KHÔNG phải phiếu treo HOLD nữa.
+     */
     @EntityGraph(attributePaths = {
             "customer",
             "customer.user",

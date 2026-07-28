@@ -1,61 +1,248 @@
 <template>
-  <div class="order-page">
-    <div class="page-header mb-4">
-      <h3 class="fw-bold mb-0 text-dark">
-        <i class="bi bi-receipt-cutoff me-2"></i> Quản lý đơn hàng
-      </h3>
+  <div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <h4 class="fw-bold mb-1">Quản lý đơn hàng</h4>
+        <small class="text-muted">
+          Theo dõi đơn online, đơn tại quầy và cập nhật trạng thái đơn hàng.
+        </small>
+      </div>
+
+      <button class="btn btn-outline-primary" :disabled="loading" @click="loadOrders">
+        Làm mới
+      </button>
     </div>
 
-    <!-- Component Lọc -->
-    <OrderFilter />
+    <OrderFilter
+      :keyword="keyword"
+      :status="status"
+      :order-type="orderType"
+      @search="handleSearch"
+    />
 
-    <!-- Tabs Trạng thái (Thay thế cho Dropdown) -->
-    <a-card :bordered="false" class="shadow-sm rounded-3 mt-3">
-      <a-tabs v-model:activeKey="activeTab" @change="onTabChange" type="card">
-        <a-tab-pane key="ALL" tab="Tất cả"></a-tab-pane>
-        <a-tab-pane key="0" tab="Chờ xác nhận"></a-tab-pane>
-        <a-tab-pane key="1" tab="Đã xác nhận"></a-tab-pane>
-        <a-tab-pane key="2" tab="Đang giao"></a-tab-pane>
-        <a-tab-pane key="3" tab="Hoàn thành"></a-tab-pane>
-        <a-tab-pane key="5" tab="Giao thất bại"></a-tab-pane>
-        <a-tab-pane key="6" tab="Yêu cầu hoàn"></a-tab-pane>
-        <a-tab-pane key="7" tab="Đã hoàn hàng"></a-tab-pane>
-        <a-tab-pane key="4" tab="Đã hủy"></a-tab-pane>
-      </a-tabs>
+    <OrderTable
+      :orders="orders"
+      :loading="loading"
+      @view-detail="openDetail"
+      @change-status="confirmChangeStatus"
+    />
 
-      <!-- Bảng dữ liệu -->
-      <OrderTable @detail="showDetail" />
-    </a-card>
+    <div
+      v-if="totalPages > 1"
+      class="d-flex justify-content-between align-items-center mt-3"
+    >
+      <div class="text-muted small">
+        Tổng {{ totalElements }} đơn hàng
+      </div>
 
-    <!-- Modal chi tiết -->
-    <OrderDetailModal :open="openDetail" @close="openDetail=false" />
+      <div class="btn-group">
+        <button
+          class="btn btn-outline-secondary"
+          :disabled="page <= 0 || loading"
+          @click="goToPage(page - 1)"
+        >
+          Trước
+        </button>
+
+        <button class="btn btn-outline-secondary disabled">
+          Trang {{ page + 1 }} / {{ totalPages }}
+        </button>
+
+        <button
+          class="btn btn-outline-secondary"
+          :disabled="page >= totalPages - 1 || loading"
+          @click="goToPage(page + 1)"
+        >
+          Sau
+        </button>
+      </div>
+    </div>
+
+    <OrderDetailModal
+      :show="showDetailModal"
+      :order="selectedOrder"
+      @close="closeDetail"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { onMounted, ref } from "vue";
+import Swal from "sweetalert2";
 import OrderFilter from "../components/OrderFilter.vue";
 import OrderTable from "../components/OrderTable.vue";
 import OrderDetailModal from "../components/OrderDetailModal.vue";
-import { useOrderStore } from "../stores/orderStore";
+import { orderService } from "../services/order.service";
+import type { AdminOrderResponse } from "../types/order.type";
 
-const store = useOrderStore();
-const openDetail = ref(false);
-const activeTab = ref("ALL");
+const orders = ref<AdminOrderResponse[]>([]);
+const selectedOrder = ref<AdminOrderResponse | null>(null);
 
-async function showDetail(id: number) {
-  await store.loadDetail(id);
-  openDetail.value = true;
-}
+const loading = ref(false);
+const detailLoading = ref(false);
 
-// Khi chuyển Tab, set lại trạng thái cho Store và tìm kiếm
-function onTabChange(key: string) {
-  store.status = key === "ALL" ? undefined : Number(key);
-  store.currentPage = 0;
-  store.search();
-}
+const showDetailModal = ref(false);
+
+const keyword = ref("");
+const status = ref<number | null>(null);
+const orderType = ref("");
+
+const page = ref(0);
+const size = ref(10);
+const totalElements = ref(0);
+const totalPages = ref(0);
 
 onMounted(() => {
-  store.loadOrders();
+  loadOrders();
 });
+
+async function loadOrders() {
+  loading.value = true;
+
+  try {
+    const data = await orderService.getOrders({
+      keyword: keyword.value,
+      status: status.value,
+      orderType: orderType.value,
+      page: page.value,
+      size: size.value,
+    });
+
+    orders.value = data.content || [];
+    totalElements.value = data.totalElements || 0;
+    totalPages.value = data.totalPages || 0;
+  } catch (error: any) {
+    await Swal.fire({
+      icon: "error",
+      title: "Không tải được danh sách đơn hàng",
+      text:
+        error?.response?.data?.message ||
+        "Vui lòng kiểm tra lại kết nối hoặc quyền truy cập.",
+      confirmButtonColor: "#bd9a5f",
+    });
+  } finally {
+    loading.value = false;
+  }
+}
+
+function handleSearch(payload: {
+  keyword: string;
+  status: number | null;
+  orderType: string;
+}) {
+  keyword.value = payload.keyword;
+  status.value = payload.status;
+  orderType.value = payload.orderType;
+  page.value = 0;
+  loadOrders();
+}
+
+function goToPage(targetPage: number) {
+  if (targetPage < 0 || targetPage >= totalPages.value) return;
+
+  page.value = targetPage;
+  loadOrders();
+}
+
+async function openDetail(orderId: number) {
+  showDetailModal.value = true;
+  selectedOrder.value = null;
+  detailLoading.value = true;
+
+  try {
+    selectedOrder.value = await orderService.getOrderDetail(orderId);
+  } catch (error: any) {
+    showDetailModal.value = false;
+
+    await Swal.fire({
+      icon: "error",
+      title: "Không tải được chi tiết đơn hàng",
+      text:
+        error?.response?.data?.message ||
+        "Vui lòng thử lại sau.",
+      confirmButtonColor: "#bd9a5f",
+    });
+  } finally {
+    detailLoading.value = false;
+  }
+}
+
+function closeDetail() {
+  showDetailModal.value = false;
+  selectedOrder.value = null;
+}
+
+async function confirmChangeStatus(order: AdminOrderResponse, nextStatus: number) {
+  const nextStatusText = getStatusText(nextStatus);
+
+  const result = await Swal.fire({
+    icon: "question",
+    title: "Xác nhận cập nhật trạng thái?",
+    html: `
+      <div style="text-align:left">
+        <p><b>Đơn hàng:</b> ${order.orderCode}</p>
+        <p><b>Trạng thái hiện tại:</b> ${order.statusText}</p>
+        <p><b>Chuyển sang:</b> ${nextStatusText}</p>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Cập nhật",
+    cancelButtonText: "Hủy",
+    confirmButtonColor: "#bd9a5f",
+  });
+
+  if (!result.isConfirmed) return;
+
+  try {
+    const response = await orderService.updateOrderStatus(
+      order.orderId,
+      nextStatus
+    );
+
+    await Swal.fire({
+      icon: "success",
+      title: "Cập nhật thành công",
+      text: response.message || "Trạng thái đơn hàng đã được cập nhật.",
+      confirmButtonColor: "#bd9a5f",
+    });
+
+    await loadOrders();
+
+    if (showDetailModal.value && selectedOrder.value?.orderId === order.orderId) {
+      selectedOrder.value = await orderService.getOrderDetail(order.orderId);
+    }
+  } catch (error: any) {
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể cập nhật trạng thái",
+      text:
+        error?.response?.data?.message ||
+        "Trạng thái chuyển không hợp lệ hoặc đơn hàng không thể cập nhật.",
+      confirmButtonColor: "#bd9a5f",
+    });
+  }
+}
+
+function getStatusText(status: number) {
+  switch (status) {
+    case 0:
+      return "Chờ xác nhận";
+    case 1:
+      return "Đã xác nhận";
+    case 2:
+      return "Đang giao hàng";
+    case 3:
+      return "Hoàn thành";
+    case 4:
+      return "Đã hủy";
+    case 5:
+      return "Giao hàng thất bại";
+    case 6:
+      return "Yêu cầu hoàn hàng";
+    case 7:
+      return "Hoàn hàng hoàn tất";
+    default:
+      return "Không xác định";
+  }
+}
 </script>

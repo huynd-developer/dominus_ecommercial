@@ -8,7 +8,8 @@ public record UpdateOrderStatusRequest(
 
         @NotNull(message = "Trạng thái đơn hàng không được để trống")
         @Min(value = 0, message = "Trạng thái đơn hàng không hợp lệ")
-        @Max(value = 4, message = "Trạng thái đơn hàng không hợp lệ")
+        @Max(value = 7, message = "Trạng thái đơn hàng không hợp lệ")
         Integer status
+
 ) {
 }

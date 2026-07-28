@@ -1,8 +1,6 @@
 package org.example.datn_sd69.common.exception;
 
 import jakarta.validation.ConstraintViolationException;
-import org.example.datn_sd69.modules.orderAdmin.exception.InvalidOrderStatusException;
-import org.example.datn_sd69.modules.orderAdmin.exception.OrderNotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -163,23 +161,4 @@ public class GlobalExceptionHandler {
         return body;
     }
 
-    @ExceptionHandler(OrderNotFoundException.class)
-    public ResponseEntity<?> handleOrderNotFound(
-            OrderNotFoundException ex) {
-
-        return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(ex.getMessage());
-
-    }
-
-    @ExceptionHandler(InvalidOrderStatusException.class)
-    public ResponseEntity<?> handleInvalidStatus(
-            InvalidOrderStatusException ex) {
-
-        return ResponseEntity
-                .badRequest()
-                .body(ex.getMessage());
-
-    }
 }

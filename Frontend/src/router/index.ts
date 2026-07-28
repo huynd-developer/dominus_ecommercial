@@ -169,8 +169,8 @@ const routes: Array<RouteRecordRaw> = [
         component: ProductView,
         meta: {
           requiresAuth: true,
-          allowedRoles: ["OWNER", "MANAGER"]
-        }
+          allowedRoles: ["OWNER", "MANAGER"],
+        },
       },
       {
         path: "categories",
@@ -227,7 +227,6 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "orders",
         name: "AdminOrders",
-        // ĐÃ SỬA: Thay đổi từ mockPage sang view thực tế
         component: () =>
           import("@/modules/admin/feature/orders/views/OrderListView.vue"),
         meta: {

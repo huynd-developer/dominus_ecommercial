@@ -1,185 +1,198 @@
 <template>
-  <!-- ĐÃ SỬA: Thêm thuộc tính :locale để việt hóa chữ No data -->
-  <a-table
-    :columns="columns"
-    :data-source="store.orders"
-    :loading="store.loading"
-    :pagination="false"
-    row-key="id"
-    :locale="{ emptyText: 'Không có dữ liệu' }"
-  >
-    <template #bodyCell="{ column, record }">
-      <!-- Loại đơn (Việt hóa) -->
-      <template v-if="column.key === 'orderType'">
-        <a-tag :color="record.orderType === 'ONLINE' ? 'blue' : 'green'">
-          <i
-            class="bi"
-            :class="record.orderType === 'ONLINE' ? 'bi-truck' : 'bi-shop'"
-          ></i>
-          {{ record.orderType === "ONLINE" ? " Online" : " Tại quầy" }}
-        </a-tag>
-      </template>
+  <div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Mã đơn</th>
+            <th>Khách hàng</th>
+            <th>Loại đơn</th>
+            <th>Thanh toán</th>
+            <th class="text-end">Tổng tiền</th>
+            <th>Trạng thái</th>
+            <th>Ngày tạo</th>
+            <th class="text-end">Thao tác</th>
+          </tr>
+        </thead>
 
-      <!-- Thanh toán -->
-      <template v-if="column.key === 'paymentMethod'">
-        <a-tag :color="getPaymentColor(record.paymentMethod)">
-          {{ formatPaymentMethod(record.paymentMethod) }}
-        </a-tag>
-      </template>
+        <tbody>
+          <tr v-if="loading">
+            <td colspan="8" class="text-center py-4 text-muted">
+              Đang tải đơn hàng...
+            </td>
+          </tr>
 
-      <!-- Tiền -->
-      <template v-if="column.key === 'finalAmount'">
-        <span class="fw-bold text-danger">{{ money(record.finalAmount) }}</span>
-      </template>
+          <tr v-else-if="orders.length === 0">
+            <td colspan="8" class="text-center py-4 text-muted">
+              Không có đơn hàng nào.
+            </td>
+          </tr>
 
-      <!-- Trạng thái -->
-      <template v-if="column.key === 'status'">
-        <OrderStatusTag :status="record.status" />
-      </template>
+          <tr v-for="order in orders" :key="order.orderId">
+            <td>
+              <div class="fw-semibold">{{ order.orderCode }}</div>
+              <small class="text-muted">#{{ order.orderId }}</small>
+            </td>
 
-      <!-- Ngày -->
-      <template v-if="column.key === 'createdAt'">
-        {{ formatDate(record.createdAt) }}
-      </template>
+            <td>
+              <div class="fw-semibold">
+                {{ order.customerName || "Khách vãng lai" }}
+              </div>
+              <small class="text-muted">
+                {{ order.customerPhone || "Không có SĐT" }}
+              </small>
+            </td>
 
-      <!-- Thao tác -->
-      <template v-if="column.key === 'action'">
-        <a-space>
-          <a-button
-            type="primary"
-            ghost
-            size="small"
-            @click="detail(record.id)"
-          >
-            Chi tiết
-          </a-button>
+            <td>
+              <span class="badge text-bg-light border">
+                {{ formatOrderType(order.orderType) }}
+              </span>
+            </td>
 
-          <!-- Thao tác hủy đơn nhanh từ thầy yêu cầu -->
-          <a-button
-            v-if="record.status === 0"
-            danger
-            size="small"
-            @click="cancelOrder(record.id)"
-          >
-            Hủy đơn
-          </a-button>
-        </a-space>
-      </template>
-    </template>
-  </a-table>
+            <td>{{ order.paymentMethod || "-" }}</td>
 
-  <div class="mt-4 text-end">
-    <a-pagination
-      :current="store.currentPage + 1"
-      :pageSize="store.pageSize"
-      :total="store.totalElements"
-      show-size-changer
-      @change="changePage"
-      @showSizeChange="changeSize"
-    />
+            <td class="text-end fw-semibold">
+              {{ formatMoney(order.finalAmount) }}
+            </td>
+
+            <td>
+              <OrderStatusBadge
+                :status="order.status"
+                :status-text="order.statusText"
+              />
+            </td>
+
+            <td>
+              <small>{{ formatDate(order.createdAt) }}</small>
+            </td>
+
+            <td class="text-end">
+              <div class="btn-group">
+                <button
+                  class="btn btn-sm btn-outline-primary"
+                  @click="$emit('view-detail', order.orderId)"
+                >
+                  Xem
+                </button>
+
+                <button
+                  v-for="action in getAvailableActions(order.status)"
+                  :key="action.status"
+                  class="btn btn-sm"
+                  :class="action.class"
+                  @click="$emit('change-status', order, action.status)"
+                >
+                  {{ action.label }}
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import Swal from "sweetalert2";
-import { useOrderStore } from "../stores/orderStore";
-import OrderStatusTag from "./OrderStatusTag.vue";
+import type { AdminOrderResponse } from "../types/order.type";
+import OrderStatusBadge from "./OrderStatusBadge.vue";
 
-const emit = defineEmits<{ (e: "detail", id: number): void }>();
-const store = useOrderStore();
+defineProps<{
+  orders: AdminOrderResponse[];
+  loading: boolean;
+}>();
 
-const columns = [
-  { title: "Mã đơn", dataIndex: "id", key: "id", width: 90 },
-  { title: "Khách hàng", dataIndex: "customerName", key: "customerName" },
-  { title: "SĐT", dataIndex: "customerPhone", key: "customerPhone" },
-  { title: "Loại đơn", key: "orderType" },
-  { title: "Thanh toán", dataIndex: "paymentMethod", key: "paymentMethod" },
-  { title: "Tổng tiền", key: "finalAmount" },
-  { title: "Trạng thái", key: "status" },
-  { title: "Ngày tạo", key: "createdAt" },
-  { title: "Thao tác", key: "action", align: "center", width: 180 },
-];
+defineEmits<{
+  "view-detail": [orderId: number];
+  "change-status": [order: AdminOrderResponse, status: number];
+}>();
 
-function money(value: number) {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-  }).format(value);
-}
-
-function formatDate(date: string) {
-  return new Date(date).toLocaleString("vi-VN");
-}
-
-function detail(id: number) {
-  emit("detail", id);
-}
-
-// Xử lý Hủy đơn nhanh
-async function cancelOrder(id: number) {
-  const result = await Swal.fire({
-    title: "Xác nhận hủy đơn?",
-    text: `Bạn có chắc chắn muốn hủy đơn hàng #${id}?`,
-    icon: "warning",
-    showCancelButton: true,
-    confirmButtonText: "Vâng, hủy đơn",
-    cancelButtonText: "Đóng",
-    confirmButtonColor: "#dc3545",
-  });
-
-  if (!result.isConfirmed) return;
-
-  try {
-    await store.cancelOrder(id);
-    store.loadOrders(); // Tải lại danh sách
-    Swal.fire({
-      icon: "success",
-      title: "Đã hủy đơn",
-      timer: 1500,
-      showConfirmButton: false,
-    });
-  } catch (e: any) {
-    Swal.fire({
-      icon: "error",
-      title: "Lỗi",
-      text: e.response?.data?.message || "Có lỗi xảy ra",
-    });
+function getAvailableActions(status: number) {
+  switch (status) {
+    case 0:
+      return [
+        {
+          status: 1,
+          label: "Xác nhận",
+          class: "btn-outline-success",
+        },
+        {
+          status: 4,
+          label: "Hủy",
+          class: "btn-outline-danger",
+        },
+      ];
+    case 1:
+      return [
+        {
+          status: 2,
+          label: "Giao hàng",
+          class: "btn-outline-primary",
+        },
+        {
+          status: 4,
+          label: "Hủy",
+          class: "btn-outline-danger",
+        },
+      ];
+    case 2:
+      return [
+        {
+          status: 3,
+          label: "Hoàn thành",
+          class: "btn-outline-success",
+        },
+        {
+          status: 5,
+          label: "Giao thất bại",
+          class: "btn-outline-dark",
+        },
+      ];
+    case 3:
+      return [
+        {
+          status: 6,
+          label: "Yêu cầu hoàn",
+          class: "btn-outline-warning",
+        },
+      ];
+    case 6:
+      return [
+        {
+          status: 7,
+          label: "Hoàn tất",
+          class: "btn-outline-success",
+        },
+      ];
+    default:
+      return [];
   }
 }
 
-function changePage(page: number) {
-  store.changePage(page - 1);
+function formatMoney(value?: number | null) {
+  const amount = Number(value || 0);
+
+  return amount.toLocaleString("vi-VN", {
+    style: "currency",
+    currency: "VND",
+  });
 }
 
-function changeSize(page: number, size: number) {
-  store.currentPage = 0;
-  store.pageSize = size;
-  store.loadOrders();
+function formatDate(value?: string | null) {
+  if (!value) return "-";
+
+  return new Date(value).toLocaleString("vi-VN");
 }
 
-function formatPaymentMethod(method?: string) {
-  if (!method) return "Không xác định";
-  const upper = method.toUpperCase();
-  
-  if (upper.includes("COD")) return "Thanh toán khi nhận hàng (COD)";
-  if (upper.includes("VIETQR") || upper.includes("QR")) return "Chuyển khoản VietQR";
-  if (upper.includes("VNPAY")) return "Chuyển khoản VNPay";
-  if (upper.includes("MOMO")) return "Chuyển khoản MoMo";
-  if (upper.includes("CASH")) return "Tiền mặt";
-  if (upper.includes("BANK") || upper.includes("TRANSFER")) return "Chuyển khoản ngân hàng";
-  
-  return method; 
-}
-
-function getPaymentColor(method?: string) {
-  if (!method) return "default";
-  const upper = method.toUpperCase();
-  
-  if (upper.includes("COD") || upper.includes("CASH")) return "orange";
-  if (upper.includes("VNPAY")) return "blue";
-  if (upper.includes("MOMO")) return "magenta";
-  if (upper.includes("VIETQR") || upper.includes("QR")) return "purple"; 
-  
-  return "cyan";
+function formatOrderType(type?: string | null) {
+  switch ((type || "").toUpperCase()) {
+    case "ONLINE":
+      return "Online";
+    case "IN_STORE":
+    case "POS":
+      return "Tại quầy";
+    default:
+      return "-";
+  }
 }
 </script>
