@@ -4,6 +4,8 @@ import org.example.datn_sd69.modules.orderAdmin.dto.response.OrderAdminResponse;
 import org.example.datn_sd69.modules.orderAdmin.dto.response.OrderDetailResponse;
 import org.springframework.data.domain.Page;
 
+import java.time.LocalDate;
+
 public interface OrderAdminService {
 
     /**
@@ -13,6 +15,8 @@ public interface OrderAdminService {
             String keyword,
             Integer status,
             String orderType,
+            LocalDate startDate,
+            LocalDate endDate,
             int page,
             int size
     );

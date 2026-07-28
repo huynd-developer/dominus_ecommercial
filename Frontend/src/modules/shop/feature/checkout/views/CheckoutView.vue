@@ -612,15 +612,16 @@ const loadCartSummary = async () => {
     if (cartItems.value.length === 0) {
       handleCancelVoucher();
 
+      // ĐÃ SỬA: Nếu giỏ hàng trống (thường là do ấn Back từ VNPay), đá về Lịch sử đơn hàng thay vì trang Sản phẩm
       await Swal.fire({
         icon: "info",
-        title: "Giỏ hàng trống",
-        text: "Bạn chưa có sản phẩm nào trong giỏ hàng.",
-        confirmButtonText: "Tiếp tục mua sắm",
+        title: "Đơn hàng đã được tạo",
+        text: "Giỏ hàng hiện đang trống. Nếu bạn vừa chọn thanh toán qua VNPay hoặc VietQR nhưng chưa hoàn tất, vui lòng kiểm tra tại Lịch sử đơn hàng.",
+        confirmButtonText: "Đến Lịch sử đơn hàng",
         confirmButtonColor: "#bd9a5f",
       });
 
-      router.replace("/products");
+      router.replace({ path: "/customer/profile", query: { tab: "orders" } });
     }
   } catch (error: any) {
     console.error("Lỗi tải giỏ hàng:", error);

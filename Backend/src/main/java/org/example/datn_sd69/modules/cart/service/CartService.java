@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.Cart;
 import org.example.datn_sd69.entity.CartItem;
 import org.example.datn_sd69.entity.Customer;
+import org.example.datn_sd69.entity.ProductImage;
 import org.example.datn_sd69.entity.ProductVariant;
 import org.example.datn_sd69.entity.PromotionVariant;
 import org.example.datn_sd69.modules.cart.dto.response.CartItemResponse;
@@ -36,6 +37,7 @@ public class CartService {
     private final CartItemRepository cartItemRepo;
     private final ProductVariantRepository variantRepo;
     private final CustomerRepository customerRepo;
+    private final jakarta.persistence.EntityManager entityManager;
 
     @Transactional
     public void addVariantToCart(
@@ -223,6 +225,27 @@ public class CartService {
 
         if (variant.getProduct() != null) {
             res.setProductName(variant.getProduct().getName());
+
+            // XỬ LÝ LẤY ẢNH TRỰC TIẾP TỪ DB BẰNG JPQL (An toàn tuyệt đối, không sợ lỗi tên hàm Entity)
+            // XỬ LÝ LẤY ẢNH TRỰC TIẾP TỪ DB BẰNG JPQL (Đã fix lỗi báo đỏ của IntelliJ)
+            // XỬ LÝ LẤY ẢNH TRỰC TIẾP TỪ DB BẰNG JPQL (Đã tháo cờ isPrimary)
+            try {
+                String primaryImg = entityManager.createQuery(
+                                "SELECT img.imageUrl FROM ProductImage img WHERE img.product.id = :productId",
+                                String.class
+                        )
+                        .setParameter("productId", variant.getProduct().getId())
+                        .setMaxResults(1)
+                        .getResultStream()
+                        .findFirst()
+                        .orElse(null);
+
+                if (primaryImg != null && !primaryImg.trim().isEmpty()) {
+                    res.setImageUrl(primaryImg);
+                }
+            } catch (Exception e) {
+                System.out.println("=== LỖI QUERY ẢNH GIỎ HÀNG: " + e.getMessage());
+            }
         }
 
         if (variant.getCapacity() != null && variant.getCapacity().getValue() != null) {
@@ -243,6 +266,7 @@ public class CartService {
 
         return res;
     }
+
 
     /**
      * Lấy ảnh hiển thị cho item trong giỏ hàng.

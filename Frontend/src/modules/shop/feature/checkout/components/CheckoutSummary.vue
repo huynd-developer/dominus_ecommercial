@@ -342,6 +342,7 @@ const emit = defineEmits<{
   (e: "cancel-voucher"): void;
 }>();
 
+// ĐÃ SỬA: Chuyển sang "Không có ảnh" tiếng Việt
 const FALLBACK_IMAGE =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(`
@@ -349,7 +350,7 @@ const FALLBACK_IMAGE =
       <rect width="100%" height="100%" fill="#f3f4f6"/>
       <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
         fill="#9ca3af" font-family="Arial" font-size="16">
-        No Image
+        Không có ảnh
       </text>
     </svg>
   `);
@@ -392,8 +393,28 @@ const getItemKey = (item: any) => {
   );
 };
 
+// ĐÃ SỬA: Hàm lấy link ảnh đào sâu chống xịt
 const getItemImage = (item: any) => {
-  return item?.image || item?.imageUrl || item?.thumbnailUrl || FALLBACK_IMAGE;
+  if (!item) return FALLBACK_IMAGE;
+  let url = item?.image || item?.imageUrl || item?.thumbnailUrl || item?.mainImage;
+
+  if (!url && item?.productVariant) {
+    url = item.productVariant.imageUrl || item.productVariant.image;
+    if (!url && item.productVariant.product) {
+      url = item.productVariant.product.mainImage || item.productVariant.product.imageUrl;
+      if (!url && item.productVariant.product.productImages?.length > 0) {
+        url = item.productVariant.product.productImages[0].imageUrl;
+      }
+    }
+  }
+  if (!url && item?.product) {
+    url = item.product.mainImage || item.product.imageUrl;
+    if (!url && item.product.productImages?.length > 0) {
+      url = item.product.productImages[0].imageUrl;
+    }
+  }
+
+  return url ? url : FALLBACK_IMAGE;
 };
 
 const handleImageError = (event: Event) => {

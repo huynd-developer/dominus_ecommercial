@@ -417,7 +417,6 @@ const getImageUrlFromValue = (value: any, visited = new WeakSet<object>()): stri
       value?.variantImageUrl,
       value?.VariantImageUrl,
 
-      // Nhiều API trả ảnh trong mảng hoặc object lồng nhau thay vì field phẳng.
       value?.images,
       value?.Images,
       value?.imageList,
