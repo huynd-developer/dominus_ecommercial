@@ -103,7 +103,6 @@
           >
             <div class="order-header-content">
               <div>
-                <!-- ĐÃ SỬA: Dùng hàm generateOrderCode để tạo mã đơn -->
                 <strong>Đơn {{ generateOrderCode(order.orderId) }}</strong>
                 <div class="small text-muted">
                   {{ formatDate(order.createdAt) }}
@@ -458,7 +457,7 @@
                     Yêu cầu hoàn hàng
                   </button>
 
-                  <!-- ĐÃ THÊM NÚT HỦY YÊU CẦU HOÀN HÀNG -->
+                  <!-- NÚT HỦY YÊU CẦU HOÀN HÀNG -->
                   <button
                     v-if="order.status === 6"
                     type="button"
@@ -513,7 +512,6 @@ import type {
 const store = useCustomerProfileStore();
 const router = useRouter();
 
-// Biến lưu trạng thái Tab hiện tại
 const currentTab = ref<number | "ALL">("ALL");
 
 const reviewLoading = ref(false);
@@ -528,13 +526,11 @@ const reviewableMap = reactive<Record<number, ReviewableOrderItemResponse[]>>(
 );
 const reviewLoadingByOrder = reactive<Record<number, boolean>>({});
 
-// ĐÃ THÊM: Hàm "phù phép" ID thành Mã đơn hàng (VD: DH-000015)
 const generateOrderCode = (id: number | string | null | undefined) => {
   if (!id) return "N/A";
   return `DH-${String(id).padStart(6, "0")}`;
 };
 
-// Lọc đơn hàng theo Tab
 const filteredOrders = computed(() => {
   if (currentTab.value === "ALL") {
     return store.orders;
@@ -559,8 +555,6 @@ const toggleOrder = async (orderId: number) => {
 
   if (openedOrderId.value === orderId) {
     const order = store.orders.find(o => o.orderId === orderId);
-    
-    // Lazy Load: Chỉ gọi API tải trạng thái review khi khách click mở đơn hoàn thành
     if (order && order.status === 3 && !reviewableMap[orderId]) {
       await loadReviewableItems(orderId, false);
     }
@@ -625,8 +619,6 @@ const fetchOrdersAndReviews = async () => {
   try {
     await store.fetchOrders();
     await fetchMyReviews();
-    
-    // Đã gỡ await loadCompletedReviewStates() ở đây để chống treo trang
 
     if (
       openedOrderId.value &&
@@ -642,24 +634,6 @@ const fetchOrdersAndReviews = async () => {
 const fetchMyReviews = async () => {
   const res = await customerProfileService.getMyReviews();
   myReviews.value = res.data || [];
-};
-
-const loadCompletedReviewStates = async () => {
-  if (completedOrders.value.length === 0) {
-    return;
-  }
-
-  reviewLoading.value = true;
-
-  try {
-    await Promise.all(
-      completedOrders.value.map((order: CustomerOrderResponse) =>
-        loadReviewableItems(order.orderId, false),
-      ),
-    );
-  } finally {
-    reviewLoading.value = false;
-  }
 };
 
 const loadReviewableItems = async (orderId: number, showToast: boolean) => {
@@ -732,7 +706,7 @@ const openReview = async (orderId: number, orderItemId: number) => {
 const submitReview = async (payload: {
   rating: number;
   comment: string | null;
-  files: File[]; // Nhận thêm mảng file từ Modal
+  files: File[];
 }) => {
   if (!selectedReviewItem.value) {
     return;
@@ -744,7 +718,6 @@ const submitReview = async (payload: {
   try {
     submittingReview.value = true;
 
-    // 1. Tạo FormData để chứa dữ liệu
     const formData = new FormData();
     formData.append("orderItemId", String(orderItemId));
     formData.append("rating", String(payload.rating));
@@ -753,14 +726,12 @@ const submitReview = async (payload: {
       formData.append("comment", payload.comment);
     }
 
-    // 2. Nhét từng file ảnh/video vào FormData
     if (payload.files && payload.files.length > 0) {
       payload.files.forEach((file) => {
-        formData.append("mediaFiles", file); // 'mediaFiles' là tên key, nhớ dặn Backend hứng đúng tên này nhé
+        formData.append("mediaFiles", file);
       });
     }
 
-    // 3. Gọi API (nhớ báo Backend đổi API nhận form-data thay vì application/json)
     await customerProfileService.createReview(formData as any);
 
     reviewModalVisible.value = false;
@@ -788,7 +759,6 @@ const handleReorder = async (order: any) => {
     confirmButtonText: "Thêm vào giỏ",
     cancelButtonText: "Quay lại",
     reverseButtons: true,
-    // T ốp luôn bộ class giao diện xịn vào thông báo này cho đồng bộ với mấy nút kia
     customClass: {
       popup: "swal-custom-popup",
       title: "swal-custom-title",
@@ -801,7 +771,6 @@ const handleReorder = async (order: any) => {
     try {
       store.orderLoading = true;
 
-      // Gọi API thêm từng sản phẩm vào giỏ
       const addPromises = order.items.map((item: any) => {
         const variantId =
           item.productVariantId || item.variantId || item.productId;
@@ -814,12 +783,10 @@ const handleReorder = async (order: any) => {
 
       await Promise.all(addPromises);
 
-      // QUAN TRỌNG: Kích hoạt event này để cục badge số lượng trên thanh Header tự động nhảy số
       window.dispatchEvent(new Event("cart-updated"));
 
       toast("success", "Đã thêm sản phẩm vào giỏ hàng!");
 
-      // ĐÃ SỬA: Chuyển hướng về trang Giỏ hàng thay vì trang Thanh toán
       router.push("/cart");
     } catch (error) {
       showError(
@@ -1107,7 +1074,6 @@ const toast = (
   });
 };
 
-// Hàm xử lý Hủy đơn hàng (Đã dọn dẹp lại cho chuẩn Form Luxury)
 const cancelOrder = async (order: CustomerOrderResponse) => {
   const { value: reason, isConfirmed } = await Swal.fire({
     title: "Hủy đơn hàng?",
@@ -1130,7 +1096,6 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
     confirmButtonText: "Xác nhận hủy",
     cancelButtonText: "Quay lại",
     reverseButtons: true,
-    // Bắt buộc giữ bộ class này để nó ăn CSS xịn
     customClass: {
       popup: "swal-custom-popup",
       title: "swal-custom-title",
@@ -1153,32 +1118,94 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
   }
 };
 
-// ĐÃ SỬA: Hàm xử lý khi khách bấm Yêu cầu hoàn hàng
+// ĐÃ SỬA: Khắc phục triệt để lỗi TypeScript typing cho files
 const requestReturn = async (order: CustomerOrderResponse) => {
-  const { isConfirmed, value: reason } = await Swal.fire({
+  const { isConfirmed, value } = await Swal.fire({
     title: "Yêu cầu hoàn trả?",
-    text: "Vui lòng chọn lý do hoàn trả đơn hàng:",
-    input: "radio", // Chuyển từ "text" sang "radio"
-    inputOptions: {
-      "Thiếu hàng": "Thiếu sản phẩm, phụ kiện, quà tặng",
-      "Bể vỡ": "Sản phẩm bị bể vỡ, tràn đổ do vận chuyển",
-      "Sai hàng": "Giao sai sản phẩm (sai mẫu mã, dung tích...)",
-      "Hàng lỗi": "Sản phẩm bị lỗi (vòi xịt hỏng, mùi lạ...)",
-      "Hàng giả": "Nghi ngờ sản phẩm không chính hãng",
-      Khác: "Lý do khác",
-    },
-    inputValidator: (value) => {
-      if (!value) {
-        return "Vui lòng chọn một lý do để tiếp tục!";
+    html: `
+      <div style="text-align: left;">
+        <label style="font-weight: 600; color: #1e293b; margin-bottom: 8px; display: block;">Vui lòng chọn lý do hoàn trả đơn hàng:</label>
+        <div id="swal-return-reasons" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+            <input type="radio" name="swal-reason" value="Thiếu hàng" style="accent-color: #bd9a5f;"> Thiếu sản phẩm, phụ kiện, quà tặng
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+            <input type="radio" name="swal-reason" value="Bể vỡ" style="accent-color: #bd9a5f;"> Sản phẩm bị bể vỡ, tràn đổ do vận chuyển
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+            <input type="radio" name="swal-reason" value="Sai hàng" style="accent-color: #bd9a5f;"> Giao sai sản phẩm (sai mẫu mã, dung tích...)
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+            <input type="radio" name="swal-reason" value="Hàng lỗi" style="accent-color: #bd9a5f;"> Sản phẩm bị lỗi (vòi xịt hỏng, mùi lạ...)
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+            <input type="radio" name="swal-reason" value="Hàng giả" style="accent-color: #bd9a5f;"> Nghi ngờ sản phẩm không chính hãng
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+            <input type="radio" name="swal-reason" value="Khác" style="accent-color: #bd9a5f;"> Lý do khác
+          </label>
+        </div>
+
+        <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Đính kèm hình ảnh / video bằng chứng:</label>
+        <input type="file" id="swal-return-files" multiple accept="image/png, image/jpeg, image/jpg, image/webp, video/mp4, video/quicktime, video/webm" class="form-control form-control-sm" style="cursor: pointer;" />
+        <small class="text-muted" style="display: block; margin-top: 4px;">Chỉ chấp nhận file ảnh hoặc video liên quan đến vấn đề sản phẩm.</small>
+      </div>
+    `,
+    didOpen: () => {
+      const fileInput = document.getElementById("swal-return-files") as HTMLInputElement;
+      if (fileInput) {
+        fileInput.addEventListener("change", (e) => {
+          const target = e.target as HTMLInputElement;
+          if (target.files && target.files.length > 0) {
+            const files = Array.from(target.files) as File[];
+            for (const file of files) {
+              const isImage = file.type.startsWith("image/");
+              const isVideo = file.type.startsWith("video/");
+
+              if (!isImage && !isVideo) {
+                Swal.showValidationMessage(`File "${file.name}" không hợp lệ! Vui lòng chỉ chọn ảnh hoặc video.`);
+                target.value = "";
+                return;
+              }
+            }
+            Swal.resetValidationMessage();
+          }
+        });
       }
     },
     showCancelButton: true,
     confirmButtonColor: "#dc2626",
-    cancelButtonColor: "#f8fafc", // Chỉnh màu nút hủy cho xuyệt tông với Hủy đơn
+    cancelButtonColor: "#f8fafc",
     confirmButtonText: "Gửi yêu cầu",
     cancelButtonText: "Quay lại",
     reverseButtons: true,
-    // Bê nguyên bộ class CSS của Hủy đơn sang để nó tự động đẹp
+    focusConfirm: false,
+    preConfirm: () => {
+      const selectedRadio = document.querySelector('input[name="swal-reason"]:checked') as HTMLInputElement;
+      const fileInput = document.getElementById("swal-return-files") as HTMLInputElement;
+
+      if (!selectedRadio) {
+        Swal.showValidationMessage("Vui lòng chọn một lý do hoàn trả!");
+        return false;
+      }
+
+      const files = fileInput?.files ? (Array.from(fileInput.files) as File[]) : [];
+
+      for (const file of files) {
+        const isImage = file.type.startsWith("image/");
+        const isVideo = file.type.startsWith("video/");
+
+        if (!isImage && !isVideo) {
+          Swal.showValidationMessage(`File "${file.name}" không hợp lệ! Hệ thống chỉ chấp nhận file ảnh hoặc video.`);
+          return false;
+        }
+      }
+
+      return {
+        reason: selectedRadio.value,
+        files: files,
+      };
+    },
     customClass: {
       popup: "swal-custom-popup",
       title: "swal-custom-title",
@@ -1187,13 +1214,25 @@ const requestReturn = async (order: CustomerOrderResponse) => {
     },
   });
 
-  if (isConfirmed) {
+  if (isConfirmed && value) {
     try {
       store.orderLoading = true;
-      // Vẫn gọi API như bình thường, nó sẽ tự động gửi cái 'reason' khách vừa chọn
-      await api.put(`/customer/orders/${order.orderId}/request-return`, {
-        reason,
+
+      const formData = new FormData();
+      formData.append("reason", value.reason);
+
+      if (value.files && value.files.length > 0) {
+        value.files.forEach((file: File) => {
+          formData.append("mediaFiles", file);
+        });
+      }
+
+      await api.put(`/customer/orders/${order.orderId}/request-return`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
+
       await fetchOrdersAndReviews();
       toast("success", "Đã gửi yêu cầu hoàn hàng thành công!");
     } catch (error) {
@@ -1204,7 +1243,6 @@ const requestReturn = async (order: CustomerOrderResponse) => {
   }
 };
 
-// Hàm xử lý Hủy yêu cầu hoàn hàng
 const cancelReturnRequest = async (order: CustomerOrderResponse) => {
   const result = await Swal.fire({
     title: "Rút lại yêu cầu?",
@@ -1227,7 +1265,6 @@ const cancelReturnRequest = async (order: CustomerOrderResponse) => {
   if (result.isConfirmed) {
     try {
       store.orderLoading = true;
-      // Gọi API sang Backend để đổi trạng thái từ 6 về lại 3
       await api.put(`/customer/orders/${order.orderId}/cancel-return`);
       await fetchOrdersAndReviews();
       toast("success", "Đã hủy yêu cầu hoàn trả thành công!");
@@ -1239,16 +1276,14 @@ const cancelReturnRequest = async (order: CustomerOrderResponse) => {
   }
 };
 
-// HÀM XỬ LÝ THANH TOÁN LẠI ĐƠN VNPAY
 const repayVnpayOrder = async (order: CustomerOrderResponse) => {
   try {
     store.orderLoading = true;
-    // Cần đảm bảo bạn đã khai báo route này trong Controller của Backend
     const res = await api.get(`/v1/orders/${order.orderId}/vnpay-url`);
 
     if (res.data?.paymentUrl) {
       toast("success", "Đang chuyển hướng đến VNPay...");
-      window.location.href = res.data.paymentUrl; // Đá sang VNPay
+      window.location.href = res.data.paymentUrl;
     } else {
       showError(null, "Không lấy được đường dẫn thanh toán từ hệ thống.");
     }
@@ -1305,7 +1340,6 @@ const getItemImage = (item: any) => {
 </script>
 
 <style scoped>
-/* CSS CHO PHẦN THANH TAB TRẠNG THÁI */
 .status-tabs {
   display: flex;
   background-color: #fff;
@@ -1336,7 +1370,6 @@ const getItemImage = (item: any) => {
   border-bottom: 3px solid #bd9a5f;
 }
 
-/* CSS KHỐI THEO DÕI GIAO HÀNG (TIMELINE) */
 .tracking-container {
   background: #f8fafc;
   padding: 20px;
@@ -1434,7 +1467,6 @@ const getItemImage = (item: any) => {
   border-radius: 8px;
   border: 1px solid #e2e8f0;
 }
-/* KẾT THÚC CSS TIMELINE */
 
 .empty-box {
   text-align: center;
@@ -1581,15 +1613,6 @@ const getItemImage = (item: any) => {
   flex-shrink: 0;
 }
 
-.placeholder-img {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f3f4f6;
-  color: #9ca3af;
-  font-size: 11px;
-}
-
 .product-info {
   min-width: 0;
 }
@@ -1604,16 +1627,6 @@ const getItemImage = (item: any) => {
   font-size: 13px;
   color: #64748b;
   margin-top: 2px;
-}
-
-.sku-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  font-size: 12px;
-  color: #64748b;
 }
 
 .variant-line,
@@ -1694,14 +1707,6 @@ const getItemImage = (item: any) => {
   font-style: italic;
 }
 
-code {
-  color: #111827;
-  background: #f3f4f6;
-  border-radius: 999px;
-  padding: 3px 8px;
-  font-size: 12px;
-}
-
 @media (max-width: 768px) {
   .order-header-content {
     grid-template-columns: 1fr 24px;
@@ -1733,79 +1738,14 @@ code {
   .order-total-box {
     max-width: 100%;
   }
-  /* 
-  CSS FIX GIAO DIỆN SWEETALERT2 (KHÔNG SCOPED)
-  Do SweetAlert2 render thẻ HTML ở ngoài cùng của body nên phải để un-scoped 
-*/
-  .swal-custom-popup {
-    border-radius: 16px !important;
-    padding: 2em 1.5em !important;
-    font-family: inherit !important;
-  }
-
-  .swal-custom-title {
-    font-size: 22px !important;
-    color: #06132b !important; /* Xanh đen đồng bộ web */
-  }
-
-  /* Ép các tùy chọn Radio xếp dọc, căn trái */
-  .swal2-radio {
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 12px !important;
-    text-align: left !important;
-    margin-top: 1.5em !important;
-    background: #f8fafc;
-    padding: 16px;
-    border-radius: 12px;
-    border: 1px solid #e2e8f0;
-  }
-
-  .swal2-radio label {
-    display: flex !important;
-    align-items: center !important;
-    font-size: 15px !important;
-    color: #475569 !important;
-    width: 100% !important;
-    cursor: pointer;
-    margin: 0 !important;
-  }
-
-  /* Đổi màu dấu chấm radio thành màu vàng đồng của web */
-  .swal2-radio input[type="radio"] {
-    margin-right: 12px !important;
-    accent-color: #bd9a5f !important;
-    width: 18px !important;
-    height: 18px !important;
-    cursor: pointer;
-  }
-
-  .swal-custom-cancel {
-    color: #64748b !important;
-    border: 1px solid #e2e8f0 !important;
-    font-weight: 600 !important;
-    box-shadow: none !important;
-  }
-
-  .swal-custom-confirm {
-    font-weight: 600 !important;
-    box-shadow: 0 4px 10px rgba(220, 38, 38, 0.2) !important;
-  }
 }
-
-/*  */
 </style>
 
 <style>
-/* 
-  BẮT BUỘC KHÔNG DÙNG SCOPED Ở ĐÂY
-  GIAO DIỆN LUXURY POPUP (HỢP VIBE XANH NAVY + VÀNG ĐỒNG CỦA WEB)
-*/
 .swal-custom-popup {
   border-radius: 16px !important;
   font-family: inherit !important;
-  padding: 0 0 24px 0 !important; /* Xóa padding trên để làm thanh Header */
+  padding: 0 0 24px 0 !important;
   overflow: hidden !important;
   border: 1px solid #e2e8f0 !important;
   box-shadow:
@@ -1813,7 +1753,6 @@ code {
     0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
 }
 
-/* Tiêu đề nền Dark Navy, chữ Gold chuẩn Vibe */
 .swal-custom-popup .swal2-title {
   background-color: #06132b !important;
   color: #bd9a5f !important;
@@ -1831,65 +1770,9 @@ code {
   text-align: left !important;
 }
 
-/* Ép danh sách thành Grid 1 cột dọc (Trị dứt điểm bệnh dồn hàng ngang) */
-.swal-custom-popup .swal2-radio {
-  display: grid !important;
-  grid-template-columns: 1fr !important;
-  gap: 12px !important;
-  margin: 20px 24px !important;
-  background: transparent !important;
-  border: none !important;
-  padding: 0 !important;
-}
-
-/* Style mỗi option thành 1 khối (Card) bo góc tinh tế */
-.swal-custom-popup .swal2-radio label {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: flex-start !important;
-  background: #f8fafc !important;
-  border: 1px solid #cbd5e1 !important;
-  border-radius: 10px !important;
-  padding: 14px 16px !important;
-  margin: 0 !important;
-  cursor: pointer !important;
-  transition: all 0.25s ease !important;
-  width: 100% !important;
-  box-sizing: border-box !important;
-}
-
-/* Hiệu ứng phát sáng màu vàng đồng khi di chuột vào option */
-.swal-custom-popup .swal2-radio label:hover {
-  background: #fffaf0 !important;
-  border-color: #bd9a5f !important;
-  box-shadow: 0 4px 8px rgba(189, 154, 95, 0.1) !important;
-}
-
-/* Chỉnh nút tick Radio to rõ và đổi màu */
-.swal-custom-popup .swal2-radio input[type="radio"] {
-  width: 20px !important;
-  height: 20px !important;
-  margin: 0 14px 0 0 !important;
-  accent-color: #bd9a5f !important;
-  flex-shrink: 0 !important;
-  cursor: pointer !important;
-}
-
-/* Chỉnh chữ bên trong Option */
-.swal-custom-popup .swal2-radio .swal2-label {
-  margin: 0 !important;
-  font-size: 15px !important;
-  color: #1e293b !important;
-  font-weight: 500 !important;
-  text-align: left !important;
-  line-height: 1.4 !important;
-  cursor: pointer !important;
-}
-
-/* Khối căn chỉnh 2 nút bấm ở dưới cùng */
 .swal-custom-popup .swal2-actions {
   gap: 12px !important;
-  margin-top: 10px !important;
+  margin-top: 20px !important;
   padding: 0 24px !important;
 }
 
@@ -1909,7 +1792,7 @@ code {
 }
 
 .swal-custom-confirm {
-  background-color: #bd9a5f !important;
+  background-color: #dc2626 !important;
   color: #fff !important;
   border: none !important;
   border-radius: 8px !important;
@@ -1919,7 +1802,7 @@ code {
 }
 
 .swal-custom-confirm:hover {
-  background-color: #a3824e !important;
-  box-shadow: 0 4px 12px rgba(189, 154, 95, 0.3) !important;
+  background-color: #b91c1c !important;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3) !important;
 }
 </style>

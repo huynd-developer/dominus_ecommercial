@@ -19,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -119,6 +120,11 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         response.setCreatedAt(order.getCreatedAt());
         response.setCompletedAt(order.getCompletedAt());
 
+        // --- MAP THÔNG TIN HOÀN HÀNG CHO ADMIN ---
+        response.setReturnReason(order.getReturnReason());
+        response.setReturnImages(parseMediaString(order.getReturnImages()));
+        response.setReturnVideos(parseMediaString(order.getReturnVideos()));
+
         if (includeItems) {
             var items = orderItemRepository.findDetailByOrderId(order.getId());
 
@@ -139,6 +145,22 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         }
 
         return response;
+    }
+
+    // --- HÀM HỖ TRỢ PARSE CHUỖI ẢNH/VIDEO THÀNH LIST ---
+    private List<String> parseMediaString(String mediaStr) {
+        if (mediaStr == null || mediaStr.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        String[] parts = mediaStr.split(",");
+        List<String> list = new ArrayList<>();
+        for (String p : parts) {
+            String cleaned = p.trim();
+            if (!cleaned.isEmpty()) {
+                list.add(cleaned);
+            }
+        }
+        return list;
     }
 
     private AdminOrderItemResponse mapOrderItemToResponse(OrderItem item) {
