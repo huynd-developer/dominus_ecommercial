@@ -22,7 +22,7 @@ public class AdminOrderStatusController {
 
     private final AdminOrderStatusService adminOrderStatusService;
 
-    @PatchMapping("/{orderId}/status")
+    @PatchMapping({"/{orderId}/status", "/{orderId}/status/"})
     public ResponseEntity<?> updateStatus(
             @PathVariable @Positive(message = "orderId phải là số nguyên dương") Integer orderId,
             @Valid @RequestBody UpdateOrderStatusRequest request

@@ -9,7 +9,7 @@
   >
     <template #bodyCell="{ column, record }">
       
-      <!-- ĐÃ THÊM: Format lại cột Mã đơn (Biến ID thành Mã code) -->
+      <!-- Format lại cột Mã đơn (Biến ID thành Mã code) -->
       <template v-if="column.key === 'id'">
         <span class="fw-bold text-dark">{{ formatOrderCode(record.id) }}</span>
       </template>
@@ -25,7 +25,7 @@
         </a-tag>
       </template>
 
-      <!-- Thanh toán (Đã chuẩn hóa 100% theo màn hình Checkout) -->
+      <!-- Thanh toán -->
       <template v-if="column.key === 'paymentMethod'">
         <a-tag :color="getPaymentColor(record.paymentMethod)">
           {{ formatPaymentMethod(record.paymentMethod) }}
@@ -93,7 +93,6 @@ import OrderStatusTag from "./OrderStatusTag.vue";
 const emit = defineEmits<{ (e: "detail", id: number): void }>();
 const store = useOrderStore();
 
-// Đã tăng width của cột id lên 100 để chứa đủ chữ DH-00000
 const columns = [
   { title: "Mã đơn", dataIndex: "id", key: "id", width: 100 },
   { title: "Khách hàng", dataIndex: "customerName", key: "customerName" },
@@ -106,10 +105,8 @@ const columns = [
   { title: "Thao tác", key: "action", align: "center", width: 180 },
 ];
 
-// Hàm format mã đơn hàng từ ID
 function formatOrderCode(id: number) {
   if (!id) return "";
-  // PadStart sẽ thêm số 0 vào trước cho đủ 5 ký tự. Ví dụ: 101 -> DH-00101
   return `DH-${id.toString().padStart(5, '0')}`;
 }
 
@@ -128,7 +125,6 @@ function detail(id: number) {
   emit("detail", id);
 }
 
-// Xử lý Hủy đơn nhanh
 async function cancelOrder(id: number) {
   const result = await Swal.fire({
     title: "Xác nhận hủy đơn?",
@@ -170,7 +166,6 @@ function changeSize(page: number, size: number) {
   store.loadOrders();
 }
 
-// ĐÃ SỬA: Đồng bộ tên phương thức thanh toán chuẩn với Checkout
 function formatPaymentMethod(method?: string) {
   if (!method) return "Không xác định";
   const upper = method.toUpperCase();
@@ -180,7 +175,6 @@ function formatPaymentMethod(method?: string) {
   if (upper.includes("VNPAY")) return "Thanh toán qua VNPay";
   if (upper.includes("MOMO")) return "Thanh toán qua MoMo";
   
-  // Xử lý thêm các trường hợp thanh toán tại quầy (nếu có)
   if (upper.includes("CASH")) return "Tiền mặt (Tại quầy)";
   if (upper.includes("MIXED")) return "Thanh toán hỗn hợp";
   if (upper === "HOLD") return "Phiếu treo";
