@@ -1,13 +1,16 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import orderAdminService from "../service/orderAdminService";
-import type { Order } from "../types/order";
-import type { OrderDetail } from "../types/OrderDetail";
+// 1. SỬA LẠI CÁCH IMPORT SERVICE (Có ngoặc nhọn)
+import { orderService } from "../services/order.service";
+// 2. SỬA LẠI IMPORT TYPE ĐÚNG VỚI FILE MỚI
+import type { AdminOrderResponse } from "../types/order.type";
 
 export const useOrderStore = defineStore("order-store", () => {
   const loading = ref(false);
-  const orders = ref<Order[]>([]);
-  const selectedOrder = ref<OrderDetail | null>(null);
+  // 3. ĐỔI TYPE CHO CÁC BIẾN NÀY
+  const orders = ref<AdminOrderResponse[]>([]);
+  const selectedOrder = ref<AdminOrderResponse | null>(null);
+  
   const totalElements = ref(0);
   const totalPages = ref(0);
   const currentPage = ref(0);
@@ -15,9 +18,7 @@ export const useOrderStore = defineStore("order-store", () => {
   
   const keyword = ref("");
   const status = ref<number | undefined>();
-  // Fix lỗi TS: Cho phép orderType nhận undefined
   const orderType = ref<string | undefined>(); 
-  // Thêm state dateRange để hứng dữ liệu từ DatePicker
   const dateRange = ref<any>(); 
 
   async function loadOrders() {
@@ -31,18 +32,17 @@ export const useOrderStore = defineStore("order-store", () => {
         size: pageSize.value,
       };
 
-      // Xử lý bóc tách ngày tháng gửi xuống backend (nếu backend yêu cầu)
       if (dateRange.value && dateRange.value.length === 2) {
-         // Lấy chuỗi định dạng YYYY-MM-DD
          payload.startDate = dateRange.value[0].format('YYYY-MM-DD');
          payload.endDate = dateRange.value[1].format('YYYY-MM-DD');
       }
 
-      const res = await orderAdminService.search(payload);
+      // 4. SỬA LẠI TÊN HÀM (getOrders) VÀ CÁCH TRẢ DỮ LIỆU
+      const res = await orderService.getOrders(payload);
 
-      orders.value = res.data.content;
-      totalElements.value = res.data.totalElements;
-      totalPages.value = res.data.totalPages;
+      orders.value = res.content;
+      totalElements.value = res.totalElements;
+      totalPages.value = res.totalPages;
     } finally {
       loading.value = false;
     }
@@ -51,8 +51,9 @@ export const useOrderStore = defineStore("order-store", () => {
   async function loadDetail(id: number) {
     loading.value = true;
     try {
-      const res = await orderAdminService.getDetail(id);
-      selectedOrder.value = res.data;
+      // 5. ĐỔI THÀNH getOrderDetail VÀ BỎ .data
+      const res = await orderService.getOrderDetail(id);
+      selectedOrder.value = res;
     } finally {
       loading.value = false;
     }
@@ -61,7 +62,8 @@ export const useOrderStore = defineStore("order-store", () => {
   async function updateStatus(id: number, newStatus: number) {
     loading.value = true;
     try {
-      await orderAdminService.updateStatus(id, newStatus);
+      // 6. ĐỔI THÀNH updateOrderStatus
+      await orderService.updateOrderStatus(id, newStatus);
       await loadDetail(id);
       await loadOrders();
     } finally {
@@ -72,7 +74,8 @@ export const useOrderStore = defineStore("order-store", () => {
   async function cancelOrder(id: number) {
     loading.value = true;
     try {
-      await orderAdminService.cancel(id);
+      // Do service ko có hàm cancel, ta dùng updateOrderStatus với status = 4 (Hủy)
+      await orderService.updateOrderStatus(id, 4);
       await loadDetail(id);
       await loadOrders();
     } finally {
@@ -101,7 +104,7 @@ export const useOrderStore = defineStore("order-store", () => {
     keyword,
     status,
     orderType,
-    dateRange, // Bổ sung export dateRange ra ngoài
+    dateRange, 
     loadOrders,
     loadDetail,
     updateStatus,
