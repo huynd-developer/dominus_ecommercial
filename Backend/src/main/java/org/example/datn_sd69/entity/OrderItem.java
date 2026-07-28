@@ -47,4 +47,16 @@ public class OrderItem extends BaseEntity {
 
     @Column(name = "Image", length = 500)
     private String image;
+
+    @Column(name = "ProductName")
+    private String productName;
+
+    @Column(name = "Sku", length = 100)
+    private String sku;
+
+    @Column(name = "CapacityName", length = 50)
+    private String capacityName;
+
+    @Column(name = "BottleTypeName")
+    private String bottleTypeName;
 }

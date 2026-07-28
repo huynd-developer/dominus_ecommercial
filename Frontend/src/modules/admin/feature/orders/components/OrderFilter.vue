@@ -1,100 +1,71 @@
 <template>
-  <a-card :bordered="false" class="mb-3">
+  <a-card :bordered="false" class="shadow-sm rounded-3">
     <a-row :gutter="16">
-
+      <!-- Mở rộng tìm kiếm -->
       <a-col :span="8">
         <a-input
           v-model:value="store.keyword"
-          placeholder="Tìm theo tên hoặc số điện thoại..."
+          placeholder="Mã đơn, Tên khách hàng hoặc Số điện thoại..."
           allow-clear
           @pressEnter="search"
+        >
+          <template #prefix>
+            <i class="bi bi-search text-muted"></i>
+          </template>
+        </a-input>
+      </a-col>
+
+      <!-- Bộ lọc Ngày tháng -->
+      <a-col :span="6">
+        <a-range-picker
+          v-model:value="store.dateRange"
+          format="DD/MM/YYYY"
+          :placeholder="['Từ ngày', 'Đến ngày']"
+          style="width: 100%"
         />
       </a-col>
 
-      <a-col :span="5">
-        <a-select
-          v-model:value="store.status"
-          style="width:100%"
-          placeholder="Trạng thái"
-          allow-clear
-        >
-          <a-select-option :value="0">Chờ xác nhận</a-select-option>
-          <a-select-option :value="1">Đã xác nhận</a-select-option>
-          <a-select-option :value="2">Đang giao</a-select-option>
-          <a-select-option :value="3">Hoàn thành</a-select-option>
-          <a-select-option :value="4">Đã hủy</a-select-option>
-          <a-select-option :value="5">Giao thất bại</a-select-option>
-          <a-select-option :value="6">Yêu cầu hoàn</a-select-option>
-          <a-select-option :value="7">Hoàn tất hoàn hàng</a-select-option>
-        </a-select>
-      </a-col>
-
+      <!-- Loại đơn (Chỉ giữ lại Online / Tại quầy) -->
       <a-col :span="5">
         <a-select
           v-model:value="store.orderType"
-          style="width:100%"
-          placeholder="Loại đơn"
+          style="width: 100%"
+          placeholder="Loại đơn hàng"
           allow-clear
         >
-          <a-select-option value="ONLINE">
-            Online
-          </a-select-option>
-
-          <a-select-option value="OFFLINE">
-            Tại quầy
-          </a-select-option>
+          <a-select-option value="ONLINE">Online (Giao hàng)</a-select-option>
+          <!-- ĐÃ SỬA: Đổi OFFLINE thành IN_STORE để khớp với dữ liệu trong Database -->
+          <a-select-option value="IN_STORE">Tại quầy</a-select-option>
         </a-select>
       </a-col>
 
-      <a-col :span="6">
-
+      <a-col :span="5">
         <a-space>
-
-          <a-button
-              type="primary"
-              @click="search">
-
-            Tìm kiếm
-
+          <a-button type="primary" @click="search">
+            <i class="bi bi-funnel me-1"></i> Lọc
           </a-button>
-
-          <a-button
-              @click="reset">
-
-            Làm mới
-
+          <a-button @click="reset">
+            <i class="bi bi-arrow-clockwise me-1"></i> Làm mới
           </a-button>
-
         </a-space>
-
       </a-col>
-
     </a-row>
   </a-card>
 </template>
 
 <script setup lang="ts">
-
-import {useOrderStore} from "../stores/orderStore";
+import { useOrderStore } from "../stores/orderStore";
 
 const store = useOrderStore();
 
-function search(){
-
+function search() {
   store.search();
-
 }
 
-function reset(){
-
-  store.keyword="";
-
-  store.status=undefined;
-
-  store.orderType="";
-
+function reset() {
+  store.keyword = "";
+  store.orderType = undefined;
+  store.dateRange = undefined; // Reset biến ngày tháng
   store.search();
-
 }
-
 </script>
