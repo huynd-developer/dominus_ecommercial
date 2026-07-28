@@ -3,17 +3,9 @@
     <div class="container-fluid px-4 px-lg-5 h-100">
       <div class="row align-items-center h-100">
         <div class="col-4 col-lg-3">
-          <RouterLink
-            to="/"
-            class="brand-logo-link text-decoration-none d-inline-flex align-items-center"
-          >
-            <img
-              v-if="!logoLoadFailed"
-              :src="logoAura"
-              alt="DOMINUS PERFUME"
-              class="brand-logo-img"
-              @error="logoLoadFailed = true"
-            />
+          <RouterLink to="/" class="brand-logo-link text-decoration-none d-inline-flex align-items-center">
+            <img v-if="!logoLoadFailed" :src="logoAura" alt="DOMINUS PERFUME" class="brand-logo-img"
+              @error="logoLoadFailed = true" />
 
             <div v-else class="brand-logo-text">
               <div class="brand-name">DOMINUS</div>
@@ -23,6 +15,7 @@
         </div>
 
         <div class="col-12 col-lg-6 order-3 order-lg-2 mt-3 mt-lg-0">
+
           <div
             class="search-wrapper position-relative mx-auto"
             ref="searchWrapperRef"
@@ -37,12 +30,7 @@
               @keydown.esc="closeSuggest"
             />
 
-            <button
-              type="button"
-              class="search-button"
-              aria-label="Tìm kiếm"
-              @click="handleSearch"
-            >
+            <button type="button" class="search-button" aria-label="Tìm kiếm" @click="handleSearch">
               <i class="bi bi-search"></i>
             </button>
 
@@ -103,22 +91,12 @@
         </div>
 
         <div class="col-8 col-lg-3 order-2 order-lg-3">
-          <div
-            class="d-flex align-items-center justify-content-end gap-3 gap-lg-4"
-          >
+          <div class="d-flex align-items-center justify-content-end gap-3 gap-lg-4">
             <div class="account-dropdown-wrapper">
-              <button
-                type="button"
-                class="header-action account-trigger d-flex align-items-center gap-2"
-              >
+              <button type="button" class="header-action account-trigger d-flex align-items-center gap-2">
                 <span class="header-account-avatar">
-                  <img
-                    v-if="isAuthenticated && headerAvatarUrl"
-                    :src="headerAvatarUrl"
-                    class="header-account-avatar-img"
-                    alt="avatar"
-                    @error="headerAvatarUrl = ''"
-                  />
+                  <img v-if="isAuthenticated && headerAvatarUrl" :src="headerAvatarUrl"
+                    class="header-account-avatar-img" alt="avatar" @error="headerAvatarUrl = ''" />
 
                   <i v-else class="bi bi-person"></i>
                 </span>
@@ -127,26 +105,18 @@
                   {{ isAuthenticated ? displayName : "Tài khoản" }}
                 </span>
 
-                <i
-                  class="bi bi-chevron-down account-chevron d-none d-md-inline"
-                ></i>
+                <i class="bi bi-chevron-down account-chevron d-none d-md-inline"></i>
               </button>
 
               <div class="account-dropdown">
                 <div v-if="!isAuthenticated" class="guest-dropdown">
                   <p class="dropdown-title mb-3">Tài khoản khách hàng</p>
 
-                  <RouterLink
-                    to="/login"
-                    class="btn dropdown-login-btn w-100 mb-2"
-                  >
+                  <RouterLink to="/login" class="btn dropdown-login-btn w-100 mb-2">
                     Đăng nhập
                   </RouterLink>
 
-                  <RouterLink
-                    to="/register"
-                    class="btn dropdown-register-btn w-100"
-                  >
+                  <RouterLink to="/register" class="btn dropdown-register-btn w-100">
                     Đăng ký
                   </RouterLink>
                 </div>
@@ -154,13 +124,8 @@
                 <div v-else class="logged-dropdown">
                   <div class="user-block d-flex align-items-center gap-3">
                     <div class="user-avatar">
-                      <img
-                        v-if="headerAvatarUrl"
-                        :src="headerAvatarUrl"
-                        class="user-avatar-img"
-                        alt="avatar"
-                        @error="headerAvatarUrl = ''"
-                      />
+                      <img v-if="headerAvatarUrl" :src="headerAvatarUrl" class="user-avatar-img" alt="avatar"
+                        @error="headerAvatarUrl = ''" />
 
                       <span v-else>
                         {{ userInitial }}
@@ -172,7 +137,7 @@
 
                       <div v-if="isUserRole" class="rank-badge mt-1">
                         <i class="bi bi-gem me-1"></i>
-                        {{ userRank }} Rank - {{ userPoints }} Pts
+                        Hạng {{ translateRank(userRank) }} - {{ userPoints }} Điểm
                       </div>
 
                       <div v-else class="rank-badge mt-1">
@@ -184,77 +149,49 @@
 
                   <div class="dropdown-divider"></div>
 
-                  <RouterLink
-                    v-if="isUserRole"
-                    :to="{
-                      path: '/customer/profile',
-                      query: { tab: 'profile' },
-                    }"
-                    class="account-menu-item"
-                  >
+                  <RouterLink v-if="isUserRole" :to="{
+                    path: '/customer/profile',
+                    query: { tab: 'profile' },
+                  }" class="account-menu-item">
                     <i class="bi bi-person-circle"></i>
                     <span>Thông tin cá nhân</span>
                   </RouterLink>
 
-                  <RouterLink
-                    v-if="isUserRole"
-                    :to="{
-                      path: '/customer/profile',
-                      query: { tab: 'password' },
-                    }"
-                    class="account-menu-item"
-                  >
+                  <RouterLink v-if="isUserRole" :to="{
+                    path: '/customer/profile',
+                    query: { tab: 'password' },
+                  }" class="account-menu-item">
                     <i class="bi bi-lock"></i>
                     <span>Đổi mật khẩu</span>
                   </RouterLink>
 
-                  <RouterLink
-                    v-if="isUserRole"
-                    :to="{
-                      path: '/customer/profile',
-                      query: { tab: 'favorites' },
-                    }"
-                    class="account-menu-item"
-                  >
+                  <RouterLink v-if="isUserRole" :to="{
+                    path: '/customer/profile',
+                    query: { tab: 'favorites' },
+                  }" class="account-menu-item">
                     <i class="bi bi-heart"></i>
                     <span>Sản phẩm yêu thích</span>
                   </RouterLink>
 
-                  <RouterLink
-                    v-if="isUserRole"
-                    :to="{
-                      path: '/customer/profile',
-                      query: { tab: 'orders' },
-                    }"
-                    class="account-menu-item"
-                  >
+                  <RouterLink v-if="isUserRole" :to="{
+                    path: '/customer/profile',
+                    query: { tab: 'orders' },
+                  }" class="account-menu-item">
                     <i class="bi bi-receipt"></i>
                     <span>Lịch sử đơn hàng</span>
                   </RouterLink>
 
-                  <RouterLink
-                    v-if="isOwnerRole"
-                    to="/admin/dashboard"
-                    class="account-menu-item"
-                  >
+                  <RouterLink v-if="isOwnerRole" to="/admin/dashboard" class="account-menu-item">
                     <i class="bi bi-speedometer2"></i>
                     <span>Trang quản trị</span>
                   </RouterLink>
 
-                  <RouterLink
-                    v-if="isStaffRole"
-                    to="/admin/pos"
-                    class="account-menu-item"
-                  >
+                  <RouterLink v-if="isStaffRole" to="/admin/pos" class="account-menu-item">
                     <i class="bi bi-shop"></i>
                     <span>Bán hàng POS</span>
                   </RouterLink>
 
-                  <button
-                    type="button"
-                    class="account-menu-item logout-item"
-                    @click="handleLogout"
-                  >
+                  <button type="button" class="account-menu-item logout-item" @click="handleLogout">
                     <i class="bi bi-box-arrow-right"></i>
                     <span>Đăng xuất</span>
                   </button>
@@ -262,11 +199,8 @@
               </div>
             </div>
 
-            <RouterLink
-              v-if="!isStaffRole"
-              to="/cart"
-              class="header-action cart-action d-flex align-items-center gap-2 text-decoration-none position-relative"
-            >
+            <RouterLink v-if="!isStaffRole" to="/cart"
+              class="header-action cart-action d-flex align-items-center gap-2 text-decoration-none position-relative">
               <span class="action-icon-circle">
                 <i class="bi bi-bag"></i>
               </span>
@@ -795,6 +729,21 @@ watch(
     refreshCartCount();
   }
 );
+
+// Hàm dịch hạng sang tiếng Việt
+const translateRank = (rankName: string) => {
+  if (!rankName) return 'Thành viên mới';
+
+  const ranks: Record<string, string> = {
+    'BRONZE': 'Đồng',
+    'SILVER': 'Bạc',
+    'GOLD': 'Vàng',
+    'PLATINUM': 'Bạch kim',
+    'DIAMOND': 'Kim cương'
+  };
+
+  return ranks[rankName.toUpperCase()] || rankName;
+};
 </script>
 
 <style scoped>
@@ -803,11 +752,9 @@ watch(
   z-index: 1050;
   min-height: 104px;
   overflow: visible;
-  background: radial-gradient(
-      circle at top left,
+  background: radial-gradient(circle at top left,
       rgba(189, 154, 95, 0.16),
-      transparent 32%
-    ),
+      transparent 32%),
     linear-gradient(135deg, #030d1a 0%, #07172f 54%, #051024 100%);
   border-bottom: 1px solid rgba(189, 154, 95, 0.22);
 }

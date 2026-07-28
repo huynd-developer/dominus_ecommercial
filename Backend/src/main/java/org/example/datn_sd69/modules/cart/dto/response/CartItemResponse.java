@@ -23,6 +23,8 @@ public class CartItemResponse {
 
     private Integer quantity;
 
+    private String imageUrl;
+
     /**
      * Giá thực tế dùng để tính tiền.
      * Nếu đang có Flash Sale: price = salePrice.
@@ -57,7 +59,7 @@ public class CartItemResponse {
 
     private String note;
 
-    private String imageUrl;
+    // ĐÃ XÓA: Biến imageUrl bị lặp lần 2 ở đây
 
     private String thumbnailUrl;
 

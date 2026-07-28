@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 @RestController
+// LƯU Ý NHỎ: Nếu FE của m gọi '/api/v1/...' thì sửa chỗ này thành "/api/v1/customer/orders" nhé.
+// T tạm giữ nguyên theo code cũ của m để không ảnh hưởng các API khác.
 @RequestMapping("/api/customer/orders")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('USER')")
@@ -61,6 +63,50 @@ public class CustomerOrderController {
 
         return ResponseEntity.ok(Map.of(
                 "message", "Hủy đơn hàng thành công"
+        ));
+    }
+
+    /**
+     * KHÁCH YÊU CẦU HOÀN HÀNG (ĐÃ THÊM)
+     *
+     * Chỉ cho phép khi đơn ở trạng thái:
+     * 3 = Hoàn thành
+     *
+     * PUT /api/customer/orders/{orderId}/request-return
+     */
+    @PutMapping("/{orderId}/request-return")
+    public ResponseEntity<?> requestReturnOrder(
+            @PathVariable
+            @Positive(message = "orderId phải là số nguyên dương")
+            Integer orderId,
+            @RequestBody Map<String, String> payload // Dùng Map để hứng file JSON { "reason": "..." } từ FE
+    ) {
+        String reason = payload.get("reason");
+        customerOrderService.requestReturnOrder(orderId, reason);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Gửi yêu cầu hoàn hàng thành công"
+        ));
+    }
+
+    /**
+     * KHÁCH HỦY YÊU CẦU HOÀN HÀNG (ĐÃ THÊM)
+     *
+     * Chỉ cho phép khi đơn ở trạng thái:
+     * 6 = Yêu cầu hoàn hàng
+     *
+     * PUT /api/customer/orders/{orderId}/cancel-return
+     */
+    @PutMapping("/{orderId}/cancel-return")
+    public ResponseEntity<?> cancelReturnRequest(
+            @PathVariable
+            @Positive(message = "orderId phải là số nguyên dương")
+            Integer orderId
+    ) {
+        customerOrderService.cancelReturnRequest(orderId);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Đã hủy yêu cầu hoàn hàng thành công"
         ));
     }
 }

@@ -1,65 +1,74 @@
 <template>
-  <div class="table-responsive">
-    <table class="table table-hover align-middle mb-0" style="background-color: #fff;">
-      <thead class="text-secondary" style="border-bottom: 2px solid #f0f0f0;">
+  <div class="table-wrapper">
+    <table class="table align-middle brand-table">
+      <thead>
         <tr>
-          <th scope="col" class="py-3 px-4" style="width: 100px;">Hình ảnh</th>
-          <th scope="col" class="py-3">Tên thương hiệu</th>
-          <th scope="col" class="py-3">Mô tả</th>
-          <th scope="col" class="py-3 text-center" style="width: 150px;">Trạng thái</th>
-          <th scope="col" class="py-3 text-center" style="width: 180px;">Thao tác</th>
+          <th scope="col" width="90">Ảnh Logo</th>
+          <th scope="col" width="30%">Tên thương hiệu</th>
+          <th scope="col" width="35%">Mô tả</th>
+          <th scope="col" class="text-center" width="140">Trạng thái (Ẩn/Hiện)</th>
+          <th scope="col" class="text-center" width="140">Thao tác</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="brand in brands" :key="brand.id">
-          <td class="px-4 py-2">
-            <img 
-              v-if="brand.logoUrl" 
-              :src="brand.logoUrl" 
-              alt="Logo" 
-              class="rounded border" 
-              style="width: 60px; height: 60px; object-fit: cover;"
-            >
-            <div 
-              v-else 
-              class="rounded border bg-light d-flex align-items-center justify-content-center text-muted" 
-              style="width: 60px; height: 60px; font-size: 12px;"
-            >
-              Trống
+          <td>
+            <div class="image-box">
+              <img
+                v-if="brand.logoUrl"
+                :src="getImageUrl(brand.logoUrl)"
+                loading="lazy"
+                decoding="async"
+                @error="onImageError"
+              />
+              <div v-else class="image-placeholder">
+                <i class="bi bi-image"></i>
+              </div>
             </div>
           </td>
 
-          <td class="py-3 fw-medium text-dark">{{ brand.name }}</td>
-          
-          <td class="py-3 text-muted text-truncate" style="max-width: 350px;" :title="brand.description">
+          <td class="brand-name">{{ brand.name }}</td>
+
+          <td class="brand-desc text-truncate" :title="brand.description">
             {{ brand.description || 'Chưa có mô tả' }}
           </td>
 
-          <td class="py-3 text-center">
-            <span 
-              class="badge rounded-pill"
-              :class="brand.status === 1 ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-secondary-subtle text-secondary border border-secondary-subtle'"
-            >
-              {{ brand.status === 1 ? 'Đang hoạt động' : 'Tạm ẩn' }}
-            </span>
+          <td class="text-center">
+            <div class="form-check form-switch d-inline-block custom-switch">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                :checked="brand.status === 1"
+                @change="emit('toggle-status', brand)"
+              />
+            </div>
           </td>
-          
-          <td class="py-3 text-center">
-            <button @click="emit('toggle-status', brand)" class="btn btn-sm btn-light border me-2 rounded-circle" :class="brand.status === 1 ? 'text-warning' : 'text-success'" :title="brand.status === 1 ? 'Tạm ẩn' : 'Hiển thị lại'">
-              <i class="bi" :class="brand.status === 1 ? 'bi-eye-slash' : 'bi-eye'"></i>
-            </button>
-            <button @click="emit('edit', brand)" class="btn btn-sm btn-light text-primary border me-2 rounded-circle" title="Sửa">
-              <i class="bi bi-pencil-square"></i>
-            </button>
-            <button @click="emit('delete', brand.id)" class="btn btn-sm btn-light text-danger border rounded-circle" title="Đưa vào thùng rác">
-              <i class="bi bi-trash"></i>
-            </button>
+
+          <td>
+            <div class="actions">
+              <button
+                @click="emit('edit', brand)"
+                class="icon-btn edit"
+                title="Sửa"
+              >
+                <i class="bi bi-pencil"></i>
+              </button>
+
+              <button
+                @click="emit('delete', brand.id)"
+                class="icon-btn delete"
+                title="Xóa"
+              >
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>
           </td>
         </tr>
-        
+
         <tr v-if="brands.length === 0">
-          <td colspan="5" class="text-center text-muted py-5">
-            Không tìm thấy kết quả nào.
+          <td colspan="5" class="empty">
+            <i class="bi bi-star"></i>
+            <p>Không tìm thấy thương hiệu nào.</p>
           </td>
         </tr>
       </tbody>
@@ -68,14 +77,182 @@
 </template>
 
 <script setup lang="ts">
-import type { Brand } from '../types/brand.type';
+import type { Brand } from "../types/brand.type";
 
 defineProps<{ brands: Brand[] }>();
-const emit = defineEmits(['edit', 'delete', 'toggle-status']);
+const emit = defineEmits(["edit", "delete", "toggle-status"]);
+
+const API_URL = import.meta.env.VITE_API_URL || "";
+
+const getImageUrl = (url?: string) => {
+  if (!url) return "";
+  return url.startsWith("http") ? url : `${API_URL}${url}`;
+};
+
+const FALLBACK_IMAGE =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+    <rect width="100%" height="100%" fill="#f1f5f9"/>
+    <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#94a3b8" font-family="Arial" font-size="14">Không có ảnh</text>
+  </svg>
+`);
+
+const onImageError = (event: Event) => {
+  const img = event.target as HTMLImageElement;
+  img.src = FALLBACK_IMAGE;
+};
 </script>
 
 <style scoped>
-.table > :not(caption) > * > * { border-bottom-color: #f8f9fa; }
-.bg-success-subtle { background-color: #d1e7dd !important; }
-.bg-secondary-subtle { background-color: #e2e3e5 !important; }
+.table-wrapper {
+  overflow: auto;
+}
+
+.brand-table {
+  margin: 0;
+}
+
+.brand-table thead {
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 5;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.brand-table thead th {
+  padding: 18px;
+  border-bottom: 2px solid #edf2f7;
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.brand-table tbody td {
+  padding: 18px;
+  vertical-align: middle;
+}
+
+.brand-table tbody tr {
+  transition: 0.25s;
+}
+
+.brand-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.brand-name {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 15px;
+}
+
+.brand-desc {
+  max-width: 250px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.image-box {
+  width: 55px;
+  height: 55px;
+}
+
+.image-box img {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  object-fit: contain;
+  border: 1px solid #e2e8f0;
+  transition: 0.25s;
+  background: #f8fafc;
+}
+
+.image-box img:hover {
+  transform: scale(1.08);
+}
+
+.image-placeholder {
+  width: 55px;
+  height: 55px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  color: #94a3b8;
+  font-size: 20px;
+}
+
+/* Switch Toggle */
+.custom-switch .form-check-input {
+  width: 48px;
+  height: 24px;
+  cursor: pointer;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background-color: #e2e8f0;
+  transition: 0.25s;
+}
+
+.custom-switch .form-check-input:checked {
+  background-color: #2563eb;
+  border-color: #2563eb;
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.icon-btn {
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 10px;
+  transition: 0.25s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.edit:hover {
+  background: #2563eb;
+  color: white;
+}
+
+.delete {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.delete:hover {
+  background: #dc2626;
+  color: white;
+}
+
+.empty {
+  text-align: center;
+  padding: 70px !important;
+  color: #94a3b8;
+}
+
+.empty i {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.empty p {
+  margin: 0;
+  font-size: 15px;
+}
 </style>

@@ -94,10 +94,9 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
             for (MultipartFile file : request.mediaFiles()) {
                 if (!file.isEmpty()) {
                     try {
-                        // GỌI CLOUDINARY UPLOAD Y HỆT BÊN PRODUCT[cite: 16]
                         Map uploadResult = cloudinary.uploader().upload(
                                 file.getBytes(),
-                                ObjectUtils.emptyMap()
+                                ObjectUtils.asMap("resource_type", "auto") // Ép nó tự động nhận diện video/audio/image
                         );
 
                         // Lấy URL trả về từ Cloudinary[cite: 16]

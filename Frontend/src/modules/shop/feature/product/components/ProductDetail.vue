@@ -519,6 +519,7 @@ const isCustomerLoggedIn = () => {
   return hasToken() && getCurrentRole() === "USER";
 };
 
+// ĐÃ SỬA: Đổi "No Image" thành "Không có ảnh"
 const getPlaceholderImage = () => {
   return (
     "data:image/svg+xml;utf8," +
@@ -527,7 +528,7 @@ const getPlaceholderImage = () => {
         <rect width="100%" height="100%" fill="#f3f4f6"/>
         <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
           fill="#9ca3af" font-family="Arial" font-size="24">
-          No Image
+          Không có ảnh
         </text>
       </svg>
     `)

@@ -43,6 +43,16 @@ public class OrderController {
         return ResponseEntity.ok(result);
     }
 
+    /**
+     * BỔ SUNG: API để lấy lại link thanh toán VNPay cho đơn hàng cũ (Nút "Thanh toán lại")
+     */
+    @GetMapping("/{orderId}/vnpay-url")
+    @PreAuthorize("hasAuthority('USER')")
+    public ResponseEntity<?> getVnPayUrl(@PathVariable Integer orderId) {
+        Map<String, Object> result = orderService.generateVnPayUrl(orderId);
+        return ResponseEntity.ok(result);
+    }
+
     private Integer getCustomerId(Principal principal) {
         if (principal == null || principal.getName() == null || principal.getName().trim().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Bạn chưa đăng nhập");

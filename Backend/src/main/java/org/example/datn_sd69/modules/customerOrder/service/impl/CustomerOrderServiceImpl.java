@@ -31,18 +31,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CustomerOrderServiceImpl implements CustomerOrderService {
 
-    /**
-     * Trạng thái đơn hàng:
-     *
-     * 0 = Chờ xác nhận
-     * 1 = Đã xác nhận / Đang chuẩn bị hàng
-     * 2 = Đang giao hàng
-     * 3 = Hoàn thành
-     * 4 = Đã hủy
-     * 5 = Giao hàng thất bại
-     * 6 = Yêu cầu hoàn hàng / đổi trả
-     * 7 = Hoàn hàng / đổi trả hoàn tất
-     */
     private static final int STATUS_PENDING = 0;
     private static final int STATUS_CONFIRMED = 1;
     private static final int STATUS_SHIPPING = 2;
@@ -116,6 +104,48 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         restoreStockWhenCancel(items);
 
         order.setStatus(STATUS_CANCELLED);
+        orderRepository.save(order);
+    }
+
+    @Override
+    @Transactional
+    public void requestReturnOrder(Integer orderId, String reason) {
+        Customer customer = getCurrentCustomer();
+
+        validateId(orderId, "orderId");
+
+        Order order = orderRepository.findByIdAndCustomer_UserId(orderId, customer.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn."
+                ));
+
+        if (order.getStatus() != STATUS_COMPLETED) {
+            throw badRequest("Chỉ có thể yêu cầu hoàn hàng đối với đơn hàng đã hoàn thành.");
+        }
+
+        order.setStatus(STATUS_RETURN_REQUESTED);
+        orderRepository.save(order);
+    }
+
+    @Override
+    @Transactional
+    public void cancelReturnRequest(Integer orderId) {
+        Customer customer = getCurrentCustomer();
+
+        validateId(orderId, "orderId");
+
+        Order order = orderRepository.findByIdAndCustomer_UserId(orderId, customer.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn."
+                ));
+
+        if (order.getStatus() != STATUS_RETURN_REQUESTED) {
+            throw badRequest("Đơn hàng không ở trạng thái yêu cầu hoàn hàng.");
+        }
+
+        order.setStatus(STATUS_COMPLETED);
         orderRepository.save(order);
     }
 

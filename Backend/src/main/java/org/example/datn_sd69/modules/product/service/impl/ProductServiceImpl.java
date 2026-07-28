@@ -14,9 +14,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.data.domain.Sort;
 
 import java.time.LocalDate;
-
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -97,10 +97,13 @@ public class ProductServiceImpl implements ProductService {
             variant.setCapacity(capacity);
             variant.setBottleType(bottleType);
 
-            String sku = generateSku(savedProduct, capacity, bottleType);
+            // ĐÃ SỬA: Kiểm tra xem có SKU gửi lên không, không có mới tạo mới
+            String sku = (dto.getSku() != null && !dto.getSku().trim().isEmpty())
+                    ? dto.getSku()
+                    : generateSku(savedProduct, capacity, bottleType);
             variant.setSku(sku);
 
-            variant.setPrice(dto.getPrice());
+            // ĐÃ SỬA: Xóa bỏ một dòng setPrice bị lặp thừa
             variant.setPrice(dto.getPrice());
             variant.setStockQuantity(dto.getStockQuantity());
 
@@ -195,7 +198,10 @@ public class ProductServiceImpl implements ProductService {
             variant.setCapacity(capacity);
             variant.setBottleType(bottleType);
 
-            String sku = generateSku(product, capacity, bottleType);
+            // ĐÃ SỬA: Giữ nguyên mã SKU cũ nếu cập nhật, tránh sinh mới làm loạn database
+            String sku = (dto.getSku() != null && !dto.getSku().trim().isEmpty())
+                    ? dto.getSku()
+                    : generateSku(product, capacity, bottleType);
             variant.setSku(sku);
 
             variant.setPrice(dto.getPrice());
@@ -240,24 +246,19 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public Map<String, Object> getAllProducts(
-            int page,
-            int size) {
+    public Map<String, Object> getAllProducts(int page, int size) {
 
+        // ĐÃ SỬA: Thêm Sort.by(Sort.Direction.DESC, "id") để đưa sp mới lên đầu
         Page<Product> productPage =
                 productRepository.findByStatusAndIsDeletedFalse(
                         1,
-                        PageRequest.of(page, size)
+                        PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"))
                 );
 
         List<ProductResponse> items =
-                productPage.getContent()
-                        .stream()
-                        .map(this::mapToResponse)
-                        .toList();
+                productPage.getContent().stream().map(this::mapToResponse).toList();
 
         Map<String, Object> result = new HashMap<>();
-
         result.put("content", items);
         result.put("currentPage", productPage.getNumber());
         result.put("totalItems", productPage.getTotalElements());
@@ -268,23 +269,18 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public Map<String, Object> getAllProductsAdmin(
-            int page,
-            int size) {
+    public Map<String, Object> getAllProductsAdmin(int page, int size) {
 
+        // ĐÃ SỬA: Thêm Sort.by(Sort.Direction.DESC, "id") để đưa sp mới lên đầu
         Page<Product> productPage =
                 productRepository.findByIsDeletedFalse(
-                        PageRequest.of(page, size)
+                        PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"))
                 );
 
         List<ProductResponse> items =
-                productPage.getContent()
-                        .stream()
-                        .map(this::mapToResponse)
-                        .toList();
+                productPage.getContent().stream().map(this::mapToResponse).toList();
 
         Map<String, Object> result = new HashMap<>();
-
         result.put("content", items);
         result.put("currentPage", productPage.getNumber());
         result.put("totalItems", productPage.getTotalElements());
