@@ -24,21 +24,53 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
             "cashier.user",
             "voucher"
     })
-    @Query("""
-        SELECT o
-        FROM Order o
-        WHERE
-            (
-                :keyword IS NULL
-                OR TRIM(:keyword) = ''
-                OR LOWER(o.customerName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                OR LOWER(o.customerPhone) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                OR CAST(o.id AS string) LIKE CONCAT('%', :keyword, '%')
-            )
-            AND (:status IS NULL OR o.status = :status)
-            AND (:orderType IS NULL OR o.orderType = :orderType)
-        ORDER BY o.createdAt DESC
-    """)
+    @Query(
+            value = """
+            SELECT o
+            FROM Order o
+            WHERE
+                (
+                    :keyword IS NULL
+                    OR TRIM(:keyword) = ''
+                    OR LOWER(COALESCE(o.customerName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                    OR LOWER(COALESCE(o.customerPhone, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                    OR CAST(o.id AS string) LIKE CONCAT('%', :keyword, '%')
+                )
+                AND (:status IS NULL OR o.status = :status)
+                AND (
+                    :orderType IS NULL
+                    OR TRIM(:orderType) = ''
+                    OR UPPER(COALESCE(o.orderType, '')) = UPPER(:orderType)
+                )
+                AND (
+                    o.paymentMethod IS NULL
+                    OR UPPER(o.paymentMethod) <> 'HOLD'
+                )
+            ORDER BY o.createdAt DESC
+        """,
+            countQuery = """
+            SELECT COUNT(o)
+            FROM Order o
+            WHERE
+                (
+                    :keyword IS NULL
+                    OR TRIM(:keyword) = ''
+                    OR LOWER(COALESCE(o.customerName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                    OR LOWER(COALESCE(o.customerPhone, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                    OR CAST(o.id AS string) LIKE CONCAT('%', :keyword, '%')
+                )
+                AND (:status IS NULL OR o.status = :status)
+                AND (
+                    :orderType IS NULL
+                    OR TRIM(:orderType) = ''
+                    OR UPPER(COALESCE(o.orderType, '')) = UPPER(:orderType)
+                )
+                AND (
+                    o.paymentMethod IS NULL
+                    OR UPPER(o.paymentMethod) <> 'HOLD'
+                )
+        """
+    )
     Page<Order> searchAdminOrders(
             @Param("keyword") String keyword,
             @Param("status") Integer status,

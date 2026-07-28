@@ -1,203 +1,198 @@
 <template>
-  <a-card :bordered="false">
+  <div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Mã đơn</th>
+            <th>Khách hàng</th>
+            <th>Loại đơn</th>
+            <th>Thanh toán</th>
+            <th class="text-end">Tổng tiền</th>
+            <th>Trạng thái</th>
+            <th>Ngày tạo</th>
+            <th class="text-end">Thao tác</th>
+          </tr>
+        </thead>
 
-    <a-table
-        :columns="columns"
-        :data-source="store.orders"
-        :loading="store.loading"
-        :pagination="false"
-        row-key="id">
+        <tbody>
+          <tr v-if="loading">
+            <td colspan="8" class="text-center py-4 text-muted">
+              Đang tải đơn hàng...
+            </td>
+          </tr>
 
-        <template #bodyCell="{ column, record }">
+          <tr v-else-if="orders.length === 0">
+            <td colspan="8" class="text-center py-4 text-muted">
+              Không có đơn hàng nào.
+            </td>
+          </tr>
 
-            <!-- Loại đơn -->
-            <template v-if="column.key==='orderType'">
+          <tr v-for="order in orders" :key="order.orderId">
+            <td>
+              <div class="fw-semibold">{{ order.orderCode }}</div>
+              <small class="text-muted">#{{ order.orderId }}</small>
+            </td>
 
-                <a-tag
-                    :color="record.orderType==='ONLINE' ? 'blue':'green'">
+            <td>
+              <div class="fw-semibold">
+                {{ order.customerName || "Khách vãng lai" }}
+              </div>
+              <small class="text-muted">
+                {{ order.customerPhone || "Không có SĐT" }}
+              </small>
+            </td>
 
-                    {{ record.orderType==='ONLINE'
-                    ? 'Online'
-                    : 'Tại quầy'
-                    }}
+            <td>
+              <span class="badge text-bg-light border">
+                {{ formatOrderType(order.orderType) }}
+              </span>
+            </td>
 
-                </a-tag>
+            <td>{{ order.paymentMethod || "-" }}</td>
 
-            </template>
+            <td class="text-end fw-semibold">
+              {{ formatMoney(order.finalAmount) }}
+            </td>
 
-            <!-- Tiền -->
-            <template v-if="column.key==='finalAmount'">
+            <td>
+              <OrderStatusBadge
+                :status="order.status"
+                :status-text="order.statusText"
+              />
+            </td>
 
-                {{ money(record.finalAmount) }}
+            <td>
+              <small>{{ formatDate(order.createdAt) }}</small>
+            </td>
 
-            </template>
+            <td class="text-end">
+              <div class="btn-group">
+                <button
+                  class="btn btn-sm btn-outline-primary"
+                  @click="$emit('view-detail', order.orderId)"
+                >
+                  Xem
+                </button>
 
-            <!-- Trạng thái -->
-            <template v-if="column.key==='status'">
-
-                <OrderStatusTag
-                        :status="record.status"/>
-
-            </template>
-
-            <!-- Ngày -->
-            <template v-if="column.key==='createdAt'">
-
-                {{ formatDate(record.createdAt) }}
-
-            </template>
-
-            <!-- Thao tác -->
-            <template v-if="column.key==='action'">
-
-                <a-space>
-
-                    <a-button
-                            type="primary"
-                            size="small"
-                            @click="detail(record.id)">
-
-                        Chi tiết
-
-                    </a-button>
-
-                </a-space>
-
-            </template>
-
-        </template>
-
-    </a-table>
-
-    <div class="mt-3 text-end">
-
-        <a-pagination
-
-                :current="store.currentPage+1"
-
-                :pageSize="store.pageSize"
-
-                :total="store.totalElements"
-
-                show-size-changer
-
-                @change="changePage"
-
-                @showSizeChange="changeSize"
-
-        />
-
+                <button
+                  v-for="action in getAvailableActions(order.status)"
+                  :key="action.status"
+                  class="btn btn-sm"
+                  :class="action.class"
+                  @click="$emit('change-status', order, action.status)"
+                >
+                  {{ action.label }}
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
-
-  </a-card>
+  </div>
 </template>
 
 <script setup lang="ts">
+import type { AdminOrderResponse } from "../types/order.type";
+import OrderStatusBadge from "./OrderStatusBadge.vue";
 
-
-import {useOrderStore} from "../stores/orderStore";
-
-import OrderStatusTag from "./OrderStatusTag.vue";
-
-const emit = defineEmits<{
-  (e: "detail", id: number): void;
+defineProps<{
+  orders: AdminOrderResponse[];
+  loading: boolean;
 }>();
 
-const store = useOrderStore();
+defineEmits<{
+  "view-detail": [orderId: number];
+  "change-status": [order: AdminOrderResponse, status: number];
+}>();
 
-const columns=[
-
-    {
-        title:"Mã đơn",
-        dataIndex:"id",
-        key:"id"
-    },
-
-    {
-        title:"Khách hàng",
-        dataIndex:"customerName",
-        key:"customerName"
-    },
-
-    {
-        title:"SĐT",
-        dataIndex:"customerPhone",
-        key:"customerPhone"
-    },
-
-    {
-        title:"Loại đơn",
-        key:"orderType"
-    },
-
-    {
-        title:"Thanh toán",
-        dataIndex:"paymentMethod",
-        key:"paymentMethod"
-    },
-
-    {
-        title:"Tổng tiền",
-        key:"finalAmount"
-    },
-
-    {
-        title:"Trạng thái",
-        key:"status"
-    },
-
-    {
-        title:"Ngày tạo",
-        key:"createdAt"
-    },
-
-    {
-        title:"",
-        key:"action"
-    }
-
-]
-
-function money(value:number){
-
-    return new Intl.NumberFormat(
-        "vi-VN",
+function getAvailableActions(status: number) {
+  switch (status) {
+    case 0:
+      return [
         {
-            style:"currency",
-            currency:"VND"
-        }
-    ).format(value);
-
+          status: 1,
+          label: "Xác nhận",
+          class: "btn-outline-success",
+        },
+        {
+          status: 4,
+          label: "Hủy",
+          class: "btn-outline-danger",
+        },
+      ];
+    case 1:
+      return [
+        {
+          status: 2,
+          label: "Giao hàng",
+          class: "btn-outline-primary",
+        },
+        {
+          status: 4,
+          label: "Hủy",
+          class: "btn-outline-danger",
+        },
+      ];
+    case 2:
+      return [
+        {
+          status: 3,
+          label: "Hoàn thành",
+          class: "btn-outline-success",
+        },
+        {
+          status: 5,
+          label: "Giao thất bại",
+          class: "btn-outline-dark",
+        },
+      ];
+    case 3:
+      return [
+        {
+          status: 6,
+          label: "Yêu cầu hoàn",
+          class: "btn-outline-warning",
+        },
+      ];
+    case 6:
+      return [
+        {
+          status: 7,
+          label: "Hoàn tất",
+          class: "btn-outline-success",
+        },
+      ];
+    default:
+      return [];
+  }
 }
 
-function formatDate(date:string){
+function formatMoney(value?: number | null) {
+  const amount = Number(value || 0);
 
-    return new Date(date)
-        .toLocaleString("vi-VN");
-
+  return amount.toLocaleString("vi-VN", {
+    style: "currency",
+    currency: "VND",
+  });
 }
 
-function detail(id: number) {
-    emit("detail", id);
+function formatDate(value?: string | null) {
+  if (!value) return "-";
+
+  return new Date(value).toLocaleString("vi-VN");
 }
 
-function changePage(page:number){
-
-    store.changePage(page - 1);
-
+function formatOrderType(type?: string | null) {
+  switch ((type || "").toUpperCase()) {
+    case "ONLINE":
+      return "Online";
+    case "IN_STORE":
+    case "POS":
+      return "Tại quầy";
+    default:
+      return "-";
+  }
 }
-
-function changeSize(
-    page:number,
-    size:number
-){
-
-    store.currentPage=0;
-
-    store.pageSize=size;
-
-    store.loadOrders();
-
-}
-
 </script>

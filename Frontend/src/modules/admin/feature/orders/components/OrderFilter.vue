@@ -1,100 +1,111 @@
 <template>
-  <a-card :bordered="false" class="mb-3">
-    <a-row :gutter="16">
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Tìm kiếm</label>
+          <input
+            v-model.trim="localKeyword"
+            type="text"
+            class="form-control"
+            placeholder="Tên khách, SĐT, mã đơn..."
+            @keyup.enter="emitSearch"
+          />
+        </div>
 
-      <a-col :span="8">
-        <a-input
-          v-model:value="store.keyword"
-          placeholder="Tìm theo tên hoặc số điện thoại..."
-          allow-clear
-          @pressEnter="search"
-        />
-      </a-col>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">Trạng thái</label>
+          <select v-model="localStatus" class="form-select" @change="emitSearch">
+            <option :value="null">Tất cả trạng thái</option>
+            <option :value="0">Chờ xác nhận</option>
+            <option :value="1">Đã xác nhận</option>
+            <option :value="2">Đang giao hàng</option>
+            <option :value="3">Hoàn thành</option>
+            <option :value="4">Đã hủy</option>
+            <option :value="5">Giao hàng thất bại</option>
+            <option :value="6">Yêu cầu hoàn hàng</option>
+            <option :value="7">Hoàn hàng hoàn tất</option>
+          </select>
+        </div>
 
-      <a-col :span="5">
-        <a-select
-          v-model:value="store.status"
-          style="width:100%"
-          placeholder="Trạng thái"
-          allow-clear
-        >
-          <a-select-option :value="0">Chờ xác nhận</a-select-option>
-          <a-select-option :value="1">Đã xác nhận</a-select-option>
-          <a-select-option :value="2">Đang giao</a-select-option>
-          <a-select-option :value="3">Hoàn thành</a-select-option>
-          <a-select-option :value="4">Đã hủy</a-select-option>
-          <a-select-option :value="5">Giao thất bại</a-select-option>
-          <a-select-option :value="6">Yêu cầu hoàn</a-select-option>
-          <a-select-option :value="7">Hoàn tất hoàn hàng</a-select-option>
-        </a-select>
-      </a-col>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">Loại đơn</label>
+          <select v-model="localOrderType" class="form-select" @change="emitSearch">
+            <option value="">Tất cả loại đơn</option>
+            <option value="ONLINE">Online</option>
+            <option value="IN_STORE">Tại quầy</option>
+          </select>
+        </div>
 
-      <a-col :span="5">
-        <a-select
-          v-model:value="store.orderType"
-          style="width:100%"
-          placeholder="Loại đơn"
-          allow-clear
-        >
-          <a-select-option value="ONLINE">
-            Online
-          </a-select-option>
-
-          <a-select-option value="OFFLINE">
-            Tại quầy
-          </a-select-option>
-        </a-select>
-      </a-col>
-
-      <a-col :span="6">
-
-        <a-space>
-
-          <a-button
-              type="primary"
-              @click="search">
-
-            Tìm kiếm
-
-          </a-button>
-
-          <a-button
-              @click="reset">
-
-            Làm mới
-
-          </a-button>
-
-        </a-space>
-
-      </a-col>
-
-    </a-row>
-  </a-card>
+        <div class="col-md-2 d-flex gap-2">
+          <button class="btn btn-primary w-100" @click="emitSearch">
+            Tìm
+          </button>
+          <button class="btn btn-outline-secondary" @click="resetFilter">
+            Xóa
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
+import { ref, watch } from "vue";
 
-import {useOrderStore} from "../stores/orderStore";
+const props = defineProps<{
+  keyword: string;
+  status: number | null;
+  orderType: string;
+}>();
 
-const store = useOrderStore();
+const emit = defineEmits<{
+  search: [
+    payload: {
+      keyword: string;
+      status: number | null;
+      orderType: string;
+    }
+  ];
+}>();
 
-function search(){
+const localKeyword = ref(props.keyword);
+const localStatus = ref<number | null>(props.status);
+const localOrderType = ref(props.orderType);
 
-  store.search();
+watch(
+  () => props.keyword,
+  (value) => {
+    localKeyword.value = value;
+  }
+);
 
+watch(
+  () => props.status,
+  (value) => {
+    localStatus.value = value;
+  }
+);
+
+watch(
+  () => props.orderType,
+  (value) => {
+    localOrderType.value = value;
+  }
+);
+
+function emitSearch() {
+  emit("search", {
+    keyword: localKeyword.value,
+    status: localStatus.value,
+    orderType: localOrderType.value,
+  });
 }
 
-function reset(){
-
-  store.keyword="";
-
-  store.status=undefined;
-
-  store.orderType="";
-
-  store.search();
-
+function resetFilter() {
+  localKeyword.value = "";
+  localStatus.value = null;
+  localOrderType.value = "";
+  emitSearch();
 }
-
 </script>

@@ -1,401 +1,230 @@
 <template>
-  <a-modal
-    :open="open"
-    title="Chi tiết đơn hàng"
-    width="1100px"
-    :footer="null"
-    @cancel="close"
-  >
-    <div v-if="order">
+  <div v-if="show" class="modal d-block" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title fw-bold mb-1">
+              Chi tiết đơn hàng {{ order?.orderCode }}
+            </h5>
+            <small class="text-muted">
+              Mã đơn #{{ order?.orderId }}
+            </small>
+          </div>
 
-      <!-- Thông tin đơn -->
-      <a-descriptions bordered :column="2">
+          <button type="button" class="btn-close" @click="$emit('close')"></button>
+        </div>
 
-        <a-descriptions-item label="Mã đơn">
-          #{{ order.id }}
-        </a-descriptions-item>
+        <div class="modal-body">
+          <div v-if="!order" class="text-center text-muted py-4">
+            Đang tải chi tiết đơn hàng...
+          </div>
 
-        <a-descriptions-item label="Trạng thái">
-          <OrderStatusTag :status="order.status"/>
-        </a-descriptions-item>
+          <template v-else>
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <div class="border rounded p-3 h-100">
+                  <h6 class="fw-bold mb-3">Thông tin khách hàng</h6>
+                  <p class="mb-1">
+                    <strong>Tên:</strong>
+                    {{ order.customerName || "Khách vãng lai" }}
+                  </p>
+                  <p class="mb-1">
+                    <strong>SĐT:</strong>
+                    {{ order.customerPhone || "-" }}
+                  </p>
+                  <p class="mb-0">
+                    <strong>Địa chỉ:</strong>
+                    {{ order.shippingAddress || "-" }}
+                  </p>
+                </div>
+              </div>
 
-        <a-descriptions-item label="Khách hàng">
-          {{ order.customerName }}
-        </a-descriptions-item>
-
-        <a-descriptions-item label="Số điện thoại">
-          {{ order.customerPhone }}
-        </a-descriptions-item>
-
-        <a-descriptions-item label="Loại đơn">
-          {{ order.orderType }}
-        </a-descriptions-item>
-
-        <a-descriptions-item label="Thanh toán">
-          {{ order.paymentMethod }}
-        </a-descriptions-item>
-
-        <a-descriptions-item :span="2" label="Địa chỉ">
-
-          {{ order.shippingAddress || "-" }}
-
-        </a-descriptions-item>
-
-      </a-descriptions>
-
-      <br>
-
-      <!-- Danh sách sản phẩm -->
-
-      <a-table
-
-          :pagination="false"
-
-          :data-source="order.items"
-
-          row-key="id"
-
-          bordered
-
-      >
-
-        <a-table-column
-            title="Ảnh">
-
-          <template #default="{record}">
-
-            <img
-
-                :src="record.image"
-
-                width="60"
-
-            >
-
-          </template>
-
-        </a-table-column>
-
-        <a-table-column
-            title="Sản phẩm">
-
-          <template #default="{record}">
-
-            <div>
-
-              <b>
-
-                {{record.productName}}
-
-              </b>
-
-              <br>
-
-              SKU:
-
-              {{record.sku}}
-
-              <br>
-
-              {{record.capacityName}}
-
-              -
-
-              {{record.bottleTypeName}}
-
+              <div class="col-md-6">
+                <div class="border rounded p-3 h-100">
+                  <h6 class="fw-bold mb-3">Thông tin đơn hàng</h6>
+                  <p class="mb-1">
+                    <strong>Loại đơn:</strong>
+                    {{ formatOrderType(order.orderType) }}
+                  </p>
+                  <p class="mb-1">
+                    <strong>Thanh toán:</strong>
+                    {{ order.paymentMethod || "-" }}
+                  </p>
+                  <p class="mb-1">
+                    <strong>Trạng thái:</strong>
+                    <OrderStatusBadge
+                      :status="order.status"
+                      :status-text="order.statusText"
+                    />
+                  </p>
+                  <p class="mb-0">
+                    <strong>Ngày tạo:</strong>
+                    {{ formatDate(order.createdAt) }}
+                  </p>
+                </div>
+              </div>
             </div>
 
+            <div class="table-responsive border rounded">
+              <table class="table align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Sản phẩm</th>
+                    <th>SKU</th>
+                    <th>Dung tích</th>
+                    <th>Loại chai</th>
+                    <th class="text-end">SL</th>
+                    <th class="text-end">Giá cuối</th>
+                    <th class="text-end">Thành tiền</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  <tr v-if="order.items.length === 0">
+                    <td colspan="7" class="text-center text-muted py-4">
+                      Đơn hàng này chưa có sản phẩm.
+                    </td>
+                  </tr>
+
+                  <tr v-for="item in order.items" :key="item.orderItemId">
+                    <td>
+                      <div class="d-flex align-items-center gap-2">
+                        <img
+                          :src="getImageUrl(item.imageUrl)"
+                          alt="product"
+                          class="rounded border"
+                          style="width: 48px; height: 48px; object-fit: cover"
+                        />
+                        <div>
+                          <div class="fw-semibold">
+                            {{ item.productName || "Sản phẩm" }}
+                          </div>
+                          <small v-if="item.note" class="text-muted">
+                            {{ item.note }}
+                          </small>
+                        </div>
+                      </div>
+                    </td>
+                    <td>{{ item.sku || "-" }}</td>
+                    <td>{{ item.capacity || "-" }}</td>
+                    <td>{{ item.bottleType || "-" }}</td>
+                    <td class="text-end">{{ item.quantity }}</td>
+                    <td class="text-end">{{ formatMoney(item.finalPrice) }}</td>
+                    <td class="text-end fw-semibold">
+                      {{ formatMoney(item.lineTotal) }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="row justify-content-end mt-3">
+              <div class="col-md-4">
+                <div class="border rounded p-3">
+                  <div class="d-flex justify-content-between mb-2">
+                    <span>Tổng tiền:</span>
+                    <strong>{{ formatMoney(order.totalAmount) }}</strong>
+                  </div>
+
+                  <div class="d-flex justify-content-between mb-2">
+                    <span>Giảm giá:</span>
+                    <strong>{{ formatMoney(order.discountAmount) }}</strong>
+                  </div>
+
+                  <div class="d-flex justify-content-between fs-5">
+                    <span>Thanh toán:</span>
+                    <strong class="text-danger">
+                      {{ formatMoney(order.finalAmount) }}
+                    </strong>
+                  </div>
+
+                  <div v-if="order.voucher" class="mt-2 small text-muted">
+                    Voucher: {{ order.voucher.voucherCode }}
+                  </div>
+                </div>
+              </div>
+            </div>
           </template>
-
-        </a-table-column>
-
-        <a-table-column
-            title="SL"
-            dataIndex="quantity"/>
-
-        <a-table-column
-            title="Đơn giá">
-
-          <template #default="{record}">
-
-            {{money(record.finalPrice)}}
-
-          </template>
-
-        </a-table-column>
-
-        <a-table-column
-            title="Thành tiền">
-
-          <template #default="{record}">
-
-            {{money(record.lineTotal)}}
-
-          </template>
-
-        </a-table-column>
-
-      </a-table>
-
-      <br>
-
-      <!-- Tổng tiền -->
-
-      <a-descriptions bordered>
-
-        <a-descriptions-item label="Tạm tính">
-
-          {{money(order.totalAmount)}}
-
-        </a-descriptions-item>
-
-        <a-descriptions-item label="Giảm giá">
-
-          {{money(order.discountAmount)}}
-
-        </a-descriptions-item>
-
-        <a-descriptions-item label="Thanh toán">
-
-          <b style="color:red">
-
-            {{money(order.finalAmount)}}
-
-          </b>
-
-        </a-descriptions-item>
-
-      </a-descriptions>
-
-      <br>
-
-      <!-- Nút thao tác -->
-
-      <a-space>
-
-        <a-button
-
-            v-if="order.status===0"
-
-            type="primary"
-
-            @click="update(1)"
-
-        >
-
-          Xác nhận
-
-        </a-button>
-
-        <a-button
-
-            v-if="order.status===0"
-
-            danger
-
-            @click="cancel"
-
-        >
-
-          Hủy đơn
-
-        </a-button>
-
-        <a-button
-
-            v-if="order.status===1"
-
-            type="primary"
-
-            @click="update(2)"
-
-        >
-
-          Chuyển giao hàng
-
-        </a-button>
-
-        <a-button
-
-            v-if="order.status===2"
-
-            type="primary"
-
-            @click="update(3)"
-
-        >
-
-          Hoàn thành
-
-        </a-button>
-
-        <a-button
-
-            v-if="order.status===2"
-
-            danger
-
-            @click="update(5)"
-
-        >
-
-          Giao thất bại
-
-        </a-button>
-
-        <a-button
-
-            v-if="order.status===3"
-
-            @click="update(6)"
-
-        >
-
-          Yêu cầu hoàn
-
-        </a-button>
-
-        <a-button
-
-            v-if="order.status===6"
-
-            danger
-
-            @click="update(7)"
-
-        >
-
-          Hoàn tất hoàn
-
-        </a-button>
-
-      </a-space>
-
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="$emit('close')">
+            Đóng
+          </button>
+        </div>
+      </div>
     </div>
+  </div>
 
-  </a-modal>
+  <div v-if="show" class="modal-backdrop show"></div>
 </template>
 
 <script setup lang="ts">
+import type { AdminOrderResponse } from "../types/order.type";
+import OrderStatusBadge from "./OrderStatusBadge.vue";
 
-import {computed} from "vue";
-
-import Swal from "sweetalert2";
-
-import {useOrderStore} from "../stores/orderStore";
-
-import OrderStatusTag from "./OrderStatusTag.vue";
-
-const props=defineProps<{
-
-  open:boolean
-
+defineProps<{
+  show: boolean;
+  order: AdminOrderResponse | null;
 }>();
 
-const emit=defineEmits([
+defineEmits<{
+  close: [];
+}>();
 
-    "close"
+const FALLBACK_IMAGE =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120">
+      <rect width="100%" height="100%" fill="#f2f2f2"/>
+      <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#999" font-size="12">
+        No image
+      </text>
+    </svg>
+  `);
 
-]);
+function getImageUrl(value?: string | null) {
+  if (!value || !value.trim()) return FALLBACK_IMAGE;
 
-const store=useOrderStore();
+  const cleanValue = value.trim();
 
-const order=computed(
+  if (cleanValue.startsWith("http")) return cleanValue;
+  if (cleanValue.startsWith("/")) return `http://localhost:8080${cleanValue}`;
 
-    ()=>store.selectedOrder
-
-);
-
-function close(){
-
-  emit("close");
-
+  return `http://localhost:8080/${cleanValue}`;
 }
 
-function money(value:number){
+function formatMoney(value?: number | null) {
+  const amount = Number(value || 0);
 
-  return new Intl.NumberFormat(
-
-      "vi-VN",
-
-      {
-
-        style:"currency",
-
-        currency:"VND"
-
-      }
-
-  ).format(value);
-
-}
-
-async function update(status:number){
-
-  if(!order.value) return;
-
-  try{
-
-    await store.updateStatus(
-      order.value.id,
-      status
-    );
-
-    await Swal.fire({
-      icon:"success",
-      title:"Thành công",
-      text:"Cập nhật trạng thái thành công",
-      timer:1500,
-      showConfirmButton:false
-    });
-
-  }catch(e:any){
-
-    Swal.fire({
-      icon:"error",
-      title:"Lỗi",
-      text:e.response?.data?.message || "Có lỗi xảy ra"
-    });
-
-  }
-
-}
-
-async function cancel(){
-
-  if(!order.value) return;
-
-  const result = await Swal.fire({
-    title:"Xác nhận hủy đơn?",
-    icon:"warning",
-    showCancelButton:true,
-    confirmButtonText:"Hủy đơn",
-    cancelButtonText:"Đóng"
+  return amount.toLocaleString("vi-VN", {
+    style: "currency",
+    currency: "VND",
   });
-
-  if(!result.isConfirmed) return;
-
-  try{
-
-    await store.cancelOrder(order.value.id);
-
-    Swal.fire({
-      icon:"success",
-      title:"Đã hủy đơn",
-      timer:1500,
-      showConfirmButton:false
-    });
-
-  }catch(e:any){
-
-    Swal.fire({
-      icon:"error",
-      title:"Lỗi",
-      text:e.response?.data?.message || "Có lỗi xảy ra"
-    });
-
-  }
-
 }
 
+function formatDate(value?: string | null) {
+  if (!value) return "-";
+
+  return new Date(value).toLocaleString("vi-VN");
+}
+
+function formatOrderType(type?: string | null) {
+  switch ((type || "").toUpperCase()) {
+    case "ONLINE":
+      return "Online";
+    case "IN_STORE":
+    case "POS":
+      return "Tại quầy";
+    default:
+      return "-";
+  }
+}
 </script>
+
+<style scoped>
+.modal {
+  background: rgba(0, 0, 0, 0.1);
+}
+</style>
