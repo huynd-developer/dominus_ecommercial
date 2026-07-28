@@ -1,5 +1,6 @@
 package org.example.datn_sd69.modules.order.service.impl;
 
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.Order;
 import org.example.datn_sd69.entity.OrderItem;
@@ -9,7 +10,6 @@ import org.example.datn_sd69.modules.order.dto.response.AdminOrderResponse;
 import org.example.datn_sd69.modules.order.service.AdminOrderService;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
-import org.example.datn_sd69.repository.ProductVariantRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -18,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Set;
@@ -54,6 +53,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    private final EntityManager entityManager;
 
     @Override
     @Transactional(readOnly = true)
@@ -150,7 +150,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         response.setDiscountAmount(defaultMoney(item.getDiscountAmount()));
         response.setFinalPrice(defaultMoney(item.getFinalPrice()));
         response.setNote(item.getNote());
-        response.setImageUrl(item.getImage());
 
         BigDecimal lineTotal = defaultMoney(item.getFinalPrice())
                 .multiply(BigDecimal.valueOf(item.getQuantity() == null ? 0 : item.getQuantity()));
@@ -160,6 +159,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         ProductVariant variant = item.getProductVariant();
 
         if (variant == null) {
+            response.setImageUrl(cleanImageUrl(item.getImage()));
             return response;
         }
 
@@ -178,7 +178,59 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             response.setBottleType(variant.getBottleType().getName());
         }
 
+        response.setImageUrl(resolveOrderItemImage(item, variant));
+
         return response;
+    }
+
+    private String resolveOrderItemImage(OrderItem item, ProductVariant variant) {
+        String savedImage = cleanImageUrl(item == null ? null : item.getImage());
+
+        if (savedImage != null) {
+            return savedImage;
+        }
+
+        return resolveProductImageByVariant(variant);
+    }
+
+    private String resolveProductImageByVariant(ProductVariant variant) {
+        if (variant == null || variant.getProduct() == null || variant.getProduct().getId() == null) {
+            return null;
+        }
+
+        try {
+            return entityManager.createQuery(
+                            """
+                            SELECT img.imageUrl
+                            FROM ProductImage img
+                            WHERE img.product.id = :productId
+                              AND img.imageUrl IS NOT NULL
+                              AND img.imageUrl <> ''
+                            ORDER BY img.id ASC
+                            """,
+                            String.class
+                    )
+                    .setParameter("productId", variant.getProduct().getId())
+                    .setMaxResults(1)
+                    .getResultStream()
+                    .map(this::cleanImageUrl)
+                    .filter(value -> value != null)
+                    .findFirst()
+                    .orElse(null);
+        } catch (Exception e) {
+            System.out.println("=== LỖI QUERY ẢNH CHI TIẾT ĐƠN HÀNG: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private String cleanImageUrl(String imageUrl) {
+        if (imageUrl == null) {
+            return null;
+        }
+
+        String cleanValue = imageUrl.trim();
+
+        return cleanValue.isEmpty() ? null : cleanValue;
     }
 
     private Order findOrderOrThrow(Integer orderId) {
