@@ -34,9 +34,17 @@
     <Teleport to="body">
       <!-- BƯỚC 1: POPUP MÃ QR (Chỉ hiện khi chọn VietQR) -->
       <Transition name="fade-modal">
-        <div v-if="showQrModal" class="premium-modal-overlay">
-          <div class="qr-payment-box bg-white p-4 rounded-4 shadow-lg text-center d-flex flex-column align-items-center mx-3" style="max-width: 400px; animation: slideUp 0.3s ease-out;">
-            <div class="mb-2 text-primary">
+        <div v-if="showQrModal" class="premium-modal-overlay" @click.self="handleCancelQR">
+          <div class="qr-payment-box bg-white p-4 rounded-4 shadow-lg text-center d-flex flex-column align-items-center mx-3 position-relative" style="max-width: 400px; animation: slideUp 0.3s ease-out;">
+            <!-- Nút đóng (X) góc trên bên phải -->
+            <button 
+              type="button" 
+              class="btn-close position-absolute top-0 end-0 m-3" 
+              aria-label="Close" 
+              @click="handleCancelQR"
+            ></button>
+
+            <div class="mb-2 text-primary mt-2">
               <i class="bi bi-qr-code-scan" style="font-size: 2.5rem; color: #10b981;"></i>
             </div>
             <h4 class="mb-2 fw-bold" style="color: #06132b;">Thanh toán đơn hàng</h4>
@@ -780,8 +788,15 @@ const handlePlaceOrder = async () => {
       
       qrCodeUrl.value = res.data?.qrUrl || `https://img.vietqr.io/image/970422-0123456789-compact2.png?amount=${amount}&addInfo=Thanh toan don ${orderId}&accountName=SHOP DOMINUS`;
       
+      cartItems.value = [];
+      window.dispatchEvent(new Event("cart-updated"));
+      
       showQrModal.value = true;
-    } 
+
+      // THÊM ĐOẠN NÀY: Đẩy 1 trạng thái ảo vào history để bắt sự kiện người dùng bấm Back
+      window.history.pushState({ qrOpen: true }, "", window.location.href);
+      window.addEventListener("popstate", handleBrowserBackDuringQR);
+    }
     // LUỒNG 3: NẾU LÀ COD -> HIỆN BILL THÀNH CÔNG
     else {
       showSuccessModal.value = true;
@@ -795,26 +810,50 @@ const handlePlaceOrder = async () => {
   }
 };
 
-const confirmQrPayment = () => {
-  showQrModal.value = false;
-  setTimeout(() => {
-    showSuccessModal.value = true;
-  }, 200);
+// Hàm xử lý khi khách bấm nút Back trên trình duyệt lúc đang hiện mã QR
+const handleBrowserBackDuringQR = async (event: PopStateEvent) => {
+  if (showQrModal.value) {
+    showQrModal.value = false;
+    window.removeEventListener("popstate", handleBrowserBackDuringQR);
+
+    // Bật popup thông báo hệt như VNPay
+    await Swal.fire({
+      icon: 'info',
+      title: 'Đơn hàng đã được tạo',
+      text: 'Giỏ hàng hiện đang trống. Nếu bạn vừa chọn thanh toán qua VNPay hoặc VietQR nhưng chưa hoàn tất, vui lòng kiểm tra tại Lịch sử đơn hàng.',
+      confirmButtonText: 'Đến Lịch sử đơn hàng',
+      confirmButtonColor: '#bd9a5f',
+      allowOutsideClick: false,
+    });
+
+    goToOrders();
+  }
 };
 
-// ĐÃ SỬA: Không hủy đơn nữa mà thông báo cho khách có 15 phút
 const handleCancelQR = async () => {
-  showQrModal.value = false; 
+  if (!showQrModal.value) return;
+  showQrModal.value = false;
+  window.removeEventListener("popstate", handleBrowserBackDuringQR);
 
   await Swal.fire({
     icon: 'info',
-    title: 'Chưa hoàn tất thanh toán',
-    text: 'Đơn hàng đã được tạo. Vui lòng thanh toán trong vòng 15 phút tại Lịch sử đơn hàng để không bị tự động hủy.',
+    title: 'Đơn hàng đã được tạo',
+    text: 'Giỏ hàng hiện đang trống. Nếu bạn vừa chọn thanh toán qua VNPay hoặc VietQR nhưng chưa hoàn tất, vui lòng kiểm tra tại Lịch sử đơn hàng.',
+    confirmButtonText: 'Đến Lịch sử đơn hàng',
     confirmButtonColor: '#bd9a5f',
-    confirmButtonText: 'Đã hiểu'
+    allowOutsideClick: false,
   });
 
   goToOrders();
+};
+
+const confirmQrPayment = () => {
+  showQrModal.value = false;
+  window.removeEventListener("popstate", handleBrowserBackDuringQR);
+  
+  setTimeout(() => {
+    showSuccessModal.value = true;
+  }, 200);
 };
 
 const goToCart = () => {
@@ -848,6 +887,7 @@ const loadInitialData = async () => {
     isPageLoading.value = false;
   }
 };
+
 
 onMounted(() => {
   loadInitialData();

@@ -42,9 +42,38 @@
         </template>
 
         <template v-if="column.key === 'paymentMethod'">
-          <a-tag class="payment-tag" :color="getPaymentColor(record.paymentMethod)">
-            {{ formatPaymentMethod(record.paymentMethod) }}
-          </a-tag>
+          <div class="payment-cell">
+            <a-tag class="payment-tag" :color="getPaymentColor(record.paymentMethod)">
+              {{ formatPaymentMethod(record.paymentMethod) }}
+            </a-tag>
+            
+            <!-- KHỐI THÔNG BÁO THANH TOÁN (VIETQR/VNPAY) ĐANG CHỜ XÁC NHẬN -->
+            <template v-if="record.status === 0 && ['VIETQR', 'VNPAY'].includes((record.paymentMethod || '').toUpperCase())">
+              
+              <!-- 1. KHÁCH ĐÃ BÁO THANH TOÁN -->
+              <a-tag v-if="record.isPaymentReported" color="success" class="mt-1 fw-bold">
+                <i class="bi bi-check-circle-fill me-1"></i> Khách đã thanh toán
+              </a-tag>
+
+              <!-- 2. ĐANG CHỜ THANH TOÁN & CÒN GIỜ -->
+              <a-tag v-else-if="getRemainingSeconds(record.createdAt) > 0" color="warning" class="mt-1 fw-bold">
+                <i class="bi bi-clock-history me-1"></i> Chờ khách thanh toán ({{ formatCountdown(getRemainingSeconds(record.createdAt)) }})
+              </a-tag>
+
+              <!-- 3. ĐÃ QUÁ HẠN -->
+              <a-tag v-else color="error" class="mt-1 fw-bold">
+                <i class="bi bi-x-circle-fill me-1"></i> Đã quá hạn 15p
+              </a-tag>
+
+            </template>
+
+            <!-- THÔNG BÁO CHO ĐƠN ĐÃ BỊ HỦY DO QUÁ HẠN THANH TOÁN -->
+            <template v-if="record.status === 4 && ['VIETQR', 'VNPAY'].includes((record.paymentMethod || '').toUpperCase())">
+              <a-tag color="error" class="mt-1 fw-bold" style="background-color: #fee2e2; color: #dc2626; border: 1px solid #fca5a5;">
+                <i class="bi bi-exclamation-circle-fill me-1"></i> Đã hủy do quá hạn thanh toán
+              </a-tag>
+            </template>
+          </div>
         </template>
 
         <template v-if="column.key === 'finalAmount'">
@@ -56,7 +85,7 @@
         <template v-if="column.key === 'status'">
           <OrderStatusBadge
             :status="record.status"
-            :status-text="record.statusText"
+            :status-text="getAdminOrderStatusText(record)"
           />
         </template>
 
@@ -95,9 +124,11 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted, onUnmounted } from "vue";
 import OrderStatusBadge from "./OrderStatusBadge.vue";
+import api from "@/common/api";
 
-defineProps<{
+const props = defineProps<{
   orders: any[];
   loading: boolean;
 }>();
@@ -108,50 +139,72 @@ const emit = defineEmits<{
 }>();
 
 const columns = [
-  {
-    title: "Mã đơn",
-    key: "orderCode",
-    width: 130,
-  },
-  {
-    title: "Khách hàng",
-    key: "customer",
-    width: 190,
-  },
-  {
-    title: "Loại đơn",
-    key: "orderType",
-    width: 120,
-  },
-  {
-    title: "Thanh toán",
-    dataIndex: "paymentMethod",
-    key: "paymentMethod",
-    width: 210,
-  },
-  {
-    title: "Tổng tiền",
-    key: "finalAmount",
-    width: 140,
-    align: "right",
-  },
-  {
-    title: "Trạng thái",
-    key: "status",
-    width: 170,
-  },
-  {
-    title: "Ngày tạo",
-    key: "createdAt",
-    width: 160,
-  },
-  {
-    title: "Thao tác",
-    key: "action",
-    align: "right",
-    width: 220,
-  },
+  { title: "Mã đơn", key: "orderCode", width: 130 },
+  { title: "Khách hàng", key: "customer", width: 190 },
+  { title: "Loại đơn", key: "orderType", width: 120 },
+  { title: "Thanh toán", dataIndex: "paymentMethod", key: "paymentMethod", width: 210 },
+  { title: "Tổng tiền", key: "finalAmount", width: 140, align: "right" },
+  { title: "Trạng thái", key: "status", width: 170 },
+  { title: "Ngày tạo", key: "createdAt", width: 160 },
+  { title: "Thao tác", key: "action", align: "right", width: 220 },
 ];
+
+const currentTime = ref(Date.now());
+let countdownTimer: any = null;
+
+const getRemainingSeconds = (createdAt: string | Date) => {
+  if (!createdAt) return 0;
+  const createTime = new Date(createdAt).getTime();
+  const expireTime = createTime + 15 * 60 * 1000;
+  const diff = Math.floor((expireTime - currentTime.value) / 1000);
+  return diff > 0 ? diff : 0;
+};
+
+const formatCountdown = (seconds: number) => {
+  const m = Math.floor(seconds / 60).toString().padStart(2, "0");
+  const s = (seconds % 60).toString().padStart(2, "0");
+  return `${m}:${s}`;
+};
+
+const checkExpiredOrders = () => {
+  if (!props.orders) return;
+  
+  props.orders.forEach(async (order) => {
+    if (order.status === 0 && ["VIETQR", "VNPAY"].includes((order.paymentMethod || "").toUpperCase())) {
+      if (order.isPaymentReported) return;
+
+      if (getRemainingSeconds(order.createdAt) <= 0) {
+        try {
+          await api.patch(`/customer/orders/${order.orderId}/cancel`);
+        } catch (e) {
+          // Bỏ qua
+        }
+      }
+    }
+  });
+};
+
+const getAdminOrderStatusText = (record: any) => {
+  if (record.status === 4 && ["VIETQR", "VNPAY"].includes((record.paymentMethod || "").toUpperCase())) {
+    const createTime = new Date(record.createdAt).getTime();
+    const now = Date.now();
+    if ((now - createTime >= 15 * 60 * 1000) || (record.statusText && record.statusText.includes("quá hạn"))) {
+      return "Đã hủy (Quá hạn thanh toán)";
+    }
+  }
+  return record.statusText;
+};
+
+onMounted(() => {
+  countdownTimer = setInterval(() => {
+    currentTime.value = Date.now();
+    checkExpiredOrders();
+  }, 1000);
+});
+
+onUnmounted(() => {
+  if (countdownTimer) clearInterval(countdownTimer);
+});
 
 function money(value: number) {
   return new Intl.NumberFormat("vi-VN", {
@@ -162,7 +215,6 @@ function money(value: number) {
 
 function formatDate(date?: string | null) {
   if (!date) return "-";
-
   return new Date(date).toLocaleString("vi-VN", {
     hour: "2-digit",
     minute: "2-digit",
@@ -177,12 +229,10 @@ function formatPaymentMethod(method?: string) {
   if (!method) return "Không xác định";
 
   const upper = method.toUpperCase().trim();
-
   if (upper === "MIXED_VIETQR") return "Tiền mặt + VietQR";
   if (upper === "MIXED_VNPAY") return "Tiền mặt + VNPay";
   if (upper === "MIXED_CASH") return "Thanh toán hỗn hợp";
   if (upper.includes("MIXED")) return "Thanh toán hỗn hợp";
-
   if (upper.includes("COD")) return "Thanh toán tiền mặt";
   if (upper.includes("VIETQR") || upper.includes("QR")) return "Chuyển khoản VietQR";
   if (upper.includes("VNPAY")) return "VNPay";
@@ -198,7 +248,6 @@ function getPaymentColor(method?: string) {
   if (!method) return "default";
 
   const upper = method.toUpperCase().trim();
-
   if (upper.includes("MIXED")) return "geekblue";
   if (upper.includes("COD") || upper.includes("CASH")) return "orange";
   if (upper.includes("VNPAY")) return "blue";
@@ -283,6 +332,13 @@ function getAvailableActions(status: number) {
 .customer-phone {
   color: #6b7280;
   font-size: 12px;
+}
+
+.payment-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
 .order-type-tag,

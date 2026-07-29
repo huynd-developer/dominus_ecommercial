@@ -97,4 +97,7 @@ public class Order extends BaseEntity {
 
     @Column(name = "ReturnVideos", columnDefinition = "NVARCHAR(MAX)")
     private String returnVideos;
+
+    @Column(name = "IsPaymentReported", nullable = false)
+    private Boolean isPaymentReported = false;
 }
