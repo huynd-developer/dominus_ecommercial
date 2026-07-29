@@ -122,6 +122,18 @@ export interface CustomerOrderResponse {
   canCancel: boolean;
 
   createdAt: string;
+  completedAt?: string | null;
+
+  returnType?: ReturnType | string | null;
+  returnReason?: string | null;
+  returnDescription?: string | null;
+  returnEmail?: string | null;
+  refundMethod?: RefundMethod | string | null;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  bankAccountHolder?: string | null;
+  returnImages?: string[] | null;
+  returnVideos?: string[] | null;
 
   items: CustomerOrderItemResponse[];
 }
@@ -164,4 +176,29 @@ export interface ReviewableOrderItemResponse {
   reviewed: boolean;
   canReview: boolean;
   message: string;
+}
+
+export type ReturnType =
+  | "RECEIVED_WITH_PROBLEM"
+  | "NOT_RECEIVED_OR_MISSING";
+
+export type RefundMethod = "BANK_TRANSFER" | "STORE";
+
+export interface ReturnRequestItemPayload {
+  orderItemId: number;
+  quantity: number;
+}
+
+export interface ReturnRequestSubmitPayload {
+  orderId: number;
+  returnType: ReturnType;
+  reason: string;
+  description: string;
+  email: string;
+  refundMethod: RefundMethod;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  bankAccountHolder?: string | null;
+  returnItems: ReturnRequestItemPayload[];
+  files: File[];
 }

@@ -161,11 +161,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         response.setCreatedAt(order.getCreatedAt());
         response.setCompletedAt(order.getCompletedAt());
 
-        // --- MAP THÔNG TIN HOÀN HÀNG CHO ADMIN ---
-        response.setReturnReason(order.getReturnReason());
-        response.setReturnImages(parseMediaString(order.getReturnImages()));
-        response.setReturnVideos(parseMediaString(order.getReturnVideos()));
-
         if (includeItems) {
             var items = orderItemRepository.findDetailByOrderId(order.getId());
 

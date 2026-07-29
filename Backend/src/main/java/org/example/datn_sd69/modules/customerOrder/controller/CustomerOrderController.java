@@ -3,16 +3,18 @@ package org.example.datn_sd69.modules.customerOrder.controller;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.modules.customerOrder.service.CustomerOrderService;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 @RestController
-// LƯU Ý NHỎ: Nếu FE của m gọi '/api/v1/...' thì sửa chỗ này thành "/api/v1/customer/orders" nhé.
-// T tạm giữ nguyên theo code cũ của m để không ảnh hưởng các API khác.
 @RequestMapping("/api/customer/orders")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('USER')")
@@ -21,21 +23,11 @@ public class CustomerOrderController {
 
     private final CustomerOrderService customerOrderService;
 
-    /**
-     * Lấy danh sách đơn hàng của khách đang đăng nhập.
-     *
-     * GET /api/customer/orders
-     */
     @GetMapping
     public ResponseEntity<?> getMyOrders() {
         return ResponseEntity.ok(customerOrderService.getMyOrders());
     }
 
-    /**
-     * Xem chi tiết 1 đơn hàng của khách đang đăng nhập.
-     *
-     * GET /api/customer/orders/{orderId}
-     */
     @GetMapping("/{orderId}")
     public ResponseEntity<?> getOrderDetail(
             @PathVariable
@@ -45,14 +37,6 @@ public class CustomerOrderController {
         return ResponseEntity.ok(customerOrderService.getOrderDetail(orderId));
     }
 
-    /**
-     * Khách hủy đơn.
-     *
-     * Chỉ cho hủy khi đơn đang ở trạng thái:
-     * 0 = Chờ xác nhận
-     *
-     * PATCH /api/customer/orders/{orderId}/cancel
-     */
     @PatchMapping("/{orderId}/cancel")
     public ResponseEntity<?> cancelOrder(
             @PathVariable
@@ -67,22 +51,58 @@ public class CustomerOrderController {
     }
 
     /**
-     * KHÁCH YÊU CẦU HOÀN HÀNG (ĐÃ THÊM)
-     *
-     * Chỉ cho phép khi đơn ở trạng thái:
-     * 3 = Hoàn thành
-     *
-     * PUT /api/customer/orders/{orderId}/request-return
+     * FE gửi multipart/form-data:
+     * - returnType
+     * - reason
+     * - description
+     * - email
+     * - refundMethod
+     * - bankName
+     * - bankAccountNumber
+     * - bankAccountHolder
+     * - returnItems hoặc items: JSON string [{"orderItemId":1,"quantity":1}]
+     * - mediaFiles hoặc files
      */
-    @PutMapping("/{orderId}/request-return")
+    @PutMapping(
+            value = "/{orderId}/request-return",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
     public ResponseEntity<?> requestReturnOrder(
             @PathVariable
             @Positive(message = "orderId phải là số nguyên dương")
             Integer orderId,
-            @RequestBody Map<String, String> payload // Dùng Map để hứng file JSON { "reason": "..." } từ FE
+
+            @RequestParam String returnType,
+            @RequestParam String reason,
+            @RequestParam(required = false) String description,
+            @RequestParam(required = false) String email,
+            @RequestParam String refundMethod,
+            @RequestParam(required = false) String bankName,
+            @RequestParam(required = false) String bankAccountNumber,
+            @RequestParam(required = false) String bankAccountHolder,
+
+            @RequestParam(required = false) String returnItems,
+            @RequestParam(required = false) String items,
+
+            @RequestParam(required = false, name = "mediaFiles")
+            List<MultipartFile> mediaFiles,
+
+            @RequestParam(required = false, name = "files")
+            List<MultipartFile> files
     ) {
-        String reason = payload.get("reason");
-        customerOrderService.requestReturnOrder(orderId, reason);
+        customerOrderService.requestReturnOrder(
+                orderId,
+                returnType,
+                reason,
+                description,
+                email,
+                refundMethod,
+                bankName,
+                bankAccountNumber,
+                bankAccountHolder,
+                chooseReturnItemsPayload(returnItems, items),
+                mergeFiles(mediaFiles, files)
+        );
 
         return ResponseEntity.ok(Map.of(
                 "message", "Gửi yêu cầu hoàn hàng thành công"
@@ -90,13 +110,43 @@ public class CustomerOrderController {
     }
 
     /**
-     * KHÁCH HỦY YÊU CẦU HOÀN HÀNG (ĐÃ THÊM)
-     *
-     * Chỉ cho phép khi đơn ở trạng thái:
-     * 6 = Yêu cầu hoàn hàng
-     *
-     * PUT /api/customer/orders/{orderId}/cancel-return
+     * Giữ lại route JSON cũ, nhưng vẫn bắt buộc có returnItems/items.
+     * Không tự mặc định hoàn toàn bộ đơn.
      */
+    @PutMapping(
+            value = "/{orderId}/request-return",
+            consumes = MediaType.APPLICATION_JSON_VALUE
+    )
+    public ResponseEntity<?> requestReturnOrderJson(
+            @PathVariable
+            @Positive(message = "orderId phải là số nguyên dương")
+            Integer orderId,
+
+            @RequestBody Map<String, String> payload
+    ) {
+        String returnItemsPayload = payload == null
+                ? null
+                : chooseReturnItemsPayload(payload.get("returnItems"), payload.get("items"));
+
+        customerOrderService.requestReturnOrder(
+                orderId,
+                payload == null ? null : payload.getOrDefault("returnType", "RECEIVED_WITH_PROBLEM"),
+                payload == null ? null : payload.get("reason"),
+                payload == null ? null : payload.get("description"),
+                payload == null ? null : payload.get("email"),
+                payload == null ? null : payload.getOrDefault("refundMethod", "STORE"),
+                payload == null ? null : payload.get("bankName"),
+                payload == null ? null : payload.get("bankAccountNumber"),
+                payload == null ? null : payload.get("bankAccountHolder"),
+                returnItemsPayload,
+                null
+        );
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Gửi yêu cầu hoàn hàng thành công"
+        ));
+    }
+
     @PutMapping("/{orderId}/cancel-return")
     public ResponseEntity<?> cancelReturnRequest(
             @PathVariable
@@ -108,5 +158,34 @@ public class CustomerOrderController {
         return ResponseEntity.ok(Map.of(
                 "message", "Đã hủy yêu cầu hoàn hàng thành công"
         ));
+    }
+
+    private String chooseReturnItemsPayload(String returnItems, String items) {
+        if (returnItems != null && !returnItems.trim().isEmpty()) {
+            return returnItems;
+        }
+
+        if (items != null && !items.trim().isEmpty()) {
+            return items;
+        }
+
+        return null;
+    }
+
+    private List<MultipartFile> mergeFiles(
+            List<MultipartFile> mediaFiles,
+            List<MultipartFile> files
+    ) {
+        List<MultipartFile> result = new ArrayList<>();
+
+        if (mediaFiles != null) {
+            result.addAll(mediaFiles);
+        }
+
+        if (files != null) {
+            result.addAll(files);
+        }
+
+        return result.isEmpty() ? null : result;
     }
 }

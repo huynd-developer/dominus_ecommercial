@@ -492,6 +492,13 @@
       :loading="submittingReview"
       @submit="submitReview"
     />
+    <ReturnRequestModal
+      v-model="returnModalVisible"
+      :order="selectedReturnOrder"
+      :loading="submittingReturn"
+      :default-email="getDefaultReturnEmail()"
+      @submit="submitReturnRequest"
+    />
   </div>
 </template>
 
@@ -500,11 +507,13 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import ReviewModal from "./ReviewModal.vue";
+import ReturnRequestModal from "./ReturnRequestModal.vue";
 import { customerProfileService } from "../services/customerProfile.service";
 import { useCustomerProfileStore } from "../stores/customerProfile.store";
 import api from "@/common/api";
 import type {
   CustomerOrderResponse,
+  ReturnRequestSubmitPayload,
   ReviewResponse,
   ReviewableOrderItemResponse,
 } from "../types/profile.type";
@@ -520,6 +529,11 @@ const reviewModalVisible = ref(false);
 const selectedReviewItem = ref<ReviewableOrderItemResponse | null>(null);
 const myReviews = ref<ReviewResponse[]>([]);
 const openedOrderId = ref<number | null>(null);
+
+  
+const returnModalVisible = ref(false);
+const selectedReturnOrder = ref<CustomerOrderResponse | null>(null);
+const submittingReturn = ref(false);
 
 const reviewableMap = reactive<Record<number, ReviewableOrderItemResponse[]>>(
   {},
@@ -1118,128 +1132,45 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
   }
 };
 
-// ĐÃ SỬA: Khắc phục triệt để lỗi TypeScript typing cho files
-const requestReturn = async (order: CustomerOrderResponse) => {
-  const { isConfirmed, value } = await Swal.fire({
-    title: "Yêu cầu hoàn trả?",
-    html: `
-      <div style="text-align: left;">
-        <label style="font-weight: 600; color: #1e293b; margin-bottom: 8px; display: block;">Vui lòng chọn lý do hoàn trả đơn hàng:</label>
-        <div id="swal-return-reasons" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-            <input type="radio" name="swal-reason" value="Thiếu hàng" style="accent-color: #bd9a5f;"> Thiếu sản phẩm, phụ kiện, quà tặng
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-            <input type="radio" name="swal-reason" value="Bể vỡ" style="accent-color: #bd9a5f;"> Sản phẩm bị bể vỡ, tràn đổ do vận chuyển
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-            <input type="radio" name="swal-reason" value="Sai hàng" style="accent-color: #bd9a5f;"> Giao sai sản phẩm (sai mẫu mã, dung tích...)
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-            <input type="radio" name="swal-reason" value="Hàng lỗi" style="accent-color: #bd9a5f;"> Sản phẩm bị lỗi (vòi xịt hỏng, mùi lạ...)
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-            <input type="radio" name="swal-reason" value="Hàng giả" style="accent-color: #bd9a5f;"> Nghi ngờ sản phẩm không chính hãng
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-            <input type="radio" name="swal-reason" value="Khác" style="accent-color: #bd9a5f;"> Lý do khác
-          </label>
-        </div>
+const getDefaultReturnEmail = () => {
+  try {
+    const currentUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
 
-        <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Đính kèm hình ảnh / video bằng chứng:</label>
-        <input type="file" id="swal-return-files" multiple accept="image/png, image/jpeg, image/jpg, image/webp, video/mp4, video/quicktime, video/webm" class="form-control form-control-sm" style="cursor: pointer;" />
-        <small class="text-muted" style="display: block; margin-top: 4px;">Chỉ chấp nhận file ảnh hoặc video liên quan đến vấn đề sản phẩm.</small>
-      </div>
-    `,
-    didOpen: () => {
-      const fileInput = document.getElementById("swal-return-files") as HTMLInputElement;
-      if (fileInput) {
-        fileInput.addEventListener("change", (e) => {
-          const target = e.target as HTMLInputElement;
-          if (target.files && target.files.length > 0) {
-            const files = Array.from(target.files) as File[];
-            for (const file of files) {
-              const isImage = file.type.startsWith("image/");
-              const isVideo = file.type.startsWith("video/");
+    return String(
+      currentUser.email ||
+        currentUser.Email ||
+        localStorage.getItem("email") ||
+        ""
+    ).trim();
+  } catch {
+    return String(localStorage.getItem("email") || "").trim();
+  }
+};
 
-              if (!isImage && !isVideo) {
-                Swal.showValidationMessage(`File "${file.name}" không hợp lệ! Vui lòng chỉ chọn ảnh hoặc video.`);
-                target.value = "";
-                return;
-              }
-            }
-            Swal.resetValidationMessage();
-          }
-        });
-      }
-    },
-    showCancelButton: true,
-    confirmButtonColor: "#dc2626",
-    cancelButtonColor: "#f8fafc",
-    confirmButtonText: "Gửi yêu cầu",
-    cancelButtonText: "Quay lại",
-    reverseButtons: true,
-    focusConfirm: false,
-    preConfirm: () => {
-      const selectedRadio = document.querySelector('input[name="swal-reason"]:checked') as HTMLInputElement;
-      const fileInput = document.getElementById("swal-return-files") as HTMLInputElement;
+const requestReturn = (order: CustomerOrderResponse) => {
+  selectedReturnOrder.value = order;
+  returnModalVisible.value = true;
+};
 
-      if (!selectedRadio) {
-        Swal.showValidationMessage("Vui lòng chọn một lý do hoàn trả!");
-        return false;
-      }
+const submitReturnRequest = async (payload: ReturnRequestSubmitPayload) => {
+  try {
+    submittingReturn.value = true;
+    store.orderLoading = true;
 
-      const files = fileInput?.files ? (Array.from(fileInput.files) as File[]) : [];
+    await customerProfileService.requestReturnOrder(payload.orderId, payload);
 
-      for (const file of files) {
-        const isImage = file.type.startsWith("image/");
-        const isVideo = file.type.startsWith("video/");
+    returnModalVisible.value = false;
+    selectedReturnOrder.value = null;
 
-        if (!isImage && !isVideo) {
-          Swal.showValidationMessage(`File "${file.name}" không hợp lệ! Hệ thống chỉ chấp nhận file ảnh hoặc video.`);
-          return false;
-        }
-      }
+    await fetchOrdersAndReviews();
+    currentTab.value = 6;
 
-      return {
-        reason: selectedRadio.value,
-        files: files,
-      };
-    },
-    customClass: {
-      popup: "swal-custom-popup",
-      title: "swal-custom-title",
-      cancelButton: "swal-custom-cancel",
-      confirmButton: "swal-custom-confirm",
-    },
-  });
-
-  if (isConfirmed && value) {
-    try {
-      store.orderLoading = true;
-
-      const formData = new FormData();
-      formData.append("reason", value.reason);
-
-      if (value.files && value.files.length > 0) {
-        value.files.forEach((file: File) => {
-          formData.append("mediaFiles", file);
-        });
-      }
-
-      await api.put(`/customer/orders/${order.orderId}/request-return`, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
-
-      await fetchOrdersAndReviews();
-      toast("success", "Đã gửi yêu cầu hoàn hàng thành công!");
-    } catch (error) {
-      showError(error, "Không thể gửi yêu cầu hoàn hàng lúc này.");
-    } finally {
-      store.orderLoading = false;
-    }
+    toast("success", "Đã gửi yêu cầu hoàn hàng thành công!");
+  } catch (error) {
+    showError(error, "Không thể gửi yêu cầu hoàn hàng lúc này.");
+  } finally {
+    submittingReturn.value = false;
+    store.orderLoading = false;
   }
 };
 
@@ -1265,7 +1196,7 @@ const cancelReturnRequest = async (order: CustomerOrderResponse) => {
   if (result.isConfirmed) {
     try {
       store.orderLoading = true;
-      await api.put(`/customer/orders/${order.orderId}/cancel-return`);
+      await customerProfileService.cancelReturnRequest(order.orderId);
       await fetchOrdersAndReviews();
       toast("success", "Đã hủy yêu cầu hoàn trả thành công!");
     } catch (error) {

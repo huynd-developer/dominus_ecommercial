@@ -88,13 +88,4 @@ public class Order extends BaseEntity {
     @Column(name = "CompletedAt")
     private LocalDateTime completedAt;
 
-    // --- BỔ SUNG CÁC TRƯỜNG LƯU THÔNG TIN HOÀN HÀNG ---
-    @Column(name = "ReturnReason", columnDefinition = "NVARCHAR(MAX)")
-    private String returnReason;
-
-    @Column(name = "ReturnImages", columnDefinition = "NVARCHAR(MAX)")
-    private String returnImages;
-
-    @Column(name = "ReturnVideos", columnDefinition = "NVARCHAR(MAX)")
-    private String returnVideos;
 }
