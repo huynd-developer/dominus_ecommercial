@@ -90,4 +90,11 @@ public class Order extends BaseEntity {
 
     @Column(name = "IsPaymentReported", nullable = false)
     private Boolean isPaymentReported = false;
+
+    @Nationalized
+    @Column(name = "CancelReason", length = 255)
+    private String cancelReason;
+
+    @Column(name = "CancelledAt")
+    private LocalDateTime cancelledAt;
 }

@@ -133,11 +133,10 @@
                         +
                       </button>
 
-                      <span>/ {{ getMaxReturnQuantity(item) }}</span>
                     </div>
 
                     <div class="return-line-refund">
-                      <span>Hoàn dự kiến</span>
+                      <span>Hoàn tiền</span>
                       <strong>{{ formatMoney(getReturnItemRefundAmount(item)) }}</strong>
                     </div>
                   </div>

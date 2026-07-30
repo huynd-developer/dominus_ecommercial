@@ -1,8 +1,10 @@
 package org.example.datn_sd69.modules.customerOrder.controller;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.modules.customerOrder.service.CustomerOrderService;
+import org.example.datn_sd69.modules.order.dto.request.CancelOrderRequest;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -41,9 +43,13 @@ public class CustomerOrderController {
     public ResponseEntity<?> cancelOrder(
             @PathVariable
             @Positive(message = "orderId phải là số nguyên dương")
-            Integer orderId
+            Integer orderId,
+
+            @Valid
+            @RequestBody
+            CancelOrderRequest request
     ) {
-        customerOrderService.cancelOrder(orderId);
+        customerOrderService.cancelOrder(orderId, request);
 
         return ResponseEntity.ok(Map.of(
                 "message", "Hủy đơn hàng thành công"

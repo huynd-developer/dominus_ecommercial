@@ -316,7 +316,7 @@
                             {{
                               formatDate(
                                 getMyReviewByOrderItemId(item.orderItemId)
-                                  ?.createdAt,
+                                  ?.createdAt
                               )
                             }}
                           </div>
@@ -325,15 +325,11 @@
                         <div
                           v-else-if="
                             getReviewState(order.orderId, item.orderItemId)
-                              ?.message
-                          "
-                          class="small mt-1"
-                          :class="
-                            getReviewState(order.orderId, item.orderItemId)
+                              ?.message &&
+                            !getReviewState(order.orderId, item.orderItemId)
                               ?.canReview
-                              ? 'text-success'
-                              : 'text-muted'
                           "
+                          class="small mt-1 text-muted"
                         >
                           {{
                             getReviewState(order.orderId, item.orderItemId)
@@ -343,81 +339,175 @@
                       </div>
                     </div>
 
-                    <div class="review-action">
-                      <button
-                        v-if="order.status === 3"
-                        type="button"
-                        class="btn btn-sm"
-                        :class="
-                          isReviewed(order.orderId, item.orderItemId)
-                            ? 'btn-outline-secondary'
-                            : 'btn-review'
-                        "
-                        :disabled="
-                          reviewLoadingByOrder[order.orderId] ||
-                          !canReview(order.orderId, item.orderItemId)
-                        "
-                        @click.stop="
-                          openReview(order.orderId, item.orderItemId)
-                        "
-                      >
-                        <span
-                          v-if="reviewLoadingByOrder[order.orderId]"
-                          class="spinner-border spinner-border-sm me-1"
-                        ></span>
+                    <div class="order-item-side">
+                      <div v-if="hasItemPrice(item)" class="item-price-box">
+                        <div
+                          v-if="hasItemSale(item)"
+                          class="item-original-price"
+                        >
+                          {{ formatMoney(getItemOriginalUnitPrice(item)) }}
+                        </div>
 
-                        {{
-                          isReviewed(order.orderId, item.orderItemId)
-                            ? "Đã đánh giá"
-                            : "Đánh giá"
-                        }}
-                      </button>
+                        <div class="item-final-price">
+                          {{ formatMoney(getItemFinalUnitPrice(item)) }}
+                        </div>
 
-                      <button
-                        v-else
-                        type="button"
-                        class="btn btn-sm btn-outline-secondary"
-                        disabled
-                      >
-                        Chưa mở
-                      </button>
+                        <div
+                          v-if="Number(item.quantity || 0) > 1"
+                          class="item-line-total"
+                        >
+                          Thành tiền:
+                          {{ formatMoney(getItemLineTotal(item)) }}
+                        </div>
+                      </div>
+
+                      <div class="review-action">
+                        <button
+                          v-if="order.status === 3"
+                          type="button"
+                          class="btn btn-sm"
+                          :class="
+                            isReviewed(order.orderId, item.orderItemId)
+                              ? 'btn-outline-secondary'
+                              : 'btn-review'
+                          "
+                          :disabled="
+                            reviewLoadingByOrder[order.orderId] ||
+                            !canReview(order.orderId, item.orderItemId)
+                          "
+                          @click.stop="
+                            openReview(order.orderId, item.orderItemId)
+                          "
+                        >
+                          <span
+                            v-if="reviewLoadingByOrder[order.orderId]"
+                            class="spinner-border spinner-border-sm me-1"
+                          ></span>
+
+                          {{
+                            isReviewed(order.orderId, item.orderItemId)
+                              ? "Đã đánh giá"
+                              : "Đánh giá"
+                          }}
+                        </button>
+
+                        <button
+                          v-else
+                          type="button"
+                          class="btn btn-sm btn-outline-secondary"
+                          disabled
+                        >
+                          Chưa mở
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div class="order-total-box">
-                  <div>
-                    <span>Tạm tính:</span>
-                    <strong>{{ formatMoney(order.totalAmount) }}</strong>
+                <div class="order-summary-row">
+                  <div v-if="order.status === 4" class="order-cancel-info">
+                    <div class="cancel-info-title">
+                      <i class="bi bi-x-circle me-1"></i>
+                      Lý do hủy:
+                    </div>
+
+                    <div class="cancel-info-text">
+                      {{ getOrderCancelReason(order) }}
+                    </div>
+
+                    <div
+                      v-if="getOrderCancelledAt(order)"
+                      class="cancel-info-time"
+                    >
+                      Thời gian hủy: {{ formatDate(getOrderCancelledAt(order)) }}
+                    </div>
                   </div>
 
-                  <div>
-                    <span>Giảm giá:</span>
-                    <strong class="text-danger">
-                      -{{ formatMoney(order.discountAmount) }}
-                    </strong>
+                  <div
+                    v-else-if="isReturnInfoVisible(order)"
+                    class="order-return-info"
+                  >
+                    <div class="return-info-title">
+                      <i class="bi bi-arrow-counterclockwise me-1"></i>
+                      Thông tin hoàn hàng:
+                    </div>
+
+                    <div class="return-info-line">
+                      <span>Lý do:</span>
+                      <strong>{{ getOrderReturnReason(order) }}</strong>
+                    </div>
+
+                    <div
+                      v-if="getOrderReturnDescription(order)"
+                      class="return-info-description"
+                    >
+                      {{ getOrderReturnDescription(order) }}
+                    </div>
+
+                    <div
+                      v-if="getOrderReturnMedia(order).length > 0"
+                      class="return-media-section"
+                    >
+                      <div class="return-media-label">Ảnh/video bằng chứng:</div>
+
+                      <div class="return-media-list">
+                        <button
+                          v-for="(media, index) in getOrderReturnMedia(order)"
+                          :key="`${media.url}-${index}`"
+                          type="button"
+                          class="return-media-button"
+                          @click.stop="openReturnMediaPreview(order, index)"
+                        >
+                          <video
+                            v-if="media.isVideo"
+                            :src="media.url"
+                            class="return-media-thumb"
+                            muted
+                            preload="metadata"
+                          ></video>
+
+                          <img
+                            v-else
+                            :src="media.url"
+                            class="return-media-thumb"
+                            alt="Ảnh bằng chứng hoàn hàng"
+                          />
+
+                          <span class="return-media-overlay">
+                            <i
+                              class="bi"
+                              :class="media.isVideo ? 'bi-play-circle' : 'bi-zoom-in'"
+                            ></i>
+                          </span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
-                  <div>
-                    <span>Tổng thanh toán:</span>
-                    <strong class="fs-5">
-                      {{ formatMoney(order.finalAmount) }}
-                    </strong>
+                  <div class="order-total-box">
+                    <div>
+                      <span>Tạm tính:</span>
+                      <strong>{{ formatMoney(order.totalAmount) }}</strong>
+                    </div>
+
+                    <div>
+                      <span>Giảm giá:</span>
+                      <strong class="text-danger">
+                        -{{ formatMoney(order.discountAmount) }}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>Tổng thanh toán:</span>
+                      <strong class="fs-5">
+                        {{ formatMoney(order.finalAmount) }}
+                      </strong>
+                    </div>
                   </div>
                 </div>
 
                 <!-- KHỐI CÁC NÚT THAO TÁC -->
                 <div class="text-end mt-3 d-flex justify-content-end gap-2">
-                  <button
-                    v-if="order.status === 3"
-                    type="button"
-                    class="btn btn-outline-dark btn-sm"
-                    :disabled="reviewLoadingByOrder[order.orderId]"
-                    @click="loadReviewableItems(order.orderId, true)"
-                  >
-                    Cập nhật đánh giá
-                  </button>
-
                   <button
                     v-if="order.status === 0 && order.paymentMethod === 'VNPAY'"
                     class="btn btn-sm text-white"
@@ -530,13 +620,12 @@ const selectedReviewItem = ref<ReviewableOrderItemResponse | null>(null);
 const myReviews = ref<ReviewResponse[]>([]);
 const openedOrderId = ref<number | null>(null);
 
-  
 const returnModalVisible = ref(false);
 const selectedReturnOrder = ref<CustomerOrderResponse | null>(null);
 const submittingReturn = ref(false);
 
 const reviewableMap = reactive<Record<number, ReviewableOrderItemResponse[]>>(
-  {},
+  {}
 );
 const reviewLoadingByOrder = reactive<Record<number, boolean>>({});
 
@@ -550,13 +639,13 @@ const filteredOrders = computed(() => {
     return store.orders;
   }
   return store.orders.filter(
-    (order: CustomerOrderResponse) => order.status === currentTab.value,
+    (order: CustomerOrderResponse) => order.status === currentTab.value
   );
 });
 
 const completedOrders = computed(() => {
   return store.orders.filter(
-    (order: CustomerOrderResponse) => order.status === 3,
+    (order: CustomerOrderResponse) => order.status === 3
   );
 });
 
@@ -568,7 +657,7 @@ const toggleOrder = async (orderId: number) => {
   openedOrderId.value = openedOrderId.value === orderId ? null : orderId;
 
   if (openedOrderId.value === orderId) {
-    const order = store.orders.find(o => o.orderId === orderId);
+    const order = store.orders.find((o) => o.orderId === orderId);
     if (order && order.status === 3 && !reviewableMap[orderId]) {
       await loadReviewableItems(orderId, false);
     }
@@ -673,7 +762,7 @@ const getMyReviewByOrderItemId = (orderItemId: number) => {
 
 const getReviewState = (orderId: number, orderItemId: number) => {
   return reviewableMap[orderId]?.find(
-    (item) => item.orderItemId === orderItemId,
+    (item) => item.orderItemId === orderItemId
   );
 };
 
@@ -805,7 +894,7 @@ const handleReorder = async (order: any) => {
     } catch (error) {
       showError(
         error,
-        "Không thể thêm sản phẩm vào giỏ hàng lúc này. Vui lòng thử lại.",
+        "Không thể thêm sản phẩm vào giỏ hàng lúc này. Vui lòng thử lại."
       );
     } finally {
       store.orderLoading = false;
@@ -848,7 +937,9 @@ const getTrackingHistory = (order: any) => {
         ? new Date(order.completedAt)
         : new Date(baseDate + 48 * 60 * 60 * 1000),
       title: "Đã giao",
-      desc: `Kiện hàng của bạn đã được giao. Người nhận: ${order.customerName || "Bạn"}`,
+      desc: `Kiện hàng của bạn đã được giao. Người nhận: ${
+        order.customerName || "Bạn"
+      }`,
       img: "https://images.unsplash.com/photo-1615460549969-36fa19521a4f?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
       active: true,
     });
@@ -955,6 +1046,101 @@ const formatMoney = (value: number | null | undefined) => {
   });
 };
 
+const toMoneyNumber = (value: unknown) => {
+  if (value === null || value === undefined || value === "") {
+    return 0;
+  }
+
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue) ? numberValue : 0;
+};
+
+const pickMoneyValue = (...values: unknown[]) => {
+  for (const value of values) {
+    const numberValue = toMoneyNumber(value);
+
+    if (numberValue > 0) {
+      return numberValue;
+    }
+  }
+
+  return 0;
+};
+
+const getItemUnitDiscount = (item: any) => {
+  return pickMoneyValue(
+    item?.discountAmount,
+    item?.unitDiscountAmount,
+    item?.unitDiscount,
+    item?.flashSaleDiscount,
+    item?.itemDiscount
+  );
+};
+
+const getItemFinalUnitPrice = (item: any) => {
+  return pickMoneyValue(
+    item?.finalPrice,
+    item?.unitFinalPrice,
+    item?.priceAfterDiscount,
+    item?.discountedPrice,
+    item?.salePrice,
+    item?.sellingPrice,
+    item?.unitPrice,
+    item?.price,
+    item?.originalPrice
+  );
+};
+
+const getItemOriginalUnitPrice = (item: any) => {
+  const originalPrice = pickMoneyValue(
+    item?.originalPrice,
+    item?.unitOriginalPrice,
+    item?.basePrice,
+    item?.listedPrice,
+    item?.priceBeforeDiscount,
+    item?.regularPrice,
+    item?.unitPrice,
+    item?.price
+  );
+
+  const finalPrice = getItemFinalUnitPrice(item);
+  const discountAmount = getItemUnitDiscount(item);
+
+  if (originalPrice > finalPrice) {
+    return originalPrice;
+  }
+
+  if (finalPrice > 0 && discountAmount > 0) {
+    return finalPrice + discountAmount;
+  }
+
+  return originalPrice || finalPrice;
+};
+
+const hasItemPrice = (item: any) => {
+  return getItemFinalUnitPrice(item) > 0 || getItemOriginalUnitPrice(item) > 0;
+};
+
+const hasItemSale = (item: any) => {
+  return getItemOriginalUnitPrice(item) > getItemFinalUnitPrice(item);
+};
+
+const getItemLineTotal = (item: any) => {
+  const lineTotal = pickMoneyValue(
+    item?.lineTotal,
+    item?.totalPrice,
+    item?.itemTotal,
+    item?.subtotal
+  );
+
+  if (lineTotal > 0) {
+    return lineTotal;
+  }
+
+  return getItemFinalUnitPrice(item) * Number(item?.quantity || 0);
+};
+
 const formatDate = (value: string | null | undefined) => {
   if (!value) return "-";
 
@@ -1006,6 +1192,475 @@ const formatOrderType = (value: string | null | undefined) => {
   if (normalized === "POS") return "Đơn tại quầy";
 
   return value;
+};
+
+const getOrderCancelReason = (order: any) => {
+  const reason =
+    order?.cancelReason ??
+    order?.cancellationReason ??
+    order?.cancelNote ??
+    order?.cancelDescription ??
+    order?.reason ??
+    null;
+
+  const cleanReason = String(reason || "").trim();
+
+  return cleanReason || "Chưa có lý do hủy";
+};
+
+const getOrderCancelledAt = (order: any) => {
+  return (
+    order?.cancelledAt ??
+    order?.canceledAt ??
+    order?.cancelAt ??
+    order?.cancelDate ??
+    null
+  );
+};
+
+const getOrderReturnRequest = (order: any) => {
+  return (
+    order?.returnRequest ??
+    order?.latestReturnRequest ??
+    order?.returnInfo ??
+    order?.refundRequest ??
+    null
+  );
+};
+
+const isReturnInfoVisible = (order: any) => {
+  return Number(order?.status) === 6 || Number(order?.status) === 7;
+};
+
+const getOrderReturnReason = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  const reason =
+    order?.returnReason ??
+    order?.returnRequestReason ??
+    order?.refundReason ??
+    order?.exchangeReason ??
+    request?.reason ??
+    request?.returnReason ??
+    request?.returnRequestReason ??
+    request?.refundReason ??
+    null;
+
+  const cleanReason = String(reason || "").trim();
+
+  return cleanReason || "Chưa có lý do hoàn hàng";
+};
+
+const getOrderReturnDescription = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  const description =
+    order?.returnDescription ??
+    order?.returnRequestDescription ??
+    order?.refundDescription ??
+    order?.returnNote ??
+    order?.description ??
+    request?.description ??
+    request?.returnDescription ??
+    request?.returnRequestDescription ??
+    request?.refundDescription ??
+    request?.note ??
+    null;
+
+  return String(description || "").trim();
+};
+
+type ReturnMediaView = {
+  url: string;
+  isVideo: boolean;
+};
+
+const getLocalBackendBaseUrl = () => {
+  const isLocalhost =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+
+  if (isLocalhost) {
+    return `${window.location.protocol}//${window.location.hostname}:8080`;
+  }
+
+  return window.location.origin;
+};
+
+const getApiAssetBaseUrl = () => {
+  const configuredBaseUrl = String(api.defaults.baseURL || "").trim();
+
+  /**
+   * Khi axios baseURL là "/api", nếu ghép ảnh theo window.origin
+   * thì ảnh sẽ thành localhost:5173/uploads/... và Vite không phục vụ file đó.
+   * File hoàn hàng đang được BE lưu ở /uploads/return-requests nên ở môi trường dev
+   * phải trỏ thẳng sang backend localhost:8080.
+   */
+  if (!configuredBaseUrl || configuredBaseUrl.startsWith("/")) {
+    return getLocalBackendBaseUrl();
+  }
+
+  try {
+    const parsedUrl = new URL(configuredBaseUrl, window.location.origin);
+
+    parsedUrl.pathname = parsedUrl.pathname
+      .replace(/\/api\/?$/, "")
+      .replace(/\/$/, "");
+    parsedUrl.search = "";
+    parsedUrl.hash = "";
+
+    return parsedUrl.toString().replace(/\/$/, "");
+  } catch {
+    return getLocalBackendBaseUrl();
+  }
+};
+
+const normalizeReturnMediaUrl = (url: string) => {
+  let cleanUrl = String(url || "").trim();
+
+  if (!cleanUrl) {
+    return "";
+  }
+
+  if (
+    cleanUrl.startsWith("http://") ||
+    cleanUrl.startsWith("https://") ||
+    cleanUrl.startsWith("data:") ||
+    cleanUrl.startsWith("blob:")
+  ) {
+    return cleanUrl;
+  }
+
+  cleanUrl = cleanUrl.replace(/^\/?api\//, "/");
+
+  const assetBaseUrl = getApiAssetBaseUrl();
+
+  if (cleanUrl.startsWith("/")) {
+    return `${assetBaseUrl}${cleanUrl}`;
+  }
+
+  if (cleanUrl.startsWith("uploads/")) {
+    return `${assetBaseUrl}/${cleanUrl}`;
+  }
+
+  return cleanUrl;
+};
+
+const getReturnMediaUrl = (media: any) => {
+  const rawUrl =
+    typeof media === "string"
+      ? media
+      : media?.mediaUrl ??
+        media?.url ??
+        media?.imageUrl ??
+        media?.fileUrl ??
+        media?.src ??
+        media?.path ??
+        "";
+
+  return normalizeReturnMediaUrl(String(rawUrl || ""));
+};
+
+const isReturnMediaVideo = (media: any, url: string) => {
+  const rawType = String(
+    media?.mediaType ??
+      media?.type ??
+      media?.contentType ??
+      media?.mimeType ??
+      url
+  ).toLowerCase();
+
+  return (
+    rawType.includes("video") ||
+    rawType.includes("mp4") ||
+    rawType.includes("mov") ||
+    rawType.includes("webm") ||
+    rawType === "2"
+  );
+};
+
+const getOrderReturnMedia = (order: any): ReturnMediaView[] => {
+  const request = getOrderReturnRequest(order);
+
+  const rawMedia =
+    order?.returnMediaUrls ??
+    order?.returnMediaFiles ??
+    order?.returnMedias ??
+    order?.returnMedia ??
+    order?.returnImages ??
+    order?.returnEvidenceFiles ??
+    order?.mediaFiles ??
+    order?.files ??
+    order?.images ??
+    request?.returnMediaUrls ??
+    request?.mediaFiles ??
+    request?.returnMediaFiles ??
+    request?.returnMedias ??
+    request?.returnMedia ??
+    request?.returnImages ??
+    request?.evidenceFiles ??
+    request?.files ??
+    request?.images ??
+    [];
+
+  const mediaList = Array.isArray(rawMedia) ? rawMedia : [rawMedia];
+
+  return mediaList
+    .map((media: any) => {
+      const url = getReturnMediaUrl(media);
+
+      if (!url) {
+        return null;
+      }
+
+      return {
+        url,
+        isVideo: isReturnMediaVideo(media, url),
+      };
+    })
+    .filter((media): media is ReturnMediaView => media !== null);
+};
+
+const escapeHtml = (value: unknown) => {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+};
+
+const buildReturnPreviewMainHtml = (media: ReturnMediaView) => {
+  const safeUrl = escapeHtml(media.url);
+
+  if (media.isVideo) {
+    return `
+      <video
+        src="${safeUrl}"
+        class="return-preview-video"
+        controls
+        autoplay
+        playsinline
+      ></video>
+    `;
+  }
+
+  return `
+    <img
+      src="${safeUrl}"
+      class="return-preview-image"
+      alt="Ảnh bằng chứng hoàn hàng"
+    />
+  `;
+};
+
+const buildReturnPreviewThumbHtml = (
+  media: ReturnMediaView,
+  index: number,
+  activeIndex: number
+) => {
+  const safeUrl = escapeHtml(media.url);
+  const activeClass = index === activeIndex ? " active" : "";
+
+  const thumb = media.isVideo
+    ? `
+      <video
+        src="${safeUrl}"
+        class="return-preview-thumb-video"
+        muted
+        playsinline
+        preload="metadata"
+      ></video>
+    `
+    : `
+      <img
+        src="${safeUrl}"
+        class="return-preview-thumb-image"
+        alt="Ảnh bằng chứng ${index + 1}"
+      />
+    `;
+
+  return `
+    <button
+      type="button"
+      class="return-preview-thumb-btn${activeClass}"
+      data-preview-index="${index}"
+      aria-label="Xem ${media.isVideo ? "video" : "ảnh"} bằng chứng ${index + 1}"
+    >
+      ${thumb}
+      <span class="return-preview-thumb-badge">
+        ${media.isVideo ? "Video" : "Ảnh"} ${index + 1}
+      </span>
+      ${media.isVideo ? `<span class="return-preview-thumb-play"><i class="bi bi-play-fill"></i></span>` : ""}
+    </button>
+  `;
+};
+
+const buildReturnPreviewHtml = (
+  mediaList: ReturnMediaView[],
+  activeIndex: number
+) => {
+  if (mediaList.length === 0) {
+    return `
+      <div class="return-preview-modal">
+        <div class="return-preview-empty">
+          Không có ảnh/video bằng chứng để hiển thị.
+        </div>
+      </div>
+    `;
+  }
+
+  const safeActiveIndex = Math.min(
+    Math.max(Number.isFinite(activeIndex) ? activeIndex : 0, 0),
+    mediaList.length - 1
+  );
+
+  const activeMedia = mediaList[safeActiveIndex];
+
+  if (!activeMedia) {
+    return `
+      <div class="return-preview-modal">
+        <div class="return-preview-empty">
+          Không có ảnh/video bằng chứng để hiển thị.
+        </div>
+      </div>
+    `;
+  }
+
+  const hasMultipleMedia = mediaList.length > 1;
+
+  return `
+    <div class="return-preview-modal">
+      <div class="return-preview-counter">
+        ${activeMedia.isVideo ? "Video" : "Ảnh"} bằng chứng
+        <strong>${safeActiveIndex + 1}/${mediaList.length}</strong>
+      </div>
+
+      <div class="return-preview-stage">
+        ${
+          hasMultipleMedia
+            ? `
+              <button
+                type="button"
+                class="return-preview-nav is-prev"
+                data-preview-direction="-1"
+                aria-label="Xem ảnh/video trước"
+              >
+                <i class="bi bi-chevron-left"></i>
+              </button>
+            `
+            : ""
+        }
+
+        <div class="return-preview-main">
+          ${buildReturnPreviewMainHtml(activeMedia)}
+        </div>
+
+        ${
+          hasMultipleMedia
+            ? `
+              <button
+                type="button"
+                class="return-preview-nav is-next"
+                data-preview-direction="1"
+                aria-label="Xem ảnh/video tiếp theo"
+              >
+                <i class="bi bi-chevron-right"></i>
+              </button>
+            `
+            : ""
+        }
+      </div>
+
+      ${
+        hasMultipleMedia
+          ? `
+            <div class="return-preview-thumb-title">
+              Chọn ảnh/video bằng chứng
+            </div>
+            <div class="return-preview-thumb-list">
+              ${mediaList
+                .map((media, index) =>
+                  buildReturnPreviewThumbHtml(media, index, safeActiveIndex)
+                )
+                .join("")}
+            </div>
+          `
+          : ""
+      }
+    </div>
+  `;
+};
+
+const openReturnMediaPreview = async (order: any, index: number) => {
+  const mediaList = getOrderReturnMedia(order);
+
+  if (mediaList.length === 0) {
+    return;
+  }
+
+  let activeIndex = Number.isInteger(index) ? index : 0;
+
+  if (activeIndex < 0 || activeIndex >= mediaList.length) {
+    activeIndex = 0;
+  }
+
+  const renderPreview = () => {
+    const htmlContainer = Swal.getHtmlContainer();
+
+    if (!htmlContainer) {
+      return;
+    }
+
+    htmlContainer.innerHTML = buildReturnPreviewHtml(mediaList, activeIndex);
+    bindPreviewEvents();
+  };
+
+  const goToPreview = (nextIndex: number) => {
+    activeIndex = (nextIndex + mediaList.length) % mediaList.length;
+    renderPreview();
+  };
+
+  const bindPreviewEvents = () => {
+    const htmlContainer = Swal.getHtmlContainer();
+
+    if (!htmlContainer) {
+      return;
+    }
+
+    htmlContainer
+      .querySelectorAll<HTMLButtonElement>("[data-preview-direction]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const direction = Number(button.dataset.previewDirection || 0);
+          goToPreview(activeIndex + direction);
+        });
+      });
+
+    htmlContainer
+      .querySelectorAll<HTMLButtonElement>("[data-preview-index]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const selectedIndex = Number(button.dataset.previewIndex || 0);
+          goToPreview(selectedIndex);
+        });
+      });
+  };
+
+  await Swal.fire({
+    title: "Ảnh/video bằng chứng",
+    html: buildReturnPreviewHtml(mediaList, activeIndex),
+    width: 700,
+    showConfirmButton: true,
+    confirmButtonText: "Đóng",
+    confirmButtonColor: "#bd9a5f",
+    didOpen: bindPreviewEvents,
+    customClass: {
+      popup: "swal-custom-popup return-media-preview-popup",
+      title: "swal-custom-title",
+      confirmButton: "swal-preview-confirm",
+    },
+  });
 };
 
 const getStatusText = (status: number) => {
@@ -1075,7 +1730,7 @@ const showError = (error: any, fallback: string) => {
 
 const toast = (
   icon: "success" | "error" | "warning" | "info",
-  title: string,
+  title: string
 ) => {
   Swal.fire({
     toast: true,
@@ -1089,29 +1744,67 @@ const toast = (
 };
 
 const cancelOrder = async (order: CustomerOrderResponse) => {
-  const { value: reason, isConfirmed } = await Swal.fire({
+  const cancelReasons = [
+    "Muốn thay đổi địa chỉ nhận hàng",
+    "Muốn thay đổi số điện thoại nhận hàng",
+    "Muốn thay đổi sản phẩm hoặc phân loại",
+    "Muốn thay đổi số lượng sản phẩm",
+    "Muốn thay đổi phương thức thanh toán",
+    "Quên áp dụng mã giảm giá",
+    "Đặt nhầm sản phẩm",
+    "Không còn nhu cầu mua nữa",
+    "Tìm thấy sản phẩm phù hợp hơn",
+    "Khác",
+  ];
+
+  const { value: reason, isConfirmed } = await Swal.fire<string>({
     title: "Hủy đơn hàng?",
-    text: "Vui lòng chọn lý do bạn muốn hủy đơn hàng này:",
-    input: "radio",
-    inputOptions: {
-      "Thay đổi thông tin": "Tôi muốn cập nhật địa chỉ / SĐT nhận hàng",
-      "Thay đổi sản phẩm": "Tôi muốn đổi phân loại hoặc số lượng",
-      "Thay đổi thanh toán": "Tôi muốn đổi phương thức thanh toán",
-      "Đổi ý": "Tôi không còn nhu cầu mua nữa",
-      "Giao hàng lâu": "Thời gian chuẩn bị/giao hàng quá lâu",
-      Khác: "Lý do khác",
-    },
-    inputValidator: (value) => {
-      if (!value) {
-        return "Vui lòng chọn một lý do để tiếp tục!";
-      }
-    },
+    html: `
+      <div class="cancel-order-modal">
+        <div class="cancel-order-desc">
+          Vui lòng chọn lý do bạn muốn hủy đơn hàng này:
+        </div>
+
+        <div class="cancel-reason-grid">
+          ${cancelReasons
+            .map(
+              (item, index) => `
+                <label class="cancel-reason-card" for="cancel-reason-${index}">
+                  <input
+                    id="cancel-reason-${index}"
+                    type="radio"
+                    name="cancelReason"
+                    value="${item}"
+                  />
+                  <span class="cancel-radio-dot"></span>
+                  <span class="cancel-reason-text">${item}</span>
+                </label>
+              `,
+            )
+            .join("")}
+        </div>
+      </div>
+    `,
     showCancelButton: true,
     confirmButtonText: "Xác nhận hủy",
     cancelButtonText: "Quay lại",
     reverseButtons: true,
+    focusConfirm: false,
+    width: 680,
+    preConfirm: () => {
+      const checkedReason = Swal.getPopup()?.querySelector<HTMLInputElement>(
+        'input[name="cancelReason"]:checked',
+      );
+
+      if (!checkedReason?.value) {
+        Swal.showValidationMessage("Vui lòng chọn một lý do để tiếp tục!");
+        return false;
+      }
+
+      return checkedReason.value;
+    },
     customClass: {
-      popup: "swal-custom-popup",
+      popup: "swal-custom-popup cancel-order-swal",
       title: "swal-custom-title",
       cancelButton: "swal-custom-cancel",
       confirmButton: "swal-custom-confirm",
@@ -1121,7 +1814,9 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
   if (isConfirmed) {
     try {
       store.orderLoading = true;
-      await api.patch(`/customer/orders/${order.orderId}/cancel`);
+      await api.patch(`/customer/orders/${order.orderId}/cancel`, {
+        cancelReason: reason,
+      });
       await fetchOrdersAndReviews();
       toast("success", "Đã hủy đơn hàng thành công!");
     } catch (error) {
@@ -1131,6 +1826,7 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
     }
   }
 };
+
 
 const getDefaultReturnEmail = () => {
   try {
@@ -1177,19 +1873,33 @@ const submitReturnRequest = async (payload: ReturnRequestSubmitPayload) => {
 const cancelReturnRequest = async (order: CustomerOrderResponse) => {
   const result = await Swal.fire({
     title: "Rút lại yêu cầu?",
-    text: "Bạn có chắc chắn muốn hủy yêu cầu hoàn hàng/đổi trả này không? Đơn hàng sẽ trở về trạng thái Hoàn thành.",
-    icon: "question",
+    html: `
+      <div class="return-cancel-modal">
+        <div class="return-cancel-alert">
+          <div class="return-cancel-icon">
+            <i class="bi bi-arrow-counterclockwise"></i>
+          </div>
+
+          <div class="return-cancel-content">
+            <div class="return-cancel-title">Xác nhận rút lại yêu cầu hoàn hàng</div>
+            <div class="return-cancel-desc">
+              Đơn hàng sẽ trở về trạng thái <strong>Hoàn thành</strong>.
+              Sau khi rút lại, bạn cần gửi yêu cầu mới nếu muốn hoàn hàng/đổi trả tiếp.
+            </div>
+          </div>
+        </div>
+      </div>
+    `,
     showCancelButton: true,
-    confirmButtonColor: "#bd9a5f",
-    cancelButtonColor: "#f8fafc",
-    confirmButtonText: "Đồng ý",
+    confirmButtonText: "Đồng ý rút lại",
     cancelButtonText: "Quay lại",
     reverseButtons: true,
+    focusCancel: true,
     customClass: {
-      popup: "swal-custom-popup",
+      popup: "swal-custom-popup return-cancel-swal",
       title: "swal-custom-title",
       cancelButton: "swal-custom-cancel",
-      confirmButton: "swal-custom-confirm",
+      confirmButton: "swal-gold-confirm",
     },
   });
 
@@ -1221,7 +1931,7 @@ const repayVnpayOrder = async (order: CustomerOrderResponse) => {
   } catch (error) {
     showError(
       error,
-      "Không thể tạo lại phiên thanh toán lúc này. Vui lòng thử lại sau.",
+      "Không thể tạo lại phiên thanh toán lúc này. Vui lòng thử lại sau."
     );
   } finally {
     store.orderLoading = false;
@@ -1418,9 +2128,7 @@ const getItemImage = (item: any) => {
   border-radius: 14px;
   overflow: hidden;
   background: #ffffff;
-  transition:
-    border-color 0.25s ease,
-    box-shadow 0.25s ease,
+  transition: border-color 0.25s ease, box-shadow 0.25s ease,
     transform 0.25s ease;
 }
 
@@ -1437,9 +2145,7 @@ const getItemImage = (item: any) => {
   padding: 16px 20px;
   text-align: left;
   cursor: pointer;
-  transition:
-    background 0.25s ease,
-    color 0.25s ease;
+  transition: background 0.25s ease, color 0.25s ease;
 }
 
 .order-card.opened .order-header-button {
@@ -1533,6 +2239,7 @@ const getItemImage = (item: any) => {
   display: flex;
   gap: 12px;
   min-width: 0;
+  flex: 1;
 }
 
 .item-img {
@@ -1575,6 +2282,42 @@ const getItemImage = (item: any) => {
   color: #0f172a;
 }
 
+.order-item-side {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.item-price-box {
+  min-width: 140px;
+  text-align: right;
+  line-height: 1.25;
+}
+
+.item-original-price {
+  color: #94a3b8;
+  font-size: 13px;
+  text-decoration: line-through;
+  margin-bottom: 3px;
+}
+
+.item-final-price {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.item-line-total {
+  margin-top: 5px;
+  color: #9a6a1f;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .review-action {
   display: flex;
   align-items: center;
@@ -1582,10 +2325,141 @@ const getItemImage = (item: any) => {
   flex-shrink: 0;
 }
 
-.order-total-box {
-  max-width: 450px;
-  margin-left: auto;
+.order-summary-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 390px);
+  align-items: flex-start;
+  gap: 18px;
   margin-top: 18px;
+}
+
+.order-cancel-info,
+.order-return-info {
+  width: 100%;
+  min-width: 0;
+  min-height: 118px;
+  background: #fffaf0;
+  border: 1px solid #f3e2bd;
+  border-left: 4px solid #bd9a5f;
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.cancel-info-title,
+.return-info-title {
+  color: #9a6a1f;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.cancel-info-text,
+.return-info-line strong {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.cancel-info-time {
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.return-info-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.return-info-line span {
+  color: #64748b;
+}
+
+.return-info-description {
+  margin-top: 8px;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.return-media-section {
+  margin-top: 12px;
+}
+
+.return-media-label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.return-media-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(78px, 78px));
+  gap: 10px;
+}
+
+.return-media-button {
+  position: relative;
+  width: 78px;
+  height: 78px;
+  padding: 0;
+  border: 1px solid #f3e2bd;
+  background: #ffffff;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.return-media-button:hover {
+  transform: translateY(-1px);
+  border-color: #bd9a5f;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+}
+
+.return-media-thumb {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  background: #ffffff;
+}
+
+.return-media-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 22px;
+  background: rgba(15, 23, 42, 0.2);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.return-media-button:hover .return-media-overlay {
+  opacity: 1;
+}
+
+.order-total-box {
+  width: 100%;
+  max-width: none;
+  margin-left: 0;
+  margin-top: 0;
   background: #f8fafc;
   border-radius: 16px;
   padding: 18px;
@@ -1662,8 +2536,30 @@ const getItemImage = (item: any) => {
     flex-direction: column;
   }
 
+  .order-item-side {
+    width: 100%;
+    margin-left: 0;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .order-summary-row {
+    grid-template-columns: 1fr;
+  }
+
+  .order-cancel-info,
+  .order-return-info,
+  .order-total-box {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .item-price-box {
+    text-align: left;
+  }
+
   .review-action {
-    justify-content: flex-start;
+    justify-content: flex-end;
   }
 
   .order-total-box {
@@ -1679,8 +2575,7 @@ const getItemImage = (item: any) => {
   padding: 0 0 24px 0 !important;
   overflow: hidden !important;
   border: 1px solid #e2e8f0 !important;
-  box-shadow:
-    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
     0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
 }
 
@@ -1736,4 +2631,424 @@ const getItemImage = (item: any) => {
   background-color: #b91c1c !important;
   box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3) !important;
 }
+
+.cancel-order-swal {
+  width: min(680px, calc(100vw - 28px)) !important;
+}
+
+.cancel-order-modal {
+  padding: 0 24px;
+}
+
+.cancel-order-desc {
+  color: #475569;
+  font-size: 15px;
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.cancel-reason-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.cancel-reason-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 54px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.cancel-reason-card:hover {
+  border-color: #bd9a5f;
+  background: #fffaf0;
+}
+
+.cancel-reason-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cancel-radio-dot {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 2px solid #cbd5e1;
+  border-radius: 50%;
+  background: #ffffff;
+  flex-shrink: 0;
+}
+
+.cancel-radio-dot::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #dc2626;
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform 0.18s ease;
+}
+
+.cancel-reason-card:has(input:checked) {
+  border-color: #dc2626;
+  background: #fff7ed;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.08);
+}
+
+.cancel-reason-card:has(input:checked) .cancel-radio-dot {
+  border-color: #dc2626;
+}
+
+.cancel-reason-card:has(input:checked) .cancel-radio-dot::after {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.cancel-reason-text {
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.cancel-order-swal .swal2-validation-message {
+  margin: 14px 24px 0 !important;
+  border-radius: 10px !important;
+  background: #fef2f2 !important;
+  color: #b91c1c !important;
+  font-size: 14px !important;
+}
+
+@media (max-width: 640px) {
+  .cancel-order-modal {
+    padding: 0 16px;
+  }
+
+  .cancel-reason-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cancel-reason-card {
+    min-height: auto;
+  }
+
+  .return-cancel-swal .swal2-html-container {
+    margin: 0 16px !important;
+  }
+
+  .return-cancel-alert {
+    padding: 14px;
+  }
+}
+
+.return-cancel-swal {
+  width: min(520px, calc(100vw - 28px)) !important;
+}
+
+.return-cancel-swal .swal2-html-container {
+  margin: 0 22px !important;
+}
+
+.return-cancel-modal {
+  padding: 0 6px;
+}
+
+.return-cancel-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  background: #fffaf0;
+  border: 1px solid #f3e2bd;
+  border-left: 4px solid #bd9a5f;
+  border-radius: 14px;
+}
+
+.return-cancel-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: #06132b;
+  color: #bd9a5f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 18px;
+}
+
+.return-cancel-content {
+  min-width: 0;
+}
+
+.return-cancel-title {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.35;
+  margin-bottom: 6px;
+}
+
+.return-cancel-desc {
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.return-cancel-desc strong {
+  color: #9a6a1f;
+  font-weight: 800;
+}
+
+.swal-gold-confirm {
+  background-color: #bd9a5f !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 12px 24px !important;
+  font-weight: 700 !important;
+  transition: all 0.2s ease !important;
+}
+
+.swal-gold-confirm:hover {
+  background-color: #9a6a1f !important;
+  box-shadow: 0 4px 12px rgba(189, 154, 95, 0.28) !important;
+}
+
+.return-preview-empty {
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  padding: 36px 16px;
+}
+
+.return-media-preview-popup {
+  width: min(700px, calc(100vw - 28px)) !important;
+  max-width: calc(100vw - 28px) !important;
+}
+
+.return-media-preview-popup .swal2-html-container {
+  margin: 0 18px !important;
+}
+
+.return-preview-modal {
+  width: 100%;
+}
+
+.return-preview-counter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.return-preview-counter strong {
+  color: #9a6a1f;
+  font-size: 14px;
+}
+
+.return-preview-stage {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.return-preview-main {
+  min-width: 0;
+  min-height: 280px;
+  max-height: 54vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.return-preview-image,
+.return-preview-video {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  max-height: 54vh;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.return-preview-nav {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #f3e2bd;
+  border-radius: 999px;
+  background: #fffaf0;
+  color: #9a6a1f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.return-preview-nav:hover {
+  background: #bd9a5f;
+  border-color: #bd9a5f;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.return-preview-thumb-title {
+  margin-top: 12px;
+  margin-bottom: 7px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.return-preview-thumb-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 2px 8px;
+  scrollbar-width: thin;
+}
+
+.return-preview-thumb-btn {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  flex: 0 0 68px;
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.return-preview-thumb-btn:hover {
+  border-color: #bd9a5f;
+  transform: translateY(-1px);
+}
+
+.return-preview-thumb-btn.active {
+  border-color: #bd9a5f;
+  box-shadow: 0 0 0 3px rgba(189, 154, 95, 0.18);
+}
+
+.return-preview-thumb-image,
+.return-preview-thumb-video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  background: #f8fafc;
+}
+
+.return-preview-thumb-badge {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  border-radius: 999px;
+  padding: 2px 5px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.return-preview-thumb-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 24px;
+  text-shadow: 0 2px 8px rgba(15, 23, 42, 0.45);
+  pointer-events: none;
+}
+
+.swal-preview-confirm {
+  background-color: #bd9a5f !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 12px 24px !important;
+  font-weight: 700 !important;
+}
+
+.swal-preview-confirm:hover {
+  background-color: #9a6a1f !important;
+}
+
+@media (max-width: 640px) {
+  .return-media-preview-popup .swal2-html-container {
+    margin: 0 14px !important;
+  }
+
+  .return-preview-stage {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .return-preview-main {
+    min-height: 240px;
+  }
+
+  .return-preview-nav {
+    width: 100%;
+    height: 38px;
+    border-radius: 10px;
+  }
+
+  .return-preview-nav.is-prev {
+    order: 2;
+  }
+
+  .return-preview-main {
+    order: 1;
+  }
+
+  .return-preview-nav.is-next {
+    order: 3;
+  }
+}
+
 </style>
+

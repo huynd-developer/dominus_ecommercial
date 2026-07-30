@@ -593,6 +593,7 @@ public class OrderService {
         );
     }
 
+
     private String normalizeText(String value, String fieldName) {
         if (value == null || value.trim().isEmpty()) {
             throw new ResponseStatusException(

@@ -204,9 +204,19 @@ public class PosServiceImpl implements PosService {
             orderItem.setOrder(savedOrder);
             orderItem.setProductVariant(variant);
             orderItem.setQuantity(line.quantity());
+            /*
+             * POS bán theo giá tại quầy: dùng ProductVariant.Price.
+             * Không tự áp dụng Flash Sale online.
+             *
+             * Quy ước chung của OrderItem sau khi sửa DB:
+             * - OriginalPrice = đơn giá gốc tại thời điểm bán
+             * - DiscountAmount = giảm giá trên 1 sản phẩm
+             * - FinalPrice = đơn giá sau giảm trên 1 sản phẩm
+             * - Tổng dòng = FinalPrice * Quantity
+             */
             orderItem.setOriginalPrice(line.unitPrice());
             orderItem.setDiscountAmount(BigDecimal.ZERO);
-            orderItem.setFinalPrice(line.lineTotal());
+            orderItem.setFinalPrice(line.unitPrice());
 
             orderItemRepository.save(orderItem);
 
@@ -786,9 +796,13 @@ public class PosServiceImpl implements PosService {
             orderItem.setOrder(order);
             orderItem.setProductVariant(variant);
             orderItem.setQuantity(line.quantity());
+            /*
+             * Phiếu treo POS cũng lưu giá theo đơn vị 1 sản phẩm.
+             * Không lưu FinalPrice = lineTotal vì sẽ sai với CHECK constraint mới.
+             */
             orderItem.setOriginalPrice(line.unitPrice());
             orderItem.setDiscountAmount(BigDecimal.ZERO);
-            orderItem.setFinalPrice(line.lineTotal());
+            orderItem.setFinalPrice(line.unitPrice());
 
             savedItems.add(orderItemRepository.save(orderItem));
         }
@@ -1571,11 +1585,15 @@ public class PosServiceImpl implements PosService {
         List<PosOrderResponse.InvoiceItem> invoiceItems = orderItems == null ? List.of() : orderItems.stream().map(item -> {
             ProductVariant variant = item.getProductVariant();
 
-            BigDecimal unitPrice = item.getOriginalPrice() != null ? item.getOriginalPrice() : BigDecimal.ZERO;
+            BigDecimal unitPrice = item.getFinalPrice() != null
+                    ? item.getFinalPrice()
+                    : (item.getOriginalPrice() != null ? item.getOriginalPrice() : BigDecimal.ZERO);
 
-            BigDecimal lineTotal = item.getFinalPrice() != null ? item.getFinalPrice() : unitPrice.multiply(BigDecimal.valueOf(item.getQuantity()));
+            Integer quantity = item.getQuantity() != null ? item.getQuantity() : 0;
 
-            return PosOrderResponse.InvoiceItem.builder().productName(variant != null && variant.getProduct() != null ? variant.getProduct().getName() : null).sku(variant != null ? variant.getSku() : null).capacityLabel(variant != null ? buildCapacityLabel(variant) : null).bottleTypeName(variant != null && variant.getBottleType() != null ? variant.getBottleType().getName() : null).quantity(item.getQuantity()).unitPrice(unitPrice).lineTotal(lineTotal).build();
+            BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(quantity));
+
+            return PosOrderResponse.InvoiceItem.builder().productName(variant != null && variant.getProduct() != null ? variant.getProduct().getName() : null).sku(variant != null ? variant.getSku() : null).capacityLabel(variant != null ? buildCapacityLabel(variant) : null).bottleTypeName(variant != null && variant.getBottleType() != null ? variant.getBottleType().getName() : null).quantity(quantity).unitPrice(unitPrice).lineTotal(lineTotal).build();
         }).toList();
 
         return PosOrderResponse.builder().orderId(order.getId()).status(status).totalAmount(order.getTotalAmount()).discountAmount(order.getDiscountAmount()).finalAmount(order.getFinalAmount()).voucherCode(order.getVoucher() != null ? order.getVoucher().getCode() : null).paymentMethod(toResponsePaymentMethod(order.getPaymentMethod())).transferProvider(resolveTransferProviderFromPaymentMethod(order.getPaymentMethod())).paidAmount(paidAmount != null ? paidAmount : BigDecimal.ZERO).remainingAmount(remainingAmount != null ? remainingAmount : BigDecimal.ZERO).cashGiven(cashGiven != null ? cashGiven : BigDecimal.ZERO).transferAmount(transferAmount != null ? transferAmount : BigDecimal.ZERO).changeAmount(changeAmount != null ? changeAmount : BigDecimal.ZERO).vnpayPaymentUrl(vnpayUrl).vietQrImageUrl(vietQrImageUrl).vietQrContent(vietQrContent).createdAt(order.getCreatedAt()).customerName(order.getCustomerName()).customerPhone(order.getCustomerPhone()).customerEmail(customerUser != null ? customerUser.getEmail() : null).cashierName(cashierUser != null ? cashierUser.getName() : null).loyaltyPointsEarned(loyaltyPointsEarned).customerLoyaltyPointsAfter(customerPointAfter != null ? customerPointAfter : 0).items(invoiceItems).build();

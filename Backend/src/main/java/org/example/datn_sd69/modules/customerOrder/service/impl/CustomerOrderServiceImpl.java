@@ -1,7 +1,9 @@
 package org.example.datn_sd69.modules.customerOrder.service.impl;
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
 import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-
+import org.example.datn_sd69.modules.order.dto.request.CancelOrderRequest;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,10 +38,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -87,8 +86,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     private static final String REFUND_METHOD_BANK_TRANSFER = "BANK_TRANSFER";
     private static final String REFUND_METHOD_STORE = "STORE";
 
-    private static final Path RETURN_UPLOAD_DIR = Paths.get("uploads", "return-requests");
-    private static final String RETURN_UPLOAD_URL_PREFIX = "/uploads/return-requests/";
+    private static final String RETURN_CLOUDINARY_FOLDER = "return-requests";
 
     private static final int MIN_BANK_NAME_LENGTH = 2;
     private static final int MAX_BANK_NAME_LENGTH = 100;
@@ -163,6 +161,19 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             "Thùng hàng rỗng"
     );
 
+    private static final Set<String> CANCEL_REASONS = Set.of(
+            "Muốn thay đổi địa chỉ nhận hàng",
+            "Muốn thay đổi số điện thoại nhận hàng",
+            "Muốn thay đổi sản phẩm hoặc phân loại",
+            "Muốn thay đổi số lượng sản phẩm",
+            "Muốn thay đổi phương thức thanh toán",
+            "Quên áp dụng mã giảm giá",
+            "Đặt nhầm sản phẩm",
+            "Không còn nhu cầu mua nữa",
+            "Tìm thấy sản phẩm phù hợp hơn",
+            "Khác"
+    );
+
     private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of(".jpg", ".jpeg", ".png", ".webp");
     private static final Set<String> ALLOWED_VIDEO_EXTENSIONS = Set.of(".mp4", ".mov", ".webm");
 
@@ -174,6 +185,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     private final ReturnRequestRepository returnRequestRepository;
     private final ReturnRequestItemRepository returnRequestItemRepository;
     private final ReturnRequestMediaRepository returnRequestMediaRepository;
+    private final Cloudinary cloudinary;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -210,10 +222,12 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
     @Override
     @Transactional
-    public void cancelOrder(Integer orderId) {
+    public void cancelOrder(Integer orderId, CancelOrderRequest request) {
         Customer customer = getCurrentCustomer();
 
         validateId(orderId, "orderId");
+
+        String cancelReason = normalizeCancelReason(request);
 
         Order order = orderRepository.findByIdAndCustomer_UserId(orderId, customer.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(
@@ -234,6 +248,9 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         restoreStockWhenCancel(items);
 
         order.setStatus(STATUS_CANCELLED);
+        order.setCancelReason(cancelReason);
+        order.setCancelledAt(LocalDateTime.now());
+
         orderRepository.save(order);
     }
 
@@ -433,6 +450,27 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         orderRepository.save(order);
     }
 
+    private String normalizeCancelReason(CancelOrderRequest request) {
+        if (request == null || request.getCancelReason() == null || request.getCancelReason().isBlank()) {
+            throw badRequest("Vui lòng chọn lý do hủy đơn");
+        }
+
+        String reason = request.getCancelReason()
+                .trim()
+                .replaceAll("[\\r\\n\\t]+", " ")
+                .replaceAll("\\s{2,}", " ");
+
+        if (reason.length() > 255) {
+            throw badRequest("Lý do hủy đơn không được vượt quá 255 ký tự");
+        }
+
+        if (!CANCEL_REASONS.contains(reason)) {
+            throw badRequest("Lý do hủy đơn không hợp lệ");
+        }
+
+        return reason;
+    }
+
     private void restoreStockWhenCancel(List<OrderItem> items) {
         for (OrderItem item : items) {
             ProductVariant variant = item.getProductVariant();
@@ -461,6 +499,9 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 .map(this::mapToOrderItemResponse)
                 .toList();
 
+        ReturnRequest returnRequest = findLatestReturnRequestForCustomerView(order);
+        List<String> returnMediaUrls = getReturnMediaUrls(returnRequest);
+
         return new CustomerOrderResponse(
                 order.getId(),
                 order.getOrderType(),
@@ -475,8 +516,45 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 getStatusText(order.getStatus()),
                 canCancelOrder(order),
                 order.getCreatedAt(),
+                order.getCancelReason(),
+                order.getCancelledAt(),
+                returnRequest != null ? returnRequest.getReason() : null,
+                returnRequest != null ? returnRequest.getDescription() : null,
+                returnRequest != null ? returnRequest.getCreatedAt() : null,
+                returnRequest != null ? moneyOrZero(returnRequest.getRefundAmount()) : null,
+                returnMediaUrls,
                 itemResponses
         );
+    }
+
+    private ReturnRequest findLatestReturnRequestForCustomerView(Order order) {
+        if (order == null || order.getId() == null || order.getStatus() == null) {
+            return null;
+        }
+
+        boolean shouldShowReturnInfo = Integer.valueOf(STATUS_RETURN_REQUESTED).equals(order.getStatus())
+                || Integer.valueOf(STATUS_RETURN_COMPLETED).equals(order.getStatus());
+
+        if (!shouldShowReturnInfo) {
+            return null;
+        }
+
+        return returnRequestRepository
+                .findTopByOrder_IdOrderByCreatedAtDesc(order.getId())
+                .orElse(null);
+    }
+
+    private List<String> getReturnMediaUrls(ReturnRequest returnRequest) {
+        if (returnRequest == null || returnRequest.getId() == null) {
+            return List.of();
+        }
+
+        return returnRequestMediaRepository.findByReturnRequest_Id(returnRequest.getId())
+                .stream()
+                .map(ReturnRequestMedia::getMediaUrl)
+                .filter(url -> url != null && !url.trim().isEmpty())
+                .map(String::trim)
+                .toList();
     }
 
     private CustomerOrderItemResponse mapToOrderItemResponse(OrderItem item) {
@@ -943,9 +1021,14 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             return;
         }
 
-        try {
-            Files.createDirectories(RETURN_UPLOAD_DIR);
+        if (returnRequest == null || returnRequest.getId() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Không thể lưu file bằng chứng hoàn hàng"
+            );
+        }
 
+        try {
             List<ReturnRequestMedia> mediaList = new ArrayList<>();
 
             for (MultipartFile file : mediaFiles) {
@@ -957,32 +1040,47 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                         ? MEDIA_TYPE_VIDEO
                         : MEDIA_TYPE_IMAGE;
 
-                String fileName = buildReturnMediaFileName(returnRequest.getId(), file.getOriginalFilename());
-                Path targetPath = RETURN_UPLOAD_DIR.resolve(fileName).normalize();
+                Map<?, ?> uploadResult = cloudinary.uploader().upload(
+                        file.getBytes(),
+                        ObjectUtils.asMap(
+                                "folder", RETURN_CLOUDINARY_FOLDER,
+                                "resource_type", "auto",
+                                "public_id", buildReturnMediaPublicId(returnRequest.getId())
+                        )
+                );
 
-                Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+                Object secureUrl = uploadResult.get("secure_url");
+                String mediaUrl = secureUrl == null ? null : String.valueOf(secureUrl).trim();
+
+                if (mediaUrl == null || mediaUrl.isEmpty()) {
+                    throw new ResponseStatusException(
+                            HttpStatus.INTERNAL_SERVER_ERROR,
+                            "Cloudinary không trả về đường dẫn file bằng chứng hoàn hàng"
+                    );
+                }
 
                 ReturnRequestMedia media = new ReturnRequestMedia();
                 media.setReturnRequest(returnRequest);
                 media.setMediaType(mediaType);
-                media.setMediaUrl(RETURN_UPLOAD_URL_PREFIX + fileName);
+                media.setMediaUrl(mediaUrl);
                 media.setCreatedAt(LocalDateTime.now());
 
                 mediaList.add(media);
             }
 
             returnRequestMediaRepository.saveAll(mediaList);
+        } catch (ResponseStatusException e) {
+            throw e;
         } catch (IOException e) {
             throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Lỗi lưu file bằng chứng hoàn hàng"
+                    "Lỗi upload file bằng chứng hoàn hàng lên Cloudinary"
             );
         }
     }
 
-    private String buildReturnMediaFileName(Integer returnRequestId, String originalFileName) {
-        String extension = getFileExtension(originalFileName);
-        return "return_" + returnRequestId + "_" + UUID.randomUUID() + extension;
+    private String buildReturnMediaPublicId(Integer returnRequestId) {
+        return "return_" + returnRequestId + "_" + UUID.randomUUID();
     }
 
     private String getFileExtension(String originalFileName) {
