@@ -158,6 +158,7 @@ public class OrderService {
         order.setCreatedAt(LocalDateTime.now());
         order.setLoyaltyPointsApplied(false);
         order.setLoyaltyPointsEarned(0);
+        order.setIsPaymentReported(false); // Đảm bảo lúc mới đặt là false
 
         if (appliedVoucher != null) {
             order.setVoucher(appliedVoucher);
@@ -234,7 +235,6 @@ public class OrderService {
 
                 jakarta.servlet.http.HttpServletRequest httpRequest = ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.currentRequestAttributes()).getRequest();
 
-                // Lấy IP trực tiếp siêu tốc, bypass DNS Timeout
                 String ipAddr = httpRequest.getHeader("X-FORWARDED-FOR");
                 if (ipAddr == null || ipAddr.isEmpty()) {
                     ipAddr = httpRequest.getRemoteAddr();
@@ -462,7 +462,6 @@ public class OrderService {
 
             jakarta.servlet.http.HttpServletRequest httpRequest = ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.currentRequestAttributes()).getRequest();
 
-            // Lấy IP trực tiếp siêu tốc, bypass DNS Timeout
             String ipAddr = httpRequest.getHeader("X-FORWARDED-FOR");
             if (ipAddr == null || ipAddr.isEmpty()) {
                 ipAddr = httpRequest.getRemoteAddr();
@@ -505,5 +504,17 @@ public class OrderService {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Lỗi khi tạo lại link thanh toán VNPay");
         }
         return response;
+    }
+
+    // --- BỔ SUNG: HÀM CẬP NHẬT CỜ ĐÃ THANH TOÁN ---
+    @Transactional
+    public void reportPayment(Integer orderId) {
+        Order order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy đơn hàng"));
+
+        // Cập nhật trạng thái thành true
+        order.setIsPaymentReported(true);
+
+        orderRepo.save(order);
     }
 }

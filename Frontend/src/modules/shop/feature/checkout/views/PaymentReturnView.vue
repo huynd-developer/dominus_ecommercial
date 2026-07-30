@@ -71,7 +71,6 @@ const orderStatusText = computed(() => {
   if (orderStatus.value === null || orderStatus.value === undefined) {
     return "";
   }
-
   return getStatusText(orderStatus.value);
 });
 
@@ -86,7 +85,6 @@ const failedTitle = computed(() => {
   if (responseCode.value === "24") {
     return "Thanh toán đã bị hủy";
   }
-
   return "Thanh toán không thành công";
 });
 
@@ -110,7 +108,6 @@ const normalizeQueryParams = () => {
       params[key] = value[0] ? String(value[0]) : "";
       return;
     }
-
     params[key] = value ? String(value) : "";
   });
 
@@ -139,81 +136,69 @@ const formatPaymentMethod = (value: string | null | undefined) => {
 
 const getStatusText = (value: number) => {
   switch (Number(value)) {
-    case 0:
-      return "Chờ xác nhận";
-    case 1:
-      return "Đã xác nhận";
-    case 2:
-      return "Đang giao hàng";
-    case 3:
-      return "Hoàn thành";
-    case 4:
-      return "Đã hủy";
-    case 5:
-      return "Giao hàng thất bại";
-    case 6:
-      return "Yêu cầu hoàn hàng / đổi trả";
-    case 7:
-      return "Hoàn hàng / đổi trả hoàn tất";
-    default:
-      return "Không xác định";
+    case 0: return "Chờ xác nhận";
+    case 1: return "Đã xác nhận";
+    case 2: return "Đang giao hàng";
+    case 3: return "Hoàn thành";
+    case 4: return "Đã hủy";
+    case 5: return "Giao hàng thất bại";
+    case 6: return "Yêu cầu hoàn hàng / đổi trả";
+    case 7: return "Hoàn hàng / đổi trả hoàn tất";
+    default: return "Không xác định";
   }
 };
 
 const getNumber = (value: unknown) => {
   const numberValue = Number(value || 0);
-
   return Number.isFinite(numberValue) ? numberValue : 0;
 };
 
 const getNullableStatus = (data: any) => {
-  const value =
-    data?.orderStatus ??
-    data?.status ??
-    data?.order?.status ??
-    null;
-
+  const value = data?.orderStatus ?? data?.status ?? data?.order?.status ?? null;
   if (value === null || value === undefined || value === "") {
     return null;
   }
-
   const numberValue = Number(value);
-
   return Number.isFinite(numberValue) ? numberValue : null;
 };
 
 const isSuccessResponse = (data: any) => {
-  if (data?.success === true) {
-    return true;
-  }
-
+  if (data?.success === true) return true;
+  // Mã 00 của VNPay mặc định là giao dịch thành công
+  if (responseCode.value === "00") return true; 
+  
   const currentStatus = getNullableStatus(data);
-
-  /**
-   * Online VNPay đúng nghiệp vụ: thanh toán xong -> 1 Đã xác nhận.
-   * POS / flow cũ có thể thanh toán xong -> 3 Hoàn thành.
-   */
-  if (currentStatus === 1 || currentStatus === 3) {
-    return true;
-  }
+  if (currentStatus === 1 || currentStatus === 3) return true;
 
   return false;
 };
 
+// ĐÃ SỬA: Lấy dữ liệu dự phòng từ URL VNPay (route.query) nếu Backend không trả về chi tiết
 const buildDetails = (data: any) => {
   const currentStatus = getNullableStatus(data);
+  const query = route.query;
+
+  const fallbackOrderId = query.vnp_TxnRef ? String(query.vnp_TxnRef) : null;
+  const rawVnpAmount = query.vnp_Amount ? Number(query.vnp_Amount) / 100 : 0; // VNPay nhân 100 số tiền
+  const fallbackBankCode = query.vnp_BankCode ? String(query.vnp_BankCode) : null;
+  const fallbackTransactionNo = query.vnp_TransactionNo ? String(query.vnp_TransactionNo) : null;
+
+  const orderIdVal = data?.orderId || data?.orderCode || fallbackOrderId;
+  const totalAmountVal = getNumber(data?.totalAmount) || rawVnpAmount;
+  const finalAmountVal = getNumber(data?.finalAmount) || rawVnpAmount;
+  const discountAmountVal = getNumber(data?.discountAmount);
 
   const details: ResultDetail[] = [
     {
       label: "Mã đơn hàng",
-      value: data?.orderId ? `#${data.orderId}` : "-",
+      value: orderIdVal ? (String(orderIdVal).startsWith('#') ? orderIdVal : `#${orderIdVal}`) : "-",
     },
     {
       label: "Trạng thái đơn",
       value:
         data?.statusText ||
         data?.orderStatusText ||
-        (currentStatus !== null ? getStatusText(currentStatus) : "-"),
+        (currentStatus !== null ? getStatusText(currentStatus) : (responseCode.value === '00' ? 'Đã thanh toán' : '-')),
     },
     {
       label: "Phương thức",
@@ -221,20 +206,25 @@ const buildDetails = (data: any) => {
     },
     {
       label: "Tạm tính",
-      value: formatCurrency(getNumber(data?.totalAmount)),
+      value: formatCurrency(totalAmountVal),
       money: true,
-    },
-    {
-      label: "Giảm giá",
-      value: `-${formatCurrency(getNumber(data?.discountAmount))}`,
-      money: true,
-    },
-    {
-      label: "Tổng thanh toán",
-      value: formatCurrency(getNumber(data?.finalAmount)),
-      money: true,
-    },
+    }
   ];
+
+  // Chỉ hiển thị Giảm giá nếu > 0
+  if (discountAmountVal > 0) {
+    details.push({
+      label: "Giảm giá",
+      value: `-${formatCurrency(discountAmountVal)}`,
+      money: true,
+    });
+  }
+
+  details.push({
+    label: "Tổng thanh toán",
+    value: formatCurrency(finalAmountVal),
+    money: true,
+  });
 
   if (data?.paidAmount !== undefined && data?.paidAmount !== null) {
     details.push({
@@ -258,17 +248,19 @@ const buildDetails = (data: any) => {
     });
   }
 
-  if (data?.transactionNo) {
+  const transNo = data?.transactionNo || fallbackTransactionNo;
+  if (transNo) {
     details.push({
       label: "Mã giao dịch",
-      value: data.transactionNo,
+      value: transNo,
     });
   }
 
-  if (data?.bankCode) {
+  const bank = data?.bankCode || fallbackBankCode;
+  if (bank) {
     details.push({
       label: "Ngân hàng",
-      value: data.bankCode,
+      value: bank,
     });
   }
 
@@ -277,41 +269,22 @@ const buildDetails = (data: any) => {
 
 const getErrorMessage = (error: any) => {
   const data = error?.response?.data;
-
-  if (typeof data === "string") {
-    return data;
-  }
-
-  if (data?.message) {
-    return data.message;
-  }
-
-  if (error?.message) {
-    return error.message;
-  }
-
+  if (typeof data === "string") return data;
+  if (data?.message) return data.message;
+  if (error?.message) return error.message;
   return "Không thể xác minh giao dịch VNPay. Vui lòng liên hệ cửa hàng để được hỗ trợ.";
 };
 
 const callOnlineReturnApi = async (params: Record<string, string>) => {
-  return api.get("/v1/orders/payment/vnpay-return", {
-    params,
-  });
+  return api.get("/v1/orders/payment/vnpay-return", { params });
 };
 
 const callLegacyReturnApi = async (params: Record<string, string>) => {
-  /**
-   * api thường đã có baseURL = /api
-   * nên endpoint này sẽ thành /api/vnpay/return
-   */
-  return api.get("/vnpay/return", {
-    params,
-  });
+  return api.get("/vnpay/return", { params });
 };
 
 const shouldFallbackToLegacyEndpoint = (error: any) => {
   const statusCode = Number(error?.response?.status || 0);
-
   return statusCode === 404 || statusCode === 405;
 };
 
@@ -324,23 +297,17 @@ const verifyPaymentReturn = async () => {
     let res;
 
     try {
-      /**
-       * Ưu tiên flow online mới.
-       */
       res = await callOnlineReturnApi(params);
     } catch (error: any) {
-      /**
-       * Không phá flow cũ:
-       * nếu endpoint online không tồn tại thì fallback sang /api/vnpay/return.
-       */
       if (!shouldFallbackToLegacyEndpoint(error)) {
         throw error;
       }
-
       res = await callLegacyReturnApi(params);
     }
 
-    const data = res.data || {};
+    // ĐÃ SỬA: Đề phòng backend gói data trong trường `data` hoặc `result`
+    const rawPayload = res.data || {};
+    const data = rawPayload.data || rawPayload.result || rawPayload;
 
     serverMessage.value = data.message || "";
     orderStatus.value = getNullableStatus(data);
@@ -356,20 +323,15 @@ const verifyPaymentReturn = async () => {
   } catch (error: any) {
     console.error("Lỗi xác minh thanh toán VNPay:", error);
 
-    const data = error?.response?.data || {};
+    const rawPayload = error?.response?.data || {};
+    const data = rawPayload.data || rawPayload.result || rawPayload;
 
     serverMessage.value = getErrorMessage(error);
     orderStatus.value = getNullableStatus(data);
 
     resultDetails.value = [
-      {
-        label: "Mã phản hồi VNPay",
-        value: responseCode.value || "-",
-      },
-      {
-        label: "Trạng thái giao dịch",
-        value: transactionStatus.value || "-",
-      },
+      { label: "Mã phản hồi VNPay", value: responseCode.value || "-" },
+      { label: "Trạng thái giao dịch", value: transactionStatus.value || "-" },
     ];
 
     status.value = "failed";

@@ -88,4 +88,6 @@ public class Order extends BaseEntity {
     @Column(name = "CompletedAt")
     private LocalDateTime completedAt;
 
+    @Column(name = "IsPaymentReported", nullable = false)
+    private Boolean isPaymentReported = false;
 }
