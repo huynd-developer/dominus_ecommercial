@@ -204,12 +204,6 @@
                       <div class="timeline-content">
                         <div class="t-title">{{ track.title }}</div>
                         <div class="t-desc">{{ track.desc }}</div>
-                        <img
-                          v-if="track.img"
-                          :src="track.img"
-                          class="tracking-img mt-2"
-                          alt="Bằng chứng giao hàng"
-                        />
                       </div>
                     </div>
                   </div>
@@ -222,7 +216,15 @@
                     :key="item.orderItemId"
                     class="order-item"
                   >
-                    <div class="product-block">
+                    <div
+                      class="product-block"
+                      role="button"
+                      tabindex="0"
+                      title="Xem chi tiết sản phẩm"
+                      @click.stop="goToProductDetail(item)"
+                      @keydown.enter.stop="goToProductDetail(item)"
+                      @keydown.space.prevent.stop="goToProductDetail(item)"
+                    >
                       <img
                         :src="getItemImage(item)"
                         class="item-img"
@@ -319,6 +321,50 @@
                                   ?.createdAt
                               )
                             }}
+                          </div>
+
+                          <div
+                            v-if="getReviewMediaByOrderItemId(item.orderItemId).length > 0"
+                            class="review-media-section"
+                          >
+                            <div class="review-media-label">
+                              Ảnh/video đánh giá:
+                            </div>
+
+                            <div class="review-media-list">
+                              <button
+                                v-for="(media, mediaIndex) in getReviewMediaByOrderItemId(item.orderItemId)"
+                                :key="`${media.url}-${mediaIndex}`"
+                                type="button"
+                                class="review-media-button"
+                                :title="media.isVideo ? 'Xem video đánh giá' : 'Xem ảnh đánh giá'"
+                                @click.stop="openReviewMediaPreview(item.orderItemId, mediaIndex)"
+                              >
+                                <video
+                                  v-if="media.isVideo"
+                                  :src="media.url"
+                                  class="review-media-thumb"
+                                  muted
+                                  playsinline
+                                  preload="metadata"
+                                ></video>
+
+                                <img
+                                  v-else
+                                  :src="media.url"
+                                  class="review-media-thumb"
+                                  alt="Ảnh đánh giá sản phẩm"
+                                  @error="handleImageError"
+                                />
+
+                                <span class="review-media-overlay">
+                                  <i
+                                    class="bi"
+                                    :class="media.isVideo ? 'bi-play-circle' : 'bi-zoom-in'"
+                                  ></i>
+                                </span>
+                              </button>
+                            </div>
                           </div>
                         </div>
 
@@ -902,6 +948,119 @@ const handleReorder = async (order: any) => {
   }
 };
 
+const getProductIdFromItem = (item: any) => {
+  const rawId =
+    item?.productId ??
+    item?.product?.id ??
+    item?.product?.productId ??
+    item?.productVariant?.productId ??
+    item?.productVariant?.product?.id ??
+    item?.productVariant?.product?.productId ??
+    null;
+
+  const productId = Number(rawId);
+
+  return Number.isFinite(productId) && productId > 0 ? productId : null;
+};
+
+const getProductVariantIdFromItem = (item: any) => {
+  const rawId =
+    item?.productVariantId ??
+    item?.variantId ??
+    item?.productVariant?.id ??
+    item?.productVariant?.variantId ??
+    null;
+
+  const variantId = Number(rawId);
+
+  return Number.isFinite(variantId) && variantId > 0 ? variantId : null;
+};
+
+const getProductDetailRoute = () => {
+  return router.getRoutes().find((route) => {
+    const routeName = String(route.name || "").toLowerCase();
+    const routePath = String(route.path || "").toLowerCase();
+
+    return (
+      (routeName.includes("product") && routeName.includes("detail")) ||
+      routePath.includes("/product/:") ||
+      routePath.includes("/products/:") ||
+      routePath.includes("/san-pham/:")
+    );
+  });
+};
+
+const buildProductDetailPathFromRoute = (routePath: string, item: any) => {
+  const productId = getProductIdFromItem(item);
+  const variantId = getProductVariantIdFromItem(item);
+
+  if (!productId) {
+    return "";
+  }
+
+  return routePath
+    .replace(/:productId\??/g, String(productId))
+    .replace(/:id\??/g, String(productId))
+    .replace(/:variantId\??/g, String(variantId || productId));
+};
+
+const goToProductDetail = async (item: any) => {
+  const productId = getProductIdFromItem(item);
+
+  if (!productId) {
+    toast("warning", "Không tìm thấy sản phẩm để xem chi tiết");
+    return;
+  }
+
+  const variantId = getProductVariantIdFromItem(item);
+  const productDetailRoute = getProductDetailRoute();
+  const query = variantId ? { variantId: String(variantId) } : undefined;
+
+  try {
+    if (productDetailRoute?.name) {
+      const params: Record<string, string> = {};
+      const paramNames = Array.from(
+        String(productDetailRoute.path || "").matchAll(/:([A-Za-z0-9_]+)/g)
+      )
+        .map((match) => match[1])
+        .filter((paramName): paramName is string => Boolean(paramName));
+
+      paramNames.forEach((paramName) => {
+        if (paramName.toLowerCase().includes("variant")) {
+          params[paramName] = String(variantId || productId);
+          return;
+        }
+
+        params[paramName] = String(productId);
+      });
+
+      await router.push({
+        name: productDetailRoute.name,
+        params,
+        query,
+      });
+
+      return;
+    }
+
+    if (productDetailRoute?.path) {
+      const productPath = buildProductDetailPathFromRoute(
+        productDetailRoute.path,
+        item
+      );
+
+      if (productPath) {
+        await router.push({ path: productPath, query });
+        return;
+      }
+    }
+
+    await router.push({ path: `/product/${productId}`, query });
+  } catch (error) {
+    showError(error, "Không thể mở chi tiết sản phẩm lúc này.");
+  }
+};
+
 const getTrackingHistory = (order: any) => {
   const history = [];
   const baseDate = new Date(order.createdAt).getTime();
@@ -940,7 +1099,6 @@ const getTrackingHistory = (order: any) => {
       desc: `Kiện hàng của bạn đã được giao. Người nhận: ${
         order.customerName || "Bạn"
       }`,
-      img: "https://images.unsplash.com/photo-1615460549969-36fa19521a4f?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
       active: true,
     });
   }
@@ -1372,6 +1530,8 @@ const isReturnMediaVideo = (media: any, url: string) => {
 
   return (
     rawType.includes("video") ||
+    rawType.includes("/video/upload/") ||
+    rawType.includes("/raw/upload/") ||
     rawType.includes("mp4") ||
     rawType.includes("mov") ||
     rawType.includes("webm") ||
@@ -1430,8 +1590,36 @@ const escapeHtml = (value: unknown) => {
     .replaceAll("'", "&#039;");
 };
 
-const buildReturnPreviewMainHtml = (media: ReturnMediaView) => {
+type MediaPreviewOptions = {
+  title: string;
+  counterLabel: string;
+  emptyText: string;
+  imageAlt: string;
+  thumbTitle: string;
+};
+
+const RETURN_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
+  title: "Ảnh/video bằng chứng hoàn hàng",
+  counterLabel: "bằng chứng hoàn hàng",
+  emptyText: "Không có ảnh/video bằng chứng hoàn hàng để hiển thị.",
+  imageAlt: "Ảnh bằng chứng hoàn hàng",
+  thumbTitle: "Chọn ảnh/video bằng chứng",
+};
+
+const REVIEW_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
+  title: "Ảnh/video đánh giá sản phẩm",
+  counterLabel: "đánh giá sản phẩm",
+  emptyText: "Không có ảnh/video đánh giá để hiển thị.",
+  imageAlt: "Ảnh đánh giá sản phẩm",
+  thumbTitle: "Chọn ảnh/video đánh giá",
+};
+
+const buildReturnPreviewMainHtml = (
+  media: ReturnMediaView,
+  options: MediaPreviewOptions
+) => {
   const safeUrl = escapeHtml(media.url);
+  const safeAlt = escapeHtml(options.imageAlt);
 
   if (media.isVideo) {
     return `
@@ -1449,7 +1637,7 @@ const buildReturnPreviewMainHtml = (media: ReturnMediaView) => {
     <img
       src="${safeUrl}"
       class="return-preview-image"
-      alt="Ảnh bằng chứng hoàn hàng"
+      alt="${safeAlt}"
     />
   `;
 };
@@ -1457,10 +1645,15 @@ const buildReturnPreviewMainHtml = (media: ReturnMediaView) => {
 const buildReturnPreviewThumbHtml = (
   media: ReturnMediaView,
   index: number,
-  activeIndex: number
+  activeIndex: number,
+  options: MediaPreviewOptions
 ) => {
   const safeUrl = escapeHtml(media.url);
   const activeClass = index === activeIndex ? " active" : "";
+  const mediaLabel = media.isVideo ? "Video" : "Ảnh";
+  const safeAriaLabel = escapeHtml(
+    `Xem ${mediaLabel.toLowerCase()} ${options.counterLabel} ${index + 1}`
+  );
 
   const thumb = media.isVideo
     ? `
@@ -1476,7 +1669,7 @@ const buildReturnPreviewThumbHtml = (
       <img
         src="${safeUrl}"
         class="return-preview-thumb-image"
-        alt="Ảnh bằng chứng ${index + 1}"
+        alt="${escapeHtml(`${mediaLabel} ${options.counterLabel} ${index + 1}`)}"
       />
     `;
 
@@ -1485,11 +1678,11 @@ const buildReturnPreviewThumbHtml = (
       type="button"
       class="return-preview-thumb-btn${activeClass}"
       data-preview-index="${index}"
-      aria-label="Xem ${media.isVideo ? "video" : "ảnh"} bằng chứng ${index + 1}"
+      aria-label="${safeAriaLabel}"
     >
       ${thumb}
       <span class="return-preview-thumb-badge">
-        ${media.isVideo ? "Video" : "Ảnh"} ${index + 1}
+        ${mediaLabel} ${index + 1}
       </span>
       ${media.isVideo ? `<span class="return-preview-thumb-play"><i class="bi bi-play-fill"></i></span>` : ""}
     </button>
@@ -1498,13 +1691,14 @@ const buildReturnPreviewThumbHtml = (
 
 const buildReturnPreviewHtml = (
   mediaList: ReturnMediaView[],
-  activeIndex: number
+  activeIndex: number,
+  options: MediaPreviewOptions
 ) => {
   if (mediaList.length === 0) {
     return `
       <div class="return-preview-modal">
         <div class="return-preview-empty">
-          Không có ảnh/video bằng chứng để hiển thị.
+          ${escapeHtml(options.emptyText)}
         </div>
       </div>
     `;
@@ -1521,18 +1715,19 @@ const buildReturnPreviewHtml = (
     return `
       <div class="return-preview-modal">
         <div class="return-preview-empty">
-          Không có ảnh/video bằng chứng để hiển thị.
+          ${escapeHtml(options.emptyText)}
         </div>
       </div>
     `;
   }
 
   const hasMultipleMedia = mediaList.length > 1;
+  const activeMediaLabel = activeMedia.isVideo ? "Video" : "Ảnh";
 
   return `
     <div class="return-preview-modal">
       <div class="return-preview-counter">
-        ${activeMedia.isVideo ? "Video" : "Ảnh"} bằng chứng
+        ${activeMediaLabel} ${escapeHtml(options.counterLabel)}
         <strong>${safeActiveIndex + 1}/${mediaList.length}</strong>
       </div>
 
@@ -1553,7 +1748,7 @@ const buildReturnPreviewHtml = (
         }
 
         <div class="return-preview-main">
-          ${buildReturnPreviewMainHtml(activeMedia)}
+          ${buildReturnPreviewMainHtml(activeMedia, options)}
         </div>
 
         ${
@@ -1576,12 +1771,17 @@ const buildReturnPreviewHtml = (
         hasMultipleMedia
           ? `
             <div class="return-preview-thumb-title">
-              Chọn ảnh/video bằng chứng
+              ${escapeHtml(options.thumbTitle)}
             </div>
             <div class="return-preview-thumb-list">
               ${mediaList
                 .map((media, index) =>
-                  buildReturnPreviewThumbHtml(media, index, safeActiveIndex)
+                  buildReturnPreviewThumbHtml(
+                    media,
+                    index,
+                    safeActiveIndex,
+                    options
+                  )
                 )
                 .join("")}
             </div>
@@ -1592,9 +1792,11 @@ const buildReturnPreviewHtml = (
   `;
 };
 
-const openReturnMediaPreview = async (order: any, index: number) => {
-  const mediaList = getOrderReturnMedia(order);
-
+const openMediaPreview = async (
+  mediaList: ReturnMediaView[],
+  index: number,
+  options: MediaPreviewOptions
+) => {
   if (mediaList.length === 0) {
     return;
   }
@@ -1612,7 +1814,11 @@ const openReturnMediaPreview = async (order: any, index: number) => {
       return;
     }
 
-    htmlContainer.innerHTML = buildReturnPreviewHtml(mediaList, activeIndex);
+    htmlContainer.innerHTML = buildReturnPreviewHtml(
+      mediaList,
+      activeIndex,
+      options
+    );
     bindPreviewEvents();
   };
 
@@ -1648,8 +1854,8 @@ const openReturnMediaPreview = async (order: any, index: number) => {
   };
 
   await Swal.fire({
-    title: "Ảnh/video bằng chứng",
-    html: buildReturnPreviewHtml(mediaList, activeIndex),
+    title: options.title,
+    html: buildReturnPreviewHtml(mediaList, activeIndex, options),
     width: 700,
     showConfirmButton: true,
     confirmButtonText: "Đóng",
@@ -1661,6 +1867,56 @@ const openReturnMediaPreview = async (order: any, index: number) => {
       confirmButton: "swal-preview-confirm",
     },
   });
+};
+
+const openReturnMediaPreview = async (order: any, index: number) => {
+  await openMediaPreview(
+    getOrderReturnMedia(order),
+    index,
+    RETURN_MEDIA_PREVIEW_OPTIONS
+  );
+};
+
+const getReviewMediaByOrderItemId = (orderItemId: number): ReturnMediaView[] => {
+  const review = getMyReviewByOrderItemId(orderItemId) as any;
+
+  if (!review) {
+    return [];
+  }
+
+  const rawMedia =
+    review?.mediaFiles ??
+    review?.mediaUrls ??
+    review?.reviewMediaFiles ??
+    review?.reviewMediaUrls ??
+    review?.images ??
+    review?.files ??
+    [];
+
+  const mediaList = Array.isArray(rawMedia) ? rawMedia : [rawMedia];
+
+  return mediaList
+    .map((media: any) => {
+      const url = getReturnMediaUrl(media);
+
+      if (!url) {
+        return null;
+      }
+
+      return {
+        url,
+        isVideo: isReturnMediaVideo(media, url),
+      };
+    })
+    .filter((media): media is ReturnMediaView => media !== null);
+};
+
+const openReviewMediaPreview = async (orderItemId: number, index: number) => {
+  await openMediaPreview(
+    getReviewMediaByOrderItemId(orderItemId),
+    index,
+    REVIEW_MEDIA_PREVIEW_OPTIONS
+  );
 };
 
 const getStatusText = (status: number) => {
@@ -2240,6 +2496,14 @@ const getItemImage = (item: any) => {
   gap: 12px;
   min-width: 0;
   flex: 1;
+  cursor: pointer;
+  border-radius: 12px;
+  transition: background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.product-block:focus-visible {
+  outline: 2px solid #bd9a5f;
+  outline-offset: 3px;
 }
 
 .item-img {
@@ -2510,6 +2774,70 @@ const getItemImage = (item: any) => {
   color: #374151;
   margin-top: 4px;
   font-style: italic;
+}
+
+.review-media-section {
+  margin-top: 9px;
+}
+
+.review-media-label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 7px;
+}
+
+.review-media-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.review-media-button {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #f3e2bd;
+  border-radius: 10px;
+  background: #ffffff;
+  cursor: zoom-in;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.review-media-button:hover {
+  border-color: #bd9a5f;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+  transform: translateY(-1px);
+}
+
+.review-media-thumb {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  background: #ffffff;
+}
+
+.review-media-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 18px;
+  background: rgba(15, 23, 42, 0.28);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.review-media-button:hover .review-media-overlay {
+  opacity: 1;
 }
 
 @media (max-width: 768px) {
