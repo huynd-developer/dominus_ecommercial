@@ -265,24 +265,27 @@ function getAvailableActions(status: number) {
         { status: 1, label: "Xác nhận", type: "primary", danger: false },
         { status: 4, label: "Hủy", type: "primary", danger: true },
       ];
+
     case 1:
       return [
         { status: 2, label: "Giao hàng", type: "primary", danger: false },
         { status: 4, label: "Hủy", type: "primary", danger: true },
       ];
+
     case 2:
       return [
         { status: 3, label: "Hoàn thành", type: "primary", danger: false },
         { status: 5, label: "Giao thất bại", type: "default", danger: true },
       ];
+
     case 3:
-      return [
-        { status: 6, label: "Yêu cầu hoàn", type: "dashed", danger: true },
-      ];
+      return [];
+
     case 6:
       return [
         { status: 7, label: "Hoàn tất", type: "primary", danger: false },
       ];
+
     default:
       return [];
   }

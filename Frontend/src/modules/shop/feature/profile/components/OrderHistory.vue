@@ -111,7 +111,7 @@
 
               <div class="order-header-right">
                 <span :class="['badge', getStatusClass(order.status)]">
-                  {{ getStatusText(order.status, order) }}
+                  {{ order.statusText || getStatusText(order.status) }}
                 </span>
 
                 <div class="fw-bold mt-1 order-header-total">
@@ -169,7 +169,7 @@
                   </div>
                 </div>
 
-                <!-- BẮT ĐẦU KHỐI THEO DÕI ĐƠN HÀNG -->
+                <!-- BẮT ĐẦU KHỐI THEO DÕI ĐƠN HÀNG (FAKE TRACKING) -->
                 <div class="tracking-container mt-2 mb-4">
                   <h6 class="fw-bold mb-3">
                     <i class="bi bi-truck me-2"></i>Theo dõi kiện hàng
@@ -272,86 +272,64 @@
                           </span>
                         </div>
 
-                        <!-- KHỐI HIỂN THỊ ĐÁNH GIÁ -->
                         <div
-                          v-if="reviewMap.has(item.orderItemId)"
-                          class="my-review-box mt-3 w-100"
+                          v-if="getMyReviewByOrderItemId(item.orderItemId)"
+                          class="my-review-box mt-2"
                         >
-                          <div
-                            class="d-flex justify-content-between align-items-center mb-2"
-                          >
-                            <div class="review-stars">
-                              <i
-                                v-for="star in 5"
-                                :key="star"
-                                class="bi"
-                                :class="
-                                  star <= (reviewMap.get(item.orderItemId)?.rating || 0)
-                                    ? 'bi-star-fill text-warning'
-                                    : 'bi-star text-muted'
-                                "
-                              ></i>
-                              <span class="ms-2 fw-bold text-dark"
-                                >{{ reviewMap.get(item.orderItemId)?.rating }}/5</span
-                              >
-                            </div>
-                            <div
-                              class="small text-muted"
-                              style="font-size: 12px"
-                            >
+                          <div class="review-stars">
+                            <i
+                              v-for="star in 5"
+                              :key="star"
+                              class="bi"
+                              :class="
+                                star <=
+                                (getMyReviewByOrderItemId(item.orderItemId)
+                                  ?.rating || 0)
+                                  ? 'bi-star-fill'
+                                  : 'bi-star'
+                              "
+                            ></i>
+
+                            <span class="ms-2 small text-muted">
                               {{
-                                formatDate(
-                                  reviewMap.get(item.orderItemId)?.createdAt
-                                )
-                              }}
-                            </div>
+                                getMyReviewByOrderItemId(item.orderItemId)
+                                  ?.rating
+                              }}/5
+                            </span>
                           </div>
 
                           <div
-                            v-if="reviewMap.get(item.orderItemId)?.comment"
-                            class="review-comment small"
+                            v-if="
+                              getMyReviewByOrderItemId(item.orderItemId)
+                                ?.comment
+                            "
+                            class="small review-comment"
                           >
-                            "{{ reviewMap.get(item.orderItemId)?.comment }}"
+                            "{{
+                              getMyReviewByOrderItemId(item.orderItemId)
+                                ?.comment
+                            }}"
                           </div>
 
-                          <div
-                            v-if="getReviewMedia(item.orderItemId).length > 0"
-                            class="d-flex gap-2 mt-2 flex-wrap"
-                          >
-                            <template
-                              v-for="(url, idx) in getReviewMedia(item.orderItemId)"
-                              :key="idx"
-                            >
-                              <video
-                                v-if="String(url).match(/\.(mp4|webm|mov)/i)"
-                                :src="String(url)"
-                                class="review-media-preview"
-                                controls
-                                @click="openMediaPreview(String(url))"
-                              ></video>
-                              <img
-                                v-else
-                                :src="String(url)"
-                                class="review-media-preview"
-                                alt="Ảnh đánh giá"
-                                @click="openMediaPreview(String(url))"
-                              />
-                            </template>
+                          <div class="small text-muted mt-1">
+                            Đã đánh giá:
+                            {{
+                              formatDate(
+                                getMyReviewByOrderItemId(item.orderItemId)
+                                  ?.createdAt
+                              )
+                            }}
                           </div>
                         </div>
 
                         <div
                           v-else-if="
                             getReviewState(order.orderId, item.orderItemId)
-                              ?.message
-                          "
-                          class="small mt-1"
-                          :class="
-                            getReviewState(order.orderId, item.orderItemId)
+                              ?.message &&
+                            !getReviewState(order.orderId, item.orderItemId)
                               ?.canReview
-                              ? 'text-success'
-                              : 'text-muted'
                           "
+                          class="small mt-1 text-muted"
                         >
                           {{
                             getReviewState(order.orderId, item.orderItemId)
@@ -361,138 +339,185 @@
                       </div>
                     </div>
 
-                    <div class="review-action">
-                      <button
-                        v-if="order.status === 3"
-                        type="button"
-                        class="btn btn-sm"
-                        :class="
-                          isReviewed(order.orderId, item.orderItemId)
-                            ? 'btn-outline-secondary'
-                            : 'btn-review'
-                        "
-                        :disabled="
-                          reviewLoadingByOrder[order.orderId] ||
-                          !canReview(order.orderId, item.orderItemId)
-                        "
-                        @click.stop="
-                          openReview(order.orderId, item.orderItemId)
-                        "
-                      >
-                        <span
-                          v-if="reviewLoadingByOrder[order.orderId]"
-                          class="spinner-border spinner-border-sm me-1"
-                        ></span>
+                    <div class="order-item-side">
+                      <div v-if="hasItemPrice(item)" class="item-price-box">
+                        <div
+                          v-if="hasItemSale(item)"
+                          class="item-original-price"
+                        >
+                          {{ formatMoney(getItemOriginalUnitPrice(item)) }}
+                        </div>
 
-                        {{
-                          isReviewed(order.orderId, item.orderItemId)
-                            ? "Đã đánh giá"
-                            : "Đánh giá"
-                        }}
-                      </button>
+                        <div class="item-final-price">
+                          {{ formatMoney(getItemFinalUnitPrice(item)) }}
+                        </div>
 
-                      <button
-                        v-else
-                        type="button"
-                        class="btn btn-sm btn-outline-secondary"
-                        disabled
-                      >
-                        Chưa mở
-                      </button>
+                        <div
+                          v-if="Number(item.quantity || 0) > 1"
+                          class="item-line-total"
+                        >
+                          Thành tiền:
+                          {{ formatMoney(getItemLineTotal(item)) }}
+                        </div>
+                      </div>
+
+                      <div class="review-action">
+                        <button
+                          v-if="order.status === 3"
+                          type="button"
+                          class="btn btn-sm"
+                          :class="
+                            isReviewed(order.orderId, item.orderItemId)
+                              ? 'btn-outline-secondary'
+                              : 'btn-review'
+                          "
+                          :disabled="
+                            reviewLoadingByOrder[order.orderId] ||
+                            !canReview(order.orderId, item.orderItemId)
+                          "
+                          @click.stop="
+                            openReview(order.orderId, item.orderItemId)
+                          "
+                        >
+                          <span
+                            v-if="reviewLoadingByOrder[order.orderId]"
+                            class="spinner-border spinner-border-sm me-1"
+                          ></span>
+
+                          {{
+                            isReviewed(order.orderId, item.orderItemId)
+                              ? "Đã đánh giá"
+                              : "Đánh giá"
+                          }}
+                        </button>
+
+                        <button
+                          v-else
+                          type="button"
+                          class="btn btn-sm btn-outline-secondary"
+                          disabled
+                        >
+                          Chưa mở
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div class="order-total-box">
-                  <div>
-                    <span>Tạm tính:</span>
-                    <strong>{{ formatMoney(order.totalAmount) }}</strong>
+                <div class="order-summary-row">
+                  <div v-if="order.status === 4" class="order-cancel-info">
+                    <div class="cancel-info-title">
+                      <i class="bi bi-x-circle me-1"></i>
+                      Lý do hủy:
+                    </div>
+
+                    <div class="cancel-info-text">
+                      {{ getOrderCancelReason(order) }}
+                    </div>
+
+                    <div
+                      v-if="getOrderCancelledAt(order)"
+                      class="cancel-info-time"
+                    >
+                      Thời gian hủy: {{ formatDate(getOrderCancelledAt(order)) }}
+                    </div>
                   </div>
 
-                  <div v-if="order.discountAmount > 0">
-                    <span>Giảm giá:</span>
-                    <strong class="text-danger">
-                      -{{ formatMoney(order.discountAmount) }}
-                    </strong>
+                  <div
+                    v-else-if="isReturnInfoVisible(order)"
+                    class="order-return-info"
+                  >
+                    <div class="return-info-title">
+                      <i class="bi bi-arrow-counterclockwise me-1"></i>
+                      Thông tin hoàn hàng:
+                    </div>
+
+                    <div class="return-info-line">
+                      <span>Lý do:</span>
+                      <strong>{{ getOrderReturnReason(order) }}</strong>
+                    </div>
+
+                    <div
+                      v-if="getOrderReturnDescription(order)"
+                      class="return-info-description"
+                    >
+                      {{ getOrderReturnDescription(order) }}
+                    </div>
+
+                    <div
+                      v-if="getOrderReturnMedia(order).length > 0"
+                      class="return-media-section"
+                    >
+                      <div class="return-media-label">Ảnh/video bằng chứng:</div>
+
+                      <div class="return-media-list">
+                        <button
+                          v-for="(media, index) in getOrderReturnMedia(order)"
+                          :key="`${media.url}-${index}`"
+                          type="button"
+                          class="return-media-button"
+                          @click.stop="openReturnMediaPreview(order, index)"
+                        >
+                          <video
+                            v-if="media.isVideo"
+                            :src="media.url"
+                            class="return-media-thumb"
+                            muted
+                            preload="metadata"
+                          ></video>
+
+                          <img
+                            v-else
+                            :src="media.url"
+                            class="return-media-thumb"
+                            alt="Ảnh bằng chứng hoàn hàng"
+                          />
+
+                          <span class="return-media-overlay">
+                            <i
+                              class="bi"
+                              :class="media.isVideo ? 'bi-play-circle' : 'bi-zoom-in'"
+                            ></i>
+                          </span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
-                  <div>
-                    <span>Tổng thanh toán:</span>
-                    <strong class="fs-5">
-                      {{ formatMoney(order.finalAmount) }}
-                    </strong>
+                  <div class="order-total-box">
+                    <div>
+                      <span>Tạm tính:</span>
+                      <strong>{{ formatMoney(order.totalAmount) }}</strong>
+                    </div>
+
+                    <div>
+                      <span>Giảm giá:</span>
+                      <strong class="text-danger">
+                        -{{ formatMoney(order.discountAmount) }}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>Tổng thanh toán:</span>
+                      <strong class="fs-5">
+                        {{ formatMoney(order.finalAmount) }}
+                      </strong>
+                    </div>
                   </div>
                 </div>
 
                 <!-- KHỐI CÁC NÚT THAO TÁC -->
-                <div class="text-end mt-3 d-flex justify-content-end align-items-center gap-2 flex-wrap">
+                <div class="text-end mt-3 d-flex justify-content-end gap-2">
                   <button
-                    v-if="order.status === 3"
-                    type="button"
-                    class="btn btn-outline-dark btn-sm"
-                    :disabled="reviewLoadingByOrder[order.orderId]"
-                    @click="loadReviewableItems(order.orderId, true)"
+                    v-if="order.status === 0 && order.paymentMethod === 'VNPAY'"
+                    class="btn btn-sm text-white"
+                    style="background-color: #10b981; border-color: #10b981"
+                    :disabled="store.orderLoading"
+                    @click="repayVnpayOrder(order)"
                   >
-                    Cập nhật đánh giá
+                    <i class="bi bi-credit-card me-1"></i> Thanh toán VNPay ngay
                   </button>
 
-                  <!-- 1. THANH TOÁN VNPAY -->
-                  <template v-if="order.status === 0 && (order.paymentMethod || '').toUpperCase().includes('VNPAY')">
-                    <!-- ĐỌC TRỰC TIẾP TỪ OBJECT MAP REACTIVE -->
-                    <div
-                      v-if="paidOrdersMap[String(order.orderId)] || (order as any).isPaymentReported"
-                      class="d-flex align-items-center me-auto text-success fw-bold"
-                      style="font-size: 14px"
-                    >
-                      <i class="bi bi-check-circle-fill me-1"></i> Đang chờ shop đối soát...
-                    </div>
-                    <template v-else-if="getRemainingSeconds(order.createdAt) > 0">
-                      <div class="d-flex align-items-center me-3 text-danger fw-bold" style="font-size: 14px">
-                        <i class="bi bi-clock-history me-1"></i> Hủy sau: {{ formatCountdown(getRemainingSeconds(order.createdAt)) }}
-                      </div>
-                      <button
-                        class="btn btn-sm text-white"
-                        style="background-color: #10b981; border-color: #10b981"
-                        :disabled="store.orderLoading"
-                        @click="repayVnpayOrder(order)"
-                      >
-                        <i class="bi bi-credit-card me-1"></i> Thanh toán VNPay ngay
-                      </button>
-                    </template>
-                    <div v-else class="d-flex align-items-center me-3 text-muted fw-bold" style="font-size: 14px">
-                      <i class="bi bi-clock-history me-1"></i> Đã quá hạn thanh toán
-                    </div>
-                  </template>
-
-                  <!-- 2. THANH TOÁN VIETQR -->
-                  <template v-if="order.status === 0 && (order.paymentMethod || '').toUpperCase().includes('VIETQR')">
-                    <!-- ĐỌC TRỰC TIẾP TỪ OBJECT MAP REACTIVE -->
-                    <div
-                      v-if="paidOrdersMap[String(order.orderId)] || (order as any).isPaymentReported"
-                      class="d-flex align-items-center me-auto text-success fw-bold"
-                      style="font-size: 14px"
-                    >
-                      <i class="bi bi-check-circle-fill me-1"></i> Đang chờ shop đối soát...
-                    </div>
-                    <template v-else-if="getRemainingSeconds(order.createdAt) > 0">
-                      <div class="d-flex align-items-center me-3 text-danger fw-bold" style="font-size: 14px">
-                        <i class="bi bi-clock-history me-1"></i> Hủy sau: {{ formatCountdown(getRemainingSeconds(order.createdAt)) }}
-                      </div>
-                      <button
-                        class="btn btn-sm text-white"
-                        style="background-color: #0ea5e9; border-color: #0ea5e9"
-                        :disabled="store.orderLoading"
-                        @click="repayVietQrOrder(order)"
-                      >
-                        <i class="bi bi-qr-code-scan me-1"></i> Quét mã VietQR ngay
-                      </button>
-                    </template>
-                    <div v-else class="d-flex align-items-center me-3 text-muted fw-bold" style="font-size: 14px">
-                      <i class="bi bi-clock-history me-1"></i> Đã quá hạn thanh toán
-                    </div>
-                  </template>
-
-                  <!-- CÁC NÚT CHUNG KHÁC -->
                   <button
                     v-if="order.canCancel"
                     class="btn btn-outline-danger btn-sm"
@@ -502,6 +527,7 @@
                     Hủy đơn
                   </button>
 
+                  <!-- NÚT MUA LẠI -->
                   <button
                     v-if="order.status === 4 || order.status === 3"
                     class="btn btn-primary btn-sm px-3 text-white"
@@ -521,6 +547,7 @@
                     Yêu cầu hoàn hàng
                   </button>
 
+                  <!-- NÚT HỦY YÊU CẦU HOÀN HÀNG -->
                   <button
                     v-if="order.status === 6"
                     type="button"
@@ -530,6 +557,17 @@
                   >
                     Hủy yêu cầu hoàn hàng
                   </button>
+
+                  <span
+                    v-if="
+                      !order.canCancel &&
+                      order.status !== 3 &&
+                      order.status !== 4
+                    "
+                    class="text-muted small align-self-center"
+                  >
+                    Đơn hàng không còn được hủy
+                  </span>
                 </div>
               </div>
             </div>
@@ -544,19 +582,28 @@
       :loading="submittingReview"
       @submit="submitReview"
     />
+    <ReturnRequestModal
+      v-model="returnModalVisible"
+      :order="selectedReturnOrder"
+      :loading="submittingReturn"
+      :default-email="getDefaultReturnEmail()"
+      @submit="submitReturnRequest"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, reactive, onUnmounted } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import ReviewModal from "./ReviewModal.vue";
+import ReturnRequestModal from "./ReturnRequestModal.vue";
 import { customerProfileService } from "../services/customerProfile.service";
 import { useCustomerProfileStore } from "../stores/customerProfile.store";
 import api from "@/common/api";
 import type {
   CustomerOrderResponse,
+  ReturnRequestSubmitPayload,
   ReviewResponse,
   ReviewableOrderItemResponse,
 } from "../types/profile.type";
@@ -565,8 +612,6 @@ const store = useCustomerProfileStore();
 const router = useRouter();
 
 const currentTab = ref<number | "ALL">("ALL");
-const currentTime = ref(Date.now());
-let countdownTimer: any = null;
 
 const reviewLoading = ref(false);
 const submittingReview = ref(false);
@@ -575,41 +620,13 @@ const selectedReviewItem = ref<ReviewableOrderItemResponse | null>(null);
 const myReviews = ref<ReviewResponse[]>([]);
 const openedOrderId = ref<number | null>(null);
 
-// ==== GIẢI PHÁP TỐI THƯỢNG: REF MAP CỨNG REACTIVITY ====
-// 1. Dùng Record map string -> boolean để Vue bắt dính sự thay đổi
-const paidOrdersMap = ref<Record<string, boolean>>({});
+const returnModalVisible = ref(false);
+const selectedReturnOrder = ref<CustomerOrderResponse | null>(null);
+const submittingReturn = ref(false);
 
-// 2. Load dữ liệu lúc khởi tạo
-const initPaidOrders = () => {
-  try {
-    const saved = localStorage.getItem('dominus_paid_orders');
-    if (saved) {
-      paidOrdersMap.value = JSON.parse(saved);
-    }
-  } catch (e) {}
-};
-
-// 3. Hàm đánh dấu và ép Vue render lại
-const markAsPaid = (orderId: number | string) => {
-  const idStr = String(orderId);
-  paidOrdersMap.value[idStr] = true;
-  // Trick phá vỡ object ép Vue nhận diện reactivity tức thì:
-  paidOrdersMap.value = { ...paidOrdersMap.value }; 
-  localStorage.setItem('dominus_paid_orders', JSON.stringify(paidOrdersMap.value));
-};
-// ========================================================
-
-const reviewMap = computed(() => {
-  const map = new Map<number, ReviewResponse>();
-  myReviews.value.forEach((review) => {
-    if (review.orderItemId) {
-      map.set(review.orderItemId, review);
-    }
-  });
-  return map;
-});
-
-const reviewableMap = reactive<Record<number, ReviewableOrderItemResponse[]>>({});
+const reviewableMap = reactive<Record<number, ReviewableOrderItemResponse[]>>(
+  {}
+);
 const reviewLoadingByOrder = reactive<Record<number, boolean>>({});
 
 const generateOrderCode = (id: number | string | null | undefined) => {
@@ -622,35 +639,18 @@ const filteredOrders = computed(() => {
     return store.orders;
   }
   return store.orders.filter(
-    (order: CustomerOrderResponse) => order.status === currentTab.value,
+    (order: CustomerOrderResponse) => order.status === currentTab.value
   );
 });
 
-const getRemainingSeconds = (createdAt: string | Date) => {
-  const createTime = new Date(createdAt).getTime();
-  const expireTime = createTime + 15 * 60 * 1000;
-  const diff = Math.floor((expireTime - currentTime.value) / 1000);
-  return diff > 0 ? diff : 0;
-};
-
-const formatCountdown = (seconds: number) => {
-  const m = Math.floor(seconds / 60).toString().padStart(2, "0");
-  const s = (seconds % 60).toString().padStart(2, "0");
-  return `${m}:${s}`;
-};
-
-onMounted(() => {
-  initPaidOrders(); // Nạp dữ liệu lúc F5
-  fetchOrdersAndReviews();
-
-  countdownTimer = setInterval(() => {
-    currentTime.value = Date.now();
-    checkExpiredOrders();
-  }, 1000);
+const completedOrders = computed(() => {
+  return store.orders.filter(
+    (order: CustomerOrderResponse) => order.status === 3
+  );
 });
 
-onUnmounted(() => {
-  if (countdownTimer) clearInterval(countdownTimer);
+onMounted(() => {
+  fetchOrdersAndReviews();
 });
 
 const toggleOrder = async (orderId: number) => {
@@ -723,13 +723,6 @@ const fetchOrdersAndReviews = async () => {
     await store.fetchOrders();
     await fetchMyReviews();
 
-    // Phục hồi lại dữ liệu cho những đơn hàng đã chuyển khoản từ Map
-    store.orders.forEach((order: any) => {
-      if (paidOrdersMap.value[String(order.orderId)]) {
-        order.isPaymentReported = true;
-      }
-    });
-
     if (
       openedOrderId.value &&
       !store.orders.some((order) => order.orderId === openedOrderId.value)
@@ -739,31 +732,6 @@ const fetchOrdersAndReviews = async () => {
   } catch (error) {
     showError(error, "Không tải được lịch sử đơn hàng");
   }
-};
-
-const checkExpiredOrders = () => {
-  store.orders.forEach(async (order: any) => {
-    const method = (order.paymentMethod || "").toUpperCase();
-    if (
-      order.status === 0 &&
-      (method.includes("VIETQR") || method.includes("VNPAY"))
-    ) {
-      // Ngưng tự động hủy nếu đã ghi nhận thanh toán
-      if (paidOrdersMap.value[String(order.orderId)] || order.isPaymentReported) {
-        return;
-      }
-
-      // Hủy nếu quá hạn
-      if (getRemainingSeconds(order.createdAt) <= 0) {
-        try {
-          await api.patch(`/customer/orders/${order.orderId}/cancel`);
-          await fetchOrdersAndReviews();
-        } catch (e) {
-          // Bỏ qua lỗi ngầm
-        }
-      }
-    }
-  });
 };
 
 const fetchMyReviews = async () => {
@@ -789,40 +757,12 @@ const loadReviewableItems = async (orderId: number, showToast: boolean) => {
 };
 
 const getMyReviewByOrderItemId = (orderItemId: number) => {
-  return reviewMap.value.get(orderItemId);
-};
-
-const getReviewMedia = (orderItemId: number): string[] => {
-  const review = getMyReviewByOrderItemId(orderItemId) as any;
-  if (!review) return [];
-  return (
-    review.mediaFiles ||
-    review.imageUrls ||
-    review.images ||
-    review.reviewImages ||
-    []
-  );
-};
-
-const openMediaPreview = (url: string) => {
-  const isVideo = String(url).match(/\.(mp4|webm|mov)/i);
-  Swal.fire({
-    html: isVideo 
-      ? `<video src="${url}" class="img-fluid rounded" controls autoplay style="max-height: 80vh;"></video>`
-      : `<img src="${url}" class="img-fluid rounded" style="max-height: 80vh;" />`,
-    showCloseButton: true,
-    showConfirmButton: false,
-    width: 'auto',
-    background: '#000',
-    customClass: {
-      popup: 'swal-media-popup'
-    }
-  });
+  return myReviews.value.find((review) => review.orderItemId === orderItemId);
 };
 
 const getReviewState = (orderId: number, orderItemId: number) => {
   return reviewableMap[orderId]?.find(
-    (item) => item.orderItemId === orderItemId,
+    (item) => item.orderItemId === orderItemId
   );
 };
 
@@ -954,7 +894,7 @@ const handleReorder = async (order: any) => {
     } catch (error) {
       showError(
         error,
-        "Không thể thêm sản phẩm vào giỏ hàng lúc này. Vui lòng thử lại.",
+        "Không thể thêm sản phẩm vào giỏ hàng lúc này. Vui lòng thử lại."
       );
     } finally {
       store.orderLoading = false;
@@ -997,7 +937,9 @@ const getTrackingHistory = (order: any) => {
         ? new Date(order.completedAt)
         : new Date(baseDate + 48 * 60 * 60 * 1000),
       title: "Đã giao",
-      desc: `Kiện hàng của bạn đã được giao. Người nhận: ${order.customerName || "Bạn"}`,
+      desc: `Kiện hàng của bạn đã được giao. Người nhận: ${
+        order.customerName || "Bạn"
+      }`,
       img: "https://images.unsplash.com/photo-1615460549969-36fa19521a4f?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
       active: true,
     });
@@ -1104,6 +1046,101 @@ const formatMoney = (value: number | null | undefined) => {
   });
 };
 
+const toMoneyNumber = (value: unknown) => {
+  if (value === null || value === undefined || value === "") {
+    return 0;
+  }
+
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue) ? numberValue : 0;
+};
+
+const pickMoneyValue = (...values: unknown[]) => {
+  for (const value of values) {
+    const numberValue = toMoneyNumber(value);
+
+    if (numberValue > 0) {
+      return numberValue;
+    }
+  }
+
+  return 0;
+};
+
+const getItemUnitDiscount = (item: any) => {
+  return pickMoneyValue(
+    item?.discountAmount,
+    item?.unitDiscountAmount,
+    item?.unitDiscount,
+    item?.flashSaleDiscount,
+    item?.itemDiscount
+  );
+};
+
+const getItemFinalUnitPrice = (item: any) => {
+  return pickMoneyValue(
+    item?.finalPrice,
+    item?.unitFinalPrice,
+    item?.priceAfterDiscount,
+    item?.discountedPrice,
+    item?.salePrice,
+    item?.sellingPrice,
+    item?.unitPrice,
+    item?.price,
+    item?.originalPrice
+  );
+};
+
+const getItemOriginalUnitPrice = (item: any) => {
+  const originalPrice = pickMoneyValue(
+    item?.originalPrice,
+    item?.unitOriginalPrice,
+    item?.basePrice,
+    item?.listedPrice,
+    item?.priceBeforeDiscount,
+    item?.regularPrice,
+    item?.unitPrice,
+    item?.price
+  );
+
+  const finalPrice = getItemFinalUnitPrice(item);
+  const discountAmount = getItemUnitDiscount(item);
+
+  if (originalPrice > finalPrice) {
+    return originalPrice;
+  }
+
+  if (finalPrice > 0 && discountAmount > 0) {
+    return finalPrice + discountAmount;
+  }
+
+  return originalPrice || finalPrice;
+};
+
+const hasItemPrice = (item: any) => {
+  return getItemFinalUnitPrice(item) > 0 || getItemOriginalUnitPrice(item) > 0;
+};
+
+const hasItemSale = (item: any) => {
+  return getItemOriginalUnitPrice(item) > getItemFinalUnitPrice(item);
+};
+
+const getItemLineTotal = (item: any) => {
+  const lineTotal = pickMoneyValue(
+    item?.lineTotal,
+    item?.totalPrice,
+    item?.itemTotal,
+    item?.subtotal
+  );
+
+  if (lineTotal > 0) {
+    return lineTotal;
+  }
+
+  return getItemFinalUnitPrice(item) * Number(item?.quantity || 0);
+};
+
 const formatDate = (value: string | null | undefined) => {
   if (!value) return "-";
 
@@ -1157,7 +1194,476 @@ const formatOrderType = (value: string | null | undefined) => {
   return value;
 };
 
-const getStatusText = (status: number, order?: any) => {
+const getOrderCancelReason = (order: any) => {
+  const reason =
+    order?.cancelReason ??
+    order?.cancellationReason ??
+    order?.cancelNote ??
+    order?.cancelDescription ??
+    order?.reason ??
+    null;
+
+  const cleanReason = String(reason || "").trim();
+
+  return cleanReason || "Chưa có lý do hủy";
+};
+
+const getOrderCancelledAt = (order: any) => {
+  return (
+    order?.cancelledAt ??
+    order?.canceledAt ??
+    order?.cancelAt ??
+    order?.cancelDate ??
+    null
+  );
+};
+
+const getOrderReturnRequest = (order: any) => {
+  return (
+    order?.returnRequest ??
+    order?.latestReturnRequest ??
+    order?.returnInfo ??
+    order?.refundRequest ??
+    null
+  );
+};
+
+const isReturnInfoVisible = (order: any) => {
+  return Number(order?.status) === 6 || Number(order?.status) === 7;
+};
+
+const getOrderReturnReason = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  const reason =
+    order?.returnReason ??
+    order?.returnRequestReason ??
+    order?.refundReason ??
+    order?.exchangeReason ??
+    request?.reason ??
+    request?.returnReason ??
+    request?.returnRequestReason ??
+    request?.refundReason ??
+    null;
+
+  const cleanReason = String(reason || "").trim();
+
+  return cleanReason || "Chưa có lý do hoàn hàng";
+};
+
+const getOrderReturnDescription = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  const description =
+    order?.returnDescription ??
+    order?.returnRequestDescription ??
+    order?.refundDescription ??
+    order?.returnNote ??
+    order?.description ??
+    request?.description ??
+    request?.returnDescription ??
+    request?.returnRequestDescription ??
+    request?.refundDescription ??
+    request?.note ??
+    null;
+
+  return String(description || "").trim();
+};
+
+type ReturnMediaView = {
+  url: string;
+  isVideo: boolean;
+};
+
+const getLocalBackendBaseUrl = () => {
+  const isLocalhost =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+
+  if (isLocalhost) {
+    return `${window.location.protocol}//${window.location.hostname}:8080`;
+  }
+
+  return window.location.origin;
+};
+
+const getApiAssetBaseUrl = () => {
+  const configuredBaseUrl = String(api.defaults.baseURL || "").trim();
+
+  /**
+   * Khi axios baseURL là "/api", nếu ghép ảnh theo window.origin
+   * thì ảnh sẽ thành localhost:5173/uploads/... và Vite không phục vụ file đó.
+   * File hoàn hàng đang được BE lưu ở /uploads/return-requests nên ở môi trường dev
+   * phải trỏ thẳng sang backend localhost:8080.
+   */
+  if (!configuredBaseUrl || configuredBaseUrl.startsWith("/")) {
+    return getLocalBackendBaseUrl();
+  }
+
+  try {
+    const parsedUrl = new URL(configuredBaseUrl, window.location.origin);
+
+    parsedUrl.pathname = parsedUrl.pathname
+      .replace(/\/api\/?$/, "")
+      .replace(/\/$/, "");
+    parsedUrl.search = "";
+    parsedUrl.hash = "";
+
+    return parsedUrl.toString().replace(/\/$/, "");
+  } catch {
+    return getLocalBackendBaseUrl();
+  }
+};
+
+const normalizeReturnMediaUrl = (url: string) => {
+  let cleanUrl = String(url || "").trim();
+
+  if (!cleanUrl) {
+    return "";
+  }
+
+  if (
+    cleanUrl.startsWith("http://") ||
+    cleanUrl.startsWith("https://") ||
+    cleanUrl.startsWith("data:") ||
+    cleanUrl.startsWith("blob:")
+  ) {
+    return cleanUrl;
+  }
+
+  cleanUrl = cleanUrl.replace(/^\/?api\//, "/");
+
+  const assetBaseUrl = getApiAssetBaseUrl();
+
+  if (cleanUrl.startsWith("/")) {
+    return `${assetBaseUrl}${cleanUrl}`;
+  }
+
+  if (cleanUrl.startsWith("uploads/")) {
+    return `${assetBaseUrl}/${cleanUrl}`;
+  }
+
+  return cleanUrl;
+};
+
+const getReturnMediaUrl = (media: any) => {
+  const rawUrl =
+    typeof media === "string"
+      ? media
+      : media?.mediaUrl ??
+        media?.url ??
+        media?.imageUrl ??
+        media?.fileUrl ??
+        media?.src ??
+        media?.path ??
+        "";
+
+  return normalizeReturnMediaUrl(String(rawUrl || ""));
+};
+
+const isReturnMediaVideo = (media: any, url: string) => {
+  const rawType = String(
+    media?.mediaType ??
+      media?.type ??
+      media?.contentType ??
+      media?.mimeType ??
+      url
+  ).toLowerCase();
+
+  return (
+    rawType.includes("video") ||
+    rawType.includes("mp4") ||
+    rawType.includes("mov") ||
+    rawType.includes("webm") ||
+    rawType === "2"
+  );
+};
+
+const getOrderReturnMedia = (order: any): ReturnMediaView[] => {
+  const request = getOrderReturnRequest(order);
+
+  const rawMedia =
+    order?.returnMediaUrls ??
+    order?.returnMediaFiles ??
+    order?.returnMedias ??
+    order?.returnMedia ??
+    order?.returnImages ??
+    order?.returnEvidenceFiles ??
+    order?.mediaFiles ??
+    order?.files ??
+    order?.images ??
+    request?.returnMediaUrls ??
+    request?.mediaFiles ??
+    request?.returnMediaFiles ??
+    request?.returnMedias ??
+    request?.returnMedia ??
+    request?.returnImages ??
+    request?.evidenceFiles ??
+    request?.files ??
+    request?.images ??
+    [];
+
+  const mediaList = Array.isArray(rawMedia) ? rawMedia : [rawMedia];
+
+  return mediaList
+    .map((media: any) => {
+      const url = getReturnMediaUrl(media);
+
+      if (!url) {
+        return null;
+      }
+
+      return {
+        url,
+        isVideo: isReturnMediaVideo(media, url),
+      };
+    })
+    .filter((media): media is ReturnMediaView => media !== null);
+};
+
+const escapeHtml = (value: unknown) => {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+};
+
+const buildReturnPreviewMainHtml = (media: ReturnMediaView) => {
+  const safeUrl = escapeHtml(media.url);
+
+  if (media.isVideo) {
+    return `
+      <video
+        src="${safeUrl}"
+        class="return-preview-video"
+        controls
+        autoplay
+        playsinline
+      ></video>
+    `;
+  }
+
+  return `
+    <img
+      src="${safeUrl}"
+      class="return-preview-image"
+      alt="Ảnh bằng chứng hoàn hàng"
+    />
+  `;
+};
+
+const buildReturnPreviewThumbHtml = (
+  media: ReturnMediaView,
+  index: number,
+  activeIndex: number
+) => {
+  const safeUrl = escapeHtml(media.url);
+  const activeClass = index === activeIndex ? " active" : "";
+
+  const thumb = media.isVideo
+    ? `
+      <video
+        src="${safeUrl}"
+        class="return-preview-thumb-video"
+        muted
+        playsinline
+        preload="metadata"
+      ></video>
+    `
+    : `
+      <img
+        src="${safeUrl}"
+        class="return-preview-thumb-image"
+        alt="Ảnh bằng chứng ${index + 1}"
+      />
+    `;
+
+  return `
+    <button
+      type="button"
+      class="return-preview-thumb-btn${activeClass}"
+      data-preview-index="${index}"
+      aria-label="Xem ${media.isVideo ? "video" : "ảnh"} bằng chứng ${index + 1}"
+    >
+      ${thumb}
+      <span class="return-preview-thumb-badge">
+        ${media.isVideo ? "Video" : "Ảnh"} ${index + 1}
+      </span>
+      ${media.isVideo ? `<span class="return-preview-thumb-play"><i class="bi bi-play-fill"></i></span>` : ""}
+    </button>
+  `;
+};
+
+const buildReturnPreviewHtml = (
+  mediaList: ReturnMediaView[],
+  activeIndex: number
+) => {
+  if (mediaList.length === 0) {
+    return `
+      <div class="return-preview-modal">
+        <div class="return-preview-empty">
+          Không có ảnh/video bằng chứng để hiển thị.
+        </div>
+      </div>
+    `;
+  }
+
+  const safeActiveIndex = Math.min(
+    Math.max(Number.isFinite(activeIndex) ? activeIndex : 0, 0),
+    mediaList.length - 1
+  );
+
+  const activeMedia = mediaList[safeActiveIndex];
+
+  if (!activeMedia) {
+    return `
+      <div class="return-preview-modal">
+        <div class="return-preview-empty">
+          Không có ảnh/video bằng chứng để hiển thị.
+        </div>
+      </div>
+    `;
+  }
+
+  const hasMultipleMedia = mediaList.length > 1;
+
+  return `
+    <div class="return-preview-modal">
+      <div class="return-preview-counter">
+        ${activeMedia.isVideo ? "Video" : "Ảnh"} bằng chứng
+        <strong>${safeActiveIndex + 1}/${mediaList.length}</strong>
+      </div>
+
+      <div class="return-preview-stage">
+        ${
+          hasMultipleMedia
+            ? `
+              <button
+                type="button"
+                class="return-preview-nav is-prev"
+                data-preview-direction="-1"
+                aria-label="Xem ảnh/video trước"
+              >
+                <i class="bi bi-chevron-left"></i>
+              </button>
+            `
+            : ""
+        }
+
+        <div class="return-preview-main">
+          ${buildReturnPreviewMainHtml(activeMedia)}
+        </div>
+
+        ${
+          hasMultipleMedia
+            ? `
+              <button
+                type="button"
+                class="return-preview-nav is-next"
+                data-preview-direction="1"
+                aria-label="Xem ảnh/video tiếp theo"
+              >
+                <i class="bi bi-chevron-right"></i>
+              </button>
+            `
+            : ""
+        }
+      </div>
+
+      ${
+        hasMultipleMedia
+          ? `
+            <div class="return-preview-thumb-title">
+              Chọn ảnh/video bằng chứng
+            </div>
+            <div class="return-preview-thumb-list">
+              ${mediaList
+                .map((media, index) =>
+                  buildReturnPreviewThumbHtml(media, index, safeActiveIndex)
+                )
+                .join("")}
+            </div>
+          `
+          : ""
+      }
+    </div>
+  `;
+};
+
+const openReturnMediaPreview = async (order: any, index: number) => {
+  const mediaList = getOrderReturnMedia(order);
+
+  if (mediaList.length === 0) {
+    return;
+  }
+
+  let activeIndex = Number.isInteger(index) ? index : 0;
+
+  if (activeIndex < 0 || activeIndex >= mediaList.length) {
+    activeIndex = 0;
+  }
+
+  const renderPreview = () => {
+    const htmlContainer = Swal.getHtmlContainer();
+
+    if (!htmlContainer) {
+      return;
+    }
+
+    htmlContainer.innerHTML = buildReturnPreviewHtml(mediaList, activeIndex);
+    bindPreviewEvents();
+  };
+
+  const goToPreview = (nextIndex: number) => {
+    activeIndex = (nextIndex + mediaList.length) % mediaList.length;
+    renderPreview();
+  };
+
+  const bindPreviewEvents = () => {
+    const htmlContainer = Swal.getHtmlContainer();
+
+    if (!htmlContainer) {
+      return;
+    }
+
+    htmlContainer
+      .querySelectorAll<HTMLButtonElement>("[data-preview-direction]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const direction = Number(button.dataset.previewDirection || 0);
+          goToPreview(activeIndex + direction);
+        });
+      });
+
+    htmlContainer
+      .querySelectorAll<HTMLButtonElement>("[data-preview-index]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const selectedIndex = Number(button.dataset.previewIndex || 0);
+          goToPreview(selectedIndex);
+        });
+      });
+  };
+
+  await Swal.fire({
+    title: "Ảnh/video bằng chứng",
+    html: buildReturnPreviewHtml(mediaList, activeIndex),
+    width: 700,
+    showConfirmButton: true,
+    confirmButtonText: "Đóng",
+    confirmButtonColor: "#bd9a5f",
+    didOpen: bindPreviewEvents,
+    customClass: {
+      popup: "swal-custom-popup return-media-preview-popup",
+      title: "swal-custom-title",
+      confirmButton: "swal-preview-confirm",
+    },
+  });
+};
+
+const getStatusText = (status: number) => {
   switch (status) {
     case 0:
       return "Chờ xác nhận";
@@ -1168,14 +1674,7 @@ const getStatusText = (status: number, order?: any) => {
     case 3:
       return "Hoàn thành";
     case 4:
-      if (order && ["VIETQR", "VNPAY"].includes((order.paymentMethod || "").toUpperCase())) {
-        const createTime = new Date(order.createdAt).getTime();
-        const now = Date.now();
-        if ((now - createTime >= 15 * 60 * 1000) || (order.statusText && order.statusText.includes("quá hạn"))) {
-          return "Đã hủy (Quá hạn thanh toán)";
-        }
-      }
-      return order?.statusText || "Đã hủy";
+      return "Đã hủy";
     case 5:
       return "Giao hàng thất bại";
     case 6:
@@ -1231,7 +1730,7 @@ const showError = (error: any, fallback: string) => {
 
 const toast = (
   icon: "success" | "error" | "warning" | "info",
-  title: string,
+  title: string
 ) => {
   Swal.fire({
     toast: true,
@@ -1245,30 +1744,44 @@ const toast = (
 };
 
 const cancelOrder = async (order: CustomerOrderResponse) => {
-  const { value: reason, isConfirmed } = await Swal.fire({
+  const cancelReasons = [
+    "Muốn thay đổi địa chỉ nhận hàng",
+    "Muốn thay đổi số điện thoại nhận hàng",
+    "Muốn thay đổi sản phẩm hoặc phân loại",
+    "Muốn thay đổi số lượng sản phẩm",
+    "Muốn thay đổi phương thức thanh toán",
+    "Quên áp dụng mã giảm giá",
+    "Đặt nhầm sản phẩm",
+    "Không còn nhu cầu mua nữa",
+    "Tìm thấy sản phẩm phù hợp hơn",
+    "Khác",
+  ];
+
+  const { value: reason, isConfirmed } = await Swal.fire<string>({
     title: "Hủy đơn hàng?",
     html: `
-      <div style="text-align: left;">
-        <label style="font-weight: 600; color: #1e293b; margin-bottom: 8px; display: block;">Vui lòng chọn lý do bạn muốn hủy đơn hàng này:</label>
-        <div id="swal-cancel-reasons" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px;">
-          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; color: #334155;">
-            <input type="radio" name="swal-cancel-reason" value="Thay đổi thông tin" style="accent-color: #bd9a5f;" checked> Tôi muốn cập nhật địa chỉ / SĐT nhận hàng
-          </label>
-          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; color: #334155;">
-            <input type="radio" name="swal-cancel-reason" value="Thay đổi sản phẩm" style="accent-color: #bd9a5f;"> Tôi muốn đổi phân loại hoặc số lượng
-          </label>
-          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; color: #334155;">
-            <input type="radio" name="swal-cancel-reason" value="Thay đổi thanh toán" style="accent-color: #bd9a5f;"> Tôi muốn đổi phương thức thanh toán
-          </label>
-          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; color: #334155;">
-            <input type="radio" name="swal-cancel-reason" value="Đổi ý" style="accent-color: #bd9a5f;"> Tôi không còn nhu cầu mua nữa
-          </label>
-          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; color: #334155;">
-            <input type="radio" name="swal-cancel-reason" value="Giao hàng lâu" style="accent-color: #bd9a5f;"> Thời gian chuẩn bị/giao hàng quá lâu
-          </label>
-          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; color: #334155;">
-            <input type="radio" name="swal-cancel-reason" value="Khác" style="accent-color: #bd9a5f;"> Lý do khác
-          </label>
+      <div class="cancel-order-modal">
+        <div class="cancel-order-desc">
+          Vui lòng chọn lý do bạn muốn hủy đơn hàng này:
+        </div>
+
+        <div class="cancel-reason-grid">
+          ${cancelReasons
+            .map(
+              (item, index) => `
+                <label class="cancel-reason-card" for="cancel-reason-${index}">
+                  <input
+                    id="cancel-reason-${index}"
+                    type="radio"
+                    name="cancelReason"
+                    value="${item}"
+                  />
+                  <span class="cancel-radio-dot"></span>
+                  <span class="cancel-reason-text">${item}</span>
+                </label>
+              `,
+            )
+            .join("")}
         </div>
       </div>
     `,
@@ -1277,30 +1790,33 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
     cancelButtonText: "Quay lại",
     reverseButtons: true,
     focusConfirm: false,
+    width: 680,
     preConfirm: () => {
-      const selectedRadio = document.querySelector(
-        'input[name="swal-cancel-reason"]:checked',
-      ) as HTMLInputElement;
+      const checkedReason = Swal.getPopup()?.querySelector<HTMLInputElement>(
+        'input[name="cancelReason"]:checked',
+      );
 
-      if (!selectedRadio) {
+      if (!checkedReason?.value) {
         Swal.showValidationMessage("Vui lòng chọn một lý do để tiếp tục!");
         return false;
       }
 
-      return selectedRadio.value;
+      return checkedReason.value;
     },
     customClass: {
-      popup: "swal-custom-popup",
+      popup: "swal-custom-popup cancel-order-swal",
       title: "swal-custom-title",
       cancelButton: "swal-custom-cancel",
       confirmButton: "swal-custom-confirm",
     },
   });
 
-  if (isConfirmed && reason) {
+  if (isConfirmed) {
     try {
       store.orderLoading = true;
-      await api.patch(`/customer/orders/${order.orderId}/cancel`);
+      await api.patch(`/customer/orders/${order.orderId}/cancel`, {
+        cancelReason: reason,
+      });
       await fetchOrdersAndReviews();
       toast("success", "Đã hủy đơn hàng thành công!");
     } catch (error) {
@@ -1311,169 +1827,86 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
   }
 };
 
-const requestReturn = async (order: CustomerOrderResponse) => {
-  const { isConfirmed, value } = await Swal.fire({
-    title: "Yêu cầu hoàn trả?",
-    html: `
-      <div style="text-align: left;">
-        <label style="font-weight: 600; color: #1e293b; margin-bottom: 8px; display: block;">Vui lòng chọn lý do hoàn trả đơn hàng:</label>
-        <div id="swal-return-reasons" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-            <input type="radio" name="swal-reason" value="Thiếu hàng" style="accent-color: #bd9a5f;"> Thiếu sản phẩm, phụ kiện, quà tặng
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-            <input type="radio" name="swal-reason" value="Bể vỡ" style="accent-color: #bd9a5f;"> Sản phẩm bị bể vỡ, tràn đổ do vận chuyển
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-            <input type="radio" name="swal-reason" value="Sai hàng" style="accent-color: #bd9a5f;"> Giao sai sản phẩm (sai mẫu mã, dung tích...)
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-            <input type="radio" name="swal-reason" value="Hàng lỗi" style="accent-color: #bd9a5f;"> Sản phẩm bị lỗi (vòi xịt hỏng, mùi lạ...)
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-            <input type="radio" name="swal-reason" value="Hàng giả" style="accent-color: #bd9a5f;"> Nghi ngờ sản phẩm không chính hãng
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-            <input type="radio" name="swal-reason" value="Khác" style="accent-color: #bd9a5f;"> Lý do khác
-          </label>
-        </div>
 
-        <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Đính kèm hình ảnh / video bằng chứng:</label>
-        <input type="file" id="swal-return-files" multiple accept="image/png, image/jpeg, image/jpg, image/webp, video/mp4, video/quicktime, video/webm" class="form-control form-control-sm" style="cursor: pointer;" />
-        <small class="text-muted" style="display: block; margin-top: 4px;">Chỉ chấp nhận file ảnh hoặc video liên quan đến vấn đề sản phẩm.</small>
-      </div>
-    `,
-    didOpen: () => {
-      const fileInput = document.getElementById(
-        "swal-return-files",
-      ) as HTMLInputElement;
-      if (fileInput) {
-        fileInput.addEventListener("change", (e) => {
-          const target = e.target as HTMLInputElement;
-          if (target.files && target.files.length > 0) {
-            const files = Array.from(target.files) as File[];
-            for (const file of files) {
-              const isImage = file.type.startsWith("image/");
-              const isVideo = file.type.startsWith("video/");
+const getDefaultReturnEmail = () => {
+  try {
+    const currentUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
 
-              if (!isImage && !isVideo) {
-                Swal.showValidationMessage(
-                  `File "${file.name}" không hợp lệ! Vui lòng chỉ chọn ảnh hoặc video.`,
-                );
-                target.value = "";
-                return;
-              }
-            }
-            Swal.resetValidationMessage();
-          }
-        });
-      }
-    },
-    showCancelButton: true,
-    confirmButtonColor: "#dc2626",
-    cancelButtonColor: "#f8fafc",
-    confirmButtonText: "Gửi yêu cầu",
-    cancelButtonText: "Quay lại",
-    reverseButtons: true,
-    focusConfirm: false,
-    preConfirm: () => {
-      const selectedRadio = document.querySelector(
-        'input[name="swal-reason"]:checked',
-      ) as HTMLInputElement;
-      const fileInput = document.getElementById(
-        "swal-return-files",
-      ) as HTMLInputElement;
+    return String(
+      currentUser.email ||
+        currentUser.Email ||
+        localStorage.getItem("email") ||
+        ""
+    ).trim();
+  } catch {
+    return String(localStorage.getItem("email") || "").trim();
+  }
+};
 
-      if (!selectedRadio) {
-        Swal.showValidationMessage("Vui lòng chọn một lý do hoàn trả!");
-        return false;
-      }
+const requestReturn = (order: CustomerOrderResponse) => {
+  selectedReturnOrder.value = order;
+  returnModalVisible.value = true;
+};
 
-      const files = fileInput?.files
-        ? (Array.from(fileInput.files) as File[])
-        : [];
+const submitReturnRequest = async (payload: ReturnRequestSubmitPayload) => {
+  try {
+    submittingReturn.value = true;
+    store.orderLoading = true;
 
-      for (const file of files) {
-        const isImage = file.type.startsWith("image/");
-        const isVideo = file.type.startsWith("video/");
+    await customerProfileService.requestReturnOrder(payload.orderId, payload);
 
-        if (!isImage && !isVideo) {
-          Swal.showValidationMessage(
-            `File "${file.name}" không hợp lệ! Hệ thống chỉ chấp nhận file ảnh hoặc video.`,
-          );
-          return false;
-        }
-      }
+    returnModalVisible.value = false;
+    selectedReturnOrder.value = null;
 
-      return {
-        reason: selectedRadio.value,
-        files: files,
-      };
-    },
-    customClass: {
-      popup: "swal-custom-popup",
-      title: "swal-custom-title",
-      cancelButton: "swal-custom-cancel",
-      confirmButton: "swal-custom-confirm",
-    },
-  });
+    await fetchOrdersAndReviews();
+    currentTab.value = 6;
 
-  if (isConfirmed && value) {
-    try {
-      store.orderLoading = true;
-
-      const formData = new FormData();
-      formData.append("reason", value.reason);
-
-      if (value.files && value.files.length > 0) {
-        value.files.forEach((file: File) => {
-          formData.append("mediaFiles", file);
-        });
-      }
-
-      await api.put(
-        `/customer/orders/${order.orderId}/request-return`,
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        },
-      );
-
-      await fetchOrdersAndReviews();
-      toast("success", "Đã gửi yêu cầu hoàn hàng thành công!");
-    } catch (error) {
-      showError(error, "Không thể gửi yêu cầu hoàn hàng lúc này.");
-    } finally {
-      store.orderLoading = false;
-    }
+    toast("success", "Đã gửi yêu cầu hoàn hàng thành công!");
+  } catch (error) {
+    showError(error, "Không thể gửi yêu cầu hoàn hàng lúc này.");
+  } finally {
+    submittingReturn.value = false;
+    store.orderLoading = false;
   }
 };
 
 const cancelReturnRequest = async (order: CustomerOrderResponse) => {
   const result = await Swal.fire({
     title: "Rút lại yêu cầu?",
-    text: "Bạn có chắc chắn muốn hủy yêu cầu hoàn hàng/đổi trả này không? Đơn hàng sẽ trở về trạng thái Hoàn thành.",
-    icon: "question",
+    html: `
+      <div class="return-cancel-modal">
+        <div class="return-cancel-alert">
+          <div class="return-cancel-icon">
+            <i class="bi bi-arrow-counterclockwise"></i>
+          </div>
+
+          <div class="return-cancel-content">
+            <div class="return-cancel-title">Xác nhận rút lại yêu cầu hoàn hàng</div>
+            <div class="return-cancel-desc">
+              Đơn hàng sẽ trở về trạng thái <strong>Hoàn thành</strong>.
+              Sau khi rút lại, bạn cần gửi yêu cầu mới nếu muốn hoàn hàng/đổi trả tiếp.
+            </div>
+          </div>
+        </div>
+      </div>
+    `,
     showCancelButton: true,
-    confirmButtonColor: "#bd9a5f",
-    cancelButtonColor: "#f8fafc",
-    confirmButtonText: "Đồng ý",
+    confirmButtonText: "Đồng ý rút lại",
     cancelButtonText: "Quay lại",
     reverseButtons: true,
+    focusCancel: true,
     customClass: {
-      popup: "swal-custom-popup",
+      popup: "swal-custom-popup return-cancel-swal",
       title: "swal-custom-title",
       cancelButton: "swal-custom-cancel",
-      confirmButton: "swal-custom-confirm",
+      confirmButton: "swal-gold-confirm",
     },
   });
 
   if (result.isConfirmed) {
     try {
       store.orderLoading = true;
-      await api.put(`/customer/orders/${order.orderId}/cancel-return`);
+      await customerProfileService.cancelReturnRequest(order.orderId);
       await fetchOrdersAndReviews();
       toast("success", "Đã hủy yêu cầu hoàn trả thành công!");
     } catch (error) {
@@ -1498,59 +1931,10 @@ const repayVnpayOrder = async (order: CustomerOrderResponse) => {
   } catch (error) {
     showError(
       error,
-      "Không thể tạo lại phiên thanh toán lúc này. Vui lòng thử lại sau.",
+      "Không thể tạo lại phiên thanh toán lúc này. Vui lòng thử lại sau."
     );
   } finally {
     store.orderLoading = false;
-  }
-};
-
-const repayVietQrOrder = async (order: CustomerOrderResponse) => {
-  const amount = order.finalAmount;
-  const orderIdStr = (order as any).orderCode || order.orderId;
-  const qrUrl = `https://img.vietqr.io/image/970422-0123456789-compact2.png?amount=${amount}&addInfo=Thanh toan don ${orderIdStr}&accountName=SHOP DOMINUS`;
-
-  const result = await Swal.fire({
-    title: "Thanh toán VietQR",
-    html: `
-      <div class="text-center">
-        <p class="text-muted small mb-3">Quét mã QR dưới đây bằng ứng dụng ngân hàng để thanh toán cho đơn hàng <b>${orderIdStr}</b>.</p>
-        <img src="${qrUrl}" alt="Mã VietQR" class="img-fluid rounded mb-3" style="border: 2px dashed #bd9a5f; padding: 8px; max-width: 250px;" />
-        <div class="alert alert-warning py-2 px-3 mb-0 w-100 text-start" style="font-size: 0.85rem;">
-          <i class="bi bi-info-circle me-1"></i> Sau khi chuyển khoản thành công, shop sẽ kiểm tra và xác nhận đơn hàng của bạn.
-        </div>
-      </div>
-    `,
-    showConfirmButton: true,
-    confirmButtonText: "Đã chuyển khoản",
-    confirmButtonColor: "#10b981",
-    showCancelButton: true,
-    cancelButtonText: "Đóng",
-    customClass: {
-      popup: "swal-custom-popup",
-      title: "swal-custom-title",
-      cancelButton: "swal-custom-cancel",
-      confirmButton: "swal-custom-confirm",
-    },
-  });
-
-  if (result.isConfirmed) {
-    // Ép giao diện update tức thì
-    markAsPaid(order.orderId);
-    (order as any).isPaymentReported = true;
-
-    Swal.fire({
-      icon: "success",
-      title: "Đã ghi nhận thanh toán",
-      text: "Hệ thống đang chờ đối soát giao dịch từ ngân hàng. Đơn hàng sẽ được xác nhận trong ít phút nữa.",
-      confirmButtonColor: "#10b981",
-    });
-
-    try {
-      await api.post(`/v1/orders/${order.orderId}/report-payment`);
-    } catch (error) {
-      console.error("Lỗi đồng bộ báo cáo thanh toán:", error);
-    }
   }
 };
 
@@ -1744,9 +2128,7 @@ const getItemImage = (item: any) => {
   border-radius: 14px;
   overflow: hidden;
   background: #ffffff;
-  transition:
-    border-color 0.25s ease,
-    box-shadow 0.25s ease,
+  transition: border-color 0.25s ease, box-shadow 0.25s ease,
     transform 0.25s ease;
 }
 
@@ -1763,9 +2145,7 @@ const getItemImage = (item: any) => {
   padding: 16px 20px;
   text-align: left;
   cursor: pointer;
-  transition:
-    background 0.25s ease,
-    color 0.25s ease;
+  transition: background 0.25s ease, color 0.25s ease;
 }
 
 .order-card.opened .order-header-button {
@@ -1859,6 +2239,7 @@ const getItemImage = (item: any) => {
   display: flex;
   gap: 12px;
   min-width: 0;
+  flex: 1;
 }
 
 .item-img {
@@ -1901,6 +2282,42 @@ const getItemImage = (item: any) => {
   color: #0f172a;
 }
 
+.order-item-side {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.item-price-box {
+  min-width: 140px;
+  text-align: right;
+  line-height: 1.25;
+}
+
+.item-original-price {
+  color: #94a3b8;
+  font-size: 13px;
+  text-decoration: line-through;
+  margin-bottom: 3px;
+}
+
+.item-final-price {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.item-line-total {
+  margin-top: 5px;
+  color: #9a6a1f;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .review-action {
   display: flex;
   align-items: center;
@@ -1908,10 +2325,141 @@ const getItemImage = (item: any) => {
   flex-shrink: 0;
 }
 
-.order-total-box {
-  max-width: 450px;
-  margin-left: auto;
+.order-summary-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 390px);
+  align-items: flex-start;
+  gap: 18px;
   margin-top: 18px;
+}
+
+.order-cancel-info,
+.order-return-info {
+  width: 100%;
+  min-width: 0;
+  min-height: 118px;
+  background: #fffaf0;
+  border: 1px solid #f3e2bd;
+  border-left: 4px solid #bd9a5f;
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.cancel-info-title,
+.return-info-title {
+  color: #9a6a1f;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.cancel-info-text,
+.return-info-line strong {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.cancel-info-time {
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.return-info-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.return-info-line span {
+  color: #64748b;
+}
+
+.return-info-description {
+  margin-top: 8px;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.return-media-section {
+  margin-top: 12px;
+}
+
+.return-media-label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.return-media-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(78px, 78px));
+  gap: 10px;
+}
+
+.return-media-button {
+  position: relative;
+  width: 78px;
+  height: 78px;
+  padding: 0;
+  border: 1px solid #f3e2bd;
+  background: #ffffff;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.return-media-button:hover {
+  transform: translateY(-1px);
+  border-color: #bd9a5f;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+}
+
+.return-media-thumb {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  background: #ffffff;
+}
+
+.return-media-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 22px;
+  background: rgba(15, 23, 42, 0.2);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.return-media-button:hover .return-media-overlay {
+  opacity: 1;
+}
+
+.order-total-box {
+  width: 100%;
+  max-width: none;
+  margin-left: 0;
+  margin-top: 0;
   background: #f8fafc;
   border-radius: 16px;
   padding: 18px;
@@ -1946,40 +2494,22 @@ const getItemImage = (item: any) => {
 }
 
 .my-review-box {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: #fffaf0;
+  border: 1px solid #f3e2bd;
   border-radius: 12px;
-  padding: 14px 16px;
-  width: 100%;
+  padding: 8px 10px;
+  max-width: 420px;
 }
 
 .review-stars {
-  font-size: 15px;
+  color: #bd9a5f;
+  font-size: 14px;
 }
 
 .review-comment {
-  color: #334155;
-  background: #ffffff;
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: 1px solid #f1f5f9;
+  color: #374151;
+  margin-top: 4px;
   font-style: italic;
-  margin-top: 8px;
-}
-
-.review-media-preview {
-  width: 68px;
-  height: 68px;
-  object-fit: cover;
-  border-radius: 6px;
-  border: 1px solid #cbd5e1;
-  cursor: pointer;
-  transition: transform 0.2s ease;
-}
-
-.review-media-preview:hover {
-  transform: scale(1.05);
-  border-color: #bd9a5f;
 }
 
 @media (max-width: 768px) {
@@ -2006,8 +2536,30 @@ const getItemImage = (item: any) => {
     flex-direction: column;
   }
 
+  .order-item-side {
+    width: 100%;
+    margin-left: 0;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .order-summary-row {
+    grid-template-columns: 1fr;
+  }
+
+  .order-cancel-info,
+  .order-return-info,
+  .order-total-box {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .item-price-box {
+    text-align: left;
+  }
+
   .review-action {
-    justify-content: flex-start;
+    justify-content: flex-end;
   }
 
   .order-total-box {
@@ -2023,14 +2575,8 @@ const getItemImage = (item: any) => {
   padding: 0 0 24px 0 !important;
   overflow: hidden !important;
   border: 1px solid #e2e8f0 !important;
-  box-shadow:
-    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
     0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
-}
-
-.swal-media-popup {
-  background: rgba(0, 0, 0, 0.9) !important;
-  border-radius: 12px !important;
 }
 
 .swal-custom-popup .swal2-title {
@@ -2085,4 +2631,424 @@ const getItemImage = (item: any) => {
   background-color: #b91c1c !important;
   box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3) !important;
 }
+
+.cancel-order-swal {
+  width: min(680px, calc(100vw - 28px)) !important;
+}
+
+.cancel-order-modal {
+  padding: 0 24px;
+}
+
+.cancel-order-desc {
+  color: #475569;
+  font-size: 15px;
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.cancel-reason-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.cancel-reason-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 54px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.cancel-reason-card:hover {
+  border-color: #bd9a5f;
+  background: #fffaf0;
+}
+
+.cancel-reason-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cancel-radio-dot {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 2px solid #cbd5e1;
+  border-radius: 50%;
+  background: #ffffff;
+  flex-shrink: 0;
+}
+
+.cancel-radio-dot::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #dc2626;
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform 0.18s ease;
+}
+
+.cancel-reason-card:has(input:checked) {
+  border-color: #dc2626;
+  background: #fff7ed;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.08);
+}
+
+.cancel-reason-card:has(input:checked) .cancel-radio-dot {
+  border-color: #dc2626;
+}
+
+.cancel-reason-card:has(input:checked) .cancel-radio-dot::after {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.cancel-reason-text {
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.cancel-order-swal .swal2-validation-message {
+  margin: 14px 24px 0 !important;
+  border-radius: 10px !important;
+  background: #fef2f2 !important;
+  color: #b91c1c !important;
+  font-size: 14px !important;
+}
+
+@media (max-width: 640px) {
+  .cancel-order-modal {
+    padding: 0 16px;
+  }
+
+  .cancel-reason-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cancel-reason-card {
+    min-height: auto;
+  }
+
+  .return-cancel-swal .swal2-html-container {
+    margin: 0 16px !important;
+  }
+
+  .return-cancel-alert {
+    padding: 14px;
+  }
+}
+
+.return-cancel-swal {
+  width: min(520px, calc(100vw - 28px)) !important;
+}
+
+.return-cancel-swal .swal2-html-container {
+  margin: 0 22px !important;
+}
+
+.return-cancel-modal {
+  padding: 0 6px;
+}
+
+.return-cancel-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  background: #fffaf0;
+  border: 1px solid #f3e2bd;
+  border-left: 4px solid #bd9a5f;
+  border-radius: 14px;
+}
+
+.return-cancel-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: #06132b;
+  color: #bd9a5f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 18px;
+}
+
+.return-cancel-content {
+  min-width: 0;
+}
+
+.return-cancel-title {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.35;
+  margin-bottom: 6px;
+}
+
+.return-cancel-desc {
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.return-cancel-desc strong {
+  color: #9a6a1f;
+  font-weight: 800;
+}
+
+.swal-gold-confirm {
+  background-color: #bd9a5f !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 12px 24px !important;
+  font-weight: 700 !important;
+  transition: all 0.2s ease !important;
+}
+
+.swal-gold-confirm:hover {
+  background-color: #9a6a1f !important;
+  box-shadow: 0 4px 12px rgba(189, 154, 95, 0.28) !important;
+}
+
+.return-preview-empty {
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  padding: 36px 16px;
+}
+
+.return-media-preview-popup {
+  width: min(700px, calc(100vw - 28px)) !important;
+  max-width: calc(100vw - 28px) !important;
+}
+
+.return-media-preview-popup .swal2-html-container {
+  margin: 0 18px !important;
+}
+
+.return-preview-modal {
+  width: 100%;
+}
+
+.return-preview-counter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.return-preview-counter strong {
+  color: #9a6a1f;
+  font-size: 14px;
+}
+
+.return-preview-stage {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.return-preview-main {
+  min-width: 0;
+  min-height: 280px;
+  max-height: 54vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.return-preview-image,
+.return-preview-video {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  max-height: 54vh;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.return-preview-nav {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #f3e2bd;
+  border-radius: 999px;
+  background: #fffaf0;
+  color: #9a6a1f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.return-preview-nav:hover {
+  background: #bd9a5f;
+  border-color: #bd9a5f;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.return-preview-thumb-title {
+  margin-top: 12px;
+  margin-bottom: 7px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.return-preview-thumb-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 2px 8px;
+  scrollbar-width: thin;
+}
+
+.return-preview-thumb-btn {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  flex: 0 0 68px;
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.return-preview-thumb-btn:hover {
+  border-color: #bd9a5f;
+  transform: translateY(-1px);
+}
+
+.return-preview-thumb-btn.active {
+  border-color: #bd9a5f;
+  box-shadow: 0 0 0 3px rgba(189, 154, 95, 0.18);
+}
+
+.return-preview-thumb-image,
+.return-preview-thumb-video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  background: #f8fafc;
+}
+
+.return-preview-thumb-badge {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  border-radius: 999px;
+  padding: 2px 5px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.return-preview-thumb-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 24px;
+  text-shadow: 0 2px 8px rgba(15, 23, 42, 0.45);
+  pointer-events: none;
+}
+
+.swal-preview-confirm {
+  background-color: #bd9a5f !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 12px 24px !important;
+  font-weight: 700 !important;
+}
+
+.swal-preview-confirm:hover {
+  background-color: #9a6a1f !important;
+}
+
+@media (max-width: 640px) {
+  .return-media-preview-popup .swal2-html-container {
+    margin: 0 14px !important;
+  }
+
+  .return-preview-stage {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .return-preview-main {
+    min-height: 240px;
+  }
+
+  .return-preview-nav {
+    width: 100%;
+    height: 38px;
+    border-radius: 10px;
+  }
+
+  .return-preview-nav.is-prev {
+    order: 2;
+  }
+
+  .return-preview-main {
+    order: 1;
+  }
+
+  .return-preview-nav.is-next {
+    order: 3;
+  }
+}
+
 </style>
+

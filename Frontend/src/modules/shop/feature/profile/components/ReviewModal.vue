@@ -22,7 +22,9 @@
               <img :src="item.image || fallbackImage" class="mini-img" alt="Product" />
               <div class="mini-details">
                 <div class="mini-name">{{ item.productName }}</div>
-                <!-- ĐÃ BỎ PHẦN LOẠI Ở ĐÂY -->
+                <div v-if="getVariantText(item)" class="mini-variant">
+                  {{ getVariantText(item) }}
+                </div>
               </div>
             </div>
 
@@ -138,6 +140,47 @@ watch(() => props.modelValue, (newVal) => {
 const getRatingText = (val: number) => {
   const texts = ['Tệ', 'Không hài lòng', 'Bình thường', 'Hài lòng', 'Tuyệt vời'];
   return texts[val - 1] || '';
+};
+
+const normalizeTextValue = (value: unknown) => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  return String(value).trim();
+};
+
+const getCapacityText = (reviewItem: any) => {
+  const raw =
+    reviewItem?.capacityLabel ??
+    reviewItem?.capacityName ??
+    reviewItem?.capacityText ??
+    reviewItem?.capacity ??
+    reviewItem?.capacityValue ??
+    reviewItem?.volume ??
+    reviewItem?.volumeValue ??
+    null;
+
+  const text = normalizeTextValue(raw);
+
+  if (text) {
+    return text.toLowerCase().includes('ml') ? text : `${text}ml`;
+  }
+
+  const sku = normalizeTextValue(reviewItem?.sku);
+  const match = sku.match(/-(\d+(?:\.\d+)?)-/);
+
+  if (match?.[1]) {
+    return `${match[1]}ml`;
+  }
+
+  return '';
+};
+
+const getVariantText = (reviewItem: any) => {
+  const capacityText = getCapacityText(reviewItem);
+
+  return capacityText ? `Dung tích: ${capacityText}` : '';
 };
 
 // Cập nhật điều kiện độ dài comment <= 100
@@ -286,6 +329,13 @@ const handleSubmit = () => {
 .mini-name {
   font-weight: 600;
   font-size: 14px;
+}
+
+.mini-variant {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .star-icon {

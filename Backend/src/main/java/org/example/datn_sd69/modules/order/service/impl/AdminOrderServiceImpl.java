@@ -164,11 +164,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         // BỔ SUNG TRƯỜNG NÀY ĐỂ TRẢ VỀ CHO VUE
         response.setIsPaymentReported(order.getIsPaymentReported() != null && order.getIsPaymentReported());
 
-        // --- MAP THÔNG TIN HOÀN HÀNG CHO ADMIN ---
-        response.setReturnReason(order.getReturnReason());
-        response.setReturnImages(parseMediaString(order.getReturnImages()));
-        response.setReturnVideos(parseMediaString(order.getReturnVideos()));
-
         if (includeItems) {
             var items = orderItemRepository.findDetailByOrderId(order.getId());
 

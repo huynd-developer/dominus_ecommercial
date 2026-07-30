@@ -6,6 +6,7 @@ import type {
   CustomerOrderResponse,
   CustomerProfileResponse,
   FavoriteResponse,
+  ReturnRequestSubmitPayload,
   ReviewResponse,
   ReviewableOrderItemResponse,
   UpdateCustomerProfileRequest,
@@ -46,9 +47,7 @@ export const customerProfileService = {
   },
 
   deleteFavorite(favoriteId: number) {
-    return api.delete<{ message: string }>(
-      `/customer/favorites/${favoriteId}`
-    );
+    return api.delete<{ message: string }>(`/customer/favorites/${favoriteId}`);
   },
 
   deleteFavoriteByVariant(productVariantId: number) {
@@ -78,8 +77,47 @@ export const customerProfileService = {
    * PATCH /api/customer/orders/{orderId}/cancel
    */
   cancelOrder(orderId: number) {
-    return api.patch<{ message: string }>(
-      `/customer/orders/${orderId}/cancel`
+    return api.patch<{ message: string }>(`/customer/orders/${orderId}/cancel`);
+  },
+
+  /**
+   * BE:
+   * PUT /api/customer/orders/{orderId}/request-return
+   */
+  requestReturnOrder(orderId: number, data: ReturnRequestSubmitPayload) {
+    const formData = new FormData();
+
+    formData.append("returnType", data.returnType);
+    formData.append("reason", data.reason);
+    formData.append("description", data.description || "");
+    formData.append("email", data.email || "");
+    formData.append("refundMethod", data.refundMethod);
+
+    if (data.refundMethod === "BANK_TRANSFER") {
+      formData.append("bankName", data.bankName || "");
+      formData.append("bankAccountNumber", data.bankAccountNumber || "");
+      formData.append("bankAccountHolder", data.bankAccountHolder || "");
+    }
+
+    formData.append("returnItems", JSON.stringify(data.returnItems || []));
+
+    data.files.forEach((file) => {
+      formData.append("mediaFiles", file);
+    });
+
+    return api.put<{ message: string }>(
+      `/customer/orders/${orderId}/request-return`,
+      formData
+    );
+  },
+
+  /**
+   * BE:
+   * PUT /api/customer/orders/{orderId}/cancel-return
+   */
+  cancelReturnRequest(orderId: number) {
+    return api.put<{ message: string }>(
+      `/customer/orders/${orderId}/cancel-return`
     );
   },
 
@@ -89,7 +127,7 @@ export const customerProfileService = {
     );
   },
 
-  createReview(data: CreateReviewRequest) {
+  createReview(data: CreateReviewRequest | FormData) {
     return api.post<ReviewResponse>("/customer/reviews", data);
   },
 

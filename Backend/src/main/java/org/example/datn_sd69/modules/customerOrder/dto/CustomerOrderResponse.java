@@ -26,6 +26,15 @@ public record CustomerOrderResponse(
 
         LocalDateTime createdAt,
 
+        String cancelReason,
+        LocalDateTime cancelledAt,
+
+        String returnReason,
+        String returnDescription,
+        LocalDateTime returnRequestedAt,
+        BigDecimal returnRefundAmount,
+        List<String> returnMediaUrls,
+
         List<CustomerOrderItemResponse> items
 ) {
 }

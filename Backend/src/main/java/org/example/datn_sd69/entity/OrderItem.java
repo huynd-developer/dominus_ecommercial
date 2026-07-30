@@ -1,4 +1,5 @@
 package org.example.datn_sd69.entity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -16,30 +17,52 @@ import java.math.BigDecimal;
 
 @Entity
 @Table(name = "OrderItem")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class OrderItem extends BaseEntity {
-    @ManyToOne(fetch = FetchType.LAZY)
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "OrderId", nullable = false)
     private Order order;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(
-            name = "ProductVariantId",
-            nullable = false
-    )
+    /**
+     * DB đang để ProductVariantId NULL ON DELETE SET NULL.
+     * Vì vậy entity không được nullable = false.
+     * Khi sản phẩm/biến thể bị xóa, đơn hàng cũ vẫn còn snapshot bên dưới:
+     * productName, sku, capacityName, bottleTypeName, image, giá...
+     */
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "ProductVariantId", nullable = true)
     private ProductVariant productVariant;
 
     @Column(name = "Quantity", nullable = false)
     private Integer quantity;
 
-    @Column(name = "OriginalPrice", nullable = false)
-    private BigDecimal originalPrice;
+    /**
+     * Giá gốc của 1 sản phẩm tại thời điểm mua.
+     * Không nhân quantity.
+     */
+    @Column(name = "OriginalPrice", nullable = false, precision = 18, scale = 2)
+    private BigDecimal originalPrice = BigDecimal.ZERO;
 
-    @Column(name = "DiscountAmount")
+    /**
+     * Số tiền giảm Flash Sale của 1 sản phẩm.
+     * Không chứa voucher toàn đơn.
+     */
+    @Column(name = "DiscountAmount", nullable = false, precision = 18, scale = 2)
     private BigDecimal discountAmount = BigDecimal.ZERO;
 
-    @Column(name = "FinalPrice", nullable = false)
-    private BigDecimal finalPrice;
+    /**
+     * Giá sau giảm của 1 sản phẩm.
+     * Công thức đúng:
+     * FinalPrice = OriginalPrice - DiscountAmount
+     *
+     * Tổng dòng = FinalPrice * Quantity
+     */
+    @Column(name = "FinalPrice", nullable = false, precision = 18, scale = 2)
+    private BigDecimal finalPrice = BigDecimal.ZERO;
 
     @Nationalized
     @Column(name = "Note", length = 255)
@@ -48,15 +71,22 @@ public class OrderItem extends BaseEntity {
     @Column(name = "Image", length = 500)
     private String image;
 
-    @Column(name = "ProductName")
+    /**
+     * Snapshot thông tin sản phẩm tại thời điểm mua.
+     * Dùng để đơn hàng cũ vẫn hiển thị được dù ProductVariant bị xóa/sửa.
+     */
+    @Nationalized
+    @Column(name = "ProductName", length = 255)
     private String productName;
 
     @Column(name = "Sku", length = 100)
     private String sku;
 
+    @Nationalized
     @Column(name = "CapacityName", length = 50)
     private String capacityName;
 
-    @Column(name = "BottleTypeName")
+    @Nationalized
+    @Column(name = "BottleTypeName", length = 255)
     private String bottleTypeName;
 }
