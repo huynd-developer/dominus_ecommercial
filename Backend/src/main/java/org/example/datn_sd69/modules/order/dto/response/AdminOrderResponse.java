@@ -60,6 +60,8 @@ public class AdminOrderResponse {
 
     private Integer totalQuantity;
 
+    private Boolean isPaymentReported;
+
     // --- BỔ SUNG CÁC TRƯỜNG DỮ LIỆU HOÀN HÀNG ---
     private String returnReason;
     private List<String> returnImages = new ArrayList<>();

@@ -22,7 +22,7 @@
               <img :src="item.image || fallbackImage" class="mini-img" alt="Product" />
               <div class="mini-details">
                 <div class="mini-name">{{ item.productName }}</div>
-                <div class="mini-variant text-muted small">Phân loại: {{ item.capacity || 'Đang cập nhật' }}</div>
+                <!-- ĐÃ BỎ PHẦN LOẠI Ở ĐÂY -->
               </div>
             </div>
 
@@ -50,8 +50,13 @@
                 v-model="comment"
                 class="form-control review-textarea"
                 rows="4"
-                placeholder="Hãy chia sẻ nhận xét của bạn về sản phẩm này nhé (tối thiểu 10 ký tự)..."
+                maxlength="100"
+                placeholder="Hãy chia sẻ nhận xét của bạn về sản phẩm này nhé (tối đa 100 ký tự)..."
               ></textarea>
+              <!-- BỘ ĐẾM KÝ TỰ -->
+              <div class="text-end small mt-1 text-muted">
+                {{ comment.length }}/100
+              </div>
             </div>
 
             <!-- Upload Ảnh/Video -->
@@ -135,8 +140,9 @@ const getRatingText = (val: number) => {
   return texts[val - 1] || '';
 };
 
+// Cập nhật điều kiện độ dài comment <= 100
 const isValid = computed(() => {
-  return rating.value > 0;
+  return rating.value > 0 && comment.value.length <= 200;
 });
 
 const closeModal = () => {
@@ -155,10 +161,20 @@ const handleFileSelect = (event: Event) => {
 
   const MAX_SIZE = 5 * 1024 * 1024; // 5MB
   let hasOversizedFile = false;
+  let hasInvalidTypeFile = false;
 
   Array.from(files).forEach((file) => {
     // Chặn quá 5 file
     if (selectedFiles.value.length >= 5) return;
+
+    // CHECK ĐỊNH DẠNG: Chỉ nhận hình ảnh hoặc video
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    
+    if (!isImage && !isVideo) {
+      hasInvalidTypeFile = true;
+      return; // Bỏ qua file sai định dạng
+    }
 
     // Chặn file > 5MB
     if (file.size > MAX_SIZE) {
@@ -168,12 +184,22 @@ const handleFileSelect = (event: Event) => {
 
     selectedFiles.value.push(file);
     previewUrls.value.push({
-      type: file.type.startsWith('video/') ? 'video' : 'image',
+      type: isVideo ? 'video' : 'image',
       url: URL.createObjectURL(file)
     });
   });
 
-  if (hasOversizedFile) {
+  // Cảnh báo nếu có file sai định dạng
+  if (hasInvalidTypeFile) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Định dạng không hợp lệ',
+      text: 'Hệ thống chỉ cho phép tải lên tệp tin hình ảnh hoặc video.',
+      confirmButtonColor: '#bd9a5f'
+    });
+  } 
+  // Cảnh báo dung lượng
+  else if (hasOversizedFile) {
     Swal.fire({
       icon: 'warning',
       title: 'File quá lớn',
@@ -376,6 +402,6 @@ const handleSubmit = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 99999; /* Tăng hẳn lên nóc nhà */
+  z-index: 99999;
 }
 </style>

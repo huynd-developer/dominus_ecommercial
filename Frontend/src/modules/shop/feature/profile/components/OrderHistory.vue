@@ -111,7 +111,7 @@
 
               <div class="order-header-right">
                 <span :class="['badge', getStatusClass(order.status)]">
-                  {{ order.statusText || getStatusText(order.status) }}
+                  {{ getStatusText(order.status, order) }}
                 </span>
 
                 <div class="fw-bold mt-1 order-header-total">
@@ -169,7 +169,7 @@
                   </div>
                 </div>
 
-                <!-- BẮT ĐẦU KHỐI THEO DÕI ĐƠN HÀNG (FAKE TRACKING) -->
+                <!-- BẮT ĐẦU KHỐI THEO DÕI ĐƠN HÀNG -->
                 <div class="tracking-container mt-2 mb-4">
                   <h6 class="fw-bold mb-3">
                     <i class="bi bi-truck me-2"></i>Theo dõi kiện hàng
@@ -272,53 +272,71 @@
                           </span>
                         </div>
 
+                        <!-- KHỐI HIỂN THỊ ĐÁNH GIÁ -->
                         <div
-                          v-if="getMyReviewByOrderItemId(item.orderItemId)"
-                          class="my-review-box mt-2"
+                          v-if="reviewMap.has(item.orderItemId)"
+                          class="my-review-box mt-3 w-100"
                         >
-                          <div class="review-stars">
-                            <i
-                              v-for="star in 5"
-                              :key="star"
-                              class="bi"
-                              :class="
-                                star <=
-                                (getMyReviewByOrderItemId(item.orderItemId)
-                                  ?.rating || 0)
-                                  ? 'bi-star-fill'
-                                  : 'bi-star'
-                              "
-                            ></i>
-
-                            <span class="ms-2 small text-muted">
+                          <div
+                            class="d-flex justify-content-between align-items-center mb-2"
+                          >
+                            <div class="review-stars">
+                              <i
+                                v-for="star in 5"
+                                :key="star"
+                                class="bi"
+                                :class="
+                                  star <= (reviewMap.get(item.orderItemId)?.rating || 0)
+                                    ? 'bi-star-fill text-warning'
+                                    : 'bi-star text-muted'
+                                "
+                              ></i>
+                              <span class="ms-2 fw-bold text-dark"
+                                >{{ reviewMap.get(item.orderItemId)?.rating }}/5</span
+                              >
+                            </div>
+                            <div
+                              class="small text-muted"
+                              style="font-size: 12px"
+                            >
                               {{
-                                getMyReviewByOrderItemId(item.orderItemId)
-                                  ?.rating
-                              }}/5
-                            </span>
+                                formatDate(
+                                  reviewMap.get(item.orderItemId)?.createdAt
+                                )
+                              }}
+                            </div>
                           </div>
 
                           <div
-                            v-if="
-                              getMyReviewByOrderItemId(item.orderItemId)
-                                ?.comment
-                            "
-                            class="small review-comment"
+                            v-if="reviewMap.get(item.orderItemId)?.comment"
+                            class="review-comment small"
                           >
-                            "{{
-                              getMyReviewByOrderItemId(item.orderItemId)
-                                ?.comment
-                            }}"
+                            "{{ reviewMap.get(item.orderItemId)?.comment }}"
                           </div>
 
-                          <div class="small text-muted mt-1">
-                            Đã đánh giá:
-                            {{
-                              formatDate(
-                                getMyReviewByOrderItemId(item.orderItemId)
-                                  ?.createdAt,
-                              )
-                            }}
+                          <div
+                            v-if="getReviewMedia(item.orderItemId).length > 0"
+                            class="d-flex gap-2 mt-2 flex-wrap"
+                          >
+                            <template
+                              v-for="(url, idx) in getReviewMedia(item.orderItemId)"
+                              :key="idx"
+                            >
+                              <video
+                                v-if="String(url).match(/\.(mp4|webm|mov)/i)"
+                                :src="String(url)"
+                                class="review-media-preview"
+                                controls
+                                @click="openMediaPreview(String(url))"
+                              ></video>
+                              <img
+                                v-else
+                                :src="String(url)"
+                                class="review-media-preview"
+                                alt="Ảnh đánh giá"
+                                @click="openMediaPreview(String(url))"
+                              />
+                            </template>
                           </div>
                         </div>
 
@@ -391,7 +409,7 @@
                     <strong>{{ formatMoney(order.totalAmount) }}</strong>
                   </div>
 
-                  <div>
+                  <div v-if="order.discountAmount > 0">
                     <span>Giảm giá:</span>
                     <strong class="text-danger">
                       -{{ formatMoney(order.discountAmount) }}
@@ -407,7 +425,7 @@
                 </div>
 
                 <!-- KHỐI CÁC NÚT THAO TÁC -->
-                <div class="text-end mt-3 d-flex justify-content-end gap-2">
+                <div class="text-end mt-3 d-flex justify-content-end align-items-center gap-2 flex-wrap">
                   <button
                     v-if="order.status === 3"
                     type="button"
@@ -418,16 +436,63 @@
                     Cập nhật đánh giá
                   </button>
 
-                  <button
-                    v-if="order.status === 0 && order.paymentMethod === 'VNPAY'"
-                    class="btn btn-sm text-white"
-                    style="background-color: #10b981; border-color: #10b981"
-                    :disabled="store.orderLoading"
-                    @click="repayVnpayOrder(order)"
-                  >
-                    <i class="bi bi-credit-card me-1"></i> Thanh toán VNPay ngay
-                  </button>
+                  <!-- 1. THANH TOÁN VNPAY -->
+                  <template v-if="order.status === 0 && (order.paymentMethod || '').toUpperCase().includes('VNPAY')">
+                    <!-- ĐỌC TRỰC TIẾP TỪ OBJECT MAP REACTIVE -->
+                    <div
+                      v-if="paidOrdersMap[String(order.orderId)] || (order as any).isPaymentReported"
+                      class="d-flex align-items-center me-auto text-success fw-bold"
+                      style="font-size: 14px"
+                    >
+                      <i class="bi bi-check-circle-fill me-1"></i> Đang chờ shop đối soát...
+                    </div>
+                    <template v-else-if="getRemainingSeconds(order.createdAt) > 0">
+                      <div class="d-flex align-items-center me-3 text-danger fw-bold" style="font-size: 14px">
+                        <i class="bi bi-clock-history me-1"></i> Hủy sau: {{ formatCountdown(getRemainingSeconds(order.createdAt)) }}
+                      </div>
+                      <button
+                        class="btn btn-sm text-white"
+                        style="background-color: #10b981; border-color: #10b981"
+                        :disabled="store.orderLoading"
+                        @click="repayVnpayOrder(order)"
+                      >
+                        <i class="bi bi-credit-card me-1"></i> Thanh toán VNPay ngay
+                      </button>
+                    </template>
+                    <div v-else class="d-flex align-items-center me-3 text-muted fw-bold" style="font-size: 14px">
+                      <i class="bi bi-clock-history me-1"></i> Đã quá hạn thanh toán
+                    </div>
+                  </template>
 
+                  <!-- 2. THANH TOÁN VIETQR -->
+                  <template v-if="order.status === 0 && (order.paymentMethod || '').toUpperCase().includes('VIETQR')">
+                    <!-- ĐỌC TRỰC TIẾP TỪ OBJECT MAP REACTIVE -->
+                    <div
+                      v-if="paidOrdersMap[String(order.orderId)] || (order as any).isPaymentReported"
+                      class="d-flex align-items-center me-auto text-success fw-bold"
+                      style="font-size: 14px"
+                    >
+                      <i class="bi bi-check-circle-fill me-1"></i> Đang chờ shop đối soát...
+                    </div>
+                    <template v-else-if="getRemainingSeconds(order.createdAt) > 0">
+                      <div class="d-flex align-items-center me-3 text-danger fw-bold" style="font-size: 14px">
+                        <i class="bi bi-clock-history me-1"></i> Hủy sau: {{ formatCountdown(getRemainingSeconds(order.createdAt)) }}
+                      </div>
+                      <button
+                        class="btn btn-sm text-white"
+                        style="background-color: #0ea5e9; border-color: #0ea5e9"
+                        :disabled="store.orderLoading"
+                        @click="repayVietQrOrder(order)"
+                      >
+                        <i class="bi bi-qr-code-scan me-1"></i> Quét mã VietQR ngay
+                      </button>
+                    </template>
+                    <div v-else class="d-flex align-items-center me-3 text-muted fw-bold" style="font-size: 14px">
+                      <i class="bi bi-clock-history me-1"></i> Đã quá hạn thanh toán
+                    </div>
+                  </template>
+
+                  <!-- CÁC NÚT CHUNG KHÁC -->
                   <button
                     v-if="order.canCancel"
                     class="btn btn-outline-danger btn-sm"
@@ -437,7 +502,6 @@
                     Hủy đơn
                   </button>
 
-                  <!-- NÚT MUA LẠI -->
                   <button
                     v-if="order.status === 4 || order.status === 3"
                     class="btn btn-primary btn-sm px-3 text-white"
@@ -457,7 +521,6 @@
                     Yêu cầu hoàn hàng
                   </button>
 
-                  <!-- NÚT HỦY YÊU CẦU HOÀN HÀNG -->
                   <button
                     v-if="order.status === 6"
                     type="button"
@@ -467,17 +530,6 @@
                   >
                     Hủy yêu cầu hoàn hàng
                   </button>
-
-                  <span
-                    v-if="
-                      !order.canCancel &&
-                      order.status !== 3 &&
-                      order.status !== 4
-                    "
-                    class="text-muted small align-self-center"
-                  >
-                    Đơn hàng không còn được hủy
-                  </span>
                 </div>
               </div>
             </div>
@@ -496,7 +548,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, ref, reactive, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import ReviewModal from "./ReviewModal.vue";
@@ -513,6 +565,8 @@ const store = useCustomerProfileStore();
 const router = useRouter();
 
 const currentTab = ref<number | "ALL">("ALL");
+const currentTime = ref(Date.now());
+let countdownTimer: any = null;
 
 const reviewLoading = ref(false);
 const submittingReview = ref(false);
@@ -521,9 +575,41 @@ const selectedReviewItem = ref<ReviewableOrderItemResponse | null>(null);
 const myReviews = ref<ReviewResponse[]>([]);
 const openedOrderId = ref<number | null>(null);
 
-const reviewableMap = reactive<Record<number, ReviewableOrderItemResponse[]>>(
-  {},
-);
+// ==== GIẢI PHÁP TỐI THƯỢNG: REF MAP CỨNG REACTIVITY ====
+// 1. Dùng Record map string -> boolean để Vue bắt dính sự thay đổi
+const paidOrdersMap = ref<Record<string, boolean>>({});
+
+// 2. Load dữ liệu lúc khởi tạo
+const initPaidOrders = () => {
+  try {
+    const saved = localStorage.getItem('dominus_paid_orders');
+    if (saved) {
+      paidOrdersMap.value = JSON.parse(saved);
+    }
+  } catch (e) {}
+};
+
+// 3. Hàm đánh dấu và ép Vue render lại
+const markAsPaid = (orderId: number | string) => {
+  const idStr = String(orderId);
+  paidOrdersMap.value[idStr] = true;
+  // Trick phá vỡ object ép Vue nhận diện reactivity tức thì:
+  paidOrdersMap.value = { ...paidOrdersMap.value }; 
+  localStorage.setItem('dominus_paid_orders', JSON.stringify(paidOrdersMap.value));
+};
+// ========================================================
+
+const reviewMap = computed(() => {
+  const map = new Map<number, ReviewResponse>();
+  myReviews.value.forEach((review) => {
+    if (review.orderItemId) {
+      map.set(review.orderItemId, review);
+    }
+  });
+  return map;
+});
+
+const reviewableMap = reactive<Record<number, ReviewableOrderItemResponse[]>>({});
 const reviewLoadingByOrder = reactive<Record<number, boolean>>({});
 
 const generateOrderCode = (id: number | string | null | undefined) => {
@@ -540,21 +626,38 @@ const filteredOrders = computed(() => {
   );
 });
 
-const completedOrders = computed(() => {
-  return store.orders.filter(
-    (order: CustomerOrderResponse) => order.status === 3,
-  );
-});
+const getRemainingSeconds = (createdAt: string | Date) => {
+  const createTime = new Date(createdAt).getTime();
+  const expireTime = createTime + 15 * 60 * 1000;
+  const diff = Math.floor((expireTime - currentTime.value) / 1000);
+  return diff > 0 ? diff : 0;
+};
+
+const formatCountdown = (seconds: number) => {
+  const m = Math.floor(seconds / 60).toString().padStart(2, "0");
+  const s = (seconds % 60).toString().padStart(2, "0");
+  return `${m}:${s}`;
+};
 
 onMounted(() => {
+  initPaidOrders(); // Nạp dữ liệu lúc F5
   fetchOrdersAndReviews();
+
+  countdownTimer = setInterval(() => {
+    currentTime.value = Date.now();
+    checkExpiredOrders();
+  }, 1000);
+});
+
+onUnmounted(() => {
+  if (countdownTimer) clearInterval(countdownTimer);
 });
 
 const toggleOrder = async (orderId: number) => {
   openedOrderId.value = openedOrderId.value === orderId ? null : orderId;
 
   if (openedOrderId.value === orderId) {
-    const order = store.orders.find(o => o.orderId === orderId);
+    const order = store.orders.find((o) => o.orderId === orderId);
     if (order && order.status === 3 && !reviewableMap[orderId]) {
       await loadReviewableItems(orderId, false);
     }
@@ -620,6 +723,13 @@ const fetchOrdersAndReviews = async () => {
     await store.fetchOrders();
     await fetchMyReviews();
 
+    // Phục hồi lại dữ liệu cho những đơn hàng đã chuyển khoản từ Map
+    store.orders.forEach((order: any) => {
+      if (paidOrdersMap.value[String(order.orderId)]) {
+        order.isPaymentReported = true;
+      }
+    });
+
     if (
       openedOrderId.value &&
       !store.orders.some((order) => order.orderId === openedOrderId.value)
@@ -629,6 +739,31 @@ const fetchOrdersAndReviews = async () => {
   } catch (error) {
     showError(error, "Không tải được lịch sử đơn hàng");
   }
+};
+
+const checkExpiredOrders = () => {
+  store.orders.forEach(async (order: any) => {
+    const method = (order.paymentMethod || "").toUpperCase();
+    if (
+      order.status === 0 &&
+      (method.includes("VIETQR") || method.includes("VNPAY"))
+    ) {
+      // Ngưng tự động hủy nếu đã ghi nhận thanh toán
+      if (paidOrdersMap.value[String(order.orderId)] || order.isPaymentReported) {
+        return;
+      }
+
+      // Hủy nếu quá hạn
+      if (getRemainingSeconds(order.createdAt) <= 0) {
+        try {
+          await api.patch(`/customer/orders/${order.orderId}/cancel`);
+          await fetchOrdersAndReviews();
+        } catch (e) {
+          // Bỏ qua lỗi ngầm
+        }
+      }
+    }
+  });
 };
 
 const fetchMyReviews = async () => {
@@ -654,7 +789,35 @@ const loadReviewableItems = async (orderId: number, showToast: boolean) => {
 };
 
 const getMyReviewByOrderItemId = (orderItemId: number) => {
-  return myReviews.value.find((review) => review.orderItemId === orderItemId);
+  return reviewMap.value.get(orderItemId);
+};
+
+const getReviewMedia = (orderItemId: number): string[] => {
+  const review = getMyReviewByOrderItemId(orderItemId) as any;
+  if (!review) return [];
+  return (
+    review.mediaFiles ||
+    review.imageUrls ||
+    review.images ||
+    review.reviewImages ||
+    []
+  );
+};
+
+const openMediaPreview = (url: string) => {
+  const isVideo = String(url).match(/\.(mp4|webm|mov)/i);
+  Swal.fire({
+    html: isVideo 
+      ? `<video src="${url}" class="img-fluid rounded" controls autoplay style="max-height: 80vh;"></video>`
+      : `<img src="${url}" class="img-fluid rounded" style="max-height: 80vh;" />`,
+    showCloseButton: true,
+    showConfirmButton: false,
+    width: 'auto',
+    background: '#000',
+    customClass: {
+      popup: 'swal-media-popup'
+    }
+  });
 };
 
 const getReviewState = (orderId: number, orderItemId: number) => {
@@ -994,7 +1157,7 @@ const formatOrderType = (value: string | null | undefined) => {
   return value;
 };
 
-const getStatusText = (status: number) => {
+const getStatusText = (status: number, order?: any) => {
   switch (status) {
     case 0:
       return "Chờ xác nhận";
@@ -1005,7 +1168,14 @@ const getStatusText = (status: number) => {
     case 3:
       return "Hoàn thành";
     case 4:
-      return "Đã hủy";
+      if (order && ["VIETQR", "VNPAY"].includes((order.paymentMethod || "").toUpperCase())) {
+        const createTime = new Date(order.createdAt).getTime();
+        const now = Date.now();
+        if ((now - createTime >= 15 * 60 * 1000) || (order.statusText && order.statusText.includes("quá hạn"))) {
+          return "Đã hủy (Quá hạn thanh toán)";
+        }
+      }
+      return order?.statusText || "Đã hủy";
     case 5:
       return "Giao hàng thất bại";
     case 6:
@@ -1077,25 +1247,48 @@ const toast = (
 const cancelOrder = async (order: CustomerOrderResponse) => {
   const { value: reason, isConfirmed } = await Swal.fire({
     title: "Hủy đơn hàng?",
-    text: "Vui lòng chọn lý do bạn muốn hủy đơn hàng này:",
-    input: "radio",
-    inputOptions: {
-      "Thay đổi thông tin": "Tôi muốn cập nhật địa chỉ / SĐT nhận hàng",
-      "Thay đổi sản phẩm": "Tôi muốn đổi phân loại hoặc số lượng",
-      "Thay đổi thanh toán": "Tôi muốn đổi phương thức thanh toán",
-      "Đổi ý": "Tôi không còn nhu cầu mua nữa",
-      "Giao hàng lâu": "Thời gian chuẩn bị/giao hàng quá lâu",
-      Khác: "Lý do khác",
-    },
-    inputValidator: (value) => {
-      if (!value) {
-        return "Vui lòng chọn một lý do để tiếp tục!";
-      }
-    },
+    html: `
+      <div style="text-align: left;">
+        <label style="font-weight: 600; color: #1e293b; margin-bottom: 8px; display: block;">Vui lòng chọn lý do bạn muốn hủy đơn hàng này:</label>
+        <div id="swal-cancel-reasons" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px;">
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; color: #334155;">
+            <input type="radio" name="swal-cancel-reason" value="Thay đổi thông tin" style="accent-color: #bd9a5f;" checked> Tôi muốn cập nhật địa chỉ / SĐT nhận hàng
+          </label>
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; color: #334155;">
+            <input type="radio" name="swal-cancel-reason" value="Thay đổi sản phẩm" style="accent-color: #bd9a5f;"> Tôi muốn đổi phân loại hoặc số lượng
+          </label>
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; color: #334155;">
+            <input type="radio" name="swal-cancel-reason" value="Thay đổi thanh toán" style="accent-color: #bd9a5f;"> Tôi muốn đổi phương thức thanh toán
+          </label>
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; color: #334155;">
+            <input type="radio" name="swal-cancel-reason" value="Đổi ý" style="accent-color: #bd9a5f;"> Tôi không còn nhu cầu mua nữa
+          </label>
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; color: #334155;">
+            <input type="radio" name="swal-cancel-reason" value="Giao hàng lâu" style="accent-color: #bd9a5f;"> Thời gian chuẩn bị/giao hàng quá lâu
+          </label>
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; color: #334155;">
+            <input type="radio" name="swal-cancel-reason" value="Khác" style="accent-color: #bd9a5f;"> Lý do khác
+          </label>
+        </div>
+      </div>
+    `,
     showCancelButton: true,
     confirmButtonText: "Xác nhận hủy",
     cancelButtonText: "Quay lại",
     reverseButtons: true,
+    focusConfirm: false,
+    preConfirm: () => {
+      const selectedRadio = document.querySelector(
+        'input[name="swal-cancel-reason"]:checked',
+      ) as HTMLInputElement;
+
+      if (!selectedRadio) {
+        Swal.showValidationMessage("Vui lòng chọn một lý do để tiếp tục!");
+        return false;
+      }
+
+      return selectedRadio.value;
+    },
     customClass: {
       popup: "swal-custom-popup",
       title: "swal-custom-title",
@@ -1104,7 +1297,7 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
     },
   });
 
-  if (isConfirmed) {
+  if (isConfirmed && reason) {
     try {
       store.orderLoading = true;
       await api.patch(`/customer/orders/${order.orderId}/cancel`);
@@ -1118,7 +1311,6 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
   }
 };
 
-// ĐÃ SỬA: Khắc phục triệt để lỗi TypeScript typing cho files
 const requestReturn = async (order: CustomerOrderResponse) => {
   const { isConfirmed, value } = await Swal.fire({
     title: "Yêu cầu hoàn trả?",
@@ -1152,7 +1344,9 @@ const requestReturn = async (order: CustomerOrderResponse) => {
       </div>
     `,
     didOpen: () => {
-      const fileInput = document.getElementById("swal-return-files") as HTMLInputElement;
+      const fileInput = document.getElementById(
+        "swal-return-files",
+      ) as HTMLInputElement;
       if (fileInput) {
         fileInput.addEventListener("change", (e) => {
           const target = e.target as HTMLInputElement;
@@ -1163,7 +1357,9 @@ const requestReturn = async (order: CustomerOrderResponse) => {
               const isVideo = file.type.startsWith("video/");
 
               if (!isImage && !isVideo) {
-                Swal.showValidationMessage(`File "${file.name}" không hợp lệ! Vui lòng chỉ chọn ảnh hoặc video.`);
+                Swal.showValidationMessage(
+                  `File "${file.name}" không hợp lệ! Vui lòng chỉ chọn ảnh hoặc video.`,
+                );
                 target.value = "";
                 return;
               }
@@ -1181,22 +1377,30 @@ const requestReturn = async (order: CustomerOrderResponse) => {
     reverseButtons: true,
     focusConfirm: false,
     preConfirm: () => {
-      const selectedRadio = document.querySelector('input[name="swal-reason"]:checked') as HTMLInputElement;
-      const fileInput = document.getElementById("swal-return-files") as HTMLInputElement;
+      const selectedRadio = document.querySelector(
+        'input[name="swal-reason"]:checked',
+      ) as HTMLInputElement;
+      const fileInput = document.getElementById(
+        "swal-return-files",
+      ) as HTMLInputElement;
 
       if (!selectedRadio) {
         Swal.showValidationMessage("Vui lòng chọn một lý do hoàn trả!");
         return false;
       }
 
-      const files = fileInput?.files ? (Array.from(fileInput.files) as File[]) : [];
+      const files = fileInput?.files
+        ? (Array.from(fileInput.files) as File[])
+        : [];
 
       for (const file of files) {
         const isImage = file.type.startsWith("image/");
         const isVideo = file.type.startsWith("video/");
 
         if (!isImage && !isVideo) {
-          Swal.showValidationMessage(`File "${file.name}" không hợp lệ! Hệ thống chỉ chấp nhận file ảnh hoặc video.`);
+          Swal.showValidationMessage(
+            `File "${file.name}" không hợp lệ! Hệ thống chỉ chấp nhận file ảnh hoặc video.`,
+          );
           return false;
         }
       }
@@ -1227,11 +1431,15 @@ const requestReturn = async (order: CustomerOrderResponse) => {
         });
       }
 
-      await api.put(`/customer/orders/${order.orderId}/request-return`, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
+      await api.put(
+        `/customer/orders/${order.orderId}/request-return`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
         },
-      });
+      );
 
       await fetchOrdersAndReviews();
       toast("success", "Đã gửi yêu cầu hoàn hàng thành công!");
@@ -1294,6 +1502,55 @@ const repayVnpayOrder = async (order: CustomerOrderResponse) => {
     );
   } finally {
     store.orderLoading = false;
+  }
+};
+
+const repayVietQrOrder = async (order: CustomerOrderResponse) => {
+  const amount = order.finalAmount;
+  const orderIdStr = (order as any).orderCode || order.orderId;
+  const qrUrl = `https://img.vietqr.io/image/970422-0123456789-compact2.png?amount=${amount}&addInfo=Thanh toan don ${orderIdStr}&accountName=SHOP DOMINUS`;
+
+  const result = await Swal.fire({
+    title: "Thanh toán VietQR",
+    html: `
+      <div class="text-center">
+        <p class="text-muted small mb-3">Quét mã QR dưới đây bằng ứng dụng ngân hàng để thanh toán cho đơn hàng <b>${orderIdStr}</b>.</p>
+        <img src="${qrUrl}" alt="Mã VietQR" class="img-fluid rounded mb-3" style="border: 2px dashed #bd9a5f; padding: 8px; max-width: 250px;" />
+        <div class="alert alert-warning py-2 px-3 mb-0 w-100 text-start" style="font-size: 0.85rem;">
+          <i class="bi bi-info-circle me-1"></i> Sau khi chuyển khoản thành công, shop sẽ kiểm tra và xác nhận đơn hàng của bạn.
+        </div>
+      </div>
+    `,
+    showConfirmButton: true,
+    confirmButtonText: "Đã chuyển khoản",
+    confirmButtonColor: "#10b981",
+    showCancelButton: true,
+    cancelButtonText: "Đóng",
+    customClass: {
+      popup: "swal-custom-popup",
+      title: "swal-custom-title",
+      cancelButton: "swal-custom-cancel",
+      confirmButton: "swal-custom-confirm",
+    },
+  });
+
+  if (result.isConfirmed) {
+    // Ép giao diện update tức thì
+    markAsPaid(order.orderId);
+    (order as any).isPaymentReported = true;
+
+    Swal.fire({
+      icon: "success",
+      title: "Đã ghi nhận thanh toán",
+      text: "Hệ thống đang chờ đối soát giao dịch từ ngân hàng. Đơn hàng sẽ được xác nhận trong ít phút nữa.",
+      confirmButtonColor: "#10b981",
+    });
+
+    try {
+      await api.post(`/v1/orders/${order.orderId}/report-payment`);
+    } catch (error) {
+      console.error("Lỗi đồng bộ báo cáo thanh toán:", error);
+    }
   }
 };
 
@@ -1689,22 +1946,40 @@ const getItemImage = (item: any) => {
 }
 
 .my-review-box {
-  background: #fffaf0;
-  border: 1px solid #f3e2bd;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 8px 10px;
-  max-width: 420px;
+  padding: 14px 16px;
+  width: 100%;
 }
 
 .review-stars {
-  color: #bd9a5f;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .review-comment {
-  color: #374151;
-  margin-top: 4px;
+  color: #334155;
+  background: #ffffff;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #f1f5f9;
   font-style: italic;
+  margin-top: 8px;
+}
+
+.review-media-preview {
+  width: 68px;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.review-media-preview:hover {
+  transform: scale(1.05);
+  border-color: #bd9a5f;
 }
 
 @media (max-width: 768px) {
@@ -1751,6 +2026,11 @@ const getItemImage = (item: any) => {
   box-shadow:
     0 20px 25px -5px rgba(0, 0, 0, 0.1),
     0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+}
+
+.swal-media-popup {
+  background: rgba(0, 0, 0, 0.9) !important;
+  border-radius: 12px !important;
 }
 
 .swal-custom-popup .swal2-title {
