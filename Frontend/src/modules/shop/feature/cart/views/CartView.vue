@@ -255,12 +255,12 @@ const showError = async (title: string, text: string) => {
   });
 };
 
-const handleApplyVoucher = (discount: number, code: string) => {
+const handleApplyVoucher = (discount: number, voucherCode: string) => {
   discountAmount.value = Number(discount || 0);
-  appliedVoucherCode.value = code || "";
+  appliedVoucherCode.value = voucherCode || "";
 
-  if (code) {
-    localStorage.setItem("applied_voucher", code);
+  if (voucherCode) {
+    localStorage.setItem("applied_voucher", voucherCode);
   } else {
     localStorage.removeItem("applied_voucher");
   }

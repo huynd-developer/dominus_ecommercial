@@ -19,7 +19,7 @@
     <div v-else-if="cartItems.length === 0" class="empty">
       Giỏ hàng trống.
       <router-link to="/">Tiếp tục mua sắm ➔</router-link>
-</div>
+    </div>
 
     <div v-else class="item-list">
       <div
@@ -113,11 +113,12 @@
             {{ getUnavailableReason(item) }}
           </p>
 
+          <!-- BỎ isUpdating KHỎI NÚT CỘNG TRỪ ĐỂ BẤM THOẢI MÁI -->
           <div class="qty-wrapper">
             <button
               type="button"
-              @click="$emit('update-qty', item, Number(item.quantity || 0) - 1)"
-              :disabled="isUpdating || Number(item.quantity || 0) <= 1"
+              @click="changeQuantity(item, -1)"
+              :disabled="Number(item.quantity || 0) <= 1"
             >
               −
             </button>
@@ -130,9 +131,8 @@
 
             <button
               type="button"
-              @click="$emit('update-qty', item, Number(item.quantity || 0) + 1)"
+              @click="changeQuantity(item, 1)"
               :disabled="
-                isUpdating ||
                 !isItemAvailable(item) ||
                 Number(item.quantity || 0) >= Number(item.stockQuantity || 0)
               "
@@ -197,6 +197,8 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue';
+
 interface CartItem {
   cartItemId: number;
   productVariantId?: number;
@@ -261,17 +263,50 @@ interface CartItem {
   unavailableReason?: string | null;
 }
 
-defineProps<{
+const props = defineProps<{
   cartItems: CartItem[];
   isLoading: boolean;
   isUpdating?: boolean;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: "update-qty", item: CartItem, quantity: number): void;
   (e: "remove-item", cartItemId: number): void;
   (e: "update-variant", item: CartItem, newVariantId: number): void;
 }>();
+
+// ==== LOGIC DEBOUNCE TỐI ƯU CỘNG TRỪ SỐ LƯỢNG ====
+let updateTimeout: ReturnType<typeof setTimeout> | null = null;
+
+const changeQuantity = (item: CartItem, delta: number) => {
+  let currentQty = Number(item.quantity || 0);
+  let newQty = currentQty + delta;
+
+  if (newQty < 1) {
+    newQty = 1;
+  }
+
+  const stock = Number(item.stockQuantity || 0);
+  if (stock > 0 && newQty > stock) {
+    newQty = stock; // Ép không được vượt quá tồn kho
+  }
+
+  if (currentQty === newQty) return;
+
+  // Optimistic UI: Gán số lượng nhảy lập tức trên giao diện
+  item.quantity = newQty;
+
+  // Clear timer cũ nếu khách đang bấm liên tục
+  if (updateTimeout) {
+    clearTimeout(updateTimeout);
+  }
+
+  // Đợi khách ngừng bấm 0.4s (400ms) thì mới báo component cha gọi API một lần
+  updateTimeout = setTimeout(() => {
+    emit("update-qty", item, newQty);
+  }, 400);
+};
+// ===============================================
 
 const getVariantId = (item: CartItem) => {
   return Number(item?.productVariantId ?? item?.variantId ?? item?.id ?? 0);
