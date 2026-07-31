@@ -224,6 +224,7 @@ public class CartService {
         applyCurrentPrice(res, variant);
 
         if (variant.getProduct() != null) {
+            res.setProductId(variant.getProduct().getId());
             res.setProductName(variant.getProduct().getName());
 
             // XỬ LÝ LẤY ẢNH TRỰC TIẾP TỪ DB BẰNG JPQL (An toàn tuyệt đối, không sợ lỗi tên hàm Entity)

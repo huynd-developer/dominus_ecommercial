@@ -1,198 +1,180 @@
 <template>
-  <div class="container-fluid py-3">
-    <div class="d-flex justify-content-between align-items-start mb-3">
-      <div>
-        <h4 class="fw-bold mb-1">Quản lý Flash Sale</h4>
-        <p class="text-muted mb-0">
-          CRUD chiến dịch khuyến mãi, chọn biến thể sản phẩm và cấu hình phần trăm giảm giá.
-        </p>
-      </div>
-
-      <button class="btn btn-dark" @click="openCreateModal">
-        + Tạo chiến dịch
+  <div class="p-4 min-vh-100" style="background-color: #f8f9fa;">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h4 class="fw-bold mb-0 d-flex align-items-center gap-2">
+        <i class="bi bi-lightning-charge"></i> Quản lý Flash Sale
+      </h4>
+      <button @click="openCreateModal" class="btn btn-primary rounded-pill px-4 py-2 shadow-sm d-flex align-items-center gap-2">
+        <i class="bi bi-plus-circle"></i> Tạo chiến dịch
       </button>
     </div>
 
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-body">
-        <div class="row g-2">
-          <div class="col-md-6">
+    <!-- Bọc toàn bộ vào Card trắng bo góc như trang Sản phẩm -->
+    <div class="card border-0 shadow-sm rounded-4">
+      <div class="card-body p-4">
+        
+        <!-- Filter & Search Bar kiểu mới -->
+        <div class="d-flex justify-content-between align-items-center mb-4 gap-3 flex-wrap">
+          <div class="position-relative flex-grow-1" style="max-width: 400px;">
+            <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
             <input
               v-model.trim="filters.keyword"
               type="text"
-              class="form-control"
+              class="form-control rounded-pill ps-5 bg-light border-0"
               placeholder="Tìm theo tên chiến dịch..."
               @keyup.enter="fetchPromotions(0)"
             />
           </div>
-
-          <div class="col-md-3">
+          <div class="d-flex align-items-center gap-2">
             <select
               v-model="filters.status"
-              class="form-select"
+              class="form-select rounded-pill bg-light border-0 px-4" style="width: 200px;"
               @change="fetchPromotions(0)"
             >
               <option :value="null">Tất cả trạng thái</option>
-              <option :value="1">Đang bật</option>
-              <option :value="0">Đã tắt / đã kết thúc</option>
+              <option :value="1">Đang hoạt động</option>
+              <option :value="0">Đã kết thúc/Tắt</option>
             </select>
-          </div>
-
-          <div class="col-md-3 d-grid">
             <button
-              class="btn btn-outline-dark"
+              class="btn btn-light rounded-circle shadow-sm text-muted"
               :disabled="store.loading"
               @click="fetchPromotions(0)"
+              title="Làm mới"
             >
-              <span
-                v-if="store.loading"
-                class="spinner-border spinner-border-sm me-1"
-              ></span>
-              Tìm kiếm
+              <i class="bi bi-arrow-clockwise" :class="{'fa-spin': store.loading}"></i>
             </button>
           </div>
         </div>
-      </div>
-    </div>
 
-    <div class="card border-0 shadow-sm">
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-          <thead class="table-light">
-            <tr>
-              <th style="width: 80px">ID</th>
-              <th>Chiến dịch</th>
-              <th>Bắt đầu</th>
-              <th>Kết thúc</th>
-              <th>Trạng thái</th>
-              <th class="text-end">Số biến thể</th>
-              <th class="text-end" style="width: 270px">Thao tác</th>
-            </tr>
-          </thead>
+        <!-- Table Danh Sách -->
+        <div v-if="store.loading" class="text-center py-5">
+          <div class="spinner-border text-primary" role="status"></div>
+        </div>
 
-          <tbody>
-            <tr v-if="store.loading">
-              <td colspan="7" class="text-center py-4">
-                <span class="spinner-border spinner-border-sm me-2"></span>
-                Đang tải dữ liệu...
-              </td>
-            </tr>
+        <div class="table-responsive" v-else>
+          <table class="table align-middle table-borderless table-hover custom-table">
+            <thead class="text-muted border-bottom">
+              <tr>
+                <th class="ps-3 fw-medium" style="width: 80px">ID</th>
+                <th class="fw-medium">Chiến dịch</th>
+                <th class="fw-medium">Bắt đầu</th>
+                <th class="fw-medium">Kết thúc</th>
+                <th class="fw-medium text-center">Trạng thái</th>
+                <th class="fw-medium text-center">Số sản phẩm gốc</th>
+                <th class="fw-medium text-end pe-3">Thao tác</th>
+              </tr>
+            </thead>
 
-            <tr v-else-if="store.promotions.length === 0">
-              <td colspan="7" class="text-center py-4 text-muted">
-                Chưa có chiến dịch khuyến mãi.
-              </td>
-            </tr>
-
-            <template v-else>
-              <tr v-for="promotion in store.promotions" :key="promotion.id">
-                <td>#{{ promotion.id }}</td>
-
-                <td>
-                  <div class="fw-semibold">{{ promotion.name }}</div>
-                  <small class="text-muted">
-                    Đang chạy:
-                    <span :class="promotion.activeNow ? 'text-success' : 'text-muted'">
-                      {{ promotion.activeNow ? "Có" : "Không" }}
-                    </span>
-                  </small>
-                </td>
-
-                <td>{{ formatDateTime(promotion.startDate) }}</td>
-
-                <td>{{ formatDateTime(promotion.endDate) }}</td>
-
-                <td>
-                  <span :class="statusBadgeClass(promotion)">
-                    {{ promotion.statusText }}
-                  </span>
-                </td>
-
-                <td class="text-end">
-                  {{ promotion.variants?.length || 0 }}
-                </td>
-
-                <td class="text-end">
-                  <div class="btn-group">
-                    <button
-                      v-if="promotion.ended"
-                      class="btn btn-sm btn-outline-secondary"
-                      @click="openEditModal(promotion.id)"
-                    >
-                      Xem
-                    </button>
-
-                    <button
-                      v-else
-                      class="btn btn-sm btn-outline-primary"
-                      @click="openEditModal(promotion.id)"
-                    >
-                      Sửa
-                    </button>
-
-                    <button
-                      v-if="promotion.status === 1 && !promotion.ended"
-                      class="btn btn-sm btn-outline-warning"
-                      @click="changeStatus(promotion.id, 0)"
-                    >
-                      Tắt
-                    </button>
-
-                    <button
-                      v-else-if="promotion.status === 0 && !promotion.ended"
-                      class="btn btn-sm btn-outline-success"
-                      @click="changeStatus(promotion.id, 1)"
-                    >
-                      Bật
-                    </button>
-
-                    <button
-                      class="btn btn-sm btn-outline-danger"
-                      :disabled="promotion.activeNow"
-                      @click="removePromotion(promotion)"
-                    >
-                      Xóa
-                    </button>
-                  </div>
+            <tbody>
+              <tr v-if="groupedPromotions.length === 0">
+                <td colspan="7" class="text-center py-5 text-muted">
+                  Không tìm thấy chiến dịch khuyến mãi nào.
                 </td>
               </tr>
-            </template>
-          </tbody>
-        </table>
-      </div>
 
-      <div
-        v-if="store.totalPages > 1"
-        class="card-footer bg-white d-flex justify-content-between align-items-center"
-      >
-        <small class="text-muted">
-          Tổng {{ store.totalElements }} chiến dịch
-        </small>
+              <template v-else>
+                <tr v-for="promotion in groupedPromotions" :key="promotion.id" class="border-bottom">
+                  <td class="ps-3 fw-bold text-dark">#{{ promotion.id }}</td>
 
-        <div class="d-flex align-items-center gap-2">
-          <button
-            class="btn btn-sm btn-outline-secondary"
-            :disabled="store.pageNumber <= 0 || store.loading"
-            @click="fetchPromotions(store.pageNumber - 1)"
-          >
-            Trước
-          </button>
+                  <td>
+                    <div class="fw-bold text-dark">{{ promotion.name }}</div>
+                    <small class="text-muted">
+                      Đang chạy:
+                      <span :class="promotion.activeNow ? 'text-success fw-bold' : 'text-muted'">
+                        {{ promotion.activeNow ? "Có" : "Không" }}
+                      </span>
+                    </small>
+                  </td>
 
-          <span class="small text-muted">
-            Trang {{ store.pageNumber + 1 }} / {{ store.totalPages }}
-          </span>
+                  <td class="small text-muted">{{ formatDateTime(promotion.startDate) }}</td>
 
-          <button
-            class="btn btn-sm btn-outline-secondary"
-            :disabled="store.pageNumber + 1 >= store.totalPages || store.loading"
-            @click="fetchPromotions(store.pageNumber + 1)"
-          >
-            Sau
-          </button>
+                  <td class="small text-muted">
+                     <span :class="{'text-danger fw-bold': isExpiredStatus(promotion.endDate)}">
+                        {{ formatDateTime(promotion.endDate) }}
+                     </span>
+                  </td>
+
+                  <td class="text-center">
+                    <span :class="statusBadgeClass(promotion)" class="badge rounded-pill px-3 py-2">
+                      {{ promotion.statusText }}
+                    </span>
+                  </td>
+
+                  <!-- Hiển thị số lượng sản phẩm gốc sau khi đã gom nhóm các biến thể trùng -->
+                  <td class="text-center">
+                    <span class="badge bg-light text-dark border">{{ promotion.variants?.length || 0 }}</span>
+                  </td>
+
+                  <td class="text-end pe-3">
+                    <div class="d-flex gap-1 justify-content-end">
+                      <button
+                        v-if="promotion.ended"
+                        class="btn btn-sm btn-light text-secondary rounded-circle action-btn"
+                        @click="openEditModal(promotion.id)" title="Xem chi tiết"
+                      >
+                        <i class="bi bi-eye"></i>
+                      </button>
+
+                      <button
+                        v-else
+                        class="btn btn-sm btn-light text-primary rounded-circle action-btn"
+                        @click="openEditModal(promotion.id)" title="Sửa"
+                      >
+                        <i class="bi bi-pencil-square"></i>
+                      </button>
+
+                      <button
+                        v-if="promotion.status === 1 && !promotion.ended"
+                        class="btn btn-sm btn-light text-warning rounded-circle action-btn"
+                        @click="changeStatus(promotion.id, 0)" title="Tạm dừng"
+                      >
+                        <i class="bi bi-pause-circle"></i>
+                      </button>
+
+                      <button
+                        v-else-if="promotion.status === 0 && !promotion.ended"
+                        class="btn btn-sm btn-light text-success rounded-circle action-btn"
+                        @click="changeStatus(promotion.id, 1)" title="Kích hoạt"
+                      >
+                        <i class="bi bi-play-circle"></i>
+                      </button>
+
+                      <button
+                        class="btn btn-sm btn-light text-danger rounded-circle action-btn"
+                        :disabled="promotion.activeNow"
+                        @click="removePromotion(promotion)" title="Xóa"
+                      >
+                        <i class="bi bi-trash3"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
         </div>
+
+        <!-- Pagination kiểu mới -->
+        <div class="d-flex justify-content-between align-items-center mt-4 text-muted small" v-if="store.totalPages > 0">
+          <div>
+            Hiển thị trang {{ store.pageNumber + 1 }} / {{ store.totalPages }} (Tổng: {{ store.totalElements }})
+          </div>
+          <div class="d-flex gap-2 align-items-center">
+            <button class="btn btn-sm btn-light rounded-circle" :disabled="store.pageNumber <= 0 || store.loading" @click="fetchPromotions(store.pageNumber - 1)">
+              <i class="bi bi-arrow-left"></i>
+            </button>
+            <span class="mx-2">{{ store.pageNumber + 1 }} / {{ store.totalPages }}</span>
+            <button class="btn btn-sm btn-light rounded-circle" :disabled="store.pageNumber + 1 >= store.totalPages || store.loading" @click="fetchPromotions(store.pageNumber + 1)">
+              <i class="bi bi-arrow-right"></i>
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
 
+    <!-- MODAL -->
     <PromotionFormModal
       :show="showModal"
       :promotion="editingPromotion"
@@ -203,7 +185,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import Swal from "sweetalert2";
 import PromotionFormModal from "../components/PromotionFormModal.vue";
 import { usePromotionStore } from "../stores/promotion.store";
@@ -233,6 +215,39 @@ const fetchPromotions = async (page = 0) => {
     size: store.pageSize,
   });
 };
+
+// Computed xử lý gom nhóm các biến thể cùng 1 sản phẩm lại thành 1 dòng duy nhất nếu backend trả về phân tách
+const groupedPromotions = computed(() => {
+  if (!store.promotions || store.promotions.length === 0) return [];
+  
+  const map = new Map<number, any>();
+
+  store.promotions.forEach((item: any) => {
+    // Dùng ID của chiến dịch hoặc ID sản phẩm để làm chuẩn gộp nhóm
+    const key = item.id; 
+
+    if (!map.has(key)) {
+      map.set(key, {
+        ...item,
+        variants: item.variants ? [...item.variants] : []
+      });
+    } else {
+      const existing = map.get(key);
+      if (item.variants && Array.isArray(item.variants)) {
+        // Gộp các biến thể tránh trùng lặp dựa vào id biến thể
+        item.variants.forEach((v: any) => {
+          const vId = v.productVariantId || v.id;
+          const exists = existing.variants.some((ev: any) => (ev.productVariantId || ev.id) === vId);
+          if (!exists) {
+            existing.variants.push(v);
+          }
+        });
+      }
+    }
+  });
+
+  return Array.from(map.values());
+});
 
 const openCreateModal = () => {
   editingPromotion.value = null;
@@ -290,7 +305,7 @@ const changeStatus = async (id: number, status: PromotionStatus) => {
     showCancelButton: true,
     confirmButtonText: status === 1 ? "Bật" : "Tắt",
     cancelButtonText: "Hủy",
-    confirmButtonColor: "#bd9a5f",
+    confirmButtonColor: "#0d6efd",
   });
 
   if (!confirm.isConfirmed) return;
@@ -318,7 +333,7 @@ const removePromotion = async (promotion: PromotionResponse) => {
   const confirm = await Swal.fire({
     icon: "warning",
     title: "Xóa chiến dịch?",
-    html: `Chiến dịch <b>${promotion.name}</b> sẽ bị xóa mềm.`,
+    html: `Chiến dịch <b>${promotion.name}</b> sẽ bị xóa.`,
     showCancelButton: true,
     confirmButtonText: "Xóa",
     cancelButtonText: "Hủy",
@@ -337,29 +352,78 @@ const removePromotion = async (promotion: PromotionResponse) => {
 
 const statusBadgeClass = (promotion: PromotionResponse) => {
   if (promotion.ended) {
-    return "badge bg-secondary";
+    return "bg-secondary-subtle text-secondary";
   }
-
   if (promotion.activeNow) {
-    return "badge bg-success";
+    return "bg-success-subtle text-success";
   }
-
   if (promotion.status === 1) {
-    return "badge bg-primary";
+    return "bg-primary-subtle text-primary";
   }
-
-  return "badge bg-secondary";
+  return "bg-secondary-subtle text-secondary";
 };
 
 const formatDateTime = (value: string) => {
   if (!value) return "";
-
   return new Date(value).toLocaleString("vi-VN", {
     hour12: false,
   });
+};
+
+const isExpiredStatus = (endDate: string) => {
+  if (!endDate) return false;
+  return new Date(endDate).getTime() < new Date().getTime();
 };
 
 onMounted(() => {
   fetchPromotions(0);
 });
 </script>
+
+<style scoped>
+.custom-table th {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1rem 0.5rem;
+}
+.custom-table td {
+  padding: 1rem 0.5rem;
+  vertical-align: middle;
+}
+.action-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.action-btn:hover {
+  transform: translateY(-2px);
+  background-color: #e9ecef !important;
+}
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+.bg-success-subtle {
+  background-color: #d1e7dd !important;
+}
+.text-success {
+  color: #198754 !important;
+}
+.bg-secondary-subtle {
+  background-color: #e2e3e5 !important;
+}
+.text-secondary {
+  color: #6c757d !important;
+}
+.bg-primary-subtle {
+  background-color: #cfe2ff !important;
+}
+.text-primary {
+  color: #0d6efd !important;
+}
+</style>

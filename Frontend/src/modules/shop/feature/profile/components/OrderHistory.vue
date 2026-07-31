@@ -169,7 +169,7 @@
                   </div>
                 </div>
 
-                <!-- BẮT ĐẦU KHỐI THEO DÕI ĐƠN HÀNG (FAKE TRACKING) -->
+                <!-- BẮT ĐẦU KHỐI THEO DÕI ĐƠN HÀNG -->
                 <div class="tracking-container mt-2 mb-4">
                   <h6 class="fw-bold mb-3">
                     <i class="bi bi-truck me-2"></i>Theo dõi kiện hàng
@@ -318,7 +318,7 @@
                             {{
                               formatDate(
                                 getMyReviewByOrderItemId(item.orderItemId)
-                                  ?.createdAt
+                                  ?.createdAt,
                               )
                             }}
                           </div>
@@ -820,11 +820,18 @@
                       <strong>{{ formatMoney(order.totalAmount) }}</strong>
                     </div>
 
-                    <div>
+                    <div v-if="order.discountAmount > 0">
                       <span>Giảm giá:</span>
                       <strong class="text-danger">
                         -{{ formatMoney(order.discountAmount) }}
                       </strong>
+                    </div>
+
+                    <div>
+                      <span>Phí vận chuyển:</span>
+                      <strong>{{
+                        formatMoney((order as any).shippingFee || 30000)
+                      }}</strong>
                     </div>
 
                     <div>
@@ -838,15 +845,63 @@
 
                 <!-- KHỐI CÁC NÚT THAO TÁC -->
                 <div class="text-end mt-3 d-flex justify-content-end gap-2">
-                  <button
-                    v-if="order.status === 0 && order.paymentMethod === 'VNPAY'"
-                    class="btn btn-sm text-white"
-                    style="background-color: #10b981; border-color: #10b981"
-                    :disabled="store.orderLoading"
-                    @click="repayVnpayOrder(order)"
+                  <!-- 1. THANH TOÁN VNPAY & VIETQR -->
+                  <!-- Do đã đổi sang luồng Hủy/Back là tự động trả đồ lại giỏ hàng,
+                       Nên ở đây các nút "Thanh toán lại" cũng ko cần thiết nữa vì làm gì có đơn rác mà thanh toán lại.
+                       Tớ vẫn giữ logic gốc ở đây cho đồng bộ form giao diện -->
+                  <template
+                    v-if="
+                      order.status === 0 &&
+                      (order.paymentMethod || '')
+                        .toUpperCase()
+                        .includes('VNPAY')
+                    "
                   >
-                    <i class="bi bi-credit-card me-1"></i> Thanh toán VNPay ngay
-                  </button>
+                    <div
+                      v-if="isOrderPendingVerification(order)"
+                      class="d-flex align-items-center me-auto text-success fw-bold"
+                      style="font-size: 14px"
+                    >
+                      <i class="bi bi-check-circle-fill me-1"></i> Đang chờ shop
+                      đối soát...
+                    </div>
+                    <template v-else>
+                      <div
+                        class="d-flex align-items-center me-3 text-warning fw-bold"
+                        style="font-size: 14px"
+                      >
+                        <i class="bi bi-clock-history me-1"></i> Đang chờ xác
+                        nhận thanh toán
+                      </div>
+                    </template>
+                  </template>
+
+                  <template
+                    v-if="
+                      order.status === 0 &&
+                      (order.paymentMethod || '')
+                        .toUpperCase()
+                        .includes('VIETQR')
+                    "
+                  >
+                    <div
+                      v-if="isOrderPendingVerification(order)"
+                      class="d-flex align-items-center me-auto text-success fw-bold"
+                      style="font-size: 14px"
+                    >
+                      <i class="bi bi-check-circle-fill me-1"></i> Đang chờ shop
+                      đối soát...
+                    </div>
+                    <template v-else>
+                      <div
+                        class="d-flex align-items-center me-3 text-warning fw-bold"
+                        style="font-size: 14px"
+                      >
+                        <i class="bi bi-clock-history me-1"></i> Đang chờ khách
+                        chuyển khoản
+                      </div>
+                    </template>
+                  </template>
 
                   <button
                     v-if="order.canCancel"
@@ -857,7 +912,6 @@
                     Hủy đơn
                   </button>
 
-                  <!-- NÚT MUA LẠI -->
                   <button
                     v-if="order.status === 4 || order.status === 3"
                     class="btn btn-primary btn-sm px-3 text-white"
@@ -899,7 +953,8 @@
                     v-if="
                       !order.canCancel &&
                       order.status !== 3 &&
-                      order.status !== 4
+                      order.status !== 4 &&
+                      order.status !== 0
                     "
                     class="text-muted small align-self-center"
                   >
@@ -969,9 +1024,32 @@ const selectedReturnOrder = ref<CustomerOrderResponse | null>(null);
 const submittingReturn = ref(false);
 
 const reviewableMap = reactive<Record<number, ReviewableOrderItemResponse[]>>(
-  {}
+  {},
 );
 const reviewLoadingByOrder = reactive<Record<number, boolean>>({});
+
+const paidOrdersMap = ref<Record<string, boolean>>({});
+
+const initPaidOrders = () => {
+  try {
+    const saved = localStorage.getItem("dominus_paid_orders");
+    if (saved) {
+      paidOrdersMap.value = JSON.parse(saved);
+    }
+  } catch (e) {}
+};
+
+const isOrderPendingVerification = (order: any) => {
+  if (!order) return false;
+  const isPaidLocally = paidOrdersMap.value[String(order.orderId)] === true;
+  const rawStatus = (order as any).isPaymentReported;
+  const isPaidApi =
+    rawStatus === true ||
+    rawStatus === 1 ||
+    rawStatus === "1" ||
+    String(rawStatus).toLowerCase() === "true";
+  return isPaidLocally || isPaidApi;
+};
 
 const generateOrderCode = (id: number | string | null | undefined) => {
   if (!id) return "N/A";
@@ -1174,12 +1252,12 @@ const completedOrders = computed(() => {
 });
 
 onMounted(() => {
+  initPaidOrders();
   fetchOrdersAndReviews();
 });
 
 const toggleOrder = async (orderId: number) => {
   openedOrderId.value = openedOrderId.value === orderId ? null : orderId;
-
   if (openedOrderId.value === orderId) {
     const order = store.orders.find((o) => o.orderId === orderId);
     if (order && order.status === 3 && !reviewableMap[orderId]) {
@@ -1188,9 +1266,7 @@ const toggleOrder = async (orderId: number) => {
   }
 };
 
-const isOrderOpen = (orderId: number) => {
-  return openedOrderId.value === orderId;
-};
+const isOrderOpen = (orderId: number) => openedOrderId.value === orderId;
 
 const beforeEnter = (el: Element) => {
   const element = el as HTMLElement;
@@ -1202,7 +1278,6 @@ const beforeEnter = (el: Element) => {
 const enter = (el: Element) => {
   const element = el as HTMLElement;
   const height = element.scrollHeight;
-
   element.style.transition = "height 0.32s ease, opacity 0.24s ease";
   requestAnimationFrame(() => {
     element.style.height = `${height}px`;
@@ -1226,7 +1301,6 @@ const beforeLeave = (el: Element) => {
 
 const leave = (el: Element) => {
   const element = el as HTMLElement;
-
   element.style.transition = "height 0.28s ease, opacity 0.2s ease";
   requestAnimationFrame(() => {
     element.style.height = "0";
@@ -1247,12 +1321,26 @@ const fetchOrdersAndReviews = async () => {
     await store.fetchOrders();
     await fetchMyReviews();
 
+    // Tự động tải lại trạng thái reviewable cho các đơn hàng hoàn thành (status === 3)
+    // hoặc đơn hàng đang được mở rộng xem chi tiết
+    const reviewPromises: Promise<any>[] = [];
+    store.orders.forEach((order) => {
+      if (order.status === 3) {
+        reviewPromises.push(loadReviewableItems(order.orderId, false));
+      }
+    });
+    if (reviewPromises.length > 0) {
+      await Promise.all(reviewPromises);
+    }
+
     if (
       openedOrderId.value &&
       !store.orders.some((order) => order.orderId === openedOrderId.value)
     ) {
       openedOrderId.value = null;
     }
+
+    toast("success", "Đã làm mới lịch sử đơn hàng");
   } catch (error) {
     showError(error, "Không tải được lịch sử đơn hàng");
   }
@@ -1266,13 +1354,9 @@ const fetchMyReviews = async () => {
 const loadReviewableItems = async (orderId: number, showToast: boolean) => {
   try {
     reviewLoadingByOrder[orderId] = true;
-
     const res = await customerProfileService.getReviewableItemsByOrder(orderId);
     reviewableMap[orderId] = res.data || [];
-
-    if (showToast) {
-      toast("success", "Đã cập nhật trạng thái đánh giá");
-    }
+    if (showToast) toast("success", "Đã cập nhật trạng thái đánh giá");
   } catch (error) {
     showError(error, "Không tải được trạng thái đánh giá");
   } finally {
@@ -1452,12 +1536,10 @@ const buildReviewItemFromOrderItem = (
 
 const openReview = async (orderId: number, orderItemId: number) => {
   let state = getReviewState(orderId, orderItemId);
-
   if (!state) {
     await loadReviewableItems(orderId, false);
     state = getReviewState(orderId, orderItemId);
   }
-
   if (!state) {
     await Swal.fire({
       icon: "error",
@@ -1467,7 +1549,6 @@ const openReview = async (orderId: number, orderItemId: number) => {
     });
     return;
   }
-
   if (!state.canReview) {
     await Swal.fire({
       icon: "info",
@@ -1537,7 +1618,6 @@ const submitReview = async (payload: {
 
   try {
     submittingReview.value = true;
-
     const formData = new FormData();
 
     if (!isEditMode) {
@@ -1545,15 +1625,9 @@ const submitReview = async (payload: {
     }
 
     formData.append("rating", String(payload.rating));
-
-    if (payload.comment) {
-      formData.append("comment", payload.comment);
-    }
-
+    if (payload.comment) formData.append("comment", payload.comment);
     if (payload.files && payload.files.length > 0) {
-      payload.files.forEach((file) => {
-        formData.append("mediaFiles", file);
-      });
+      payload.files.forEach((file) => formData.append("mediaFiles", file));
     }
 
     if (
@@ -1625,28 +1699,22 @@ const handleReorder = async (order: any) => {
   if (result.isConfirmed) {
     try {
       store.orderLoading = true;
-
       const addPromises = order.items.map((item: any) => {
         const variantId =
           item.productVariantId || item.variantId || item.productId;
-
         return api.post("/v1/customer/cart/add", {
           productVariantId: Number(variantId),
           quantity: Number(item.quantity || 1),
         });
       });
-
       await Promise.all(addPromises);
-
       window.dispatchEvent(new Event("cart-updated"));
-
       toast("success", "Đã thêm sản phẩm vào giỏ hàng!");
-
       router.push("/cart");
     } catch (error) {
       showError(
         error,
-        "Không thể thêm sản phẩm vào giỏ hàng lúc này. Vui lòng thử lại."
+        "Không thể thêm sản phẩm vào giỏ hàng lúc này. Vui lòng thử lại.",
       );
     } finally {
       store.orderLoading = false;
@@ -1663,9 +1731,7 @@ const getProductIdFromItem = (item: any) => {
     item?.productVariant?.product?.id ??
     item?.productVariant?.product?.productId ??
     null;
-
   const productId = Number(rawId);
-
   return Number.isFinite(productId) && productId > 0 ? productId : null;
 };
 
@@ -1676,9 +1742,7 @@ const getProductVariantIdFromItem = (item: any) => {
     item?.productVariant?.id ??
     item?.productVariant?.variantId ??
     null;
-
   const variantId = Number(rawId);
-
   return Number.isFinite(variantId) && variantId > 0 ? variantId : null;
 };
 
@@ -1686,7 +1750,6 @@ const getProductDetailRoute = () => {
   return router.getRoutes().find((route) => {
     const routeName = String(route.name || "").toLowerCase();
     const routePath = String(route.path || "").toLowerCase();
-
     return (
       (routeName.includes("product") && routeName.includes("detail")) ||
       routePath.includes("/product/:") ||
@@ -1699,11 +1762,7 @@ const getProductDetailRoute = () => {
 const buildProductDetailPathFromRoute = (routePath: string, item: any) => {
   const productId = getProductIdFromItem(item);
   const variantId = getProductVariantIdFromItem(item);
-
-  if (!productId) {
-    return "";
-  }
-
+  if (!productId) return "";
   return routePath
     .replace(/:productId\??/g, String(productId))
     .replace(/:id\??/g, String(productId))
@@ -1712,113 +1771,108 @@ const buildProductDetailPathFromRoute = (routePath: string, item: any) => {
 
 const goToProductDetail = async (item: any) => {
   const productId = getProductIdFromItem(item);
-
   if (!productId) {
     toast("warning", "Không tìm thấy sản phẩm để xem chi tiết");
     return;
   }
-
   const variantId = getProductVariantIdFromItem(item);
   const productDetailRoute = getProductDetailRoute();
   const query = variantId ? { variantId: String(variantId) } : undefined;
-
   try {
     if (productDetailRoute?.name) {
       const params: Record<string, string> = {};
       const paramNames = Array.from(
-        String(productDetailRoute.path || "").matchAll(/:([A-Za-z0-9_]+)/g)
+        String(productDetailRoute.path || "").matchAll(/:([A-Za-z0-9_]+)/g),
       )
         .map((match) => match[1])
         .filter((paramName): paramName is string => Boolean(paramName));
-
       paramNames.forEach((paramName) => {
         if (paramName.toLowerCase().includes("variant")) {
           params[paramName] = String(variantId || productId);
           return;
         }
-
         params[paramName] = String(productId);
       });
-
-      await router.push({
-        name: productDetailRoute.name,
-        params,
-        query,
-      });
-
+      await router.push({ name: productDetailRoute.name, params, query });
       return;
     }
-
     if (productDetailRoute?.path) {
       const productPath = buildProductDetailPathFromRoute(
         productDetailRoute.path,
-        item
+        item,
       );
-
       if (productPath) {
         await router.push({ path: productPath, query });
         return;
       }
     }
-
     await router.push({ path: `/product/${productId}`, query });
   } catch (error) {
     showError(error, "Không thể mở chi tiết sản phẩm lúc này.");
   }
 };
 
+const getOrderCancelReason = (order: any) => {
+  const reason =
+    order?.cancelReason ??
+    order?.cancellationReason ??
+    order?.cancelNote ??
+    order?.cancelDescription ??
+    order?.reason ??
+    null;
+  const cleanReason = String(reason || "").trim();
+  if (
+    !cleanReason ||
+    cleanReason.toLowerCase() === "null" ||
+    cleanReason === "Đơn hàng của bạn đã bị hủy"
+  ) {
+    return "Đơn hàng của bạn đã bị hủy";
+  }
+  return cleanReason;
+};
+
 const getTrackingHistory = (order: any) => {
   const history = [];
   const baseDate = new Date(order.createdAt).getTime();
-
   history.push({
     time: new Date(baseDate),
     title: "Đơn hàng đã đặt",
     desc: "Đơn hàng đang chờ shop xác nhận.",
     active: order.status === 0,
   });
-
-  if (order.status >= 1 && order.status !== 4) {
+  if (order.status >= 1 && order.status !== 4)
     history.push({
       time: new Date(baseDate + 2 * 60 * 60 * 1000),
       title: "Đang chuẩn bị hàng",
       desc: "Người bán đang chuẩn bị kiện hàng của bạn.",
       active: order.status === 1,
     });
-  }
-
-  if (order.status >= 2 && order.status !== 4) {
+  if (order.status >= 2 && order.status !== 4)
     history.push({
       time: new Date(baseDate + 14 * 60 * 60 * 1000),
       title: "Đã giao cho ĐVVC",
       desc: "Kiện hàng đã rời trung tâm phân loại và đang trên đường giao.",
       active: order.status === 2,
     });
-  }
-
-  if (order.status === 3) {
+  if (order.status === 3)
     history.push({
       time: order.completedAt
         ? new Date(order.completedAt)
         : new Date(baseDate + 48 * 60 * 60 * 1000),
       title: "Đã giao",
-      desc: `Kiện hàng của bạn đã được giao. Người nhận: ${
-        order.customerName || "Bạn"
-      }`,
+      desc: `Kiện hàng của bạn đã được giao. Người nhận: ${order.customerName || "Bạn"}`,
       active: true,
     });
-  }
-
-  if (order.status === 4) {
+  if (order.status === 4)
     history.push({
-      time: new Date(baseDate + 30 * 60 * 1000),
+      time: getOrderCancelledAt(order)
+        ? new Date(getOrderCancelledAt(order))
+        : new Date(baseDate + 15 * 60 * 1000),
       title: "Đã hủy",
-      desc: "Đơn hàng đã được hủy bỏ.",
+      desc: "Đơn hàng của bạn đã bị hủy.",
       active: true,
       isCancel: true,
     });
-  }
-
   return history.reverse();
 };
 
@@ -1842,19 +1896,13 @@ const getCapacityText = (item: any) => {
     item?.volume ??
     item?.volumeValue ??
     null;
-
   if (raw !== null && raw !== undefined && String(raw).trim() !== "") {
     const text = String(raw).trim();
     return text.toLowerCase().includes("ml") ? text : `${text}ml`;
   }
-
   const sku = String(item?.sku || "");
   const match = sku.match(/-(\d+(?:\.\d+)?)-/);
-
-  if (match?.[1]) {
-    return `${match[1]}ml`;
-  }
-
+  if (match?.[1]) return `${match[1]}ml`;
   return "Đang cập nhật";
 };
 
@@ -1865,85 +1913,52 @@ const getBottleTypeText = (item: any) => {
     item?.bottleName ??
     item?.variantBottleType ??
     null;
-
-  if (raw !== null && raw !== undefined && String(raw).trim() !== "") {
+  if (raw !== null && raw !== undefined && String(raw).trim() !== "")
     return String(raw).trim();
-  }
-
   const sku = String(item?.sku || "").toUpperCase();
-
-  if (sku.includes("FULL")) {
-    return "Chai gốc Fullbox";
-  }
-
-  if (sku.includes("CHIET")) {
-    return "Chai chiết";
-  }
-
+  if (sku.includes("FULL")) return "Chai gốc Fullbox";
+  if (sku.includes("CHIET")) return "Chai chiết";
   return "Đang cập nhật";
 };
 
-const getManufacturingDate = (item: any) => {
-  return (
-    item?.manufacturingDate ??
-    item?.mfgDate ??
-    item?.manufactureDate ??
-    item?.productionDate ??
-    null
-  );
-};
-
-const getExpirationDate = (item: any) => {
-  return (
-    item?.expirationDate ??
-    item?.expiryDate ??
-    item?.expiredDate ??
-    item?.expDate ??
-    null
-  );
-};
-
-const formatMoney = (value: number | null | undefined) => {
-  return Number(value || 0).toLocaleString("vi-VN", {
+const getManufacturingDate = (item: any) =>
+  item?.manufacturingDate ??
+  item?.mfgDate ??
+  item?.manufactureDate ??
+  item?.productionDate ??
+  null;
+const getExpirationDate = (item: any) =>
+  item?.expirationDate ??
+  item?.expiryDate ??
+  item?.expiredDate ??
+  item?.expDate ??
+  null;
+const formatMoney = (value: number | null | undefined) =>
+  Number(value || 0).toLocaleString("vi-VN", {
     style: "currency",
     currency: "VND",
   });
-};
-
 const toMoneyNumber = (value: unknown) => {
-  if (value === null || value === undefined || value === "") {
-    return 0;
-  }
-
   const numberValue = Number(value);
-
   return Number.isFinite(numberValue) ? numberValue : 0;
 };
-
 const pickMoneyValue = (...values: unknown[]) => {
   for (const value of values) {
     const numberValue = toMoneyNumber(value);
-
-    if (numberValue > 0) {
-      return numberValue;
-    }
+    if (numberValue > 0) return numberValue;
   }
-
   return 0;
 };
-
-const getItemUnitDiscount = (item: any) => {
-  return pickMoneyValue(
+const getItemUnitDiscount = (item: any) =>
+  pickMoneyValue(
     item?.discountAmount,
     item?.unitDiscountAmount,
     item?.unitDiscount,
     item?.flashSaleDiscount,
-    item?.itemDiscount
+    item?.itemDiscount,
   );
-};
-
-const getItemFinalUnitPrice = (item: any) => {
-  return pickMoneyValue(
+const getItemFinalUnitPrice = (item: any) =>
+  pickMoneyValue(
     item?.finalPrice,
     item?.unitFinalPrice,
     item?.priceAfterDiscount,
@@ -1952,10 +1967,8 @@ const getItemFinalUnitPrice = (item: any) => {
     item?.sellingPrice,
     item?.unitPrice,
     item?.price,
-    item?.originalPrice
+    item?.originalPrice,
   );
-};
-
 const getItemOriginalUnitPrice = (item: any) => {
   const originalPrice = pickMoneyValue(
     item?.originalPrice,
@@ -1965,111 +1978,62 @@ const getItemOriginalUnitPrice = (item: any) => {
     item?.priceBeforeDiscount,
     item?.regularPrice,
     item?.unitPrice,
-    item?.price
+    item?.price,
   );
-
   const finalPrice = getItemFinalUnitPrice(item);
   const discountAmount = getItemUnitDiscount(item);
-
-  if (originalPrice > finalPrice) {
-    return originalPrice;
-  }
-
-  if (finalPrice > 0 && discountAmount > 0) {
-    return finalPrice + discountAmount;
-  }
-
+  if (originalPrice > finalPrice) return originalPrice;
+  if (finalPrice > 0 && discountAmount > 0) return finalPrice + discountAmount;
   return originalPrice || finalPrice;
 };
-
-const hasItemPrice = (item: any) => {
-  return getItemFinalUnitPrice(item) > 0 || getItemOriginalUnitPrice(item) > 0;
-};
-
-const hasItemSale = (item: any) => {
-  return getItemOriginalUnitPrice(item) > getItemFinalUnitPrice(item);
-};
-
+const hasItemPrice = (item: any) =>
+  getItemFinalUnitPrice(item) > 0 || getItemOriginalUnitPrice(item) > 0;
+const hasItemSale = (item: any) =>
+  getItemOriginalUnitPrice(item) > getItemFinalUnitPrice(item);
 const getItemLineTotal = (item: any) => {
   const lineTotal = pickMoneyValue(
     item?.lineTotal,
     item?.totalPrice,
     item?.itemTotal,
-    item?.subtotal
+    item?.subtotal,
   );
-
-  if (lineTotal > 0) {
-    return lineTotal;
-  }
-
+  if (lineTotal > 0) return lineTotal;
   return getItemFinalUnitPrice(item) * Number(item?.quantity || 0);
 };
 
 const formatDate = (value: string | null | undefined) => {
   if (!value) return "-";
-
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-
-  return date.toLocaleString("vi-VN", {
-    hour12: false,
-  });
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("vi-VN", { hour12: false });
 };
 
 const formatDateOnly = (value: string | null | undefined) => {
   if (!value) return "Đang cập nhật";
-
   const dateOnly = String(value).substring(0, 10);
   const date = new Date(`${dateOnly}T00:00:00`);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Đang cập nhật";
-  }
-
+  if (Number.isNaN(date.getTime())) return "Đang cập nhật";
   return date.toLocaleDateString("vi-VN");
 };
 
 const formatPaymentMethod = (value: string | null | undefined) => {
   if (!value) return "-";
-
   const normalized = String(value).toUpperCase();
-
   if (normalized === "COD") return "Thanh toán khi nhận hàng";
   if (normalized === "VNPAY") return "VNPay";
   if (normalized === "CASH") return "Tiền mặt";
   if (normalized === "BANK_TRANSFER") return "Chuyển khoản";
   if (normalized === "TRANSFER") return "Chuyển khoản";
   if (normalized === "MIXED") return "Tiền mặt + chuyển khoản";
-
   return value;
 };
 
 const formatOrderType = (value: string | null | undefined) => {
   if (!value) return "-";
-
   const normalized = String(value).toUpperCase();
-
   if (normalized === "ONLINE") return "Đơn online";
   if (normalized === "POS") return "Đơn tại quầy";
-
   return value;
-};
-
-const getOrderCancelReason = (order: any) => {
-  const reason =
-    order?.cancelReason ??
-    order?.cancellationReason ??
-    order?.cancelNote ??
-    order?.cancelDescription ??
-    order?.reason ??
-    null;
-
-  const cleanReason = String(reason || "").trim();
-
-  return cleanReason || "Chưa có lý do hủy";
 };
 
 const getOrderCancelledAt = (order: any) => {
@@ -2207,7 +2171,6 @@ const isReturnInfoVisible = (order: any) => {
 
 const getOrderReturnReason = (order: any) => {
   const request = getOrderReturnRequest(order);
-
   const reason =
     order?.returnReason ??
     order?.returnRequestReason ??
@@ -2218,15 +2181,11 @@ const getOrderReturnReason = (order: any) => {
     request?.returnRequestReason ??
     request?.refundReason ??
     null;
-
-  const cleanReason = String(reason || "").trim();
-
-  return cleanReason || "Chưa có lý do hoàn hàng";
+  return String(reason || "").trim() || "Chưa có lý do hoàn hàng";
 };
 
 const getOrderReturnDescription = (order: any) => {
   const request = getOrderReturnRequest(order);
-
   const description =
     order?.returnDescription ??
     order?.returnRequestDescription ??
@@ -2239,7 +2198,6 @@ const getOrderReturnDescription = (order: any) => {
     request?.refundDescription ??
     request?.note ??
     null;
-
   return String(description || "").trim();
 };
 
@@ -3189,36 +3147,22 @@ const getLocalBackendBaseUrl = () => {
   const isLocalhost =
     window.location.hostname === "localhost" ||
     window.location.hostname === "127.0.0.1";
-
-  if (isLocalhost) {
+  if (isLocalhost)
     return `${window.location.protocol}//${window.location.hostname}:8080`;
-  }
-
   return window.location.origin;
 };
 
 const getApiAssetBaseUrl = () => {
   const configuredBaseUrl = String(api.defaults.baseURL || "").trim();
-
-  /**
-   * Khi axios baseURL là "/api", nếu ghép ảnh theo window.origin
-   * thì ảnh sẽ thành localhost:5173/uploads/... và Vite không phục vụ file đó.
-   * File hoàn hàng đang được BE lưu ở /uploads/return-requests nên ở môi trường dev
-   * phải trỏ thẳng sang backend localhost:8080.
-   */
-  if (!configuredBaseUrl || configuredBaseUrl.startsWith("/")) {
+  if (!configuredBaseUrl || configuredBaseUrl.startsWith("/"))
     return getLocalBackendBaseUrl();
-  }
-
   try {
     const parsedUrl = new URL(configuredBaseUrl, window.location.origin);
-
     parsedUrl.pathname = parsedUrl.pathname
       .replace(/\/api\/?$/, "")
       .replace(/\/$/, "");
     parsedUrl.search = "";
     parsedUrl.hash = "";
-
     return parsedUrl.toString().replace(/\/$/, "");
   } catch {
     return getLocalBackendBaseUrl();
@@ -3227,32 +3171,18 @@ const getApiAssetBaseUrl = () => {
 
 const normalizeReturnMediaUrl = (url: string) => {
   let cleanUrl = String(url || "").trim();
-
-  if (!cleanUrl) {
-    return "";
-  }
-
+  if (!cleanUrl) return "";
   if (
     cleanUrl.startsWith("http://") ||
     cleanUrl.startsWith("https://") ||
     cleanUrl.startsWith("data:") ||
     cleanUrl.startsWith("blob:")
-  ) {
+  )
     return cleanUrl;
-  }
-
   cleanUrl = cleanUrl.replace(/^\/?api\//, "/");
-
   const assetBaseUrl = getApiAssetBaseUrl();
-
-  if (cleanUrl.startsWith("/")) {
-    return `${assetBaseUrl}${cleanUrl}`;
-  }
-
-  if (cleanUrl.startsWith("uploads/")) {
-    return `${assetBaseUrl}/${cleanUrl}`;
-  }
-
+  if (cleanUrl.startsWith("/")) return `${assetBaseUrl}${cleanUrl}`;
+  if (cleanUrl.startsWith("uploads/")) return `${assetBaseUrl}/${cleanUrl}`;
   return cleanUrl;
 };
 
@@ -3260,14 +3190,13 @@ const getReturnMediaUrl = (media: any) => {
   const rawUrl =
     typeof media === "string"
       ? media
-      : media?.mediaUrl ??
+      : (media?.mediaUrl ??
         media?.url ??
         media?.imageUrl ??
         media?.fileUrl ??
         media?.src ??
         media?.path ??
-        "";
-
+        "");
   return normalizeReturnMediaUrl(String(rawUrl || ""));
 };
 
@@ -3277,9 +3206,8 @@ const isReturnMediaVideo = (media: any, url: string) => {
       media?.type ??
       media?.contentType ??
       media?.mimeType ??
-      url
+      url,
   ).toLowerCase();
-
   return (
     rawType.includes("video") ||
     rawType.includes("/video/upload/") ||
@@ -3293,7 +3221,6 @@ const isReturnMediaVideo = (media: any, url: string) => {
 
 const getOrderReturnMedia = (order: any): ReturnMediaView[] => {
   const request = getOrderReturnRequest(order);
-
   const rawMedia =
     order?.returnMediaUrls ??
     order?.returnMediaFiles ??
@@ -3314,33 +3241,23 @@ const getOrderReturnMedia = (order: any): ReturnMediaView[] => {
     request?.files ??
     request?.images ??
     [];
-
   const mediaList = Array.isArray(rawMedia) ? rawMedia : [rawMedia];
-
   return mediaList
     .map((media: any) => {
       const url = getReturnMediaUrl(media);
-
-      if (!url) {
-        return null;
-      }
-
-      return {
-        url,
-        isVideo: isReturnMediaVideo(media, url),
-      };
+      if (!url) return null;
+      return { url, isVideo: isReturnMediaVideo(media, url) };
     })
     .filter((media): media is ReturnMediaView => media !== null);
 };
 
-const escapeHtml = (value: unknown) => {
-  return String(value ?? "")
+const escapeHtml = (value: unknown) =>
+  String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-};
 
 type MediaPreviewOptions = {
   title: string;
@@ -3349,7 +3266,6 @@ type MediaPreviewOptions = {
   imageAlt: string;
   thumbTitle: string;
 };
-
 const RETURN_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
   title: "Ảnh/video bằng chứng hoàn hàng",
   counterLabel: "bằng chứng hoàn hàng",
@@ -3357,7 +3273,6 @@ const RETURN_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
   imageAlt: "Ảnh bằng chứng hoàn hàng",
   thumbTitle: "Chọn ảnh/video bằng chứng",
 };
-
 const REVIEW_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
   title: "Ảnh/video đánh giá sản phẩm",
   counterLabel: "đánh giá sản phẩm",
@@ -3368,45 +3283,28 @@ const REVIEW_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
 
 const buildReturnPreviewMainHtml = (
   media: ReturnMediaView,
-  options: MediaPreviewOptions
+  options: MediaPreviewOptions,
 ) => {
   const safeUrl = escapeHtml(media.url);
   const safeAlt = escapeHtml(options.imageAlt);
-
   if (media.isVideo) {
-    return `
-      <video
-        src="${safeUrl}"
-        class="return-preview-video"
-        controls
-        autoplay
-        playsinline
-      ></video>
-    `;
+    return `<video src="${safeUrl}" class="return-preview-video" controls autoplay playsinline></video>`;
   }
-
-  return `
-    <img
-      src="${safeUrl}"
-      class="return-preview-image"
-      alt="${safeAlt}"
-    />
-  `;
+  return `<img src="${safeUrl}" class="return-preview-image" alt="${safeAlt}" />`;
 };
 
 const buildReturnPreviewThumbHtml = (
   media: ReturnMediaView,
   index: number,
   activeIndex: number,
-  options: MediaPreviewOptions
+  options: MediaPreviewOptions,
 ) => {
   const safeUrl = escapeHtml(media.url);
   const activeClass = index === activeIndex ? " active" : "";
   const mediaLabel = media.isVideo ? "Video" : "Ảnh";
   const safeAriaLabel = escapeHtml(
-    `Xem ${mediaLabel.toLowerCase()} ${options.counterLabel} ${index + 1}`
+    `Xem ${mediaLabel.toLowerCase()} ${options.counterLabel} ${index + 1}`,
   );
-
   const thumb = media.isVideo
     ? `
       <video
@@ -3450,148 +3348,47 @@ const buildReturnPreviewThumbHtml = (
 const buildReturnPreviewHtml = (
   mediaList: ReturnMediaView[],
   activeIndex: number,
-  options: MediaPreviewOptions
+  options: MediaPreviewOptions,
 ) => {
-  if (mediaList.length === 0) {
-    return `
-      <div class="return-preview-modal">
-        <div class="return-preview-empty">
-          ${escapeHtml(options.emptyText)}
-        </div>
-      </div>
-    `;
-  }
-
+  if (mediaList.length === 0)
+    return `<div class="return-preview-modal"><div class="return-preview-empty">${escapeHtml(options.emptyText)}</div></div>`;
   const safeActiveIndex = Math.min(
     Math.max(Number.isFinite(activeIndex) ? activeIndex : 0, 0),
-    mediaList.length - 1
+    mediaList.length - 1,
   );
-
   const activeMedia = mediaList[safeActiveIndex];
-
-  if (!activeMedia) {
-    return `
-      <div class="return-preview-modal">
-        <div class="return-preview-empty">
-          ${escapeHtml(options.emptyText)}
-        </div>
-      </div>
-    `;
-  }
-
+  if (!activeMedia)
+    return `<div class="return-preview-modal"><div class="return-preview-empty">${escapeHtml(options.emptyText)}</div></div>`;
   const hasMultipleMedia = mediaList.length > 1;
   const activeMediaLabel = activeMedia.isVideo ? "Video" : "Ảnh";
-
-  return `
-    <div class="return-preview-modal">
-      <div class="return-preview-counter">
-        ${activeMediaLabel} ${escapeHtml(options.counterLabel)}
-        <strong>${safeActiveIndex + 1}/${mediaList.length}</strong>
-      </div>
-
-      <div class="return-preview-stage">
-        ${
-          hasMultipleMedia
-            ? `
-              <button
-                type="button"
-                class="return-preview-nav is-prev"
-                data-preview-direction="-1"
-                aria-label="Xem ảnh/video trước"
-              >
-                <i class="bi bi-chevron-left"></i>
-              </button>
-            `
-            : ""
-        }
-
-        <div class="return-preview-main">
-          ${buildReturnPreviewMainHtml(activeMedia, options)}
-        </div>
-
-        ${
-          hasMultipleMedia
-            ? `
-              <button
-                type="button"
-                class="return-preview-nav is-next"
-                data-preview-direction="1"
-                aria-label="Xem ảnh/video tiếp theo"
-              >
-                <i class="bi bi-chevron-right"></i>
-              </button>
-            `
-            : ""
-        }
-      </div>
-
-      ${
-        hasMultipleMedia
-          ? `
-            <div class="return-preview-thumb-title">
-              ${escapeHtml(options.thumbTitle)}
-            </div>
-            <div class="return-preview-thumb-list">
-              ${mediaList
-                .map((media, index) =>
-                  buildReturnPreviewThumbHtml(
-                    media,
-                    index,
-                    safeActiveIndex,
-                    options
-                  )
-                )
-                .join("")}
-            </div>
-          `
-          : ""
-      }
-    </div>
-  `;
+  return `<div class="return-preview-modal"><div class="return-preview-counter">${activeMediaLabel} ${escapeHtml(options.counterLabel)}<strong>${safeActiveIndex + 1}/${mediaList.length}</strong></div><div class="return-preview-stage">${hasMultipleMedia ? `<button type="button" class="return-preview-nav is-prev" data-preview-direction="-1" aria-label="Xem ảnh/video trước"><i class="bi bi-chevron-left"></i></button>` : ""}<div class="return-preview-main">${buildReturnPreviewMainHtml(activeMedia, options)}</div>${hasMultipleMedia ? `<button type="button" class="return-preview-nav is-next" data-preview-direction="1" aria-label="Xem ảnh/video tiếp theo"><i class="bi bi-chevron-right"></i></button>` : ""}</div>${hasMultipleMedia ? `<div class="return-preview-thumb-title">${escapeHtml(options.thumbTitle)}</div><div class="return-preview-thumb-list">${mediaList.map((media, index) => buildReturnPreviewThumbHtml(media, index, safeActiveIndex, options)).join("")}</div>` : ""}</div>`;
 };
 
 const openMediaPreview = async (
   mediaList: ReturnMediaView[],
   index: number,
-  options: MediaPreviewOptions
+  options: MediaPreviewOptions,
 ) => {
-  if (mediaList.length === 0) {
-    return;
-  }
-
+  if (mediaList.length === 0) return;
   let activeIndex = Number.isInteger(index) ? index : 0;
-
-  if (activeIndex < 0 || activeIndex >= mediaList.length) {
-    activeIndex = 0;
-  }
-
+  if (activeIndex < 0 || activeIndex >= mediaList.length) activeIndex = 0;
   const renderPreview = () => {
     const htmlContainer = Swal.getHtmlContainer();
-
-    if (!htmlContainer) {
-      return;
-    }
-
+    if (!htmlContainer) return;
     htmlContainer.innerHTML = buildReturnPreviewHtml(
       mediaList,
       activeIndex,
-      options
+      options,
     );
     bindPreviewEvents();
   };
-
   const goToPreview = (nextIndex: number) => {
     activeIndex = (nextIndex + mediaList.length) % mediaList.length;
     renderPreview();
   };
-
   const bindPreviewEvents = () => {
     const htmlContainer = Swal.getHtmlContainer();
-
-    if (!htmlContainer) {
-      return;
-    }
-
+    if (!htmlContainer) return;
     htmlContainer
       .querySelectorAll<HTMLButtonElement>("[data-preview-direction]")
       .forEach((button) => {
@@ -3600,7 +3397,6 @@ const openMediaPreview = async (
           goToPreview(activeIndex + direction);
         });
       });
-
     htmlContainer
       .querySelectorAll<HTMLButtonElement>("[data-preview-index]")
       .forEach((button) => {
@@ -3610,7 +3406,6 @@ const openMediaPreview = async (
         });
       });
   };
-
   await Swal.fire({
     title: options.title,
     html: buildReturnPreviewHtml(mediaList, activeIndex, options),
@@ -3631,7 +3426,7 @@ const openReturnMediaPreview = async (order: any, index: number) => {
   await openMediaPreview(
     getOrderReturnMedia(order),
     index,
-    RETURN_MEDIA_PREVIEW_OPTIONS
+    RETURN_MEDIA_PREVIEW_OPTIONS,
   );
 };
 
@@ -3639,11 +3434,7 @@ const getReviewMediaByOrderItemId = (
   orderItemId: number
 ): ReturnMediaView[] => {
   const review = getMyReviewByOrderItemId(orderItemId) as any;
-
-  if (!review) {
-    return [];
-  }
-
+  if (!review) return [];
   const rawMedia =
     review?.mediaFiles ??
     review?.mediaUrls ??
@@ -3652,21 +3443,12 @@ const getReviewMediaByOrderItemId = (
     review?.images ??
     review?.files ??
     [];
-
   const mediaList = Array.isArray(rawMedia) ? rawMedia : [rawMedia];
-
   return mediaList
     .map((media: any) => {
       const url = getReturnMediaUrl(media);
-
-      if (!url) {
-        return null;
-      }
-
-      return {
-        url,
-        isVideo: isReturnMediaVideo(media, url),
-      };
+      if (!url) return null;
+      return { url, isVideo: isReturnMediaVideo(media, url) };
     })
     .filter((media): media is ReturnMediaView => media !== null);
 };
@@ -3675,7 +3457,7 @@ const openReviewMediaPreview = async (orderItemId: number, index: number) => {
   await openMediaPreview(
     getReviewMediaByOrderItemId(orderItemId),
     index,
-    REVIEW_MEDIA_PREVIEW_OPTIONS
+    REVIEW_MEDIA_PREVIEW_OPTIONS,
   );
 };
 
@@ -3763,11 +3545,7 @@ const getOrderHeaderStatusClass = (order: any) => {
 
 const getErrorMessage = (error: any, fallback: string) => {
   const data = error?.response?.data;
-
-  if (typeof data === "string") {
-    return data;
-  }
-
+  if (typeof data === "string") return data;
   return data?.message || error?.message || fallback;
 };
 
@@ -3782,7 +3560,7 @@ const showError = (error: any, fallback: string) => {
 
 const toast = (
   icon: "success" | "error" | "warning" | "info",
-  title: string
+  title: string,
 ) => {
   Swal.fire({
     toast: true,
@@ -3808,7 +3586,6 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
     "Tìm thấy sản phẩm phù hợp hơn",
     "Khác",
   ];
-
   const { value: reason, isConfirmed } = await Swal.fire<string>({
     title: "Hủy đơn hàng?",
     html: `
@@ -3847,12 +3624,10 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
       const checkedReason = Swal.getPopup()?.querySelector<HTMLInputElement>(
         'input[name="cancelReason"]:checked'
       );
-
       if (!checkedReason?.value) {
         Swal.showValidationMessage("Vui lòng chọn một lý do để tiếp tục!");
         return false;
       }
-
       return checkedReason.value;
     },
     customClass: {
@@ -3882,12 +3657,11 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
 const getDefaultReturnEmail = () => {
   try {
     const currentUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
-
     return String(
       currentUser.email ||
         currentUser.Email ||
         localStorage.getItem("email") ||
-        ""
+        "",
     ).trim();
   } catch {
     return String(localStorage.getItem("email") || "").trim();
@@ -3912,12 +3686,9 @@ const submitReturnRequest = async (payload: ReturnRequestSubmitPayload) => {
   try {
     submittingReturn.value = true;
     store.orderLoading = true;
-
     await customerProfileService.requestReturnOrder(payload.orderId, payload);
-
     returnModalVisible.value = false;
     selectedReturnOrder.value = null;
-
     await fetchOrdersAndReviews();
     currentTab.value = "RETURN";
 
@@ -3933,23 +3704,7 @@ const submitReturnRequest = async (payload: ReturnRequestSubmitPayload) => {
 const cancelReturnRequest = async (order: CustomerOrderResponse) => {
   const result = await Swal.fire({
     title: "Rút lại yêu cầu?",
-    html: `
-      <div class="return-cancel-modal">
-        <div class="return-cancel-alert">
-          <div class="return-cancel-icon">
-            <i class="bi bi-arrow-counterclockwise"></i>
-          </div>
-
-          <div class="return-cancel-content">
-            <div class="return-cancel-title">Xác nhận rút lại yêu cầu hoàn hàng</div>
-            <div class="return-cancel-desc">
-              Đơn hàng sẽ trở về trạng thái <strong>Hoàn thành</strong>.
-              Sau khi rút lại, bạn cần gửi yêu cầu mới nếu muốn hoàn hàng/đổi trả tiếp.
-            </div>
-          </div>
-        </div>
-      </div>
-    `,
+    html: `<div class="return-cancel-modal"><div class="return-cancel-alert"><div class="return-cancel-icon"><i class="bi bi-arrow-counterclockwise"></i></div><div class="return-cancel-content"><div class="return-cancel-title">Xác nhận rút lại yêu cầu hoàn hàng</div><div class="return-cancel-desc">Đơn hàng sẽ trở về trạng thái <strong>Hoàn thành</strong>. Sau khi rút lại, bạn cần gửi yêu cầu mới nếu muốn hoàn hàng/đổi trả tiếp.</div></div></div></div>`,
     showCancelButton: true,
     confirmButtonText: "Đồng ý rút lại",
     cancelButtonText: "Quay lại",
@@ -3977,38 +3732,11 @@ const cancelReturnRequest = async (order: CustomerOrderResponse) => {
   }
 };
 
-const repayVnpayOrder = async (order: CustomerOrderResponse) => {
-  try {
-    store.orderLoading = true;
-    const res = await api.get(`/v1/orders/${order.orderId}/vnpay-url`);
-
-    if (res.data?.paymentUrl) {
-      toast("success", "Đang chuyển hướng đến VNPay...");
-      window.location.href = res.data.paymentUrl;
-    } else {
-      showError(null, "Không lấy được đường dẫn thanh toán từ hệ thống.");
-    }
-  } catch (error) {
-    showError(
-      error,
-      "Không thể tạo lại phiên thanh toán lúc này. Vui lòng thử lại sau."
-    );
-  } finally {
-    store.orderLoading = false;
-  }
-};
-
 const FALLBACK_IMAGE =
   "data:image/svg+xml;utf8," +
-  encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300">
-      <rect width="100%" height="100%" fill="#f3f4f6"/>
-      <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
-        fill="#9ca3af" font-family="Arial" font-size="20">
-        Không có ảnh
-      </text>
-    </svg>
-  `);
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#9ca3af" font-family="Arial" font-size="20">Không có ảnh</text></svg>`,
+  );
 
 const handleImageError = (event: Event) => {
   const target = event.target as HTMLImageElement;
@@ -4018,23 +3746,20 @@ const handleImageError = (event: Event) => {
 const getItemImage = (item: any) => {
   if (!item) return FALLBACK_IMAGE;
   let url = item.image || item.imageUrl || item.thumbnailUrl || item.mainImage;
-
   if (!url && item.productVariant) {
     url = item.productVariant.imageUrl || item.productVariant.image;
     if (!url && item.productVariant.product) {
       url =
         item.productVariant.product.mainImage ||
         item.productVariant.product.imageUrl;
-      if (!url && item.productVariant.product.productImages?.length > 0) {
+      if (!url && item.productVariant.product.productImages?.length > 0)
         url = item.productVariant.product.productImages[0].imageUrl;
-      }
     }
   }
   if (!url && item.product) {
     url = item.product.mainImage || item.product.imageUrl;
-    if (!url && item.product.productImages?.length > 0) {
+    if (!url && item.product.productImages?.length > 0)
       url = item.product.productImages[0].imageUrl;
-    }
   }
   return url ? url : FALLBACK_IMAGE;
 };
@@ -4188,7 +3913,9 @@ const getItemImage = (item: any) => {
   border-radius: 14px;
   overflow: hidden;
   background: #ffffff;
-  transition: border-color 0.25s ease, box-shadow 0.25s ease,
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
     transform 0.25s ease;
 }
 
@@ -4205,7 +3932,9 @@ const getItemImage = (item: any) => {
   padding: 16px 20px;
   text-align: left;
   cursor: pointer;
-  transition: background 0.25s ease, color 0.25s ease;
+  transition:
+    background 0.25s ease,
+    color 0.25s ease;
 }
 
 .order-card.opened .order-header-button {
@@ -4302,7 +4031,9 @@ const getItemImage = (item: any) => {
   flex: 1;
   cursor: pointer;
   border-radius: 12px;
-  transition: background-color 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .product-block:focus-visible {
@@ -5130,7 +4861,8 @@ const getItemImage = (item: any) => {
   padding: 0 0 24px 0 !important;
   overflow: hidden !important;
   border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
     0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
 }
 

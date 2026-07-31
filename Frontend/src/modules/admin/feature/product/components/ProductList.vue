@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
+import Swal from "sweetalert2";
 
 import type { Product, ProductVariant } from "../types/product.type";
 
@@ -10,6 +11,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "edit", product: Product): void;
   (e: "stop-selling", id: number): void;
+  (e: "start-selling", id: number): void;
+  (e: "delete", id: number): void;
 }>();
 
 const API_URL = import.meta.env.VITE_API_URL || "";
@@ -27,7 +30,6 @@ const toggleRow = (id: number) => {
 };
 
 const formatPrice = (price: number) => {
-  // Dùng en-US để lấy dấu phẩy phân cách hàng nghìn, sau đó ghép thêm chữ VNĐ
   return new Intl.NumberFormat("en-US").format(price) + " VNĐ";
 };
 
@@ -59,6 +61,23 @@ const onImageError = (event: Event) => {
   img.src = FALLBACK_IMAGE;
 };
 
+const handleDelete = (product: Product) => {
+  Swal.fire({
+    title: "Xác nhận xóa?",
+    text: `Bạn có chắc chắn muốn xóa sản phẩm "${product.name}" không? Thao tác này không thể hoàn tác!`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonColor: "#dc2626",
+    cancelButtonColor: "#64748b",
+    confirmButtonText: "Xóa sản phẩm",
+    cancelButtonText: "Hủy",
+  }).then((result) => {
+    if (result.isConfirmed) {
+      emit("delete", product.id);
+    }
+  });
+};
+
 const rows = computed(() =>
   props.paginatedData.map((product) => {
     const stock = calculateTotalStock(product.variants);
@@ -83,7 +102,7 @@ const rows = computed(() =>
           <th>Nồng độ</th>
           <th class="text-center">Tồn kho</th>
           <th class="text-center">Trạng thái</th>
-          <th width="140" class="text-center">Thao tác</th>
+          <th width="160" class="text-center">Thao tác</th>
         </tr>
       </thead>
       <tbody>
@@ -94,10 +113,14 @@ const rows = computed(() =>
           </td>
         </tr>
 
-        <!-- Bọc trong template để render 2 dòng (dòng chính + dòng biến thể) -->
         <template v-for="product in rows" :key="product.id">
-          <!-- Dòng chính -->
-          <tr :class="{ 'row-expanded': expandedRowIds.includes(product.id) }">
+          <!-- Dòng chính, thêm class row-inactive nếu Ngừng bán -->
+          <tr 
+            :class="[
+              { 'row-expanded': expandedRowIds.includes(product.id) }, 
+              product.status !== 1 ? 'row-inactive' : ''
+            ]"
+          >
             <td>
               <div class="image-box">
                 <img
@@ -115,7 +138,6 @@ const rows = computed(() =>
             <td>
               <div class="product-info">
                 <div class="product-name">{{ product.name }}</div>
-                <!-- Nút toggle xổ biến thể -->
                 <div
                   class="product-sub expand-trigger"
                   @click="toggleRow(product.id)"
@@ -159,13 +181,32 @@ const rows = computed(() =>
                 >
                   <i class="bi bi-pencil"></i>
                 </button>
+                
+                <!-- Nút Ẩn / Hiện -->
                 <button
                   v-if="product.status === 1"
-                  class="icon-btn delete"
+                  class="icon-btn toggle-status-off"
                   title="Ngừng bán"
                   @click="emit('stop-selling', product.id)"
                 >
                   <i class="bi bi-eye-slash"></i>
+                </button>
+                <button
+                  v-else
+                  class="icon-btn toggle-status-on"
+                  title="Mở bán"
+                  @click="emit('start-selling', product.id)"
+                >
+                  <i class="bi bi-eye"></i>
+                </button>
+
+                <!-- Nút Xóa -->
+                <button
+                  class="icon-btn delete"
+                  title="Xóa sản phẩm"
+                  @click="handleDelete(product)"
+                >
+                  <i class="bi bi-trash"></i>
                 </button>
               </div>
             </td>
@@ -187,10 +228,7 @@ const rows = computed(() =>
                     </tr>
                   </thead>
                   <tbody>
-                    <!-- Tìm đoạn này trong phần <tbody> của bảng variant-table và thay thế -->
-                    <tr v-for="v in product.variants" :key="v.id">
-
-                      <!-- Sửa 2 dòng này: Chỉ gọi thẳng capacityName và bottleTypeName -->
+                    <tr v-for="v in product.variants" :key="v.id" :class="{'opacity-50': v.status !== 1}">
                       <td class="fw-medium text-dark">
                         {{ v.capacityName }} ml
                       </td>
@@ -217,7 +255,7 @@ const rows = computed(() =>
                           "
                         ></span>
                         <small class="ms-1 text-muted">{{
-                          v.status === 1 ? "Mở bán" : "Tắt"
+                          v.status === 1 ? "Đang bán" : "Ngừng bán"
                         }}</small>
                       </td>
                     </tr>
@@ -277,6 +315,21 @@ const rows = computed(() =>
 .row-expanded td {
   border-bottom-color: transparent !important;
   background: #f8fafc;
+}
+
+/* CSS CHO SẢN PHẨM NGỪNG BÁN (BỊ LÀM MỜ) */
+.row-inactive > td {
+  background-color: #f8fafc !important;
+}
+.row-inactive .image-box img {
+  filter: grayscale(100%);
+  opacity: 0.6;
+}
+.row-inactive .product-name,
+.row-inactive td:nth-child(3),
+.row-inactive td:nth-child(4),
+.row-inactive td:nth-child(5) {
+  opacity: 0.5;
 }
 
 .image-box {
@@ -399,6 +452,10 @@ const rows = computed(() =>
   background: #fdfefe;
 }
 
+.opacity-50 {
+  opacity: 0.5;
+}
+
 .status-dot {
   display: inline-block;
   width: 8px;
@@ -442,8 +499,8 @@ const rows = computed(() =>
   color: #15803d;
 }
 .inactive {
-  background: #fee2e2;
-  color: #dc2626;
+  background: #f3f4f6;
+  color: #475569;
 }
 
 .actions {
@@ -469,6 +526,26 @@ const rows = computed(() =>
 }
 .edit:hover {
   background: #2563eb;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.toggle-status-off {
+  background: #fffbeb;
+  color: #d97706;
+}
+.toggle-status-off:hover {
+  background: #d97706;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.toggle-status-on {
+  background: #dcfce7;
+  color: #15803d;
+}
+.toggle-status-on:hover {
+  background: #15803d;
   color: white;
   transform: translateY(-2px);
 }

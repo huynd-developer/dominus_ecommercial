@@ -622,13 +622,98 @@ const fetchFlashSaleProducts = async () => {
       {
         params: {
           page: 0,
-          size: 4,
+          size: 20,
         },
       }
     );
 
     const rows = resolvePageContent<FlashSaleProductResponse>(res.data);
-    flashSaleProducts.value = rows.map(mapFlashSaleProduct);
+
+    const productMap = new Map<number, FlashSaleProductResponse[]>();
+    rows.forEach((item) => {
+      const pId = toNumber(item.productId ?? item.productVariantId, 0);
+      if (!productMap.has(pId)) {
+        productMap.set(pId, []);
+      }
+      productMap.get(pId)!.push(item);
+    });
+
+    const groupedProducts: ProductCardItem[] = [];
+
+    productMap.forEach((variants, productId) => {
+      if (!variants || variants.length === 0) return;
+      const firstItem = variants[0];
+      
+      const productImages = resolveProductImages(firstItem);
+      const productImage = productImages[0] || resolveProductImage(firstItem);
+
+      const salePrices = variants.map(v => toNumber(v.salePrice, 0)).filter(p => p > 0);
+      const minSalePrice = salePrices.length > 0 ? Math.min(...salePrices) : toNumber(firstItem?.salePrice, 0);
+
+      const originalPrices = variants.map(v => toNumber(v.originalPrice, 0)).filter(p => p > 0);
+      const minOriginalPrice = originalPrices.length > 0 ? Math.min(...originalPrices) : toNumber(firstItem?.originalPrice, 0);
+
+      const maxDiscount = Math.max(...variants.map(v => toNumber(v.discountPercent, 0)));
+
+      const mappedVariants = variants.map(v => {
+        const vId = toNumber(v.productVariantId, 0);
+        const vSalePrice = toNumber(v.salePrice, 0);
+        const vOriginalPrice = toNumber(v.originalPrice, 0);
+        const vStock = toNumber(v.stockQuantity, 0);
+
+        return {
+          id: vId,
+          productVariantId: vId,
+          variantId: vId,
+          price: vOriginalPrice,
+          originalPrice: vOriginalPrice,
+          salePrice: vSalePrice,
+          stockQuantity: vStock,
+          status: 1,
+          capacity: v.capacity,
+          bottleType: v.bottleType,
+          imageUrl: productImage,
+          image: productImage,
+          images: productImages,
+        };
+      });
+
+      groupedProducts.push({
+        id: productId,
+        productId: productId,
+        productVariantId: mappedVariants[0]?.productVariantId,
+        variantId: mappedVariants[0]?.productVariantId,
+
+        name: firstItem?.productName || "Sản phẩm Flash Sale",
+        brand: firstItem?.promotionName || "Flash Sale",
+        color: "#0a192f",
+
+        imageUrl: productImage,
+        image: productImage,
+        mainImage: productImage,
+        images: productImages,
+        productImages: productImages.map((imageUrl, index) => ({
+          id: index + 1,
+          imageUrl,
+          url: imageUrl,
+        })),
+
+        salePrice: minSalePrice,
+        originalPrice: minOriginalPrice,
+        discountPercent: maxDiscount,
+
+        rating: 5,
+        reviewCount: 0,
+
+        stockQuantity: mappedVariants.reduce((sum, v) => sum + (v.stockQuantity || 0), 0),
+        isFlashSale: true,
+        endDate: firstItem?.endDate,
+
+        variants: mappedVariants,
+      });
+    });
+
+    flashSaleProducts.value = groupedProducts;
   } catch (error) {
     console.error("Lỗi tải Flash Sale:", error);
     flashSaleProducts.value = [];

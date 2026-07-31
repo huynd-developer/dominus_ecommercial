@@ -134,7 +134,8 @@
 
       <div class="summary-line">
         <span>Phí vận chuyển</span>
-        <span class="val free-ship">Không tính</span>
+        <!-- Dùng hàm formatCurrency (hoặc hàm format tiền của m) để in ra 30.000 đ -->
+        <span>{{ new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(shippingFee) }}</span>
       </div>
 
       <div class="summary-line total-line">
@@ -166,6 +167,7 @@ import api from "@/common/api";
 const props = defineProps<{
   totalAmount: number;
   discountAmount: number;
+  shippingFee: number; // Bổ sung dòng này
   finalTotal: number;
   canCheckout: boolean;
 }>();

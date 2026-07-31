@@ -184,58 +184,92 @@ const closeModal = () => {
   showModal.value = false
 }
 
-const stopSelling = async (
-  id: number
-) => {
-  const result =
-    await Swal.fire({
-      title: 'Ẩn sản phẩm?',
-      text: 'Sản phẩm sẽ được chuyển sang trạng thái ngừng kinh doanh.',
-      icon: 'warning',
+// HÀM DÙNG CHUNG ĐỂ CẬP NHẬT TRẠNG THÁI ẨN / HIỆN QUA productService.updateProduct
+const toggleProductStatus = async (product: Product, newStatus: number) => {
+  const actionName = newStatus === 1 ? 'Mở bán' : 'Ẩn sản phẩm';
+  const confirmColor = newStatus === 1 ? '#10b981' : '#f59e0b';
 
-      showCancelButton: true,
+  const result = await Swal.fire({
+    title: `${actionName} này?`,
+    text: `Bạn có chắc chắn muốn ${actionName.toLowerCase()} sản phẩm "${product.name}" không?`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: confirmColor,
+    confirmButtonText: actionName,
+    cancelButtonText: 'Hủy'
+  })
 
-      confirmButtonColor:
-        '#f59e0b',
-
-      confirmButtonText:
-        'Ẩn sản phẩm',
-
-      cancelButtonText: 'Hủy'
-    })
-
-  if (!result.isConfirmed) {
-    return
-  }
+  if (!result.isConfirmed) return
 
   try {
-    Swal.fire({
-      title: 'Đang xử lý...',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading()
-      }
+    Swal.fire({ title: 'Đang xử lý...', allowOutsideClick: false, didOpen: () => Swal.showLoading() })
+
+    // Chuẩn bị payload đúng chuẩn DTO để update thông qua service có sẵn
+    const payload = {
+      name: product.name,
+      description: product.description,
+      brandId: product.brandId,
+      categoryId: product.categoryId,
+      concentrationId: product.concentrationId,
+      gender: product.gender,
+      isNiche: product.isNiche,
+      status: newStatus, // Đổi trạng thái (0: Ẩn, 1: Hiện)
+      fragranceFamilyIds: product.fragranceFamilies?.map((f: any) => f.id) || [],
+      variants: product.variants?.map((v: any) => ({
+        id: v.id,
+        capacityId: v.capacityId,
+        bottleTypeId: v.bottleTypeId,
+        price: v.price,
+        stockQuantity: v.stockQuantity,
+        manufacturingDate: v.manufacturingDate ? v.manufacturingDate.substring(0, 10) : '',
+        expirationDate: v.expirationDate ? v.expirationDate.substring(0, 10) : '',
+        status: newStatus
+      })) || []
+    }
+
+    await productService.updateProduct(product.id, payload)
+
+    Swal.fire({ 
+      icon: 'success', 
+      title: 'Thành công', 
+      text: `Đã ${actionName.toLowerCase()} sản phẩm thành công`, 
+      timer: 1200, 
+      showConfirmButton: false 
     })
-
-    await productService.deleteProduct(
-      id
-    )
-
-    Swal.fire({
-      icon: 'success',
-      title: 'Thành công',
-      text: 'Đã ẩn sản phẩm',
-      timer: 1200,
-      showConfirmButton: false
-    })
-
+    
     await store.fetchProducts()
-  } catch {
-    Swal.fire({
-      icon: 'error',
-      title: 'Lỗi',
-      text: 'Không thể thực hiện thao tác'
+  } catch (error: any) {
+    Swal.fire({ 
+      icon: 'error', 
+      title: 'Lỗi', 
+      text: error?.response?.data?.message || 'Không thể thực hiện thao tác' 
     })
+  }
+}
+
+// 1. HÀM ẨN SẢN PHẨM (status = 0)
+const handleStopSelling = (id: number) => {
+  const product = store.products.find(p => p.id === id)
+  if (product) toggleProductStatus(product, 0)
+}
+
+// 2. HÀM MỞ BÁN SẢN PHẨM (status = 1)
+const handleStartSelling = (id: number) => {
+  const product = store.products.find(p => p.id === id)
+  if (product) toggleProductStatus(product, 1)
+}
+
+// 3. HÀM XÓA HẲN SẢN PHẨM
+const handleDelete = async (id: number) => {
+  try {
+    Swal.fire({ title: 'Đang xóa...', allowOutsideClick: false, didOpen: () => Swal.showLoading() })
+    
+    await productService.deleteProduct(id)
+
+    Swal.fire({ icon: 'success', title: 'Đã xóa', text: 'Sản phẩm đã bị xóa hoàn toàn', timer: 1200, showConfirmButton: false })
+    await store.fetchProducts()
+  } catch (error: any) {
+    Swal.fire({ icon: 'error', title: 'Lỗi', text: error?.response?.data?.message || 'Không thể xóa sản phẩm' })
   }
 }
 </script>
@@ -246,9 +280,7 @@ const stopSelling = async (
     <div class="page-header">
       <div>
         <h3 class="page-title">
-          <i
-            class="bi bi-box-seam me-2"
-          ></i>
+          <i class="bi bi-box-seam me-2"></i>
           Quản lý nước hoa
         </h3>
       </div>
@@ -257,9 +289,7 @@ const stopSelling = async (
         class="btn btn-primary px-4"
         @click="openAddModal"
       >
-        <i
-          class="bi bi-plus-circle me-2"
-        ></i>
+        <i class="bi bi-plus-circle me-2"></i>
         Thêm sản phẩm
       </button>
     </div>
@@ -267,34 +297,22 @@ const stopSelling = async (
     <div class="toolbar">
 
       <div class="search-box">
-
         <i class="bi bi-search"></i>
-
         <input
           v-model="searchQuery"
           placeholder="Tìm theo tên, thương hiệu..."
         />
-
       </div>
 
       <div class="toolbar-right">
-
         <select
           v-model="pageSize"
           class="form-select"
           style="width:100px"
         >
-          <option :value="10">
-            10
-          </option>
-
-          <option :value="20">
-            20
-          </option>
-
-          <option :value="50">
-            50
-          </option>
+          <option :value="10">10</option>
+          <option :value="20">20</option>
+          <option :value="50">50</option>
         </select>
 
         <button
@@ -302,13 +320,9 @@ const stopSelling = async (
           :disabled="loading"
           @click="refreshProducts"
         >
-          <i
-            class="bi bi-arrow-clockwise"
-          ></i>
+          <i class="bi bi-arrow-clockwise"></i>
         </button>
-
       </div>
-
     </div>
 
     <div
@@ -319,9 +333,7 @@ const stopSelling = async (
     </div>
 
     <div
-      v-else-if="
-        filteredData.length === 0
-      "
+      v-else-if="filteredData.length === 0"
       class="empty-state"
     >
       Không tìm thấy sản phẩm
@@ -340,7 +352,9 @@ const stopSelling = async (
         :capacity-list="store.capacityList"
         :bottle-type-list="store.bottleTypeList"
         @edit="openEditModal"
-        @stop-selling="stopSelling"
+        @stop-selling="handleStopSelling"
+        @start-selling="handleStartSelling"
+        @delete="handleDelete"
       />
     </div>
 
@@ -349,94 +363,48 @@ const stopSelling = async (
       class="footer"
     >
       <div class="text-muted">
-
         Hiển thị
-
-        <b>
-          {{
-            paginatedData.length
-          }}
-        </b>
-
+        <b>{{ paginatedData.length }}</b>
         /
-
-        <b>
-          {{
-            filteredData.length
-          }}
-        </b>
-
+        <b>{{ filteredData.length }}</b>
       </div>
 
       <div class="pagination">
-
         <button
           class="btn btn-light"
-          :disabled="
-            currentPage === 1
-          "
-          @click="
-            currentPage--
-          "
+          :disabled="currentPage === 1"
+          @click="currentPage--"
         >
           ←
         </button>
 
         <span>
-          {{ currentPage }}
-          /
-          {{ totalPages }}
+          {{ currentPage }} / {{ totalPages }}
         </span>
 
         <button
           class="btn btn-light"
-          :disabled="
-            currentPage ===
-            totalPages
-          "
-          @click="
-            currentPage++
-          "
+          :disabled="currentPage === totalPages"
+          @click="currentPage++"
         >
           →
-
         </button>
-
       </div>
-
     </div>
 
     <Teleport to="body">
-
       <ProductModal
         v-if="showModal"
-        :product-selected="
-          selectedProduct
-        "
-        :brand-list="
-          store.brandList
-        "
-        :category-list="
-          store.categoryList
-        "
-        :concentration-list="
-          store.concentrationList
-        "
-        :fragrance-family-list="
-          store.fragranceFamilyList
-        "
-        :capacity-list="
-          store.capacityList
-        "
-        :bottle-type-list="
-          store.bottleTypeList
-        "
+        :product-selected="selectedProduct"
+        :brand-list="store.brandList"
+        :category-list="store.categoryList"
+        :concentration-list="store.concentrationList"
+        :fragrance-family-list="store.fragranceFamilyList"
+        :capacity-list="store.capacityList"
+        :bottle-type-list="store.bottleTypeList"
         @close="closeModal"
-        @refresh="
-          store.fetchProducts
-        "
+        @refresh="store.fetchProducts"
       />
-
     </Teleport>
 
   </div>
@@ -476,120 +444,75 @@ const stopSelling = async (
 }
 
 .toolbar{
-
     display:flex;
     justify-content:space-between;
     align-items:center;
-
     padding:18px 30px;
-
     background:#fafafa;
-
 }
 
 .search-box{
-
     width:420px;
-
     position:relative;
-
 }
 
 .search-box i{
-
     position:absolute;
-
     top:50%;
     left:16px;
-
     transform:translateY(-50%);
-
     color:#94a3b8;
-
 }
 
 .search-box input{
-
     width:100%;
-
     padding:12px 18px 12px 45px;
-
     border-radius:999px;
-
     border:1px solid #e2e8f0;
-
     transition:.25s;
-
 }
 
 .search-box input:focus{
-
     outline:none;
-
     border-color:#3b82f6;
-
     box-shadow:0 0 0 4px rgba(59,130,246,.15);
-
 }
 
 .toolbar-right{
-
     display:flex;
     gap:10px;
     align-items:center;
-
 }
 
 .table-wrapper{
-
     padding:20px 24px;
-
 }
 
 .footer{
-
     display:flex;
-
     justify-content:space-between;
-
     align-items:center;
-
     padding:18px 28px;
-
     border-top:1px solid #eee;
-
     background:#fafafa;
-
 }
 
 .pagination{
-
     display:flex;
-
     align-items:center;
-
     gap:12px;
-
 }
 
 .btn{
-
     border-radius:12px;
-
 }
 
 .btn-primary{
-
     border:none;
-
     background:#2563eb;
-
 }
 
 .btn-primary:hover{
-
     background:#1d4ed8;
-
 }
-
 </style>

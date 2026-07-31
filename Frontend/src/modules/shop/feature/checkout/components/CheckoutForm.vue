@@ -146,54 +146,6 @@
         <small class="field-hint">Không bắt buộc, tối đa 255 ký tự.</small>
       </div>
 
-      <div class="vat-section-wrapper">
-        <div class="vat-toggle-box">
-          <div class="vat-toggle-info">
-            <div class="vat-toggle-title">
-              <svg class="icon-receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-                <polyline points="10 9 9 9 8 9" />
-              </svg>
-              <strong>Yêu cầu xuất hóa đơn GTGT (VAT)</strong>
-            </div>
-            <span class="vat-sub">Chỉ bật khi khách cần hóa đơn điện tử cho doanh nghiệp.</span>
-          </div>
-          <label class="switch">
-            <input type="checkbox" v-model="form.requireVat" @change="handleVatToggle" />
-            <span class="slider round"></span>
-          </label>
-        </div>
-
-        <div class="vat-form-box" v-if="form.requireVat">
-          <h4 class="vat-form-title">Thông tin xuất hóa đơn</h4>
-          <div class="form-row">
-            <div class="form-group half">
-              <label>Mã số thuế <span class="text-danger">*</span></label>
-              <div class="input-box"><input type="text" v-model="form.vatTaxCode" @input="validateVatTaxCode"
-                  maxlength="14" placeholder="Ví dụ: 0101234567" /></div>
-            </div>
-            <div class="form-group half">
-              <label>Email nhận hóa đơn <span class="text-danger">*</span></label>
-              <div class="input-box"><input type="email" v-model="form.vatEmail" @input="validateVatEmail"
-                  maxlength="255" placeholder="accounting@company.com" /></div>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Tên công ty / đơn vị <span class="text-danger">*</span></label>
-            <div class="input-box"><input type="text" v-model="form.vatCompanyName" @input="validateVatCompanyName"
-                maxlength="255" placeholder="Ví dụ: Công ty TNHH ABC" /></div>
-          </div>
-          <div class="form-group mb-0">
-            <label>Địa chỉ công ty <span class="text-danger">*</span></label>
-            <div class="input-box"><input type="text" v-model="form.vatCompanyAddress"
-                @input="validateVatCompanyAddress" maxlength="500" placeholder="Địa chỉ theo giấy đăng ký kinh doanh" />
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
 
     <div class="divider"></div>
@@ -259,7 +211,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { useRouter, onBeforeRouteLeave } from "vue-router"; // Đã thêm onBeforeRouteLeave
+import { useRouter, onBeforeRouteLeave } from "vue-router"; 
 
 interface Ward { code: number | string; name: string; }
 interface Province { code: number | string; name: string; wards?: Ward[] | null; }
@@ -269,7 +221,6 @@ const props = defineProps<{
     customerName: string; customerPhone: string; shippingAddress: string; note: string; paymentMethod: string;
     provinceName?: string; wardName?: string; specificAddress?: string;
     profileLoaded?: boolean; profileAddress?: string;
-    requireVat?: boolean; vatTaxCode?: string; vatEmail?: string; vatCompanyName?: string; vatCompanyAddress?: string;
   };
 }>();
 
@@ -335,10 +286,6 @@ const validateName = () => { props.form.customerName = cleanText(String(props.fo
 const validatePhone = () => { props.form.customerPhone = String(props.form.customerPhone || "").replace(/[^\d]/g, "").slice(0, 10); };
 const validateSpecificAddress = () => { specificAddress.value = cleanAddressText(specificAddress.value).slice(0, 255); syncFullAddress(); };
 const validateNote = () => { props.form.note = cleanText(props.form.note).slice(0, 255); };
-const validateVatTaxCode = () => { props.form.vatTaxCode = String(props.form.vatTaxCode || "").replace(/[^\d]/g, "").slice(0, 14); };
-const validateVatEmail = () => { props.form.vatEmail = String(props.form.vatEmail || "").replace(/\s/g, "").slice(0, 255); };
-const validateVatCompanyName = () => { props.form.vatCompanyName = cleanText(String(props.form.vatCompanyName || "").replace(/[^\p{L}\d\s.,()\-&]/gu, "")).slice(0, 255); };
-const validateVatCompanyAddress = () => { props.form.vatCompanyAddress = cleanAddressText(String(props.form.vatCompanyAddress || "")).slice(0, 500); };
 
 // XỬ LÝ CHỌN ĐỊA CHỈ TỪ DANH SÁCH
 const applySelectedProfileAddress = () => {
@@ -408,12 +355,6 @@ const saveNewAddress = () => {
   props.form.specificAddress = "";
 };
 
-const handleVatToggle = () => {
-  if (!props.form.requireVat) {
-    props.form.vatTaxCode = ""; props.form.vatEmail = ""; props.form.vatCompanyName = ""; props.form.vatCompanyAddress = "";
-  }
-};
-
 const loadProvinces = async () => {
   try {
     loadingProvinces.value = true;
@@ -461,7 +402,6 @@ const loadWardsByProvince = async (provinceCode: string) => {
 };
 
 onMounted(async () => {
-  props.form.requireVat = Boolean(props.form.requireVat);
   specificAddress.value = props.form.specificAddress || "";
 
   if (props.form.shippingAddress && props.form.shippingAddress.startsWith('[')) {
@@ -481,12 +421,34 @@ onMounted(async () => {
 
   await loadProvinces();
 
-  // Khởi tạo giao diện: Nếu có địa chỉ thì dạng List (Chọn), chưa có thì dạng Form (Thêm mới)
-  if (parsedProfileAddresses.value.length > 0) {
+  // FIX TRIỆT ĐỂ LỖI MẤT ĐỊA CHỈ:
+  if (props.form.shippingAddress) {
+    // Đi tìm xem địa chỉ draft có trong list DB trả về không
+    const matchIdx = parsedProfileAddresses.value.findIndex(
+      (a) => a.fullAddress === props.form.shippingAddress
+    );
+    
+    if (matchIdx !== -1) {
+      selectedProfileAddressIndex.value = String(matchIdx);
+      isAddingNewAddress.value = false;
+    } else {
+      // Nếu không có (do vừa nhập tay xong), TỰ ĐỘNG ĐẨY VÀO LIST TRÊN GIAO DIỆN luôn
+      parsedProfileAddresses.value.push({
+        name: props.form.customerName,
+        phone: props.form.customerPhone,
+        fullAddress: props.form.shippingAddress,
+        isNew: true
+      });
+      selectedProfileAddressIndex.value = String(parsedProfileAddresses.value.length - 1);
+      isAddingNewAddress.value = false;
+    }
+  } else if (parsedProfileAddresses.value.length > 0) {
+    // Lần đầu vào trang, chọn mặc định cái đầu tiên
     selectedProfileAddressIndex.value = "0";
     applySelectedProfileAddress();
     isAddingNewAddress.value = false;
   } else {
+    // Chưa có địa chỉ nào bao giờ thì mở form thêm mới
     isAddingNewAddress.value = true;
   }
 });
@@ -558,22 +520,6 @@ onMounted(async () => {
 }
 .address-error { padding: 10px 12px; background: #fff1f2; color: #b91c1c; border: 1px solid #fecdd3; border-radius: 8px; font-size: 13px; }
 
-.vat-section-wrapper { margin-top: 25px; margin-bottom: 20px; }
-.vat-toggle-box { display: flex; justify-content: space-between; align-items: center; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px 20px; background: white; }
-.vat-toggle-info { display: flex; flex-direction: column; gap: 4px; }
-.vat-toggle-title { display: flex; align-items: center; gap: 8px; color: #1a202c; }
-.icon-receipt { width: 18px; height: 18px; color: #4a5568; }
-.vat-sub { font-size: 13px; color: #718096; }
-.switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
-.switch input { opacity: 0; width: 0; height: 0; }
-.slider { position: absolute; cursor: pointer; inset: 0; background-color: #cbd5e0; transition: 0.4s; }
-.slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: 0.4s; }
-input:checked + .slider { background-color: #3182ce; }
-input:checked + .slider:before { transform: translateX(20px); }
-.slider.round { border-radius: 24px; }
-.slider.round:before { border-radius: 50%; }
-.vat-form-box { background: #ebf8ff; border: 1px solid #bee3f8; border-radius: 8px; padding: 20px; margin-top: 15px; }
-.vat-form-title { margin: 0 0 15px 0; color: #2b6cb0; font-size: 15px; font-weight: 600; }
 .divider { height: 1px; background: #f0f0f0; margin: 30px 0; }
 
 .payment-option { display: flex; align-items: center; gap: 15px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px; cursor: pointer; transition: 0.2s; }
@@ -599,6 +545,5 @@ input:checked + .slider:before { transform: translateX(20px); }
 @media (max-width: 768px) {
   .checkout-left { padding: 24px; }
   .form-row { flex-direction: column; gap: 0; }
-  .vat-toggle-box { align-items: stretch; flex-direction: column; }
 }
 </style>

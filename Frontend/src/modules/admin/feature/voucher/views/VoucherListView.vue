@@ -1,88 +1,92 @@
 <template>
-  <div class="admin-voucher-page">
+  <div class="p-4 min-vh-100" style="background-color: #f8f9fa;">
     <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-      <div>
-        <h3 class="fw-bold mb-1 text-dark">Quản lý Mã giảm giá (Voucher)</h3>
-        <p class="text-muted small mb-0">CRUD mã giảm giá, cấu hình phần trăm giảm giá và thời hạn.</p>
-      </div>
-      <button @click="openCreateModal" class="btn btn-dark fw-bold px-4 py-2 custom-btn-add">
-        + Tạo voucher
+      <h4 class="fw-bold mb-0 d-flex align-items-center gap-2">
+        <i class="bi bi-ticket-perforated"></i> Quản lý Mã giảm giá (Voucher)
+      </h4>
+      <button @click="openCreateModal" class="btn btn-primary rounded-pill px-4 py-2 shadow-sm d-flex align-items-center gap-2">
+        <i class="bi bi-plus-circle"></i> Thêm voucher
       </button>
     </div>
 
-    <!-- Filter & Search Bar -->
-    <div class="card border-0 shadow-sm mb-4">
-      <div class="card-body p-3">
-        <div class="row g-3">
-          <div class="col-md-5">
+    <!-- Bọc toàn bộ vào Card trắng bo góc như trang Sản phẩm -->
+    <div class="card border-0 shadow-sm rounded-4">
+      <div class="card-body p-4">
+        
+        <!-- Filter & Search Bar kiểu mới -->
+        <div class="d-flex justify-content-between align-items-center mb-4 gap-3 flex-wrap">
+          <div class="position-relative flex-grow-1" style="max-width: 400px;">
+            <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
             <input 
               type="text" 
-              class="form-control form-control-lg bg-light" 
+              class="form-control rounded-pill ps-5 bg-light border-0" 
               placeholder="Tìm theo mã voucher..." 
               v-model="searchKeyword"
               @keyup.enter="handleSearch"
             />
           </div>
-          <div class="col-md-4">
-            <select class="form-select form-select-lg bg-light" v-model="filterStatus" @change="handleSearch">
+          <div class="d-flex align-items-center gap-2">
+            <select class="form-select rounded-pill bg-light border-0 px-4" style="width: 200px;" v-model="filterStatus" @change="handleSearch">
               <option value="">Tất cả trạng thái</option>
-              <option :value="1">Đang bật</option>
+              <option :value="1">Đang hoạt động</option>
               <option :value="0">Tạm dừng</option>
             </select>
-          </div>
-          <div class="col-md-3">
-            <button @click="handleSearch" class="btn btn-outline-dark btn-lg w-100">
-              Tìm kiếm
+            <button class="btn btn-light rounded-circle shadow-sm text-muted" @click="handleSearch" title="Làm mới">
+              <i class="bi bi-arrow-clockwise"></i>
             </button>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Table Danh Sách -->
-    <div class="card border-0 shadow-sm">
-      <div class="card-body p-0">
+        <!-- Table Danh Sách -->
         <div v-if="isLoading" class="text-center py-5">
           <div class="spinner-border text-primary" role="status"></div>
         </div>
 
         <div class="table-responsive" v-else>
-          <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
+          <table class="table align-middle table-borderless table-hover custom-table">
+            <thead class="text-muted border-bottom">
               <tr>
-                <th class="ps-4">Mã Voucher</th>
-                <th>Loại - Mức giảm</th>
-                <th>Đơn tối thiểu</th>
-                <th>Đã dùng / Giới hạn</th>
-                <th>Thời hạn</th>
-                <th>Trạng thái</th>
-                <th class="text-center">Thao tác</th>
+                <th class="ps-3 fw-medium">Mã Voucher</th>
+                <th class="fw-medium">Mức giảm</th>
+                <th class="fw-medium">Đơn tối thiểu</th>
+                <th class="fw-medium">Giới hạn</th>
+                <th class="fw-medium">Thời hạn</th>
+                <th class="fw-medium text-center">Trạng thái</th>
+                <th class="fw-medium text-end pe-3">Thao tác</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="v in vouchers" :key="v.id">
-                <td class="ps-4 fw-bold text-success">{{ v.code }}</td>
-                <td>
-                  <span class="fw-bold">{{ formatMoney(v.discountValue) }}</span>
-                  <span class="badge bg-secondary ms-1">{{ v.discountType === 'PERCENT' ? '%' : 'VNĐ' }}</span>
+              <tr v-for="v in vouchers" :key="v.id" class="border-bottom">
+                <td class="ps-3">
+                  <span class="fw-bold text-dark">{{ v.code }}</span>
                 </td>
-                <td>{{ formatMoney(v.minOrderValue) }}</td>
-                <td>{{ v.usedCount }} / {{ v.usageLimit }}</td>
+                <td>
+                  <span class="fw-bold text-dark">{{ formatMoney(v.discountValue) }}</span>
+                  <span class="text-muted ms-1 small">{{ v.discountType === 'PERCENT' ? '%' : 'VNĐ' }}</span>
+                </td>
+                <td class="text-muted">{{ formatMoney(v.minOrderValue) }}</td>
+                <td>
+                  <span class="badge bg-light text-dark border">{{ v.usedCount }} / {{ v.usageLimit }}</span>
+                </td>
                 <td class="small text-muted">
-                  Bắt đầu: {{ formatDate(v.startDate) }}<br>
-                  Kết thúc: <span :class="{'text-danger fw-bold': isExpired(v.endDate)}">{{ formatDate(v.endDate) }}</span>
+                  {{ formatDate(v.startDate) }} <br>
+                  <span :class="{'text-danger': isExpired(v.endDate)}">{{ formatDate(v.endDate) }}</span>
                 </td>
-                <td>
-                  <span class="badge" :class="v.status === 1 ? 'bg-success' : 'bg-secondary'">
+                <td class="text-center">
+                  <span class="badge rounded-pill px-3 py-2" 
+                        :class="v.status === 1 ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary'">
                     {{ v.status === 1 ? 'Hoạt động' : 'Tạm dừng' }}
                   </span>
                 </td>
-                <td class="text-center">
-                  <div class="d-flex gap-2 justify-content-center">
-                    <button @click="openEditModal(v)" class="btn btn-sm btn-outline-secondary">Xem/Sửa</button>
-                    <button @click="handleDelete(v.id)" class="btn btn-sm btn-outline-danger">Xóa</button>
-                  </div>
+                <td class="text-end pe-3">
+                  <!-- Đổi sang nút icon -->
+                  <button @click="openEditModal(v)" class="btn btn-sm btn-light text-primary rounded-circle me-2 action-btn" title="Sửa">
+                    <i class="bi bi-pencil-square"></i>
+                  </button>
+                  <button @click="handleDelete(v.id)" class="btn btn-sm btn-light text-danger rounded-circle action-btn" title="Xóa">
+                    <i class="bi bi-trash3"></i>
+                  </button>
                 </td>
               </tr>
               <tr v-if="vouchers.length === 0">
@@ -91,26 +95,28 @@
             </tbody>
           </table>
         </div>
-      </div>
 
-      <!-- Pagination -->
-      <div class="card-footer bg-white border-0 py-3" v-if="totalPages > 1">
-        <ul class="pagination justify-content-center mb-0">
-          <li class="page-item" :class="{ disabled: currentPage === 0 }">
-            <button class="page-link" @click="changePage(currentPage - 1)">Trước</button>
-          </li>
-          <li class="page-item" v-for="page in totalPages" :key="page" :class="{ active: currentPage === page - 1 }">
-            <button class="page-link" @click="changePage(page - 1)">{{ page }}</button>
-          </li>
-          <li class="page-item" :class="{ disabled: currentPage === totalPages - 1 }">
-            <button class="page-link" @click="changePage(currentPage + 1)">Sau</button>
-          </li>
-        </ul>
+        <!-- Pagination kiểu mới -->
+        <div class="d-flex justify-content-between align-items-center mt-4 text-muted small" v-if="totalPages > 0">
+          <div>
+            Hiển thị trang {{ currentPage + 1 }} / {{ totalPages }}
+          </div>
+          <div class="d-flex gap-2 align-items-center">
+            <button class="btn btn-sm btn-light rounded-circle" :disabled="currentPage === 0" @click="changePage(currentPage - 1)">
+              <i class="bi bi-arrow-left"></i>
+            </button>
+            <span class="mx-2">{{ currentPage + 1 }} / {{ totalPages }}</span>
+            <button class="btn btn-sm btn-light rounded-circle" :disabled="currentPage === totalPages - 1" @click="changePage(currentPage + 1)">
+              <i class="bi bi-arrow-right"></i>
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
 
     <!-- ============================================== -->
-    <!-- MODAL (POPUP) THÊM/SỬA VOUCHER                 -->
+    <!-- MODAL (POPUP) THÊM/SỬA VOUCHER GIỮ NGUYÊN CODE -->
     <!-- ============================================== -->
     <Teleport to="body">
       <div v-if="showModal" class="custom-modal-overlay" @click.self="closeModal">
@@ -125,8 +131,6 @@
             
             <form @submit.prevent="handleSubmit">
               <div class="row g-4">
-                
-                <!-- MÃ VOUCHER -->
                 <div class="col-md-12">
                   <label class="form-label fw-bold">Mã Voucher</label>
                   <div class="input-group">
@@ -232,7 +236,7 @@
 
               <div class="modal-footer mt-4 pt-4 border-top">
                 <button type="button" class="btn btn-light btn-lg px-4" @click="closeModal">Hủy</button>
-                <button type="submit" class="btn btn-dark btn-lg px-5" :disabled="!!dateError || isSaving">
+                <button type="submit" class="btn btn-primary btn-lg px-5 rounded-pill" :disabled="!!dateError || isSaving">
                   <span v-if="isSaving" class="spinner-border spinner-border-sm me-2"></span>
                   {{ isEditing ? 'Lưu thay đổi' : 'Tạo Voucher' }}
                 </button>
@@ -246,7 +250,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'; // Đã thêm watch ở đây
+import { ref, onMounted, watch } from 'vue'; 
 import axios from 'axios';
 import Swal from 'sweetalert2';
 
@@ -271,33 +275,23 @@ const initialForm = {
 };
 const form = ref({ ...initialForm });
 
-// ================= THEO DÕI TỰ ĐỘNG CHUYỂN TRẠNG THÁI =================
 watch(() => form.value.endDate, (newEndDate) => {
   if (newEndDate) {
     const end = new Date(newEndDate).getTime();
     const now = new Date().getTime();
-
-    // Lấy số lượt đã dùng (nếu đang ở form sửa thì mới có biến này, thêm mới thì là 0)
     const used = (form.value as any).usedCount || 0;
     const limit = form.value.usageLimit || 0;
 
-    // Nếu ngày kết thúc ở tương lai
     if (end > now) {
-      // Kiểm tra thêm điều kiện xem còn lượt dùng không
       if (limit === 0 || used < limit) {
-        form.value.status = 1; // Tự động chuyển sang Hoạt động
+        form.value.status = 1; 
       }
     } else {
-      // Nếu lùi ngày kết thúc về quá khứ
-      form.value.status = 0; // Tự động chuyển sang Tạm dừng
+      form.value.status = 0; 
     }
   }
 });
-// ======================================================================
 
-// ================= CÁC HÀM VALIDATE VÀ FORMAT GIAO DIỆN =================
-
-// Hàm gõ mã: Lọc bỏ ký tự đặc biệt, khoảng trắng, chỉ lấy chữ và số, tự in hoa
 const handleCodeInput = (event: Event) => {
   const target = event.target as HTMLInputElement;
   let rawVal = target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 20);
@@ -305,27 +299,23 @@ const handleCodeInput = (event: Event) => {
   target.value = rawVal;
 };
 
-// Hàm định dạng hiển thị tiền VNĐ (VD: 50000 -> 50.000)
 const formatNumber = (value: any) => {
   if (value === null || value === undefined || value === '') return '';
   return String(value).replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 };
 
-// Reset ô Mức giảm về 0 khi đổi Kiểu giảm để tránh lỗi logic
 const resetDiscountValue = () => {
   form.value.discountValue = 0;
   if (form.value.discountType === 'FIXED') {
-    form.value.maxDiscount = 0; // Vô hiệu hóa maxDiscount khi dùng giảm tiền mặt
+    form.value.maxDiscount = 0; 
   }
 };
 
-// Hàm Validate ô nhập Tiền tệ (Mức giảm VNĐ, Đơn tối thiểu, Giảm tối đa)
 const handleCurrencyInput = (field: string, event: Event) => {
   const target = event.target as HTMLInputElement;
-  let rawValue = target.value.replace(/\D/g, ''); // Bỏ hết chữ, ký tự lạ, giữ lại số
+  let rawValue = target.value.replace(/\D/g, ''); 
   let numValue = Number(rawValue);
 
-  // Giới hạn max 100.000.000 VNĐ
   if (numValue > 100000000) {
     Swal.fire({
       toast: true, position: 'top-end', icon: 'warning', 
@@ -339,10 +329,9 @@ const handleCurrencyInput = (field: string, event: Event) => {
   target.value = formatNumber(numValue);
 };
 
-// Hàm Validate ô nhập Mức giảm (%)
 const handlePercentInput = (event: Event) => {
   const target = event.target as HTMLInputElement;
-  let rawValue = target.value.replace(/\D/g, ''); // Chỉ lấy số
+  let rawValue = target.value.replace(/\D/g, ''); 
   let numValue = Number(rawValue);
 
   if (numValue > 100) {
@@ -358,10 +347,9 @@ const handlePercentInput = (event: Event) => {
   target.value = String(numValue);
 };
 
-// Hàm Validate giới hạn lượt dùng
 const handleUsageLimitInput = (event: Event) => {
   const target = event.target as HTMLInputElement;
-  let rawValue = target.value.replace(/\D/g, ''); // Chỉ lấy số
+  let rawValue = target.value.replace(/\D/g, ''); 
   let numValue = Number(rawValue);
 
   if (numValue > 1000) {
@@ -377,7 +365,6 @@ const handleUsageLimitInput = (event: Event) => {
   target.value = String(numValue);
 };
 
-// Hàm tạo mã ngẫu nhiên 8 ký tự
 const generateRandomCode = () => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = 'SALE'; 
@@ -387,8 +374,6 @@ const generateRandomCode = () => {
   form.value.code = code;
 };
 
-
-// ================= CALL API VÀ XỬ LÝ DỮ LIỆU BẢNG =================
 const fetchVouchers = async () => {
   isLoading.value = true;
   try {
@@ -459,7 +444,6 @@ const validateDates = () => {
 };
 
 const handleSubmit = async () => {
-  // Validate kiểm tra Submit lần cuối
   if (!form.value.discountType || !form.value.startDate || !form.value.endDate || !form.value.usageLimit) {
     Swal.fire('Lỗi', 'Vui lòng nhập đầy đủ các trường bắt buộc có dấu (*)!', 'error');
     return;
@@ -532,15 +516,39 @@ onMounted(fetchVouchers);
 </script>
 
 <style scoped>
-.admin-voucher-page {
-  padding: 24px;
-  background-color: #f8f9fa;
-  min-height: 100vh;
+/* Table styles đồng bộ */
+.custom-table th {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1rem 0.5rem;
+}
+.custom-table td {
+  padding: 1rem 0.5rem;
+  vertical-align: middle;
+}
+.action-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.action-btn:hover {
+  transform: translateY(-2px);
+  background-color: #e9ecef !important;
 }
 
-.custom-btn-add {
-  background-color: #1a1a1a;
-  border-radius: 8px;
+/* Các badge màu pastel */
+.bg-success-subtle {
+  background-color: #d1e7dd !important;
+}
+.text-success {
+  color: #198754 !important;
+}
+.bg-secondary-subtle {
+  background-color: #e2e3e5 !important;
 }
 
 /* Modal CSS */
@@ -557,18 +565,16 @@ onMounted(fetchVouchers);
   z-index: 1050;
   backdrop-filter: blur(4px);
 }
-
 .custom-modal-content {
   background-color: white;
   width: 90%;
   max-width: 800px;
-  border-radius: 12px;
+  border-radius: 16px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.2);
   display: flex;
   flex-direction: column;
   max-height: 90vh;
 }
-
 .modal-header {
   padding: 24px;
   border-bottom: 1px solid #f0f0f0;
@@ -576,11 +582,9 @@ onMounted(fetchVouchers);
   justify-content: space-between;
   align-items: center;
 }
-
 .modal-body {
   overflow-y: auto;
 }
-
 .modal-footer {
   display: flex;
   justify-content: flex-end;

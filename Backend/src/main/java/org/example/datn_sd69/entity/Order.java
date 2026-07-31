@@ -97,4 +97,7 @@ public class Order extends BaseEntity {
 
     @Column(name = "CancelledAt")
     private LocalDateTime cancelledAt;
+
+    @Column(name = "Shippingfee")
+    private BigDecimal shippingFee = BigDecimal.valueOf(30000);
 }
