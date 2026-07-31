@@ -140,10 +140,9 @@
               />
             </div>
 
-            <!-- ĐÃ FIX LỖI GIÁ Ở ĐÂY -->
             <div class="vm-details">
               <h6>{{ product.name }}</h6>
-              <div class="d-flex align-items-end gap-2">
+              <div class="d-flex align-items-end gap-2 flex-wrap">
                 <p class="vm-price mb-0">
                   {{
                     formatCurrency(
@@ -167,15 +166,18 @@
                 >
                   {{ formatCurrency(product.originalPrice) }}
                 </span>
+
+                <span v-if="calculatedDiscountPercent > 0" class="flash-sale-badge">
+                  -{{ calculatedDiscountPercent }}%
+                </span>
               </div>
             </div>
-            <!-- END FIX -->
 
           </div>
 
           <div class="vm-variants">
-            <p class="vm-label">Tùy chọn phân loại:</p>
-
+            <p class="vm-label">TÙY CHỌN PHÂN LOẠI:</p>
+            
             <div v-if="isLoadingVariants" class="text-center py-4">
               <span
                 class="spinner-border spinner-border-sm me-2"
@@ -197,7 +199,7 @@
                     (v.productVariantId || v.id),
                   disabled: Number(v.stockQuantity || v.stock || 0) <= 0,
                 }"
-                @click="selectedVariant = v"
+                @click="selectedVariant = v; quantity = 1"
               >
                 <span class="vm-v-name">
                   {{ v.displayCapacity || formatVariantName(v) }}
@@ -206,6 +208,30 @@
                   Kho: {{ v.stockQuantity || v.stock || 0 }}
                 </span>
               </button>
+            </div>
+
+            <hr class="variant-divider" v-if="selectedVariant" />
+
+            <div class="quantity-section" v-if="selectedVariant">
+              <p class="vm-label mb-0">SỐ LƯỢNG:</p>
+              <div class="quantity-control">
+                <div class="qty-wrapper">
+                  <button
+                    type="button"
+                    @click="quantity > 1 ? quantity-- : null"
+                    :disabled="quantity <= 1"
+                  >−</button>
+                  <input type="text" :value="quantity" readonly />
+                  <button
+                    type="button"
+                    @click="quantity < maxQuantity ? quantity++ : null"
+                    :disabled="quantity >= maxQuantity"
+                  >+</button>
+                </div>
+                <span class="stock-info">
+                  Kho: {{ maxQuantity }}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -227,10 +253,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import api from "@/common/api";
 import { favoriteService } from "@/modules/shop/feature/product/services/favorite.service";
+
+const quantity = ref(1);
 
 interface ProductVariant {
   id?: number;
@@ -320,6 +348,7 @@ const addCartLoading = ref(false);
 const buyNowLoading = ref(false);
 const favoriteLoading = ref(false);
 const isFavorited = ref(false);
+const favoritedMap = ref<Record<number, boolean>>({});
 
 const showVariantModal = ref(false);
 const isLoadingVariants = ref(false);
@@ -499,37 +528,45 @@ const getVariantImageList = (variant: any) => {
 
 const productImages = computed(() => {
   const images: string[] = [];
-  appendImage(images, props.product?.mainImage);
-  appendImage(images, props.product?.MainImage);
-  appendImage(images, props.product?.mainImageUrl);
-  appendImage(images, props.product?.MainImageUrl);
-  appendImage(images, props.product?.thumbnailUrl);
-  appendImage(images, props.product?.ThumbnailUrl);
-  appendImage(images, props.product?.imageUrl);
-  appendImage(images, props.product?.ImageUrl);
-  appendImage(images, props.product?.image);
-  appendImage(images, props.product?.Image);
+  const p = props.product as any;
 
-  appendImageList(images, props.product?.images);
-  appendImageList(images, props.product?.Images);
-  appendImageList(images, props.product?.galleryImages);
-  appendImageList(images, props.product?.GalleryImages);
-  appendImageList(images, props.product?.imageList);
-  appendImageList(images, props.product?.ImageList);
-  appendImageList(images, props.product?.productImages);
-  appendImageList(images, props.product?.ProductImages);
-  appendImageList(images, props.product?.productImageList);
-  appendImageList(images, props.product?.ProductImageList);
+  const addUnique = (url: unknown) => {
+    const formatted = getImageUrlFromObject(url);
+    if (formatted && !images.includes(formatted)) {
+      images.push(formatted);
+    }
+  };
 
-  if (Array.isArray(props.product?.variants)) {
-    props.product.variants.forEach((variant) => {
-      getVariantImageList(variant).forEach((imageUrl) => {
-        if (imageUrl && !images.includes(imageUrl)) {
-          images.push(imageUrl);
-        }
+  const imageArrays = [p?.images, p?.productImages, p?.galleryImages, p?.imageList];
+  for (const arr of imageArrays) {
+    if (Array.isArray(arr)) {
+      const primaryObj = arr.find((img: any) => Boolean(img?.isPrimary || img?.is_primary || img?.primary));
+      if (primaryObj) {
+        addUnique(primaryObj?.imageUrl || primaryObj?.url || primaryObj);
+      }
+    }
+  }
+
+  addUnique(p?.primaryImageUrl);
+  addUnique(p?.mainImage);
+  addUnique(p?.MainImage);
+  addUnique(p?.imageUrl);
+  addUnique(p?.ImageUrl);
+  addUnique(p?.image);
+  addUnique(p?.thumbnailUrl);
+
+  imageArrays.forEach((arr) => {
+    appendImageList(images, arr);
+  });
+
+  if (Array.isArray(p?.variants)) {
+    p.variants.forEach((variant: any) => {
+      getVariantImageList(variant).forEach((imageUrl: any) => {
+        addUnique(imageUrl);
       });
     });
   }
+
   return images;
 });
 
@@ -651,11 +688,11 @@ const openVariantModal = async (type: "CART" | "BUY") => {
   actionType.value = type;
   selectedVariant.value = null;
   fullVariants.value = [];
+  quantity.value = 1;
   showVariantModal.value = true;
   isLoadingVariants.value = true;
 
   try {
-    // 1. Lập bản đồ và tập hợp ID các biến thể thực sự nằm trong Flash Sale từ props
     const flashSalePriceMap = new Map<number, number>();
     const flashSaleVariantIds = new Set<number>();
     
@@ -671,7 +708,6 @@ const openVariantModal = async (type: "CART" | "BUY") => {
       });
     }
 
-    // 2. Gọi API lấy đầy đủ thông tin biến thể từ database
     const res = await api.get(`/v1/products/${getProductId()}`);
     const data = res.data?.data || res.data;
     let rawVariants = data?.variants || data?.productVariants || data?.productVariantList;
@@ -680,7 +716,6 @@ const openVariantModal = async (type: "CART" | "BUY") => {
       rawVariants = props.product.variants || [props.product];
     }
 
-    // 3. Nếu đây là sản phẩm Flash Sale, chỉ giữ lại các biến thể có tham gia chương trình
     if ((props.product as any)?.isFlashSale && flashSaleVariantIds.size > 0) {
       rawVariants = rawVariants.filter((v: any) => {
         const vId = Number(v.productVariantId || v.variantId || v.id);
@@ -774,11 +809,11 @@ const confirmAction = async () => {
       addCartLoading.value = true;
       await api.post("/v1/customer/cart/add", {
         productVariantId: variantId,
-        quantity: 1,
+        quantity: quantity.value,
       });
       window.dispatchEvent(new Event("cart-updated"));
       showVariantModal.value = false;
-      showToast("success", "Thêm thành công", "Đã thêm 1 sản phẩm vào giỏ.", true);
+      showToast("success", "Thêm thành công", "Đã thêm sản phẩm vào giỏ.", true);
     } catch (error: any) {
       showToast("error", "Lỗi", error?.response?.data?.message || "Không thể thêm vào giỏ.");
     } finally {
@@ -789,7 +824,7 @@ const confirmAction = async () => {
       buyNowLoading.value = true;
       await api.post("/v1/customer/cart/add", {
         productVariantId: variantId,
-        quantity: 1,
+        quantity: quantity.value,
       });
       window.dispatchEvent(new Event("cart-updated"));
       showVariantModal.value = false;
@@ -802,39 +837,83 @@ const confirmAction = async () => {
   }
 };
 
+// Hàm lấy ID biến thể chính đại diện cho card sản phẩm
+const getPrimaryVariantId = () => {
+  if (props.product?.variants && Array.isArray(props.product.variants) && props.product.variants.length > 0) {
+    const v = props.product.variants[0];
+    return Number(v?.productVariantId || v?.variantId || v?.id || 0);
+  }
+  return Number(props.product.productVariantId || props.product.variantId || props.product.id || 0);
+};
+
 const loadFavoriteStatus = async () => {
-  const variantId = Number(props.product.productVariantId || props.product.id);
-  if (!variantId || !localStorage.getItem("token")) {
+  const token = localStorage.getItem("token");
+  const rawRole = localStorage.getItem("role") || localStorage.getItem("userRole") || "";
+  const role = rawRole.replace("ROLE_", "").toUpperCase().trim();
+
+  if (!token || (role !== "USER" && role !== "CUSTOMER")) {
+    favoritedMap.value = {};
     isFavorited.value = false;
     return;
   }
+
   try {
-    const res = await favoriteService.checkFavorite(variantId);
-    isFavorited.value = Boolean(res.data?.favorited);
+    const res = await favoriteService.getFavorites();
+    const list = Array.isArray(res.data) ? res.data : [];
+    const nextMap: Record<number, boolean> = {};
+
+    list.forEach((item: any) => {
+      const variantId = Number(item?.productVariantId || 0);
+      if (variantId > 0) {
+        nextMap[variantId] = true;
+      }
+    });
+
+    favoritedMap.value = nextMap;
+    
+    // Kiểm tra xem biến thể của card này hoặc bất kỳ biến thể nào thuộc sản phẩm này có nằm trong danh sách yêu thích không
+    const primaryId = getPrimaryVariantId();
+    let matched = primaryId ? Boolean(nextMap[primaryId]) : false;
+
+    if (!matched && props.product?.variants && Array.isArray(props.product.variants)) {
+      matched = props.product.variants.some((v: any) => {
+        const vId = Number(v?.productVariantId || v?.variantId || v?.id || 0);
+        return vId && nextMap[vId];
+      });
+    }
+
+    isFavorited.value = matched;
   } catch (error) {
+    favoritedMap.value = {};
     isFavorited.value = false;
   }
 };
 
 const handleToggleFavorite = async () => {
-  const variantId = Number(props.product.productVariantId || props.product.id);
+  const variantId = getPrimaryVariantId();
   if (!variantId || Number.isNaN(variantId)) return;
   if (!checkLoginBeforeAction()) return;
 
   try {
     favoriteLoading.value = true;
     const res = await favoriteService.toggleFavorite(variantId);
-    isFavorited.value = Boolean(res.data?.favorited);
+    const favorited = Boolean(res.data?.favorited);
+
+    favoritedMap.value = {
+      ...favoritedMap.value,
+      [variantId]: favorited,
+    };
+    isFavorited.value = favorited;
 
     window.dispatchEvent(
       new CustomEvent("favorite-updated", {
-        detail: { productVariantId: variantId, favorited: isFavorited.value },
+        detail: { productVariantId: variantId, favorited },
       })
     );
 
     showToast(
-      isFavorited.value ? "success" : "warning",
-      isFavorited.value ? "Đã thêm yêu thích" : "Đã bỏ yêu thích",
+      favorited ? "success" : "warning",
+      favorited ? "Đã thêm yêu thích" : "Đã bỏ yêu thích",
       res.data?.message || ""
     );
   } catch (error: any) {
@@ -847,11 +926,26 @@ const handleToggleFavorite = async () => {
 const handleFavoriteUpdated = (event: Event) => {
   const customEvent = event as CustomEvent<{ productVariantId?: number; favorited?: boolean }>;
   const variantId = Number(customEvent.detail?.productVariantId || 0);
+  const favorited = Boolean(customEvent.detail?.favorited);
 
-  if (!variantId || variantId !== Number(props.product.productVariantId || props.product.id)) {
-    return;
+  if (!variantId) return;
+
+  favoritedMap.value = {
+    ...favoritedMap.value,
+    [variantId]: favorited,
+  };
+
+  const primaryId = getPrimaryVariantId();
+  let matched = primaryId === variantId ? favorited : isFavorited.value;
+
+  if (!matched && props.product?.variants && Array.isArray(props.product.variants)) {
+    matched = props.product.variants.some((v: any) => {
+      const vId = Number(v?.productVariantId || v?.variantId || v?.id || 0);
+      return vId && favoritedMap.value[vId];
+    });
   }
-  isFavorited.value = Boolean(customEvent.detail?.favorited);
+
+  isFavorited.value = matched;
 };
 
 const getProductId = () => Number(props.product.productId || props.product.id || 0);
@@ -865,6 +959,24 @@ const goToDetail = () => {
   }
 };
 
+const calculatedDiscountPercent = computed(() => {
+  if (selectedVariant.value) {
+    const original = selectedVariant.value.price || props.product.originalPrice;
+    const sale = selectedVariant.value.salePrice || props.product.salePrice;
+    if (original && sale && original > sale) {
+      return Math.round(((original - sale) / original) * 100);
+    }
+    return 0;
+  }
+  return props.product.discountPercent || 0;
+});
+
+const maxQuantity = computed(() => {
+  return selectedVariant.value 
+    ? Number(selectedVariant.value.stockQuantity || selectedVariant.value.stock || 0) 
+    : 0;
+});
+
 onMounted(() => {
   window.addEventListener("favorite-updated", handleFavoriteUpdated);
   loadFavoriteStatus();
@@ -874,6 +986,14 @@ onBeforeUnmount(() => {
   window.removeEventListener("favorite-updated", handleFavoriteUpdated);
   if (toastTimer) window.clearTimeout(toastTimer);
 });
+
+watch(
+  () => props.product,
+  () => {
+    loadFavoriteStatus();
+  },
+  { deep: true }
+);
 </script>
 
 <style scoped>
@@ -1323,7 +1443,7 @@ onBeforeUnmount(() => {
 
 .vm-label {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
   color: #4a5568;
   margin-bottom: 12px;
   text-transform: uppercase;
@@ -1332,7 +1452,7 @@ onBeforeUnmount(() => {
 
 .vm-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr); /* Tối ưu từ 3 xuống 2 cột vì tên lúc này dài hơn */
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
   margin-bottom: 28px;
 }
@@ -1413,5 +1533,81 @@ onBeforeUnmount(() => {
 .vm-confirm-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.flash-sale-badge {
+  background: #b31320;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 2px;
+}
+
+.variant-divider {
+  border: 0;
+  border-top: 1px dashed #cbd5e0;
+  margin: 20px 0 16px 0;
+}
+
+.quantity-section {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.quantity-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.qty-wrapper {
+  display: inline-flex;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.qty-wrapper button {
+  width: 32px;
+  height: 32px;
+  background: #ffffff;
+  border: none;
+  cursor: pointer;
+  color: #06132b;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.2s;
+}
+
+.qty-wrapper button:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.qty-wrapper button:disabled {
+  color: #cbd5e0;
+  cursor: not-allowed;
+}
+
+.qty-wrapper input {
+  width: 44px;
+  text-align: center;
+  border: none;
+  font-size: 15px;
+  font-weight: 700;
+  outline: none;
+  border-left: 1px solid #cbd5e0;
+  border-right: 1px solid #cbd5e0;
+  color: #06132b;
+}
+
+.stock-info {
+  font-size: 13px;
+  color: #718096;
 }
 </style>
