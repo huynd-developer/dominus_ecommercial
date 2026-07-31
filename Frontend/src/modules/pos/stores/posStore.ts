@@ -1228,11 +1228,6 @@ export const usePosStore = defineStore("posStore", {
           ? data
           : data?.data || data?.content || data?.items || [];
 
-<<<<<<< HEAD
-        this.heldOrders = rawOrders.filter((order: PosHeldOrder) =>
-          isRealHeldOrder(order)
-        );
-=======
         /*
          * Khu phía trên chỉ hiển thị đơn lưu tạm thật sự.
          * Đơn VNPay/VietQR đang pending nhưng chưa bấm Lưu tạm chỉ được
@@ -1241,7 +1236,6 @@ export const usePosStore = defineStore("posStore", {
         this.heldOrders = rawOrders
           .map(mapHeldOrderFromBackend)
           .filter((order: PosHeldOrder) => isRealHeldOrder(order));
->>>>>>> e26834c7413bc64609844cf8d9ee9f831662cfe8
       } catch (error: any) {
         this.errorMsg = getBackendMessage(
           error,
