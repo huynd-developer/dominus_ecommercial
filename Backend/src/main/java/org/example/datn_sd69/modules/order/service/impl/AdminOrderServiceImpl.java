@@ -1,8 +1,11 @@
 package org.example.datn_sd69.modules.order.service.impl;
 
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.Order;
+import org.example.datn_sd69.entity.OrderDeliveryEvidence;
 import org.example.datn_sd69.entity.OrderItem;
 import org.example.datn_sd69.entity.ProductVariant;
 import org.example.datn_sd69.entity.ReturnRequest;
@@ -13,8 +16,11 @@ import org.example.datn_sd69.modules.order.dto.response.AdminReturnItemResponse;
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderResponse;
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderStatusCountResponse;
 import org.example.datn_sd69.modules.order.dto.request.AdminCancelOrderRequest;
+import org.example.datn_sd69.modules.order.dto.request.MarkDeliveryCompletedRequest;
+import org.example.datn_sd69.modules.order.dto.request.MarkDeliveryFailedRequest;
 import org.example.datn_sd69.modules.order.dto.request.RejectReturnRequest;
 import org.example.datn_sd69.modules.order.service.AdminOrderService;
+import org.example.datn_sd69.repository.OrderDeliveryEvidenceRepository;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
 import org.example.datn_sd69.repository.ReturnRequestItemRepository;
@@ -24,9 +30,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+import java.io.IOException;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -37,6 +48,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -66,6 +78,46 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private static final int MEDIA_TYPE_IMAGE = 1;
     private static final int MEDIA_TYPE_VIDEO = 2;
 
+    private static final int DELIVERY_EVIDENCE_TYPE_SUCCESS = 1;
+    private static final int DELIVERY_EVIDENCE_TYPE_FAILED = 2;
+
+    private static final Set<String> DELIVERY_FAILED_REASONS = Set.of(
+            "Không liên hệ được khách hàng",
+            "Khách từ chối nhận hàng",
+            "Sai địa chỉ giao hàng",
+            "Khách hẹn giao lại",
+            "Đơn hàng bị thất lạc",
+            "Hàng bị hư hỏng khi giao",
+            "Khu vực giao hàng không hỗ trợ",
+            "Khác"
+    );
+
+    private static final Set<String> DELIVERY_FAILED_REQUIRES_EVIDENCE_REASONS = Set.of(
+            "Không liên hệ được khách hàng",
+            "Khách từ chối nhận hàng",
+            "Sai địa chỉ giao hàng",
+            "Hàng bị hư hỏng khi giao",
+            "Khác"
+    );
+
+    private static final Set<String> ALLOWED_DELIVERY_IMAGE_EXTENSIONS = Set.of(
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".webp"
+    );
+
+    private static final Set<String> ALLOWED_DELIVERY_VIDEO_EXTENSIONS = Set.of(
+            ".mp4",
+            ".mov",
+            ".webm"
+    );
+
+    private static final long MAX_DELIVERY_IMAGE_SIZE = 20L * 1024L * 1024L;
+    private static final long MAX_DELIVERY_VIDEO_SIZE = 200L * 1024L * 1024L;
+
+    private static final String DELIVERY_EVIDENCE_CLOUDINARY_FOLDER = "order-delivery-evidence";
+
     private static final Set<Integer> VALID_ORDER_STATUSES = Set.of(
             STATUS_PENDING,
             STATUS_CONFIRMED,
@@ -94,10 +146,12 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     );
 
     private final OrderRepository orderRepository;
+    private final OrderDeliveryEvidenceRepository orderDeliveryEvidenceRepository;
     private final OrderItemRepository orderItemRepository;
     private final ReturnRequestRepository returnRequestRepository;
     private final ReturnRequestItemRepository returnRequestItemRepository;
     private final ReturnRequestMediaRepository returnRequestMediaRepository;
+    private final Cloudinary cloudinary;
     private final EntityManager entityManager;
     private record KeywordDateRange(
             String keyword,
@@ -165,6 +219,81 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     public AdminOrderResponse getOrderDetail(Integer orderId) {
         Order order = findOrderOrThrow(orderId);
         return mapOrderToResponse(order, true);
+    }
+
+    @Override
+    @Transactional
+    public AdminOrderResponse markDeliveryCompleted(
+            Integer orderId,
+            MarkDeliveryCompletedRequest request
+    ) {
+        Order order = findOrderOrThrow(orderId);
+
+        if (safeStatus(order) != STATUS_SHIPPING) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ được xác nhận giao hàng thành công khi đơn đang giao hàng"
+            );
+        }
+
+        List<MultipartFile> files = request == null ? List.of() : request.getFiles();
+        validateDeliveryEvidenceFiles(files, true);
+
+        LocalDateTime now = LocalDateTime.now();
+
+        order.setStatus(STATUS_COMPLETED);
+        order.setCompletedAt(now);
+        order.setDeliveryCompletedByName(getCurrentAdminDisplayName());
+
+        Order savedOrder = orderRepository.save(order);
+
+        saveDeliveryEvidenceFiles(savedOrder, files, DELIVERY_EVIDENCE_TYPE_SUCCESS);
+
+        return mapOrderToResponse(savedOrder, true);
+    }
+
+    @Override
+    @Transactional
+    public AdminOrderResponse markDeliveryFailed(
+            Integer orderId,
+            MarkDeliveryFailedRequest request
+    ) {
+        Order order = findOrderOrThrow(orderId);
+
+        if (safeStatus(order) != STATUS_SHIPPING) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ được xác nhận giao hàng thất bại khi đơn đang giao hàng"
+            );
+        }
+
+        String reason = normalizeDeliveryFailedReason(request);
+        String description = normalizeDeliveryFailedDescription(request);
+
+        if ("Khác".equals(reason) && description == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Vui lòng nhập mô tả chi tiết khi chọn lý do Khác"
+            );
+        }
+
+        List<MultipartFile> files = request == null ? List.of() : request.getFiles();
+        boolean evidenceRequired = DELIVERY_FAILED_REQUIRES_EVIDENCE_REASONS.contains(reason);
+        validateDeliveryEvidenceFiles(files, evidenceRequired);
+
+        LocalDateTime now = LocalDateTime.now();
+
+        order.setStatus(STATUS_DELIVERY_FAILED);
+        order.setDeliveryFailedReason(reason);
+        order.setDeliveryFailedDescription(description);
+        order.setDeliveryFailedAt(now);
+        order.setDeliveryFailedByName(getCurrentAdminDisplayName());
+
+        Order savedOrder = orderRepository.save(order);
+
+        saveDeliveryEvidenceFiles(savedOrder, files, DELIVERY_EVIDENCE_TYPE_FAILED);
+
+        return mapOrderToResponse(savedOrder, true);
     }
 
     @Override
@@ -463,6 +592,243 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         return reason;
     }
 
+    private String normalizeDeliveryFailedReason(MarkDeliveryFailedRequest request) {
+        String reason = request == null ? null : normalizeOptionalText(request.getReason());
+
+        if (reason == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Vui lòng chọn lý do giao hàng thất bại"
+            );
+        }
+
+        if (!DELIVERY_FAILED_REASONS.contains(reason)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Lý do giao hàng thất bại không hợp lệ"
+            );
+        }
+
+        return reason;
+    }
+
+    private String normalizeDeliveryFailedDescription(MarkDeliveryFailedRequest request) {
+        String description = request == null ? null : normalizeOptionalText(request.getDescription());
+
+        if (description == null) {
+            return null;
+        }
+
+        if (description.length() < 5) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Mô tả giao hàng thất bại phải có ít nhất 5 ký tự"
+            );
+        }
+
+        if (description.length() > 500) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Mô tả giao hàng thất bại không được vượt quá 500 ký tự"
+            );
+        }
+
+        return description;
+    }
+
+    private void validateDeliveryEvidenceFiles(
+            List<MultipartFile> mediaFiles,
+            boolean required
+    ) {
+        List<MultipartFile> files = normalizeMultipartFiles(mediaFiles);
+
+        if (required && files.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Vui lòng tải lên ảnh/video minh chứng giao hàng"
+            );
+        }
+
+        for (MultipartFile file : files) {
+            validateSingleDeliveryEvidenceFile(file);
+        }
+    }
+
+    private void validateSingleDeliveryEvidenceFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            return;
+        }
+
+        Integer mediaType = resolveDeliveryMediaType(file);
+        long maxSize = Integer.valueOf(MEDIA_TYPE_VIDEO).equals(mediaType)
+                ? MAX_DELIVERY_VIDEO_SIZE
+                : MAX_DELIVERY_IMAGE_SIZE;
+
+        if (file.getSize() > maxSize) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    Integer.valueOf(MEDIA_TYPE_VIDEO).equals(mediaType)
+                            ? "Video minh chứng không được vượt quá 200MB"
+                            : "Ảnh minh chứng không được vượt quá 20MB"
+            );
+        }
+    }
+
+    private Integer resolveDeliveryMediaType(MultipartFile file) {
+        String filename = file == null || file.getOriginalFilename() == null
+                ? ""
+                : file.getOriginalFilename().trim();
+
+        String extension = getFileExtension(filename);
+        String contentType = file == null || file.getContentType() == null
+                ? ""
+                : file.getContentType().toLowerCase(Locale.ROOT);
+
+        if (contentType.startsWith("image/") || ALLOWED_DELIVERY_IMAGE_EXTENSIONS.contains(extension)) {
+            if (!ALLOWED_DELIVERY_IMAGE_EXTENSIONS.contains(extension)
+                    && !".jpg".equals(extension)
+                    && !".jpeg".equals(extension)
+                    && !".png".equals(extension)
+                    && !".webp".equals(extension)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Ảnh minh chứng chỉ hỗ trợ JPG, JPEG, PNG, WEBP"
+                );
+            }
+
+            return MEDIA_TYPE_IMAGE;
+        }
+
+        if (contentType.startsWith("video/") || ALLOWED_DELIVERY_VIDEO_EXTENSIONS.contains(extension)) {
+            if (!ALLOWED_DELIVERY_VIDEO_EXTENSIONS.contains(extension)
+                    && !".mp4".equals(extension)
+                    && !".mov".equals(extension)
+                    && !".webm".equals(extension)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Video minh chứng chỉ hỗ trợ MP4, MOV, WEBM"
+                );
+            }
+
+            return MEDIA_TYPE_VIDEO;
+        }
+
+        throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "File minh chứng chỉ hỗ trợ ảnh JPG/JPEG/PNG/WEBP hoặc video MP4/MOV/WEBM"
+        );
+    }
+
+    private String getFileExtension(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return "";
+        }
+
+        String cleanFilename = Paths.get(filename).getFileName().toString();
+        int dotIndex = cleanFilename.lastIndexOf('.');
+
+        if (dotIndex < 0 || dotIndex == cleanFilename.length() - 1) {
+            return "";
+        }
+
+        return cleanFilename.substring(dotIndex).toLowerCase(Locale.ROOT);
+    }
+
+    private void saveDeliveryEvidenceFiles(
+            Order order,
+            List<MultipartFile> mediaFiles,
+            Integer evidenceType
+    ) {
+        List<MultipartFile> files = normalizeMultipartFiles(mediaFiles);
+
+        if (files.isEmpty()) {
+            return;
+        }
+
+        List<OrderDeliveryEvidence> evidences = new ArrayList<>();
+
+        for (MultipartFile file : files) {
+            Integer mediaType = resolveDeliveryMediaType(file);
+            String mediaUrl = uploadDeliveryEvidenceFile(file);
+
+            OrderDeliveryEvidence evidence = new OrderDeliveryEvidence();
+            evidence.setOrder(order);
+            evidence.setEvidenceType(evidenceType);
+            evidence.setMediaType(mediaType);
+            evidence.setMediaUrl(mediaUrl);
+            evidence.setCreatedAt(LocalDateTime.now());
+
+            evidences.add(evidence);
+        }
+
+        orderDeliveryEvidenceRepository.saveAll(evidences);
+    }
+
+    private String uploadDeliveryEvidenceFile(MultipartFile file) {
+        try {
+            Map<?, ?> uploadResult = cloudinary.uploader().upload(
+                    file.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder",
+                            DELIVERY_EVIDENCE_CLOUDINARY_FOLDER,
+                            "resource_type",
+                            "auto"
+                    )
+            );
+
+            Object secureUrl = uploadResult.get("secure_url");
+
+            if (secureUrl == null || secureUrl.toString().isBlank()) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Không lấy được đường dẫn file minh chứng sau khi tải lên"
+                );
+            }
+
+            return secureUrl.toString();
+        } catch (IOException exception) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Không thể tải file minh chứng giao hàng"
+            );
+        }
+    }
+
+    private List<MultipartFile> normalizeMultipartFiles(List<MultipartFile> mediaFiles) {
+        if (mediaFiles == null || mediaFiles.isEmpty()) {
+            return List.of();
+        }
+
+        return mediaFiles.stream()
+                .filter(file -> file != null && !file.isEmpty())
+                .toList();
+    }
+
+    private List<String> getDeliveryEvidenceUrls(Order order, Integer evidenceType) {
+        if (order == null || order.getId() == null) {
+            return new ArrayList<>();
+        }
+
+        return orderDeliveryEvidenceRepository
+                .findByOrder_IdAndEvidenceTypeOrderByCreatedAtAsc(order.getId(), evidenceType)
+                .stream()
+                .map(OrderDeliveryEvidence::getMediaUrl)
+                .filter(url -> url != null && !url.trim().isEmpty())
+                .toList();
+    }
+
+    private String getCurrentAdminDisplayName() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return "Nhân viên cửa hàng";
+        }
+
+        String name = normalizeOptionalText(authentication.getName());
+
+        return name == null ? "Nhân viên cửa hàng" : name;
+    }
+
     private AdminOrderResponse mapOrderToResponse(Order order, boolean includeItems) {
         AdminOrderResponse response = new AdminOrderResponse();
 
@@ -504,6 +870,13 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         response.setStatusText(getStatusText(order.getStatus()));
         response.setCreatedAt(order.getCreatedAt());
         response.setCompletedAt(order.getCompletedAt());
+        response.setDeliveryCompletedByName(normalizeOptionalText(order.getDeliveryCompletedByName()));
+        response.setDeliveryFailedReason(normalizeOptionalText(order.getDeliveryFailedReason()));
+        response.setDeliveryFailedDescription(normalizeOptionalText(order.getDeliveryFailedDescription()));
+        response.setDeliveryFailedAt(order.getDeliveryFailedAt());
+        response.setDeliveryFailedByName(normalizeOptionalText(order.getDeliveryFailedByName()));
+        response.setDeliverySuccessMediaUrls(getDeliveryEvidenceUrls(order, DELIVERY_EVIDENCE_TYPE_SUCCESS));
+        response.setDeliveryFailedMediaUrls(getDeliveryEvidenceUrls(order, DELIVERY_EVIDENCE_TYPE_FAILED));
         response.setCancelReason(normalizeOptionalText(order.getCancelReason()));
         response.setCancelledAt(order.getCancelledAt());
 

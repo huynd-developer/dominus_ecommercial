@@ -62,6 +62,20 @@ public class AdminOrderResponse {
 
     private LocalDateTime completedAt;
 
+    private String deliveryCompletedByName;
+
+    private String deliveryFailedReason;
+
+    private String deliveryFailedDescription;
+
+    private LocalDateTime deliveryFailedAt;
+
+    private String deliveryFailedByName;
+
+    private List<String> deliverySuccessMediaUrls = new ArrayList<>();
+
+    private List<String> deliveryFailedMediaUrls = new ArrayList<>();
+
     /**
      * Lý do hủy đơn. Có thể do khách chọn hoặc admin nhập/chọn khi hủy.
      */

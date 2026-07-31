@@ -3,11 +3,14 @@ package org.example.datn_sd69.modules.order.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.modules.order.dto.request.AdminCancelOrderRequest;
+import org.example.datn_sd69.modules.order.dto.request.MarkDeliveryCompletedRequest;
+import org.example.datn_sd69.modules.order.dto.request.MarkDeliveryFailedRequest;
 import org.example.datn_sd69.modules.order.dto.request.RejectReturnRequest;
 import org.example.datn_sd69.modules.order.service.AdminOrderService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -107,6 +110,44 @@ public class AdminOrderController {
     ) {
         return ResponseEntity.ok(
                 adminOrderService.cancelOrder(orderId, request)
+        );
+    }
+
+    /**
+     * Giao hàng thành công.
+     * Chỉ áp dụng cho đơn đang giao hàng và bắt buộc có ảnh/video minh chứng.
+     *
+     * PATCH /api/admin/orders/{orderId}/delivery-completed
+     */
+    @PatchMapping(
+            value = {"/{orderId}/delivery-completed", "/{orderId}/delivery-completed/"},
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    public ResponseEntity<?> markDeliveryCompleted(
+            @PathVariable Integer orderId,
+            @ModelAttribute MarkDeliveryCompletedRequest request
+    ) {
+        return ResponseEntity.ok(
+                adminOrderService.markDeliveryCompleted(orderId, request)
+        );
+    }
+
+    /**
+     * Giao hàng thất bại.
+     * Bắt buộc có lý do. Nếu chọn Khác thì bắt buộc mô tả.
+     *
+     * PATCH /api/admin/orders/{orderId}/delivery-failed
+     */
+    @PatchMapping(
+            value = {"/{orderId}/delivery-failed", "/{orderId}/delivery-failed/"},
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    public ResponseEntity<?> markDeliveryFailed(
+            @PathVariable Integer orderId,
+            @ModelAttribute MarkDeliveryFailedRequest request
+    ) {
+        return ResponseEntity.ok(
+                adminOrderService.markDeliveryFailed(orderId, request)
         );
     }
 

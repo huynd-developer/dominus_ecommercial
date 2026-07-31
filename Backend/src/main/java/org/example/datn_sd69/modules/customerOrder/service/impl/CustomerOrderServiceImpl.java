@@ -10,6 +10,7 @@ import java.util.Arrays;
 import org.example.datn_sd69.entity.Brand;
 import org.example.datn_sd69.entity.Customer;
 import org.example.datn_sd69.entity.Order;
+import org.example.datn_sd69.entity.OrderDeliveryEvidence;
 import org.example.datn_sd69.entity.OrderItem;
 import org.example.datn_sd69.entity.Product;
 import org.example.datn_sd69.entity.ProductVariant;
@@ -22,6 +23,7 @@ import org.example.datn_sd69.modules.customerOrder.dto.CustomerOrderResponse;
 import org.example.datn_sd69.modules.customerOrder.dto.CustomerReturnItemResponse;
 import org.example.datn_sd69.modules.customerOrder.service.CustomerOrderService;
 import org.example.datn_sd69.repository.CustomerRepository;
+import org.example.datn_sd69.repository.OrderDeliveryEvidenceRepository;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
 import org.example.datn_sd69.repository.ProductVariantRepository;
@@ -74,6 +76,9 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
     private static final int MEDIA_TYPE_IMAGE = 1;
     private static final int MEDIA_TYPE_VIDEO = 2;
+
+    private static final int DELIVERY_EVIDENCE_TYPE_SUCCESS = 1;
+    private static final int DELIVERY_EVIDENCE_TYPE_FAILED = 2;
 
     private static final int MAX_RETURN_IMAGE_COUNT = 6;
     private static final int MAX_RETURN_VIDEO_COUNT = 1;
@@ -183,6 +188,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
     private final OrderRepository orderRepository;
+    private final OrderDeliveryEvidenceRepository orderDeliveryEvidenceRepository;
     private final OrderItemRepository orderItemRepository;
     private final ProductVariantRepository productVariantRepository;
     private final ReturnRequestRepository returnRequestRepository;
@@ -580,6 +586,9 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 ? null
                 : resolveReturnProcessStatus(order, rawReturnItems);
 
+        List<String> deliverySuccessMediaUrls = getDeliveryEvidenceUrls(order, DELIVERY_EVIDENCE_TYPE_SUCCESS);
+        List<String> deliveryFailedMediaUrls = getDeliveryEvidenceUrls(order, DELIVERY_EVIDENCE_TYPE_FAILED);
+
         return new CustomerOrderResponse(
                 order.getId(),
                 order.getOrderType(),
@@ -598,6 +607,13 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 order.getCreatedAt(),
                 order.getCancelReason(),
                 order.getCancelledAt(),
+                normalizeOptional(order.getDeliveryCompletedByName()),
+                normalizeOptional(order.getDeliveryFailedReason()),
+                normalizeOptional(order.getDeliveryFailedDescription()),
+                order.getDeliveryFailedAt(),
+                normalizeOptional(order.getDeliveryFailedByName()),
+                deliverySuccessMediaUrls,
+                deliveryFailedMediaUrls,
                 returnRequest != null ? returnRequest.getReason() : null,
                 returnRequest != null ? returnRequest.getDescription() : null,
                 returnRequest != null ? returnRequest.getCreatedAt() : null,
@@ -617,6 +633,19 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 null,
                 itemResponses
         );
+    }
+
+    private List<String> getDeliveryEvidenceUrls(Order order, Integer evidenceType) {
+        if (order == null || order.getId() == null) {
+            return List.of();
+        }
+
+        return orderDeliveryEvidenceRepository
+                .findByOrder_IdAndEvidenceTypeOrderByCreatedAtAsc(order.getId(), evidenceType)
+                .stream()
+                .map(OrderDeliveryEvidence::getMediaUrl)
+                .filter(url -> url != null && !url.trim().isEmpty())
+                .toList();
     }
 
     private ReturnRequest findLatestReturnRequestForCustomerView(Order order) {

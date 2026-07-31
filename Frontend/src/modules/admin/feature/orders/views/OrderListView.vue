@@ -127,7 +127,7 @@ import OrderFilter from "../components/OrderFilter.vue";
 import OrderTable from "../components/OrderTable.vue";
 import OrderDetailModal from "../components/OrderDetailModal.vue";
 import { orderService } from "../services/order.service";
-import type { AdminCancelOrderRequest, AdminOrderResponse } from "../types/order.type";
+import type { AdminCancelOrderRequest, AdminOrderResponse, MarkDeliveryFailedRequest } from "../types/order.type";
 
 const orders = ref<AdminOrderResponse[]>([]);
 const selectedOrder = ref<AdminOrderResponse | null>(null);
@@ -230,6 +230,49 @@ const adminCancelReasonOptions = [
   {
     value: "OTHER",
     label: "Khác",
+  },
+];
+
+const deliveryFailedReasonOptions = [
+  {
+    value: "CONTACT_FAILED",
+    label: "Không liên hệ được khách hàng",
+    evidenceRequired: true,
+  },
+  {
+    value: "CUSTOMER_REJECTED",
+    label: "Khách từ chối nhận hàng",
+    evidenceRequired: true,
+  },
+  {
+    value: "WRONG_ADDRESS",
+    label: "Sai địa chỉ giao hàng",
+    evidenceRequired: true,
+  },
+  {
+    value: "RESCHEDULED",
+    label: "Khách hẹn giao lại",
+    evidenceRequired: false,
+  },
+  {
+    value: "LOST_ORDER",
+    label: "Đơn hàng bị thất lạc",
+    evidenceRequired: false,
+  },
+  {
+    value: "DAMAGED_WHEN_DELIVERING",
+    label: "Hàng bị hư hỏng khi giao",
+    evidenceRequired: true,
+  },
+  {
+    value: "UNSUPPORTED_AREA",
+    label: "Khu vực giao hàng không hỗ trợ",
+    evidenceRequired: false,
+  },
+  {
+    value: "OTHER",
+    label: "Khác",
+    evidenceRequired: true,
   },
 ];
 
@@ -489,6 +532,16 @@ async function confirmChangeStatus(
     return;
   }
 
+  if (nextStatus === 3) {
+    await confirmDeliveryCompleted(order);
+    return;
+  }
+
+  if (nextStatus === 5) {
+    await confirmDeliveryFailed(order);
+    return;
+  }
+
   if (nextStatus === 7) {
     await Swal.fire({
       icon: "warning",
@@ -542,6 +595,250 @@ async function confirmChangeStatus(
         "Trạng thái chuyển không hợp lệ hoặc đơn hàng không thể cập nhật.",
       confirmButtonColor: "#bd9a5f",
     });
+  }
+}
+
+async function confirmDeliveryCompleted(order: AdminOrderResponse) {
+  if (!order || !order.orderId) return;
+
+  if (Number(order.status) !== 2) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Không thể hoàn thành đơn",
+      text: "Chỉ được xác nhận giao thành công khi đơn đang ở trạng thái Đang giao hàng.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  const result = await Swal.fire<File[]>({
+    icon: "question",
+    title: "Xác nhận giao hàng thành công?",
+    html: `
+      <div style="text-align:left">
+        <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
+        <p><b>Trạng thái hiện tại:</b> ${escapeAlertHtml(order.statusText || getStatusText(Number(order.status)))}</p>
+
+        <label for="delivery-success-files" style="display:block;font-weight:700;margin:14px 0 6px">
+          Ảnh/video minh chứng <span style="color:#dc2626">*</span>
+        </label>
+        <input
+          id="delivery-success-files"
+          type="file"
+          class="swal2-file"
+          multiple
+          accept="image/png,image/jpeg,image/jpg,image/webp,video/mp4,video/quicktime,video/webm"
+          style="display:block;width:100%;margin:0;border:1px solid #d1d5db;border-radius:8px;padding:10px"
+        />
+        <div style="font-size:12px;color:#6b7280;margin-top:6px">
+          Bắt buộc có minh chứng vì hệ thống đang xử lý theo hướng cửa hàng tự giao hàng.
+        </div>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Xác nhận hoàn thành",
+    cancelButtonText: "Quay lại",
+    confirmButtonColor: "#16a34a",
+    cancelButtonColor: "#6b7280",
+    focusConfirm: false,
+    preConfirm: () => {
+      const fileInput = document.getElementById(
+        "delivery-success-files"
+      ) as HTMLInputElement | null;
+
+      const files = Array.from(fileInput?.files || []);
+
+      if (files.length === 0) {
+        Swal.showValidationMessage("Vui lòng tải lên ảnh/video minh chứng giao hàng thành công.");
+        return false;
+      }
+
+      const invalidMessage = validateDeliveryFiles(files);
+
+      if (invalidMessage) {
+        Swal.showValidationMessage(invalidMessage);
+        return false;
+      }
+
+      return files;
+    },
+  });
+
+  if (!result.isConfirmed || !result.value) return;
+
+  loading.value = true;
+
+  try {
+    await orderService.markDeliveryCompleted(order.orderId, {
+      files: result.value,
+    });
+
+    await Swal.fire({
+      icon: "success",
+      title: "Đã xác nhận giao hàng thành công",
+      text: "Đơn hàng đã chuyển sang trạng thái Hoàn thành.",
+      confirmButtonColor: "#bd9a5f",
+    });
+
+    await refreshOrderAfterWorkflow(order.orderId);
+  } catch (error: any) {
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể xác nhận giao hàng",
+      text:
+        error?.response?.data?.message ||
+        "Vui lòng kiểm tra trạng thái đơn hàng hoặc thử lại sau.",
+      confirmButtonColor: "#bd9a5f",
+    });
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function confirmDeliveryFailed(order: AdminOrderResponse) {
+  if (!order || !order.orderId) return;
+
+  if (Number(order.status) !== 2) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Không thể cập nhật giao thất bại",
+      text: "Chỉ được xác nhận giao thất bại khi đơn đang ở trạng thái Đang giao hàng.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  const result = await Swal.fire<MarkDeliveryFailedRequest>({
+    icon: "warning",
+    title: "Xác nhận giao hàng thất bại?",
+    html: `
+      <div style="text-align:left">
+        <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
+        <p><b>Trạng thái hiện tại:</b> ${escapeAlertHtml(order.statusText || getStatusText(Number(order.status)))}</p>
+
+        <label for="delivery-failed-reason-code" style="display:block;font-weight:700;margin:14px 0 6px">
+          Lý do giao thất bại <span style="color:#dc2626">*</span>
+        </label>
+        <select
+          id="delivery-failed-reason-code"
+          class="swal2-select"
+          style="display:block;width:100%;margin:0 0 12px 0;height:42px;border:1px solid #d1d5db;border-radius:8px;padding:0 10px"
+        >
+          <option value="">-- Chọn lý do giao thất bại --</option>
+          ${buildDeliveryFailedReasonOptionsHtml()}
+        </select>
+
+        <label for="delivery-failed-description" style="display:block;font-weight:700;margin:0 0 6px">
+          Mô tả chi tiết <span style="color:#6b7280;font-weight:500">(bắt buộc nếu chọn Khác)</span>
+        </label>
+        <textarea
+          id="delivery-failed-description"
+          class="swal2-textarea"
+          maxlength="500"
+          placeholder="Ví dụ: Gọi khách 3 lần không nghe máy..."
+          style="display:block;width:100%;height:100px;margin:0;border:1px solid #d1d5db;border-radius:8px;padding:10px;resize:vertical"
+        ></textarea>
+
+        <label for="delivery-failed-files" style="display:block;font-weight:700;margin:14px 0 6px">
+          Ảnh/video minh chứng
+        </label>
+        <input
+          id="delivery-failed-files"
+          type="file"
+          class="swal2-file"
+          multiple
+          accept="image/png,image/jpeg,image/jpg,image/webp,video/mp4,video/quicktime,video/webm"
+          style="display:block;width:100%;margin:0;border:1px solid #d1d5db;border-radius:8px;padding:10px"
+        />
+        <div style="font-size:12px;color:#6b7280;margin-top:6px">
+          Bắt buộc minh chứng với lý do nhạy cảm: khách từ chối, sai địa chỉ, hư hỏng, không liên hệ được nhiều lần hoặc Khác.
+        </div>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Xác nhận thất bại",
+    cancelButtonText: "Quay lại",
+    confirmButtonColor: "#dc2626",
+    cancelButtonColor: "#6b7280",
+    focusConfirm: false,
+    preConfirm: () => {
+      const reasonCodeElement = document.getElementById(
+        "delivery-failed-reason-code"
+      ) as HTMLSelectElement | null;
+      const descriptionElement = document.getElementById(
+        "delivery-failed-description"
+      ) as HTMLTextAreaElement | null;
+      const fileInput = document.getElementById(
+        "delivery-failed-files"
+      ) as HTMLInputElement | null;
+
+      const reasonCode = String(reasonCodeElement?.value || "").trim();
+      const description = normalizeAdminCancelDescription(descriptionElement?.value || "");
+      const files = Array.from(fileInput?.files || []);
+
+      if (!reasonCode) {
+        Swal.showValidationMessage("Vui lòng chọn lý do giao hàng thất bại.");
+        return false;
+      }
+
+      if (reasonCode === "OTHER" && !description) {
+        Swal.showValidationMessage("Vui lòng nhập mô tả chi tiết khi chọn lý do Khác.");
+        return false;
+      }
+
+      if (description && description.length < 5) {
+        Swal.showValidationMessage("Mô tả chi tiết phải có ít nhất 5 ký tự.");
+        return false;
+      }
+
+      const invalidMessage = validateDeliveryFiles(files);
+
+      if (invalidMessage) {
+        Swal.showValidationMessage(invalidMessage);
+        return false;
+      }
+
+      const reasonOption = getDeliveryFailedReasonOption(reasonCode);
+
+      if (reasonOption?.evidenceRequired && files.length === 0) {
+        Swal.showValidationMessage("Lý do này cần ảnh/video minh chứng giao hàng thất bại.");
+        return false;
+      }
+
+      return {
+        reason: getDeliveryFailedReasonLabel(reasonCode),
+        description: description || null,
+        files,
+      };
+    },
+  });
+
+  if (!result.isConfirmed || !result.value) return;
+
+  loading.value = true;
+
+  try {
+    await orderService.markDeliveryFailed(order.orderId, result.value);
+
+    await Swal.fire({
+      icon: "success",
+      title: "Đã cập nhật giao hàng thất bại",
+      text: "Đơn hàng đã chuyển sang trạng thái Giao hàng thất bại.",
+      confirmButtonColor: "#bd9a5f",
+    });
+
+    await refreshOrderAfterWorkflow(order.orderId);
+  } catch (error: any) {
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể cập nhật giao hàng thất bại",
+      text:
+        error?.response?.data?.message ||
+        "Vui lòng kiểm tra trạng thái đơn hàng hoặc thử lại sau.",
+      confirmButtonColor: "#bd9a5f",
+    });
+  } finally {
+    loading.value = false;
   }
 }
 
@@ -664,6 +961,52 @@ async function confirmAdminCancelOrder(order: AdminOrderResponse) {
   } finally {
     loading.value = false;
   }
+}
+
+function getDeliveryFailedReasonOption(reasonCode: string) {
+  return deliveryFailedReasonOptions.find((item) => item.value === reasonCode);
+}
+
+function getDeliveryFailedReasonLabel(reasonCode: string) {
+  return getDeliveryFailedReasonOption(reasonCode)?.label || "Khác";
+}
+
+function buildDeliveryFailedReasonOptionsHtml() {
+  return deliveryFailedReasonOptions
+    .map(
+      (item) =>
+        `<option value="${escapeAlertHtml(item.value)}">${escapeAlertHtml(item.label)}</option>`
+    )
+    .join("");
+}
+
+function validateDeliveryFiles(files: File[]) {
+  const allowedImageTypes = ["image/jpeg", "image/png", "image/webp"];
+  const allowedVideoTypes = ["video/mp4", "video/quicktime", "video/webm"];
+  const allowedExtensions = /\.(jpg|jpeg|png|webp|mp4|mov|webm)$/i;
+
+  for (const file of files) {
+    const fileType = String(file.type || "").toLowerCase();
+    const fileName = String(file.name || "");
+
+    const isImage = allowedImageTypes.includes(fileType);
+    const isVideo = allowedVideoTypes.includes(fileType);
+    const hasAllowedExtension = allowedExtensions.test(fileName);
+
+    if (!isImage && !isVideo && !hasAllowedExtension) {
+      return "File minh chứng chỉ hỗ trợ JPG, JPEG, PNG, WEBP, MP4, MOV, WEBM.";
+    }
+
+    if (isVideo || /\.(mp4|mov|webm)$/i.test(fileName)) {
+      if (file.size > 200 * 1024 * 1024) {
+        return "Video minh chứng không được vượt quá 200MB.";
+      }
+    } else if (file.size > 20 * 1024 * 1024) {
+      return "Ảnh minh chứng không được vượt quá 20MB.";
+    }
+  }
+
+  return "";
 }
 
 function buildAdminCancelReasonOptionsHtml() {

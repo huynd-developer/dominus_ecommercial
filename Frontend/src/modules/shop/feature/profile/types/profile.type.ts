@@ -174,6 +174,19 @@ export interface CustomerOrderResponse {
   completedAt?: string | null;
   updatedAt?: string | null;
 
+  /** Người xác nhận giao hàng thành công trong hệ thống. */
+  deliveryCompletedByName?: string | null;
+
+  /** Thông tin giao hàng thất bại để khách xem được lý do. */
+  deliveryFailedReason?: string | null;
+  deliveryFailedDescription?: string | null;
+  deliveryFailedAt?: string | null;
+  deliveryFailedByName?: string | null;
+
+  /** Ảnh/video minh chứng giao hàng. */
+  deliverySuccessMediaUrls?: string[] | null;
+  deliveryFailedMediaUrls?: string[] | null;
+
   /**
    * BE có thể trả sẵn, FE vẫn tự fallback theo completedAt + 15 ngày nếu thiếu.
    */
