@@ -1,5 +1,6 @@
 package org.example.datn_sd69.modules.order.service;
 
+import org.example.datn_sd69.modules.order.dto.request.RejectReturnRequest;
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderResponse;
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderStatusCountResponse;
 import org.springframework.data.domain.Page;
@@ -30,6 +31,10 @@ public interface AdminOrderService {
             LocalDate fromDate,
             LocalDate toDate
     );
+
+    AdminOrderResponse acceptReturnRequest(Integer orderId);
+
+    AdminOrderResponse rejectReturnRequest(Integer orderId, RejectReturnRequest request);
 
     AdminOrderResponse markReturnRefunded(Integer orderId);
 }

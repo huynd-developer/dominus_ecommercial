@@ -5,6 +5,7 @@ import type {
   OrderSearchParams,
   OrderStatusCountParams,
   PageResponse,
+  RejectReturnRequest,
   UpdateOrderStatusResponse,
 } from "../types/order.type";
 
@@ -73,8 +74,37 @@ export const orderService = {
     return response.data;
   },
 
+  /**
+   * Admin chấp nhận yêu cầu hoàn hàng.
+   * Sau bước này mới được bấm "Đã hoàn tiền".
+   */
+  async acceptReturn(orderId: number) {
+    const response = await api.patch<AdminOrderResponse>(
+      `${ORDER_ADMIN_API}/${orderId}/return-accepted`
+    );
+
+    return response.data;
+  },
+
+  /**
+   * Admin từ chối yêu cầu hoàn hàng.
+   * BE bắt buộc có lý do để khách hàng nhìn được vì sao bị từ chối.
+   */
+  async rejectReturn(orderId: number, data: RejectReturnRequest) {
+    const response = await api.patch<AdminOrderResponse>(
+      `${ORDER_ADMIN_API}/${orderId}/return-rejected`,
+      data
+    );
+
+    return response.data;
+  },
+
+  /**
+   * Admin xác nhận đã hoàn tiền thực tế cho khách.
+   * BE chỉ cho chạy khi yêu cầu hoàn đã được chấp nhận.
+   */
   async markReturnRefunded(orderId: number) {
-    const response = await api.patch<UpdateOrderStatusResponse>(
+    const response = await api.patch<AdminOrderResponse>(
       `${ORDER_ADMIN_API}/${orderId}/return-refunded`
     );
 

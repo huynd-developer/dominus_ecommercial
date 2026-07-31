@@ -18,13 +18,13 @@
     </div>
 
     <OrderFilter
-  :keyword="keyword"
-  :status="status"
-  :order-type="orderType"
-  :from-date="fromDate"
-  :to-date="toDate"
-  @search="handleSearch"
-/>
+      :keyword="keyword"
+      :status="status"
+      :order-type="orderType"
+      :from-date="fromDate"
+      :to-date="toDate"
+      @search="handleSearch"
+    />
 
     <div class="order-filter-tabs mb-3">
       <div class="order-status-tabs">
@@ -113,6 +113,8 @@
       :show="showDetailModal"
       :order="selectedOrder"
       @close="closeDetail"
+      @accept-return="confirmAcceptReturn"
+      @reject-return="confirmRejectReturn"
       @mark-return-refunded="confirmMarkReturnRefunded"
     />
   </div>
@@ -163,6 +165,37 @@ const orderTypeTabs = [
   { label: "Tất cả đơn", value: "" },
   { label: "Online", value: "ONLINE" },
   { label: "Tại quầy", value: "IN_STORE" },
+];
+
+const returnRejectReasonOptions = [
+  {
+    value: "INVALID_EVIDENCE",
+    label: "Bằng chứng không hợp lệ / không rõ ràng",
+  },
+  {
+    value: "ORDER_ITEM_CORRECT",
+    label: "Sản phẩm giao đúng theo đơn hàng",
+  },
+  {
+    value: "NOT_ELIGIBLE",
+    label: "Sản phẩm không thuộc điều kiện hoàn hàng",
+  },
+  {
+    value: "RETURN_PERIOD_EXPIRED",
+    label: "Quá thời hạn yêu cầu hoàn hàng",
+  },
+  {
+    value: "USED_OR_NOT_INTACT",
+    label: "Sản phẩm đã qua sử dụng / không còn nguyên trạng",
+  },
+  {
+    value: "WRONG_RETURN_REASON",
+    label: "Khách chọn sai lý do hoàn hàng",
+  },
+  {
+    value: "OTHER",
+    label: "Khác",
+  },
 ];
 
 const safeTotalPages = computed(() => {
@@ -228,7 +261,7 @@ async function loadOrders() {
 
     const pageData = resolvePageData(rawData);
 
-    orders.value = prioritizeReturnRequestedOrders(pageData.content);
+    orders.value = getOrdersForCurrentTab(pageData.content);
     totalElements.value = pageData.totalElements;
     totalPages.value = pageData.totalPages;
 
@@ -291,6 +324,14 @@ function resolvePageData(rawData: any) {
   };
 }
 
+function getOrdersForCurrentTab(list: AdminOrderResponse[]) {
+  if (Number(status.value) === 6) {
+    return prioritizeReturnRequestedOrders(list);
+  }
+
+  return list;
+}
+
 function getReturnSortTime(order: AdminOrderResponse) {
   const rawDate = order.returnRequestedAt || order.createdAt || order.completedAt || null;
 
@@ -313,6 +354,13 @@ function prioritizeReturnRequestedOrders(list: AdminOrderResponse[]) {
     }
 
     if (leftIsReturnRequested && rightIsReturnRequested) {
+      const leftStatus = getReturnProcessStatus(left);
+      const rightStatus = getReturnProcessStatus(right);
+
+      if (leftStatus !== rightStatus) {
+        return leftStatus - rightStatus;
+      }
+
       return getReturnSortTime(right) - getReturnSortTime(left);
     }
 
@@ -391,6 +439,26 @@ async function confirmChangeStatus(
   order: AdminOrderResponse,
   nextStatus: number
 ) {
+  if (isReturnWorkflowOrder(order)) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Không thể hoàn tất bằng trạng thái thường",
+      text: "Đơn đang có yêu cầu hoàn hàng. Hãy mở chi tiết để Chấp nhận/Từ chối, sau đó mới xác nhận Đã hoàn tiền.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  if (nextStatus === 7) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Sai luồng xử lý hoàn hàng",
+      text: "Không được chuyển thẳng sang Hoàn hàng hoàn tất. Phải xử lý bằng luồng Chấp nhận/Từ chối và Đã hoàn tiền.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
   const nextStatusText = getStatusText(nextStatus);
 
   const result = await Swal.fire({
@@ -398,9 +466,9 @@ async function confirmChangeStatus(
     title: "Xác nhận cập nhật trạng thái?",
     html: `
       <div style="text-align:left">
-        <p><b>Đơn hàng:</b> ${order.orderCode}</p>
-        <p><b>Trạng thái hiện tại:</b> ${order.statusText}</p>
-        <p><b>Chuyển sang:</b> ${nextStatusText}</p>
+        <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode)}</p>
+        <p><b>Trạng thái hiện tại:</b> ${escapeAlertHtml(order.statusText)}</p>
+        <p><b>Chuyển sang:</b> ${escapeAlertHtml(nextStatusText)}</p>
       </div>
     `,
     showCancelButton: true,
@@ -424,14 +492,7 @@ async function confirmChangeStatus(
       confirmButtonColor: "#bd9a5f",
     });
 
-    await loadOrders();
-
-    if (
-      showDetailModal.value &&
-      selectedOrder.value?.orderId === order.orderId
-    ) {
-      selectedOrder.value = await orderService.getOrderDetail(order.orderId);
-    }
+    await refreshOrderAfterWorkflow(order.orderId);
   } catch (error: any) {
     await Swal.fire({
       icon: "error",
@@ -444,16 +505,225 @@ async function confirmChangeStatus(
   }
 }
 
+async function confirmAcceptReturn(order: AdminOrderResponse) {
+  if (!order || !order.orderId) return;
+
+  if (!canAcceptReturn(order)) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Không thể chấp nhận yêu cầu",
+      text: "Yêu cầu hoàn hàng này không còn ở trạng thái chờ xử lý.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  const result = await Swal.fire({
+    icon: "question",
+    title: "Chấp nhận yêu cầu hoàn hàng?",
+    html: `
+      <div style="text-align:left">
+        <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
+        <p><b>Số tiền cần hoàn:</b> ${formatMoneyForAlert(getReturnRefundAmount(order))}</p>
+        <p><b>Phương án hoàn tiền:</b> ${escapeAlertHtml(getRefundMethodTextForAlert(order))}</p>
+        <p class="mb-0 text-danger"><b>Lưu ý:</b> Sau khi chấp nhận, mới được thực hiện bước đã hoàn tiền.</p>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Chấp nhận",
+    cancelButtonText: "Hủy",
+    confirmButtonColor: "#16a34a",
+    cancelButtonColor: "#6b7280",
+  });
+
+  if (!result.isConfirmed) return;
+
+  loading.value = true;
+
+  try {
+    await orderService.acceptReturn(order.orderId);
+
+    await Swal.fire({
+      icon: "success",
+      title: "Đã chấp nhận hoàn hàng",
+      text: "Yêu cầu hoàn hàng đã được chấp nhận. Hãy hoàn tiền thực tế cho khách trước khi bấm Đã hoàn tiền.",
+      confirmButtonColor: "#bd9a5f",
+    });
+
+    await refreshOrderAfterWorkflow(order.orderId);
+  } catch (error: any) {
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể chấp nhận hoàn hàng",
+      text:
+        error?.response?.data?.message ||
+        "Vui lòng kiểm tra trạng thái yêu cầu hoàn hàng hoặc thử lại sau.",
+      confirmButtonColor: "#bd9a5f",
+    });
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function confirmRejectReturn(order: AdminOrderResponse) {
+  if (!order || !order.orderId) return;
+
+  if (!canRejectReturn(order)) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Không thể từ chối yêu cầu",
+      text: "Yêu cầu hoàn hàng này không còn ở trạng thái chờ xử lý.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  const result = await Swal.fire({
+    icon: "warning",
+    title: "Từ chối yêu cầu hoàn hàng?",
+    html: `
+      <div style="text-align:left">
+        <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
+        <p><b>Số tiền khách yêu cầu hoàn:</b> ${formatMoneyForAlert(getReturnRefundAmount(order))}</p>
+
+        <label for="return-reject-reason-code" style="display:block;font-weight:700;margin:14px 0 6px">
+          Lý do từ chối <span style="color:#dc2626">*</span>
+        </label>
+        <select
+          id="return-reject-reason-code"
+          class="swal2-select"
+          style="display:block;width:100%;margin:0 0 12px 0;height:42px;border:1px solid #d1d5db;border-radius:8px;padding:0 10px"
+        >
+          <option value="">-- Chọn lý do từ chối --</option>
+          ${buildReturnRejectReasonOptionsHtml()}
+        </select>
+
+        <label for="return-reject-reason-detail" style="display:block;font-weight:700;margin:0 0 6px">
+          Mô tả chi tiết <span style="color:#6b7280;font-weight:500">(không bắt buộc, trừ khi chọn Khác)</span>
+        </label>
+        <textarea
+          id="return-reject-reason-detail"
+          class="swal2-textarea"
+          maxlength="180"
+          placeholder="Có thể nhập thêm giải thích cụ thể cho khách hàng..."
+          style="display:block;width:100%;height:110px;margin:0;border:1px solid #d1d5db;border-radius:8px;padding:10px;resize:vertical"
+        ></textarea>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Từ chối",
+    cancelButtonText: "Hủy",
+    confirmButtonColor: "#dc2626",
+    cancelButtonColor: "#6b7280",
+    focusConfirm: false,
+    preConfirm: () => {
+      const reasonCodeElement = document.getElementById(
+        "return-reject-reason-code"
+      ) as HTMLSelectElement | null;
+      const detailElement = document.getElementById(
+        "return-reject-reason-detail"
+      ) as HTMLTextAreaElement | null;
+
+      const reasonCode = String(reasonCodeElement?.value || "").trim();
+      const detail = normalizeRejectReasonDetail(detailElement?.value || "");
+
+      if (!reasonCode) {
+        Swal.showValidationMessage("Vui lòng chọn lý do từ chối hoàn hàng.");
+        return false;
+      }
+
+      const isOtherReason = reasonCode === "OTHER";
+
+      if (isOtherReason && !detail) {
+        Swal.showValidationMessage(
+          "Vui lòng nhập mô tả chi tiết khi chọn lý do Khác."
+        );
+        return false;
+      }
+
+      if (detail && detail.length < 5) {
+        Swal.showValidationMessage("Mô tả chi tiết phải có ít nhất 5 ký tự.");
+        return false;
+      }
+
+      const reasonLabel = getReturnRejectReasonLabel(reasonCode);
+      const reason = detail ? `${reasonLabel} - ${detail}` : reasonLabel;
+
+      if (reason.length > 255) {
+        Swal.showValidationMessage(
+          "Tổng lý do từ chối không được vượt quá 255 ký tự."
+        );
+        return false;
+      }
+
+      return reason;
+    },
+  });
+
+  if (!result.isConfirmed) return;
+
+  const reason = String(result.value || "").trim();
+  loading.value = true;
+
+  try {
+    await orderService.rejectReturn(order.orderId, { reason });
+
+    await Swal.fire({
+      icon: "success",
+      title: "Đã từ chối hoàn hàng",
+      text: "Lý do từ chối đã được lưu để khách hàng có thể xem.",
+      confirmButtonColor: "#bd9a5f",
+    });
+
+    await refreshOrderAfterWorkflow(order.orderId);
+  } catch (error: any) {
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể từ chối hoàn hàng",
+      text:
+        error?.response?.data?.message ||
+        "Vui lòng kiểm tra trạng thái yêu cầu hoàn hàng hoặc thử lại sau.",
+      confirmButtonColor: "#bd9a5f",
+    });
+  } finally {
+    loading.value = false;
+  }
+}
+
+function buildReturnRejectReasonOptionsHtml() {
+  return returnRejectReasonOptions
+    .map(
+      (item) =>
+        `<option value="${escapeAlertHtml(item.value)}">${escapeAlertHtml(
+          item.label
+        )}</option>`
+    )
+    .join("");
+}
+
+function getReturnRejectReasonLabel(value: string) {
+  const option = returnRejectReasonOptions.find((item) => item.value === value);
+
+  return option?.label || value;
+}
+
+function normalizeRejectReasonDetail(value: string) {
+  return String(value || "")
+    .trim()
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s{2,}/g, " ");
+}
+
 async function confirmMarkReturnRefunded(order: AdminOrderResponse) {
   if (!order || !order.orderId) {
     return;
   }
 
-  if (Number(order.status) !== 6 && order.canMarkReturnRefunded !== true) {
+  if (!canMarkReturnRefunded(order)) {
     await Swal.fire({
       icon: "warning",
-      title: "Không thể hoàn tiền",
-      text: "Đơn hàng này không ở trạng thái yêu cầu hoàn hàng.",
+      title: "Chưa thể hoàn tiền",
+      text: "Phải chấp nhận yêu cầu hoàn hàng trước, sau đó mới được bấm Đã hoàn tiền.",
       confirmButtonColor: "#bd9a5f",
     });
     return;
@@ -477,9 +747,7 @@ async function confirmMarkReturnRefunded(order: AdminOrderResponse) {
     html: `
       <div style="text-align:left">
         <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
-        <p><b>Số tiền hoàn:</b> ${formatMoneyForAlert(
-          order.returnRefundAmount ?? order.refundAmount ?? order.finalAmount
-        )}</p>
+        <p><b>Số tiền hoàn:</b> ${formatMoneyForAlert(getReturnRefundAmount(order))}</p>
         <p><b>Phương án:</b> ${escapeAlertHtml(
           getRefundMethodTextForAlert(order)
         )}</p>
@@ -501,22 +769,16 @@ async function confirmMarkReturnRefunded(order: AdminOrderResponse) {
   loading.value = true;
 
   try {
-    const response = await orderService.markReturnRefunded(order.orderId);
+    await orderService.markReturnRefunded(order.orderId);
 
     await Swal.fire({
       icon: "success",
       title: "Đã cập nhật hoàn tiền",
-      text:
-        response.message ||
-        "Đơn hàng đã chuyển sang trạng thái hoàn hàng hoàn tất.",
+      text: "Đơn hàng đã chuyển sang trạng thái hoàn hàng hoàn tất.",
       confirmButtonColor: "#bd9a5f",
     });
 
-    await loadOrders();
-
-    if (showDetailModal.value && selectedOrder.value?.orderId === order.orderId) {
-      selectedOrder.value = await orderService.getOrderDetail(order.orderId);
-    }
+    await refreshOrderAfterWorkflow(order.orderId);
   } catch (error: any) {
     await Swal.fire({
       icon: "error",
@@ -529,6 +791,92 @@ async function confirmMarkReturnRefunded(order: AdminOrderResponse) {
   } finally {
     loading.value = false;
   }
+}
+
+async function refreshOrderAfterWorkflow(orderId: number) {
+  await loadOrders();
+
+  if (showDetailModal.value && selectedOrder.value?.orderId === orderId) {
+    selectedOrder.value = await orderService.getOrderDetail(orderId);
+  }
+}
+
+function getReturnRefundAmount(order: AdminOrderResponse) {
+  return Number(order.returnRefundAmount ?? order.refundAmount ?? 0);
+}
+
+function getReturnProcessStatus(order: AdminOrderResponse) {
+  const directStatus = Number(order.returnProcessStatus);
+
+  if (Number.isFinite(directStatus)) {
+    return directStatus;
+  }
+
+  const itemStatuses = (order.returnItems || [])
+    .map((item) => Number(item.status))
+    .filter((value) => Number.isFinite(value));
+
+  if (Number(order.status) === 7 || itemStatuses.some((value) => value === 3)) {
+    return 3;
+  }
+
+  if (itemStatuses.length > 0 && itemStatuses.every((value) => value === 2)) {
+    return 2;
+  }
+
+  if (itemStatuses.length > 0 && itemStatuses.every((value) => value === 1)) {
+    return 1;
+  }
+
+  if (Number(order.status) === 6) {
+    return 0;
+  }
+
+  return 99;
+}
+
+function isReturnWorkflowOrder(order: AdminOrderResponse | null) {
+  if (!order) {
+    return false;
+  }
+
+  return (
+    Number(order.status) === 6 ||
+    Boolean(order.returnReason) ||
+    Boolean(order.returnDescription) ||
+    Boolean(order.returnRequestedAt) ||
+    Boolean(order.returnItems && order.returnItems.length > 0) ||
+    order.canAcceptReturn === true ||
+    order.canRejectReturn === true ||
+    order.canMarkReturnRefunded === true
+  );
+}
+
+function canAcceptReturn(order: AdminOrderResponse) {
+  if (order.canAcceptReturn !== undefined && order.canAcceptReturn !== null) {
+    return order.canAcceptReturn === true;
+  }
+
+  return Number(order.status) === 6 && getReturnProcessStatus(order) === 0;
+}
+
+function canRejectReturn(order: AdminOrderResponse) {
+  if (order.canRejectReturn !== undefined && order.canRejectReturn !== null) {
+    return order.canRejectReturn === true;
+  }
+
+  return Number(order.status) === 6 && getReturnProcessStatus(order) === 0;
+}
+
+function canMarkReturnRefunded(order: AdminOrderResponse) {
+  if (
+    order.canMarkReturnRefunded !== undefined &&
+    order.canMarkReturnRefunded !== null
+  ) {
+    return order.canMarkReturnRefunded === true;
+  }
+
+  return Number(order.status) === 6 && getReturnProcessStatus(order) === 1;
 }
 
 function formatMoneyForAlert(value?: number | null) {

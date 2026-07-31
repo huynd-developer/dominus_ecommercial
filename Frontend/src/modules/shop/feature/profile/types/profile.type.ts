@@ -91,6 +91,14 @@ export interface CustomerOrderItemResponse {
   image: string | null;
 }
 
+export type ReturnProcessStatus =
+  | "PENDING"
+  | "ACCEPTED"
+  | "REJECTED"
+  | "REFUNDED"
+  | "PARTIAL"
+  | "UNKNOWN";
+
 export interface CustomerReturnItemResponse {
   orderItemId: number | null;
   productId: number | null;
@@ -113,6 +121,17 @@ export interface CustomerReturnItemResponse {
   itemAmount: number;
   voucherAllocatedAmount: number;
   refundAmount: number;
+
+  /**
+   * 0/PENDING = chờ xử lý
+   * 1/ACCEPTED = đã chấp nhận
+   * 2/REJECTED = từ chối
+   * 3/REFUNDED = đã hoàn tiền
+   */
+  status?: number | string | null;
+  statusText?: string | null;
+  rejectReason?: string | null;
+  rejectedReason?: string | null;
 }
 
 export interface CustomerOrderResponse {
@@ -168,7 +187,7 @@ export interface CustomerOrderResponse {
   refundAmount?: number | null;
   estimatedRefundAmount?: number | null;
   returnEstimatedRefundAmount?: number | null;
-  refundMethod?: RefundMethod | string | null;
+  refundMethod?: RefundMethod | string | number | null;
   bankName?: string | null;
   bankAccountNumber?: string | null;
   bankAccountHolder?: string | null;
@@ -176,6 +195,22 @@ export interface CustomerOrderResponse {
   returnVideos?: string[] | null;
   returnMediaUrls?: string[] | null;
   returnItems?: CustomerReturnItemResponse[] | null;
+
+  /**
+   * Thông tin xử lý hoàn hàng/hoàn tiền phía khách.
+   * FE vẫn tự fallback theo status và returnItems nếu BE chưa trả đủ.
+   */
+  returnRequestCode?: string | null;
+  returnProcessStatus?: ReturnProcessStatus | number | string | null;
+  returnProcessStatusText?: string | null;
+  returnRejectReason?: string | null;
+  rejectReason?: string | null;
+  rejectedReason?: string | null;
+  returnProcessedAt?: string | null;
+  returnAcceptedAt?: string | null;
+  returnRejectedAt?: string | null;
+  returnRefundedAt?: string | null;
+  refundedAt?: string | null;
 
   items: CustomerOrderItemResponse[];
 }

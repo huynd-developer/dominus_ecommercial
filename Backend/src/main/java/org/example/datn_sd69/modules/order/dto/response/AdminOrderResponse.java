@@ -48,7 +48,7 @@ public class AdminOrderResponse {
      * 4 = Đã hủy
      * 5 = Giao hàng thất bại
      * 6 = Yêu cầu hoàn hàng / đổi trả
-     * 7 = Hoàn hàng / đổi trả hoàn tất / đã hoàn tiền
+     * 7 = Hoàn hàng / đổi trả hoàn tất / đã xử lý hoàn tiền
      */
     private Integer status;
 
@@ -57,6 +57,16 @@ public class AdminOrderResponse {
     private LocalDateTime createdAt;
 
     private LocalDateTime completedAt;
+
+    /**
+     * Lý do hủy đơn. Có thể do khách chọn hoặc admin nhập/chọn khi hủy.
+     */
+    private String cancelReason;
+
+    /**
+     * Thời điểm hủy đơn.
+     */
+    private LocalDateTime cancelledAt;
 
     private Integer totalQuantity;
 
@@ -86,7 +96,28 @@ public class AdminOrderResponse {
     private String bankAccountHolder;
 
     /**
-     * true khi đơn đang ở trạng thái 6 và admin được bấm chuyển sang đã hoàn tiền.
+     * PENDING = Chờ xử lý
+     * ACCEPTED = Đã chấp nhận / chờ hoàn tiền
+     * REJECTED = Từ chối hoàn hàng
+     * REFUNDED = Đã xử lý hoàn tiền
+     * PARTIAL = Có nhiều trạng thái item khác nhau
+     */
+    private String returnProcessStatus;
+
+    private String returnProcessStatusText;
+
+    /**
+     * Lý do admin từ chối hoàn hàng.
+     * Khách hàng cần thấy field này ở lịch sử đơn hàng.
+     */
+    private String returnRejectReason;
+
+    private Boolean canAcceptReturn;
+
+    private Boolean canRejectReturn;
+
+    /**
+     * true khi đơn đang ở trạng thái 6 và tất cả sản phẩm hoàn đã được chấp nhận.
      */
     private Boolean canMarkReturnRefunded;
 
