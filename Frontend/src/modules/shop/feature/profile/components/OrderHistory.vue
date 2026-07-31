@@ -71,8 +71,8 @@
 
         <div
           class="tab-item"
-          :class="{ active: currentTab === 6 }"
-          @click="currentTab = 6"
+          :class="{ active: currentTab === 'RETURN' }"
+          @click="currentTab = 'RETURN'"
         >
           Hoàn hàng
         </div>
@@ -110,8 +110,8 @@
               </div>
 
               <div class="order-header-right">
-                <span :class="['badge', getStatusClass(order.status)]">
-                  {{ order.statusText || getStatusText(order.status) }}
+                <span :class="['badge', getOrderHeaderStatusClass(order)]">
+                  {{ getOrderHeaderStatusText(order) }}
                 </span>
 
                 <div class="fw-bold mt-1 order-header-total">
@@ -324,15 +324,31 @@
                           </div>
 
                           <div
-                            v-if="getReviewApprovalText(getMyReviewByOrderItemId(item.orderItemId))"
+                            v-if="
+                              getReviewApprovalText(
+                                getMyReviewByOrderItemId(item.orderItemId)
+                              )
+                            "
                             class="review-approval-status mt-1"
-                            :class="getReviewApprovalClass(getMyReviewByOrderItemId(item.orderItemId))"
+                            :class="
+                              getReviewApprovalClass(
+                                getMyReviewByOrderItemId(item.orderItemId)
+                              )
+                            "
                           >
-                            {{ getReviewApprovalText(getMyReviewByOrderItemId(item.orderItemId)) }}
+                            {{
+                              getReviewApprovalText(
+                                getMyReviewByOrderItemId(item.orderItemId)
+                              )
+                            }}
                           </div>
 
                           <button
-                            v-if="canEditExistingReview(getMyReviewByOrderItemId(item.orderItemId))"
+                            v-if="
+                              canEditExistingReview(
+                                getMyReviewByOrderItemId(item.orderItemId)
+                              )
+                            "
                             type="button"
                             class="btn btn-sm btn-outline-dark review-edit-btn mt-2"
                             :disabled="submittingReview"
@@ -343,7 +359,10 @@
                           </button>
 
                           <div
-                            v-if="getReviewMediaByOrderItemId(item.orderItemId).length > 0"
+                            v-if="
+                              getReviewMediaByOrderItemId(item.orderItemId)
+                                .length > 0
+                            "
                             class="review-media-section"
                           >
                             <div class="review-media-label">
@@ -355,7 +374,7 @@
                                 v-for="(
                                   media, mediaIndex
                                 ) in getReviewMediaByOrderItemId(
-                                  item.orderItemId,
+                                  item.orderItemId
                                 )"
                                 :key="`${media.url}-${mediaIndex}`"
                                 type="button"
@@ -368,7 +387,7 @@
                                 @click.stop="
                                   openReviewMediaPreview(
                                     item.orderItemId,
-                                    mediaIndex,
+                                    mediaIndex
                                   )
                                 "
                               >
@@ -509,42 +528,140 @@
                   <div
                     v-else-if="isReturnInfoVisible(order)"
                     class="order-return-info"
+                    :class="getReturnProcessClass(order)"
                   >
-                    <div class="return-info-title">
-                      <i class="bi bi-arrow-counterclockwise me-1"></i>
-                      Thông tin hoàn hàng:
+                    <div class="return-info-top">
+                      <div>
+                        <div class="return-info-title">
+                          <i class="bi bi-arrow-counterclockwise me-1"></i>
+                          Thông tin hoàn hàng / hoàn tiền
+                        </div>
+
+                        <div class="return-request-meta">
+                          <span>
+                            ID yêu cầu:
+                            <strong>{{ getReturnRequestCode(order) }}</strong>
+                          </span>
+
+                          <span v-if="getOrderReturnRequestedAt(order)">
+                            Yêu cầu vào:
+                            <strong>{{
+                              formatDate(getOrderReturnRequestedAt(order))
+                            }}</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      <span
+                        class="return-process-badge"
+                        :class="getReturnProcessBadgeClass(order)"
+                      >
+                        {{ getReturnProcessText(order) }}
+                      </span>
                     </div>
 
-                    <div class="return-info-line">
-                      <span>Lý do:</span>
-                      <strong>{{ getOrderReturnReason(order) }}</strong>
+                    <div class="return-process-timeline">
+                      <div
+                        v-for="step in getReturnProcessTimeline(order)"
+                        :key="step.key"
+                        class="return-process-step"
+                        :class="{
+                          'is-done': step.done,
+                          'is-active': step.active,
+                          'is-rejected': step.rejected,
+                        }"
+                      >
+                        <div class="return-step-marker">
+                          <i class="bi" :class="step.icon"></i>
+                        </div>
+
+                        <div class="return-step-content">
+                          <div class="return-step-title">{{ step.title }}</div>
+                          <div v-if="step.desc" class="return-step-desc">
+                            {{ step.desc }}
+                          </div>
+                          <div v-if="step.time" class="return-step-time">
+                            {{ formatDate(step.time) }}
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     <div
-                      v-if="getOrderReturnDescription(order)"
-                      class="return-info-description"
+                      v-if="getReturnProcessAlert(order)"
+                      class="return-process-alert"
+                      :class="getReturnProcessAlert(order)?.className"
                     >
-                      {{ getOrderReturnDescription(order) }}
+                      <i
+                        class="bi"
+                        :class="getReturnProcessAlert(order)?.icon"
+                      ></i>
+                      <div>
+                        <strong>{{
+                          getReturnProcessAlert(order)?.title
+                        }}</strong>
+                        <p>{{ getReturnProcessAlert(order)?.desc }}</p>
+                      </div>
                     </div>
 
-                    <div
-                      v-if="getOrderReturnRefundAmount(order) > 0"
-                      class="return-info-line return-refund-line"
-                    >
-                      <span>Hoàn tiền dự kiến:</span>
-                      <strong>{{ formatMoney(getOrderReturnRefundAmount(order)) }}</strong>
+                    <div class="return-info-grid">
+                      <div class="return-info-line">
+                        <span>Lý do hoàn:</span>
+                        <strong>{{ getOrderReturnReason(order) }}</strong>
+                      </div>
+
+                      <div
+                        v-if="getOrderReturnDescription(order)"
+                        class="return-info-description"
+                      >
+                        {{ getOrderReturnDescription(order) }}
+                      </div>
+
+                      <div
+                        v-if="getOrderReturnRejectReason(order)"
+                        class="return-info-line return-reject-line"
+                      >
+                        <span>Lý do từ chối:</span>
+                        <strong>{{ getOrderReturnRejectReason(order) }}</strong>
+                      </div>
+
+                      <div
+                        v-if="getOrderReturnRefundAmount(order) > 0"
+                        class="return-info-line return-refund-line"
+                      >
+                        <span>{{ getReturnRefundLabel(order) }}:</span>
+                        <strong>{{
+                          formatMoney(getOrderReturnRefundAmount(order))
+                        }}</strong>
+                      </div>
+
+                      <div
+                        v-if="getOrderRefundMethodText(order)"
+                        class="return-info-line"
+                      >
+                        <span>Hoàn tiền vào:</span>
+                        <strong>{{ getOrderRefundMethodText(order) }}</strong>
+                      </div>
                     </div>
 
                     <div class="return-selected-section">
-                      <div class="return-media-label">Sản phẩm yêu cầu hoàn:</div>
+                      <div class="return-media-label">
+                        Sản phẩm yêu cầu hoàn:
+                      </div>
 
                       <div
                         v-if="getOrderReturnSelectedItems(order).length > 0"
                         class="return-selected-list"
                       >
                         <button
-                          v-for="returnItem in getOrderReturnSelectedItems(order)"
-                          :key="`return-item-${returnItem.orderItemId || returnItem.productVariantId || returnItem.productId}`"
+                          v-for="returnItem in getOrderReturnSelectedItems(
+                            order
+                          )"
+                          :key="`return-item-${
+                            returnItem.orderItemId ||
+                            returnItem.productVariantId ||
+                            returnItem.productId
+                          }`"
                           type="button"
                           class="return-selected-item"
                           @click.stop="goToProductDetail(returnItem)"
@@ -552,13 +669,24 @@
                           <img
                             :src="returnItem.image || FALLBACK_IMAGE"
                             class="return-selected-img"
-                            :alt="returnItem.productName || 'Sản phẩm hoàn hàng'"
+                            :alt="
+                              returnItem.productName || 'Sản phẩm hoàn hàng'
+                            "
                             @error="handleImageError"
                           />
 
                           <div class="return-selected-content">
-                            <div class="return-selected-name">
-                              {{ returnItem.productName || "Sản phẩm" }}
+                            <div class="return-selected-name-row">
+                              <div class="return-selected-name">
+                                {{ returnItem.productName || "Sản phẩm" }}
+                              </div>
+
+                              <span
+                                class="return-selected-status"
+                                :class="getReturnItemStatusClass(returnItem)"
+                              >
+                                {{ getReturnItemStatusText(returnItem) }}
+                              </span>
                             </div>
 
                             <div class="return-selected-meta">
@@ -575,22 +703,43 @@
 
                             <div class="return-selected-bottom">
                               <span>
-                                SL hoàn:
-                                <strong>{{ returnItem.returnQuantity || 0 }}</strong>
+                                SL mua:
+                                <strong>{{
+                                  returnItem.orderedQuantity || 0
+                                }}</strong>
                               </span>
 
-                              <span v-if="Number(returnItem.itemAmount || 0) > 0">
-                                Tiền hàng:
-                                <strong>{{ formatMoney(returnItem.itemAmount) }}</strong>
+                              <span>
+                                SL hoàn:
+                                <strong>{{
+                                  returnItem.returnQuantity || 0
+                                }}</strong>
                               </span>
 
                               <span
-                                v-if="Number(returnItem.voucherAllocatedAmount || 0) > 0"
+                                v-if="Number(returnItem.itemAmount || 0) > 0"
+                              >
+                                Tiền hàng:
+                                <strong>{{
+                                  formatMoney(returnItem.itemAmount)
+                                }}</strong>
+                              </span>
+
+                              <span
+                                v-if="
+                                  Number(
+                                    returnItem.voucherAllocatedAmount || 0
+                                  ) > 0
+                                "
                                 class="return-selected-discount"
                               >
                                 Voucher phân bổ:
                                 <strong>
-                                  -{{ formatMoney(returnItem.voucherAllocatedAmount) }}
+                                  -{{
+                                    formatMoney(
+                                      returnItem.voucherAllocatedAmount
+                                    )
+                                  }}
                                 </strong>
                               </span>
 
@@ -599,8 +748,18 @@
                                 class="return-selected-refund"
                               >
                                 Hoàn:
-                                <strong>{{ formatMoney(returnItem.refundAmount) }}</strong>
+                                <strong>{{
+                                  formatMoney(returnItem.refundAmount)
+                                }}</strong>
                               </span>
+                            </div>
+
+                            <div
+                              v-if="getReturnItemRejectReason(returnItem)"
+                              class="return-item-reject-note"
+                            >
+                              Lý do từ chối:
+                              {{ getReturnItemRejectReason(returnItem) }}
                             </div>
                           </div>
                         </button>
@@ -773,7 +932,7 @@
                   </button>
 
                   <span
-                    v-else-if="isCompletedOrder(order) && getReturnDeadlineText(order)"
+                    v-else-if="shouldShowReturnDeadlineText(order)"
                     class="text-muted small align-self-center"
                   >
                     {{ getReturnDeadlineText(order) }}
@@ -781,7 +940,7 @@
 
                   <!-- NÚT HỦY YÊU CẦU HOÀN HÀNG -->
                   <button
-                    v-if="order.status === 6"
+                    v-if="canCancelReturnRequest(order)"
                     type="button"
                     class="btn btn-outline-secondary btn-sm"
                     :disabled="store.orderLoading"
@@ -846,7 +1005,7 @@ import type {
 const store = useCustomerProfileStore();
 const router = useRouter();
 
-const currentTab = ref<number | "ALL">("ALL");
+const currentTab = ref<number | "ALL" | "RETURN">("ALL");
 
 const RETURN_REQUEST_DEADLINE_DAYS = 15;
 const REVIEW_EDIT_DEADLINE_DAYS = 30;
@@ -1017,7 +1176,20 @@ const canRequestReturn = (order: any) => {
 
   const deadlineTime = getReturnDeadlineTime(order);
 
-  return deadlineTime > 0 && Date.now() <= deadlineTime;
+  if (!(deadlineTime > 0 && Date.now() <= deadlineTime)) {
+    return false;
+  }
+
+  if (!hasOrderReturnData(order)) {
+    return true;
+  }
+
+  /**
+   * Logic Shopee-like:
+   * - Khách tự hủy yêu cầu khi shop chưa xử lý thì được gửi lại nếu còn hạn.
+   * - Shop đã từ chối / đã chấp nhận / đã hoàn tiền thì không cho gửi lại.
+   */
+  return getOrderReturnProcessStatus(order) === "CUSTOMER_CANCELLED";
 };
 
 const getReturnDeadlineText = (order: any) => {
@@ -1040,15 +1212,37 @@ const getReturnDeadlineText = (order: any) => {
   return `Còn ${daysLeft} ngày để yêu cầu hoàn hàng`;
 };
 
-const filteredOrders = computed(() => {
-  const orders =
-    currentTab.value === "ALL"
-      ? store.orders
-      : store.orders.filter(
-          (order: CustomerOrderResponse) => order.status === currentTab.value
-        );
+const isReturnTabOrder = (order: any) => {
+  const status = Number(order?.status);
 
-  return sortOrdersByLatestAction(orders as CustomerOrderResponse[]);
+  if (status === 6 || status === 7) {
+    return true;
+  }
+
+  /**
+   * Đơn đã hoàn thành bình thường không được nằm trong tab Hoàn hàng.
+   * Trường hợp duy nhất status = 3 vẫn nằm tab Hoàn hàng là khi shop/admin
+   * đã từ chối yêu cầu hoàn và đơn được đưa về trạng thái Hoàn thành.
+   */
+  return status === 3 && getOrderReturnProcessStatus(order) === "REJECTED";
+};
+
+const filteredOrders = computed(() => {
+  let orders: CustomerOrderResponse[];
+
+  if (currentTab.value === "ALL") {
+    orders = store.orders as CustomerOrderResponse[];
+  } else if (currentTab.value === "RETURN") {
+    orders = (store.orders as CustomerOrderResponse[]).filter((order) =>
+      isReturnTabOrder(order)
+    );
+  } else {
+    orders = (store.orders as CustomerOrderResponse[]).filter(
+      (order) => Number(order.status) === currentTab.value
+    );
+  }
+
+  return sortOrdersByLatestAction(orders);
 });
 
 const completedOrders = computed(() => {
@@ -1176,10 +1370,7 @@ const getMyReviewByOrderItemId = (orderItemId: number) => {
 
 const getReviewApprovalStatus = (review: any) => {
   const rawStatus =
-    review?.approvalStatus ??
-    review?.status ??
-    review?.reviewStatus ??
-    null;
+    review?.approvalStatus ?? review?.status ?? review?.reviewStatus ?? null;
 
   if (rawStatus === null || rawStatus === undefined || rawStatus === "") {
     return null;
@@ -1321,7 +1512,10 @@ const isReviewed = (orderId: number, orderItemId: number) => {
   return getReviewState(orderId, orderItemId)?.reviewed === true;
 };
 
-const buildReviewItemFromOrderItem = (order: any, item: any): ReviewableOrderItemResponse => {
+const buildReviewItemFromOrderItem = (
+  order: any,
+  item: any
+): ReviewableOrderItemResponse => {
   return {
     orderItemId: Number(item?.orderItemId || item?.id || 0),
     orderId: Number(order?.orderId || order?.id || 0),
@@ -1372,7 +1566,9 @@ const openReview = async (orderId: number, orderItemId: number) => {
 };
 
 const openEditReview = async (order: CustomerOrderResponse, item: any) => {
-  const review = getMyReviewByOrderItemId(Number(item?.orderItemId || item?.id || 0));
+  const review = getMyReviewByOrderItemId(
+    Number(item?.orderItemId || item?.id || 0)
+  );
 
   if (!review) {
     await Swal.fire({
@@ -1388,7 +1584,8 @@ const openEditReview = async (order: CustomerOrderResponse, item: any) => {
     await Swal.fire({
       icon: "info",
       title: "Không thể sửa đánh giá",
-      text: getReviewEditHint(review) || "Đánh giá này không còn được chỉnh sửa.",
+      text:
+        getReviewEditHint(review) || "Đánh giá này không còn được chỉnh sửa.",
       confirmButtonColor: "#bd9a5f",
     });
     return;
@@ -1412,10 +1609,12 @@ const submitReview = async (payload: {
     return;
   }
 
-  const isEditMode = reviewModalMode.value === "edit" && selectedEditingReview.value;
+  const isEditMode =
+    reviewModalMode.value === "edit" && selectedEditingReview.value;
   const orderId = selectedReviewItem.value.orderId;
   const orderItemId = selectedReviewItem.value.orderItemId;
-  const hasReviewMedia = payload.files?.some((file) => file && file.size > 0) === true;
+  const hasReviewMedia =
+    payload.files?.some((file) => file && file.size > 0) === true;
 
   try {
     submittingReview.value = true;
@@ -1431,7 +1630,11 @@ const submitReview = async (payload: {
       payload.files.forEach((file) => formData.append("mediaFiles", file));
     }
 
-    if (isEditMode && payload.deletedMediaIds && payload.deletedMediaIds.length > 0) {
+    if (
+      isEditMode &&
+      payload.deletedMediaIds &&
+      payload.deletedMediaIds.length > 0
+    ) {
       payload.deletedMediaIds.forEach((mediaId) => {
         formData.append("deletedMediaIds", String(mediaId));
       });
@@ -1458,14 +1661,17 @@ const submitReview = async (payload: {
           ? "Cập nhật đánh giá thành công. Ảnh/video đang chờ duyệt."
           : "Cập nhật đánh giá thành công"
         : hasReviewMedia
-          ? "Gửi đánh giá thành công. Ảnh/video đang chờ duyệt."
-          : "Gửi đánh giá thành công"
+        ? "Gửi đánh giá thành công. Ảnh/video đang chờ duyệt."
+        : "Gửi đánh giá thành công"
     );
 
     await fetchMyReviews();
     await loadReviewableItems(orderId, false);
   } catch (error) {
-    showError(error, isEditMode ? "Không cập nhật được đánh giá" : "Không gửi được đánh giá");
+    showError(
+      error,
+      isEditMode ? "Không cập nhật được đánh giá" : "Không gửi được đánh giá"
+    );
   } finally {
     submittingReview.value = false;
   }
@@ -1830,20 +2036,138 @@ const formatOrderType = (value: string | null | undefined) => {
   return value;
 };
 
-const getOrderCancelledAt = (order: any) =>
-  order?.cancelledAt ??
-  order?.canceledAt ??
-  order?.cancelAt ??
-  order?.cancelDate ??
-  null;
-const getOrderReturnRequest = (order: any) =>
-  order?.returnRequest ??
-  order?.latestReturnRequest ??
-  order?.returnInfo ??
-  order?.refundRequest ??
-  null;
-const isReturnInfoVisible = (order: any) =>
-  Number(order?.status) === 6 || Number(order?.status) === 7;
+const getOrderCancelledAt = (order: any) => {
+  return (
+    order?.cancelledAt ??
+    order?.canceledAt ??
+    order?.cancelAt ??
+    order?.cancelDate ??
+    null
+  );
+};
+
+const getOrderReturnRequest = (order: any) => {
+  return (
+    order?.returnRequest ??
+    order?.latestReturnRequest ??
+    order?.returnInfo ??
+    order?.refundRequest ??
+    null
+  );
+};
+
+const hasTextValue = (value: unknown) => {
+  return String(value ?? "").trim().length > 0;
+};
+
+const hasArrayData = (value: unknown) => {
+  return Array.isArray(value) && value.length > 0;
+};
+
+const hasPositiveMoneyValue = (...values: unknown[]) => {
+  return values.some((value) => toMoneyNumber(value) > 0);
+};
+
+const hasRealReturnRequestObject = (request: any) => {
+  if (!request) {
+    return false;
+  }
+
+  return Boolean(
+    hasTextValue(request?.id) ||
+      hasTextValue(request?.returnRequestId) ||
+      hasTextValue(request?.code) ||
+      hasTextValue(request?.returnCode) ||
+      hasTextValue(request?.requestCode) ||
+      hasTextValue(request?.reason) ||
+      hasTextValue(request?.returnReason) ||
+      hasTextValue(request?.returnRequestReason) ||
+      hasTextValue(request?.description) ||
+      hasTextValue(request?.returnDescription) ||
+      hasTextValue(request?.createdAt) ||
+      hasTextValue(request?.returnRequestedAt) ||
+      hasTextValue(request?.requestedAt) ||
+      hasTextValue(request?.rejectReason) ||
+      hasTextValue(request?.rejectedReason) ||
+      hasTextValue(request?.returnRejectReason) ||
+      hasPositiveMoneyValue(
+        request?.refundAmount,
+        request?.returnRefundAmount,
+        request?.estimatedRefundAmount
+      ) ||
+      hasArrayData(request?.items) ||
+      hasArrayData(request?.returnItems) ||
+      hasArrayData(request?.returnRequestItems) ||
+      hasArrayData(request?.returnedItems) ||
+      hasArrayData(request?.refundItems) ||
+      hasArrayData(request?.mediaFiles) ||
+      hasArrayData(request?.returnMediaUrls) ||
+      hasArrayData(request?.returnMediaFiles) ||
+      hasArrayData(request?.returnMedias) ||
+      hasArrayData(request?.returnImages) ||
+      normalizeReturnStatusValue(
+        request?.processStatus ??
+          request?.status ??
+          request?.returnStatus ??
+          request?.refundStatus ??
+          null
+      ) !== null
+  );
+};
+
+const hasOrderReturnData = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  const directReturnStatus = normalizeReturnStatusValue(
+    order?.returnProcessStatus ??
+      order?.returnStatus ??
+      order?.refundStatus ??
+      order?.returnRequestStatus ??
+      null
+  );
+
+  return Boolean(
+    Number(order?.status) === 6 ||
+      Number(order?.status) === 7 ||
+      hasRealReturnRequestObject(request) ||
+      hasTextValue(order?.returnReason) ||
+      hasTextValue(order?.returnDescription) ||
+      hasTextValue(order?.returnRequestedAt) ||
+      hasTextValue(order?.returnRejectReason) ||
+      hasTextValue(order?.rejectReason) ||
+      hasTextValue(order?.rejectedReason) ||
+      hasArrayData(order?.returnItems) ||
+      hasArrayData(order?.returnRequestItems) ||
+      hasArrayData(order?.returnedItems) ||
+      hasArrayData(order?.refundItems) ||
+      hasArrayData(order?.returnMediaUrls) ||
+      hasArrayData(order?.returnImages) ||
+      hasArrayData(order?.returnVideos) ||
+      hasArrayData(order?.returnMediaFiles) ||
+      hasArrayData(order?.returnMedias) ||
+      hasPositiveMoneyValue(
+        order?.returnRefundAmount,
+        order?.estimatedRefundAmount,
+        order?.returnEstimatedRefundAmount
+      ) ||
+      directReturnStatus !== null
+  );
+};
+
+const isReturnInfoVisible = (order: any) => {
+  if (!hasOrderReturnData(order)) {
+    return false;
+  }
+
+  const processStatus = getOrderReturnProcessStatus(order);
+
+  /**
+   * Chỉ hiển thị box hoàn hàng khi có trạng thái hoàn thật sự.
+   * CUSTOMER_CANCELLED: khách đã tự rút yêu cầu, cho quay lại luồng Hoàn thành.
+   * UNKNOWN: không coi là yêu cầu hoàn để tránh đơn Hoàn thành thường bị lẫn vào.
+   */
+  return processStatus !== "CUSTOMER_CANCELLED" && processStatus !== "UNKNOWN";
+};
 
 const getOrderReturnReason = (order: any) => {
   const request = getOrderReturnRequest(order);
@@ -1877,6 +2201,565 @@ const getOrderReturnDescription = (order: any) => {
   return String(description || "").trim();
 };
 
+const getOrderReturnRequestedAt = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  return (
+    order?.returnRequestedAt ??
+    order?.returnRequestCreatedAt ??
+    order?.returnCreatedAt ??
+    request?.createdAt ??
+    request?.returnRequestedAt ??
+    request?.requestedAt ??
+    null
+  );
+};
+
+const getReturnRequestCode = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  const rawCode =
+    order?.returnRequestCode ??
+    order?.returnCode ??
+    order?.refundRequestCode ??
+    request?.code ??
+    request?.returnCode ??
+    request?.requestCode ??
+    request?.id ??
+    request?.returnRequestId ??
+    null;
+
+  const cleanCode = String(rawCode || "").trim();
+
+  if (cleanCode) {
+    return cleanCode;
+  }
+
+  return `HT-${String(order?.orderId || order?.id || "").padStart(6, "0")}`;
+};
+
+const normalizeReturnStatusValue = (
+  value: unknown
+): ReturnProcessStatus | null => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const normalized = String(value)
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (
+    ["0", "PENDING", "WAITING", "WAITING_APPROVAL", "CHO XU LY"].includes(
+      normalized
+    )
+  ) {
+    return "PENDING";
+  }
+
+  if (
+    ["1", "ACCEPTED", "APPROVED", "CONFIRMED", "DA CHAP NHAN"].includes(
+      normalized
+    )
+  ) {
+    return "ACCEPTED";
+  }
+
+  if (
+    ["2", "REJECTED", "DENIED", "REFUSED", "TU CHOI", "DA TU CHOI"].includes(
+      normalized
+    )
+  ) {
+    return "REJECTED";
+  }
+
+  if (
+    [
+      "3",
+      "REFUNDED",
+      "COMPLETED",
+      "DONE",
+      "RETURN_COMPLETED",
+      "DA HOAN TIEN",
+    ].includes(normalized)
+  ) {
+    return "REFUNDED";
+  }
+
+  if (
+    [
+      "4",
+      "CUSTOMER_CANCELLED",
+      "CUSTOMER_CANCELED",
+      "CANCELLED_BY_CUSTOMER",
+      "CANCELED_BY_CUSTOMER",
+      "CUSTOMER_CANCEL",
+      "CUSTOMER_CANCELED_RETURN",
+      "CUSTOMER_CANCELLED_RETURN",
+      "KHACH HUY",
+      "KHACH DA HUY",
+      "KHACH HUY YEU CAU",
+      "KHACH DA HUY YEU CAU",
+    ].includes(normalized)
+  ) {
+    return "CUSTOMER_CANCELLED";
+  }
+
+  if (
+    ["PARTIAL", "PARTIALLY_ACCEPTED", "PARTIALLY_REFUNDED"].includes(normalized)
+  ) {
+    return "PARTIAL";
+  }
+
+  return null;
+};
+
+const shouldShowReturnDeadlineText = (order: any) => {
+  if (!isCompletedOrder(order)) {
+    return false;
+  }
+
+  /**
+   * Đã từng có yêu cầu hoàn thật:
+   * - PENDING: đang chờ shop xử lý
+   * - ACCEPTED: đã chấp nhận
+   * - REJECTED: đã từ chối
+   * - REFUNDED: đã hoàn tiền
+   * - PARTIAL: đang xử lý một phần
+   *
+   * Các case này không hiện "Còn X ngày để yêu cầu hoàn hàng"
+   * vì sẽ gây hiểu nhầm là khách còn được gửi lại.
+   */
+  const returnStatus = getOrderReturnProcessStatus(order);
+
+  if (
+    returnStatus === "PENDING" ||
+    returnStatus === "ACCEPTED" ||
+    returnStatus === "REJECTED" ||
+    returnStatus === "REFUNDED" ||
+    returnStatus === "PARTIAL"
+  ) {
+    return false;
+  }
+
+  return Boolean(getReturnDeadlineText(order));
+};
+
+const getReturnItemRawStatus = (item: any) => {
+  return (
+    item?.status ??
+    item?.returnStatus ??
+    item?.returnItemStatus ??
+    item?.processStatus ??
+    item?.refundStatus ??
+    item?.orderItem?.returnStatus ??
+    item?.orderItem?.status ??
+    null
+  );
+};
+
+const getOrderReturnProcessStatus = (order: any): ReturnProcessStatus => {
+  const request = getOrderReturnRequest(order);
+
+  const directStatus = normalizeReturnStatusValue(
+    order?.returnProcessStatus ??
+      order?.returnStatus ??
+      order?.refundStatus ??
+      order?.returnRequestStatus ??
+      request?.processStatus ??
+      request?.status ??
+      request?.returnStatus ??
+      request?.refundStatus ??
+      null
+  );
+
+  if (directStatus) {
+    return directStatus;
+  }
+
+  const itemStatuses = getRawReturnItemsPayload(order)
+    .map((item: any) =>
+      normalizeReturnStatusValue(getReturnItemRawStatus(item))
+    )
+    .filter((status): status is ReturnProcessStatus => Boolean(status));
+
+  if (itemStatuses.length > 0) {
+    if (itemStatuses.every((status) => status === "REFUNDED")) {
+      return "REFUNDED";
+    }
+
+    if (itemStatuses.every((status) => status === "REJECTED")) {
+      return "REJECTED";
+    }
+
+    if (itemStatuses.every((status) => status === "ACCEPTED")) {
+      return "ACCEPTED";
+    }
+
+    if (itemStatuses.every((status) => status === "PENDING")) {
+      return "PENDING";
+    }
+
+    if (itemStatuses.every((status) => status === "CUSTOMER_CANCELLED")) {
+      return "CUSTOMER_CANCELLED";
+    }
+
+    return "PARTIAL";
+  }
+
+  if (Number(order?.status) === 7) {
+    return "REFUNDED";
+  }
+
+  if (Number(order?.status) === 6) {
+    return "PENDING";
+  }
+
+  return "UNKNOWN";
+};
+
+const getReturnProcessText = (order: any) => {
+  const directText = String(
+    order?.returnProcessStatusText ??
+      order?.returnStatusText ??
+      order?.refundStatusText ??
+      getOrderReturnRequest(order)?.statusText ??
+      ""
+  ).trim();
+
+  if (directText) {
+    return directText;
+  }
+
+  switch (getOrderReturnProcessStatus(order)) {
+    case "PENDING":
+      return "Chờ shop xử lý";
+    case "ACCEPTED":
+      return "Đã chấp nhận / Chờ hoàn tiền";
+    case "REJECTED":
+      return "Đã từ chối hoàn hàng";
+    case "REFUNDED":
+      return "Đã xử lý hoàn tiền";
+    case "PARTIAL":
+      return "Đang xử lý một phần";
+    case "CUSTOMER_CANCELLED":
+      return "Khách đã hủy yêu cầu";
+    default:
+      return "Đang cập nhật";
+  }
+};
+
+const getReturnProcessClass = (order: any) => {
+  const status = getOrderReturnProcessStatus(order);
+
+  return {
+    "is-return-pending": status === "PENDING",
+    "is-return-accepted": status === "ACCEPTED",
+    "is-return-rejected": status === "REJECTED",
+    "is-return-refunded": status === "REFUNDED",
+    "is-return-partial": status === "PARTIAL",
+    "is-return-cancelled": status === "CUSTOMER_CANCELLED",
+  };
+};
+
+const getReturnProcessBadgeClass = (order: any) => {
+  const status = getOrderReturnProcessStatus(order);
+
+  return {
+    "is-pending": status === "PENDING",
+    "is-accepted": status === "ACCEPTED",
+    "is-rejected": status === "REJECTED",
+    "is-refunded": status === "REFUNDED",
+    "is-partial": status === "PARTIAL",
+    "is-cancelled": status === "CUSTOMER_CANCELLED",
+  };
+};
+
+const getOrderReturnRejectReason = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  const directReason =
+    order?.returnRejectReason ??
+    order?.rejectReason ??
+    order?.rejectedReason ??
+    order?.returnRejectedReason ??
+    request?.rejectReason ??
+    request?.rejectedReason ??
+    request?.returnRejectReason ??
+    null;
+
+  const cleanDirectReason = String(directReason || "").trim();
+
+  if (cleanDirectReason) {
+    return cleanDirectReason;
+  }
+
+  const itemReason = getRawReturnItemsPayload(order)
+    .map((item: any) => getReturnItemRejectReason(item))
+    .find((reason) => reason.length > 0);
+
+  return itemReason || "";
+};
+
+const getReturnProcessedAt = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  return (
+    order?.returnProcessedAt ??
+    order?.returnReviewedAt ??
+    order?.returnAcceptedAt ??
+    order?.returnRejectedAt ??
+    order?.returnRefundedAt ??
+    order?.refundedAt ??
+    order?.updatedAt ??
+    request?.processedAt ??
+    request?.reviewedAt ??
+    request?.acceptedAt ??
+    request?.rejectedAt ??
+    request?.refundedAt ??
+    request?.updatedAt ??
+    null
+  );
+};
+
+const getReturnProcessTimeline = (order: any): ReturnProcessTimelineStep[] => {
+  const status = getOrderReturnProcessStatus(order);
+  const requestedAt = getOrderReturnRequestedAt(order);
+  const processedAt = getReturnProcessedAt(order);
+  const rejectReason = getOrderReturnRejectReason(order);
+
+  const requestedStep: ReturnProcessTimelineStep = {
+    key: "requested",
+    title: "Gửi yêu cầu",
+    desc: getOrderReturnReason(order),
+    time: requestedAt,
+    icon: "bi-send-check",
+    done: true,
+    active: status === "PENDING",
+  };
+
+  if (status === "REJECTED") {
+    return [
+      requestedStep,
+      {
+        key: "rejected",
+        title: "Đã từ chối",
+        desc: rejectReason || "Yêu cầu hoàn hàng không được chấp nhận.",
+        time: processedAt,
+        icon: "bi-x-circle",
+        done: true,
+        active: true,
+        rejected: true,
+      },
+    ];
+  }
+
+  if (status === "CUSTOMER_CANCELLED") {
+    return [
+      requestedStep,
+      {
+        key: "customer-cancelled",
+        title: "Đã hủy yêu cầu",
+        desc: "Bạn đã rút lại yêu cầu hoàn hàng trước khi shop xử lý.",
+        time: processedAt,
+        icon: "bi-arrow-counterclockwise",
+        done: true,
+        active: true,
+      },
+    ];
+  }
+
+  const acceptedDone =
+    status === "ACCEPTED" || status === "REFUNDED" || status === "PARTIAL";
+  const refundedDone = status === "REFUNDED";
+
+  return [
+    requestedStep,
+    {
+      key: "accepted",
+      title: "Được chấp nhận",
+      desc: acceptedDone
+        ? "Shop đã chấp nhận yêu cầu hoàn hàng."
+        : "Shop đang kiểm tra yêu cầu và bằng chứng của bạn.",
+      time: acceptedDone ? processedAt : null,
+      icon: "bi-check-circle",
+      done: acceptedDone,
+      active: status === "ACCEPTED" || status === "PARTIAL",
+    },
+    {
+      key: "refunded",
+      title: "Đã xử lý hoàn tiền",
+      desc: refundedDone
+        ? "Khoản hoàn tiền đã được shop xác nhận xử lý."
+        : "Sau khi shop hoàn tiền thực tế, trạng thái sẽ được cập nhật tại đây.",
+      time: refundedDone ? processedAt : null,
+      icon: "bi-cash-coin",
+      done: refundedDone,
+      active: status === "REFUNDED",
+    },
+  ];
+};
+
+const getReturnProcessAlert = (order: any): ReturnProcessAlert | null => {
+  const status = getOrderReturnProcessStatus(order);
+  const refundAmount = getOrderReturnRefundAmount(order);
+  const refundMethod = getOrderRefundMethodText(order) || "phương thức đã chọn";
+
+  if (status === "REJECTED") {
+    const reason = getOrderReturnRejectReason(order);
+
+    return {
+      title: "Yêu cầu hoàn hàng bị từ chối",
+      desc: reason
+        ? `Lý do: ${reason}`
+        : "Shop đã từ chối yêu cầu hoàn hàng. Vui lòng xem chi tiết sản phẩm bên dưới.",
+      icon: "bi-x-circle",
+      className: "is-rejected",
+    };
+  }
+
+  if (status === "REFUNDED") {
+    return {
+      title: "Đã xử lý hoàn tiền",
+      desc:
+        refundAmount > 0
+          ? `Shop đã xác nhận hoàn ${formatMoney(
+              refundAmount
+            )} qua ${refundMethod}.`
+          : "Shop đã xác nhận xử lý hoàn tiền cho yêu cầu này.",
+      icon: "bi-check-circle",
+      className: "is-refunded",
+    };
+  }
+
+  if (status === "ACCEPTED") {
+    return {
+      title: "Yêu cầu đã được chấp nhận",
+      desc:
+        refundAmount > 0
+          ? `Shop sẽ hoàn ${formatMoney(
+              refundAmount
+            )} qua ${refundMethod}. Chỉ khi shop xác nhận đã hoàn tiền, trạng thái mới chuyển sang hoàn tất.`
+          : "Shop đã chấp nhận yêu cầu và đang xử lý bước hoàn tiền.",
+      icon: "bi-clock-history",
+      className: "is-accepted",
+    };
+  }
+
+  if (status === "PENDING") {
+    return {
+      title: "Đang chờ shop xử lý",
+      desc: "Yêu cầu hoàn hàng đã được gửi. Shop sẽ kiểm tra lý do, sản phẩm hoàn và ảnh/video bằng chứng trước khi chấp nhận hoặc từ chối.",
+      icon: "bi-hourglass-split",
+      className: "is-pending",
+    };
+  }
+
+  if (status === "CUSTOMER_CANCELLED") {
+    return {
+      title: "Bạn đã hủy yêu cầu hoàn hàng",
+      desc: "Yêu cầu cũ đã được rút lại. Nếu đơn còn trong hạn 15 ngày, bạn có thể gửi yêu cầu hoàn hàng mới.",
+      icon: "bi-arrow-counterclockwise",
+      className: "is-cancelled",
+    };
+  }
+
+  return null;
+};
+
+const getReturnRefundLabel = (order: any) => {
+  switch (getOrderReturnProcessStatus(order)) {
+    case "REFUNDED":
+      return "Số tiền đã hoàn";
+    case "ACCEPTED":
+      return "Số tiền sẽ hoàn";
+    case "REJECTED":
+      return "Số tiền yêu cầu hoàn";
+    case "CUSTOMER_CANCELLED":
+      return "Số tiền yêu cầu hoàn";
+    default:
+      return "Số tiền khách yêu cầu hoàn";
+  }
+};
+
+const getOrderRefundMethodText = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  const rawMethod = String(
+    order?.refundMethod ??
+      order?.returnRefundMethod ??
+      request?.refundMethod ??
+      request?.returnRefundMethod ??
+      ""
+  )
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (!rawMethod) {
+    return "";
+  }
+
+  if (
+    rawMethod === "1" ||
+    rawMethod === "BANK_TRANSFER" ||
+    rawMethod.includes("BANK") ||
+    rawMethod.includes("TRANSFER") ||
+    rawMethod.includes("CHUYEN KHOAN") ||
+    rawMethod.includes("NGAN HANG")
+  ) {
+    return "Tài khoản ngân hàng";
+  }
+
+  if (
+    rawMethod === "2" ||
+    rawMethod === "STORE" ||
+    rawMethod.includes("CUA HANG") ||
+    rawMethod.includes("TAI QUAY")
+  ) {
+    return "Hoàn tại cửa hàng";
+  }
+
+  return String(order?.refundMethod ?? request?.refundMethod ?? "");
+};
+
+const canCancelReturnRequest = (order: any) => {
+  return (
+    Number(order?.status) === 6 &&
+    getOrderReturnProcessStatus(order) === "PENDING"
+  );
+};
+
+type ReturnProcessStatus =
+  | "PENDING"
+  | "ACCEPTED"
+  | "REJECTED"
+  | "REFUNDED"
+  | "PARTIAL"
+  | "CUSTOMER_CANCELLED"
+  | "UNKNOWN";
+
+type ReturnProcessTimelineStep = {
+  key: string;
+  title: string;
+  desc: string;
+  time: string | null;
+  icon: string;
+  done: boolean;
+  active: boolean;
+  rejected?: boolean;
+};
+
+type ReturnProcessAlert = {
+  title: string;
+  desc: string;
+  icon: string;
+  className: string;
+};
+
 type ReturnSelectedItemView = {
   orderItemId: number | null;
   productId: number | null;
@@ -1895,6 +2778,9 @@ type ReturnSelectedItemView = {
   itemAmount: number;
   voucherAllocatedAmount: number;
   refundAmount: number;
+  status: number | string | null;
+  statusText?: string | null;
+  rejectReason?: string | null;
 };
 
 const toPositiveNumberOrNull = (value: unknown) => {
@@ -1976,6 +2862,75 @@ const getReturnPayloadVariantId = (payload: any) => {
   );
 };
 
+const getReturnPayloadStatus = (payload: any) => {
+  return getReturnItemRawStatus(payload);
+};
+
+const getReturnPayloadStatusText = (payload: any) => {
+  const text =
+    payload?.statusText ??
+    payload?.returnStatusText ??
+    payload?.returnItemStatusText ??
+    payload?.processStatusText ??
+    payload?.orderItem?.returnStatusText ??
+    null;
+
+  return String(text || "").trim() || null;
+};
+
+const getReturnItemRejectReason = (item: any) => {
+  const reason =
+    item?.rejectReason ??
+    item?.rejectedReason ??
+    item?.returnRejectReason ??
+    item?.returnRejectedReason ??
+    item?.orderItem?.rejectReason ??
+    item?.orderItem?.rejectedReason ??
+    null;
+
+  return String(reason || "").trim();
+};
+
+const getReturnItemStatusText = (item: any) => {
+  const directText = String(item?.statusText || "").trim();
+
+  if (directText) {
+    return directText;
+  }
+
+  const status = normalizeReturnStatusValue(item?.status);
+
+  switch (status) {
+    case "PENDING":
+      return "Chờ xử lý";
+    case "ACCEPTED":
+      return "Đã chấp nhận";
+    case "REJECTED":
+      return "Từ chối";
+    case "REFUNDED":
+      return "Đã hoàn tiền";
+    case "PARTIAL":
+      return "Xử lý một phần";
+    case "CUSTOMER_CANCELLED":
+      return "Khách đã hủy yêu cầu";
+    default:
+      return "Đang cập nhật";
+  }
+};
+
+const getReturnItemStatusClass = (item: any) => {
+  const status = normalizeReturnStatusValue(item?.status);
+
+  return {
+    "is-pending": status === "PENDING" || status === null,
+    "is-accepted": status === "ACCEPTED",
+    "is-rejected": status === "REJECTED",
+    "is-refunded": status === "REFUNDED",
+    "is-partial": status === "PARTIAL",
+    "is-cancelled": status === "CUSTOMER_CANCELLED",
+  };
+};
+
 const findBaseOrderItemForReturn = (order: any, payload: any) => {
   const orderItems = Array.isArray(order?.items) ? order.items : [];
 
@@ -1985,7 +2940,10 @@ const findBaseOrderItemForReturn = (order: any, payload: any) => {
 
   return (
     orderItems.find((item: any) => {
-      if (orderItemId && Number(item?.orderItemId ?? item?.id) === orderItemId) {
+      if (
+        orderItemId &&
+        Number(item?.orderItemId ?? item?.id) === orderItemId
+      ) {
         return true;
       }
 
@@ -2072,7 +3030,8 @@ const getOrderReturnSelectedItems = (order: any): ReturnSelectedItemView[] => {
         getReturnPayloadProductId(payload) ?? getProductIdFromItem(baseItem);
 
       const productVariantId =
-        getReturnPayloadVariantId(payload) ?? getProductVariantIdFromItem(baseItem);
+        getReturnPayloadVariantId(payload) ??
+        getProductVariantIdFromItem(baseItem);
 
       const orderedQuantity =
         toPositiveNumberOrNull(
@@ -2105,8 +3064,8 @@ const getOrderReturnSelectedItems = (order: any): ReturnSelectedItemView[] => {
         rawItemAmount > 0
           ? rawItemAmount
           : unitFinalPrice > 0 && returnQuantity > 0
-            ? unitFinalPrice * returnQuantity
-            : 0;
+          ? unitFinalPrice * returnQuantity
+          : 0;
       const voucherAllocatedAmount = pickMoneyValue(
         payload?.voucherAllocatedAmount,
         payload?.allocatedVoucherAmount,
@@ -2135,13 +3094,8 @@ const getOrderReturnSelectedItems = (order: any): ReturnSelectedItemView[] => {
           payload?.orderItem?.brandName ??
           baseItem?.brandName ??
           null,
-        sku:
-          payload?.sku ??
-          payload?.orderItem?.sku ??
-          baseItem?.sku ??
-          null,
-        image:
-          getItemImage(mergedItem) || FALLBACK_IMAGE,
+        sku: payload?.sku ?? payload?.orderItem?.sku ?? baseItem?.sku ?? null,
+        image: getItemImage(mergedItem) || FALLBACK_IMAGE,
         capacity:
           payload?.capacity ??
           payload?.capacityName ??
@@ -2168,6 +3122,9 @@ const getOrderReturnSelectedItems = (order: any): ReturnSelectedItemView[] => {
           payload?.orderItem?.bottleTypeName ??
           baseItem?.bottleTypeName ??
           null,
+        status: getReturnPayloadStatus(payload),
+        statusText: getReturnPayloadStatusText(payload),
+        rejectReason: getReturnItemRejectReason(payload),
         orderedQuantity,
         returnQuantity,
         unitFinalPrice,
@@ -2176,7 +3133,9 @@ const getOrderReturnSelectedItems = (order: any): ReturnSelectedItemView[] => {
         refundAmount,
       };
     })
-    .filter((item) => item.orderItemId || item.productVariantId || item.productId);
+    .filter(
+      (item) => item.orderItemId || item.productVariantId || item.productId
+    );
 };
 
 type ReturnMediaView = {
@@ -2347,9 +3306,43 @@ const buildReturnPreviewThumbHtml = (
     `Xem ${mediaLabel.toLowerCase()} ${options.counterLabel} ${index + 1}`,
   );
   const thumb = media.isVideo
-    ? `<video src="${safeUrl}" class="return-preview-thumb-video" muted playsinline preload="metadata"></video>`
-    : `<img src="${safeUrl}" class="return-preview-thumb-image" alt="${escapeHtml(`${mediaLabel} ${options.counterLabel} ${index + 1}`)}" />`;
-  return `<button type="button" class="return-preview-thumb-btn${activeClass}" data-preview-index="${index}" aria-label="${safeAriaLabel}">${thumb}<span class="return-preview-thumb-badge">${mediaLabel} ${index + 1}</span>${media.isVideo ? `<span class="return-preview-thumb-play"><i class="bi bi-play-fill"></i></span>` : ""}</button>`;
+    ? `
+      <video
+        src="${safeUrl}"
+        class="return-preview-thumb-video"
+        muted
+        playsinline
+        preload="metadata"
+      ></video>
+    `
+    : `
+      <img
+        src="${safeUrl}"
+        class="return-preview-thumb-image"
+        alt="${escapeHtml(
+          `${mediaLabel} ${options.counterLabel} ${index + 1}`
+        )}"
+      />
+    `;
+
+  return `
+    <button
+      type="button"
+      class="return-preview-thumb-btn${activeClass}"
+      data-preview-index="${index}"
+      aria-label="${safeAriaLabel}"
+    >
+      ${thumb}
+      <span class="return-preview-thumb-badge">
+        ${mediaLabel} ${index + 1}
+      </span>
+      ${
+        media.isVideo
+          ? `<span class="return-preview-thumb-play"><i class="bi bi-play-fill"></i></span>`
+          : ""
+      }
+    </button>
+  `;
 };
 
 const buildReturnPreviewHtml = (
@@ -2438,7 +3431,7 @@ const openReturnMediaPreview = async (order: any, index: number) => {
 };
 
 const getReviewMediaByOrderItemId = (
-  orderItemId: number,
+  orderItemId: number
 ): ReturnMediaView[] => {
   const review = getMyReviewByOrderItemId(orderItemId) as any;
   if (!review) return [];
@@ -2514,6 +3507,42 @@ const getStatusClass = (status: number) => {
   }
 };
 
+const shouldDisplayReturnStatusInHeader = (order: any) => {
+  const orderStatus = Number(order?.status);
+  const returnStatus = getOrderReturnProcessStatus(order);
+
+  return orderStatus === 6 || orderStatus === 7 || returnStatus === "REJECTED";
+};
+
+const getOrderHeaderStatusText = (order: any) => {
+  if (shouldDisplayReturnStatusInHeader(order)) {
+    return getReturnProcessText(order);
+  }
+
+  return order?.statusText || getStatusText(Number(order?.status));
+};
+
+const getOrderHeaderStatusClass = (order: any) => {
+  if (!shouldDisplayReturnStatusInHeader(order)) {
+    return getStatusClass(Number(order?.status));
+  }
+
+  switch (getOrderReturnProcessStatus(order)) {
+    case "PENDING":
+      return "bg-secondary";
+    case "ACCEPTED":
+      return "bg-info text-dark";
+    case "REJECTED":
+      return "bg-danger";
+    case "REFUNDED":
+      return "bg-success";
+    case "PARTIAL":
+      return "bg-warning text-dark";
+    default:
+      return getStatusClass(Number(order?.status));
+  }
+};
+
 const getErrorMessage = (error: any, fallback: string) => {
   const data = error?.response?.data;
   if (typeof data === "string") return data;
@@ -2559,7 +3588,32 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
   ];
   const { value: reason, isConfirmed } = await Swal.fire<string>({
     title: "Hủy đơn hàng?",
-    html: `<div class="cancel-order-modal"><div class="cancel-order-desc">Vui lòng chọn lý do bạn muốn hủy đơn hàng này:</div><div class="cancel-reason-grid">${cancelReasons.map((item, index) => `<label class="cancel-reason-card" for="cancel-reason-${index}"><input id="cancel-reason-${index}" type="radio" name="cancelReason" value="${item}" /><span class="cancel-radio-dot"></span><span class="cancel-reason-text">${item}</span></label>`).join("")}</div></div>`,
+    html: `
+      <div class="cancel-order-modal">
+        <div class="cancel-order-desc">
+          Vui lòng chọn lý do bạn muốn hủy đơn hàng này:
+        </div>
+
+        <div class="cancel-reason-grid">
+          ${cancelReasons
+            .map(
+              (item, index) => `
+                <label class="cancel-reason-card" for="cancel-reason-${index}">
+                  <input
+                    id="cancel-reason-${index}"
+                    type="radio"
+                    name="cancelReason"
+                    value="${item}"
+                  />
+                  <span class="cancel-radio-dot"></span>
+                  <span class="cancel-reason-text">${item}</span>
+                </label>
+              `
+            )
+            .join("")}
+        </div>
+      </div>
+    `,
     showCancelButton: true,
     confirmButtonText: "Xác nhận hủy",
     cancelButtonText: "Quay lại",
@@ -2568,7 +3622,7 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
     width: 680,
     preConfirm: () => {
       const checkedReason = Swal.getPopup()?.querySelector<HTMLInputElement>(
-        'input[name="cancelReason"]:checked',
+        'input[name="cancelReason"]:checked'
       );
       if (!checkedReason?.value) {
         Swal.showValidationMessage("Vui lòng chọn một lý do để tiếp tục!");
@@ -2616,7 +3670,11 @@ const getDefaultReturnEmail = () => {
 
 const requestReturn = (order: CustomerOrderResponse) => {
   if (!canRequestReturn(order)) {
-    toast("warning", getReturnDeadlineText(order) || "Đơn hàng không còn đủ điều kiện hoàn hàng");
+    toast(
+      "warning",
+      getReturnDeadlineText(order) ||
+        "Đơn hàng không còn đủ điều kiện hoàn hàng"
+    );
     return;
   }
 
@@ -2632,7 +3690,8 @@ const submitReturnRequest = async (payload: ReturnRequestSubmitPayload) => {
     returnModalVisible.value = false;
     selectedReturnOrder.value = null;
     await fetchOrdersAndReviews();
-    currentTab.value = 6;
+    currentTab.value = "RETURN";
+
     toast("success", "Đã gửi yêu cầu hoàn hàng thành công!");
   } catch (error) {
     showError(error, "Không thể gửi yêu cầu hoàn hàng lúc này.");
@@ -3142,6 +4201,225 @@ const getItemImage = (item: any) => {
   color: #9a6a1f;
 }
 
+.return-info-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.return-request-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.return-request-meta strong {
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.return-process-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.return-process-badge.is-pending {
+  color: #92400e;
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+
+.return-process-badge.is-accepted,
+.return-process-badge.is-partial {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-color: #bfdbfe;
+}
+
+.return-process-badge.is-rejected {
+  color: #b91c1c;
+  background: #fee2e2;
+  border-color: #fecaca;
+}
+
+.return-process-badge.is-refunded {
+  color: #047857;
+  background: #d1fae5;
+  border-color: #a7f3d0;
+}
+.return-process-badge.is-cancelled {
+  color: #475569;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.return-process-timeline {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.return-process-step {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #f3e2bd;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.64);
+  color: #64748b;
+}
+
+.return-process-step.is-done {
+  border-color: #d9c392;
+  color: #334155;
+}
+
+.return-process-step.is-active {
+  background: #ffffff;
+  border-color: #bd9a5f;
+  box-shadow: 0 8px 16px rgba(189, 154, 95, 0.12);
+}
+
+.return-process-step.is-rejected {
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.return-step-marker {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #f1f5f9;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.return-process-step.is-done .return-step-marker,
+.return-process-step.is-active .return-step-marker {
+  background: #bd9a5f;
+  color: #ffffff;
+}
+
+.return-process-step.is-rejected .return-step-marker {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.return-step-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.return-step-title {
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.return-step-desc {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.return-step-time {
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.return-process-alert {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  border: 1px solid transparent;
+}
+
+.return-process-alert i {
+  font-size: 18px;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+.return-process-alert strong {
+  display: block;
+  color: #0f172a;
+  font-weight: 800;
+  margin-bottom: 2px;
+}
+
+.return-process-alert p {
+  margin: 0;
+  color: #475569;
+}
+
+.return-process-alert.is-pending {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.return-process-alert.is-accepted {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.return-process-alert.is-rejected {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.return-process-alert.is-refunded {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #047857;
+}
+.return-process-alert.is-cancelled {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.return-info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.return-reject-line strong {
+  color: #dc2626;
+}
+
 .return-selected-section {
   margin-top: 12px;
 }
@@ -3162,9 +4440,7 @@ const getItemImage = (item: any) => {
   background: #ffffff;
   text-align: left;
   cursor: pointer;
-  transition:
-    border-color 0.18s ease,
-    box-shadow 0.18s ease,
+  transition: border-color 0.18s ease, box-shadow 0.18s ease,
     transform 0.18s ease;
 }
 
@@ -3197,6 +4473,72 @@ const getItemImage = (item: any) => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.return-selected-name-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.return-selected-name-row .return-selected-name {
+  flex: 1;
+}
+
+.return-selected-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.return-selected-status.is-pending {
+  color: #92400e;
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+
+.return-selected-status.is-accepted,
+.return-selected-status.is-partial {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-color: #bfdbfe;
+}
+
+.return-selected-status.is-rejected {
+  color: #b91c1c;
+  background: #fee2e2;
+  border-color: #fecaca;
+}
+
+.return-selected-status.is-refunded {
+  color: #047857;
+  background: #d1fae5;
+  border-color: #a7f3d0;
+}
+.return-selected-status.is-cancelled {
+  color: #475569;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.return-item-reject-note {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .return-selected-meta,
@@ -3260,9 +4602,7 @@ const getItemImage = (item: any) => {
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
-  transition:
-    transform 0.18s ease,
-    box-shadow 0.18s ease,
+  transition: transform 0.18s ease, box-shadow 0.18s ease,
     border-color 0.18s ease;
 }
 
@@ -3423,9 +4763,7 @@ const getItemImage = (item: any) => {
   border-radius: 10px;
   background: #ffffff;
   cursor: zoom-in;
-  transition:
-    border-color 0.18s ease,
-    box-shadow 0.18s ease,
+  transition: border-color 0.18s ease, box-shadow 0.18s ease,
     transform 0.18s ease;
 }
 
@@ -3614,9 +4952,7 @@ const getItemImage = (item: any) => {
   background: #ffffff;
   color: #334155;
   cursor: pointer;
-  transition:
-    border-color 0.18s ease,
-    background-color 0.18s ease,
+  transition: border-color 0.18s ease, background-color 0.18s ease,
     box-shadow 0.18s ease;
 }
 
@@ -3860,11 +5196,8 @@ const getItemImage = (item: any) => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition:
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease,
-    transform 0.18s ease;
+  transition: background-color 0.18s ease, border-color 0.18s ease,
+    color 0.18s ease, transform 0.18s ease;
 }
 
 .return-preview-nav:hover {
@@ -3901,9 +5234,7 @@ const getItemImage = (item: any) => {
   border-radius: 10px;
   background: #ffffff;
   cursor: pointer;
-  transition:
-    border-color 0.18s ease,
-    box-shadow 0.18s ease,
+  transition: border-color 0.18s ease, box-shadow 0.18s ease,
     transform 0.18s ease;
 }
 
@@ -3964,6 +5295,21 @@ const getItemImage = (item: any) => {
 
 .swal-preview-confirm:hover {
   background-color: #9a6a1f !important;
+}
+
+@media (max-width: 991.98px) {
+  .return-info-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .return-process-badge {
+    align-self: flex-start;
+  }
+
+  .return-process-timeline {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {

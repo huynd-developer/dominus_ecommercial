@@ -263,7 +263,6 @@
                   class="evidence-example-btn"
                   @click="showEvidenceExample"
                 >
-                  Xem ví dụ
                 </button>
               </label>
 

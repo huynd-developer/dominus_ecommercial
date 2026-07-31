@@ -97,7 +97,7 @@ public class PosServiceImpl implements PosService {
     public ProductVariantPosResponse findVariantBySku(String sku) {
         String cleanSku = normalizeSku(sku);
 
-        ProductVariant variant = variantRepository.findBySkuIgnoreCaseAndIsDeletedFalse(cleanSku).orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với SKU: " + cleanSku));
+        ProductVariant variant = variantRepository.findPosVisibleBySku(cleanSku).orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với SKU: " + cleanSku));
 
         validateVariantCanSell(variant, 1);
 
@@ -151,7 +151,7 @@ public class PosServiceImpl implements PosService {
             String sku = entry.getKey();
             Integer quantity = entry.getValue();
 
-            ProductVariant variant = variantRepository.findBySkuIgnoreCaseAndIsDeletedFalse(sku).orElseThrow(() -> new RuntimeException("SKU không hợp lệ: " + sku));
+            ProductVariant variant = variantRepository.findPosVisibleBySku(sku).orElseThrow(() -> new RuntimeException("SKU không hợp lệ: " + sku));
 
             validateVariantCanSell(variant, quantity);
 
@@ -627,7 +627,7 @@ public class PosServiceImpl implements PosService {
             String sku = entry.getKey();
             Integer quantity = entry.getValue();
 
-            ProductVariant variant = variantRepository.findBySkuIgnoreCaseAndIsDeletedFalse(sku).orElseThrow(() -> new RuntimeException("SKU không hợp lệ: " + sku));
+            ProductVariant variant = variantRepository.findPosVisibleBySku(sku).orElseThrow(() -> new RuntimeException("SKU không hợp lệ: " + sku));
 
             validateVariantCanSell(variant, quantity);
 
@@ -1174,8 +1174,18 @@ public class PosServiceImpl implements PosService {
             return "Sản phẩm đã bị xóa.";
         }
 
+        Product product = variant.getProduct();
+
+        if (product == null) {
+            return "Sản phẩm cha không hợp lệ.";
+        }
+
+        if (Boolean.TRUE.equals(product.getIsDeleted())) {
+            return "Sản phẩm đã bị xóa.";
+        }
+
         if (variant.getStatus() == null || variant.getStatus() != STATUS_ACTIVE) {
-            return "Sản phẩm đang ngừng bán.";
+            return "Biến thể sản phẩm đang ngừng bán.";
         }
 
         if (variant.getStockQuantity() == null || variant.getStockQuantity() <= 0) {
@@ -1524,6 +1534,8 @@ public class PosServiceImpl implements PosService {
         boolean canTransfer = ownOrder || managerOrOwner;
         boolean canCancel = ownOrder || managerOrOwner;
 
+        HeldOrderQuantitySummary quantitySummary = getHeldOrderQuantitySummary(order);
+
         return PosHeldOrderResponse.builder()
                 .orderId(order.getId())
                 .status("HELD")
@@ -1532,6 +1544,8 @@ public class PosServiceImpl implements PosService {
                 .discountAmount(order.getDiscountAmount())
                 .finalAmount(order.getFinalAmount())
                 .createdAt(order.getCreatedAt())
+                .itemCount(quantitySummary.itemCount())
+                .totalQuantity(quantitySummary.totalQuantity())
                 .cashierId(cashier != null ? cashier.getUserId() : null)
                 .cashierName(cashierUser != null ? cashierUser.getName() : null)
                 .customerId(customer != null ? customer.getUserId() : null)
@@ -1544,6 +1558,39 @@ public class PosServiceImpl implements PosService {
                 .canTransfer(canTransfer)
                 .canCancel(canCancel)
                 .build();
+    }
+
+    private HeldOrderQuantitySummary getHeldOrderQuantitySummary(Order order) {
+        if (order == null || order.getId() == null) {
+            return new HeldOrderQuantitySummary(0, 0);
+        }
+
+        List<OrderItem> items = orderItemRepository.findByOrderIdWithVariant(order.getId());
+
+        if (items == null || items.isEmpty()) {
+            return new HeldOrderQuantitySummary(0, 0);
+        }
+
+        int itemCount = 0;
+        int totalQuantity = 0;
+
+        for (OrderItem item : items) {
+            if (item == null) {
+                continue;
+            }
+
+            itemCount++;
+
+            Integer quantity = item.getQuantity();
+            if (quantity != null && quantity > 0) {
+                totalQuantity += quantity;
+            }
+        }
+
+        return new HeldOrderQuantitySummary(itemCount, totalQuantity);
+    }
+
+    private record HeldOrderQuantitySummary(Integer itemCount, Integer totalQuantity) {
     }
 
     private void applyHeldOrderPermissions(
@@ -1687,7 +1734,29 @@ public class PosServiceImpl implements PosService {
     @Override
     @Transactional(readOnly = true)
     public List<ProductVariantPosResponse> getProductsForPos() {
-        return variantRepository.findAll().stream().filter(variant -> !Boolean.TRUE.equals(variant.getIsDeleted())).map(this::toProductVariantPosResponseForPosList).toList();
+        return variantRepository.findVisibleVariantsForPos()
+                .stream()
+                .filter(this::isVariantVisibleInPosList)
+                .map(this::toProductVariantPosResponseForPosList)
+                .toList();
+    }
+
+    private boolean isVariantVisibleInPosList(ProductVariant variant) {
+        if (variant == null) {
+            return false;
+        }
+
+        if (Boolean.TRUE.equals(variant.getIsDeleted())) {
+            return false;
+        }
+
+        Product product = variant.getProduct();
+
+        if (product == null) {
+            return false;
+        }
+
+        return !Boolean.TRUE.equals(product.getIsDeleted());
     }
 
     private ProductVariantPosResponse toProductVariantPosResponseForPosList(ProductVariant variant) {

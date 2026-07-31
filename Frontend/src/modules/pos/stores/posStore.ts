@@ -52,6 +52,9 @@ export interface PosHeldOrder {
   canCheckout?: boolean;
   canTransfer?: boolean;
   canCancel?: boolean;
+  itemCount?: number;
+  totalQuantity?: number;
+  items?: any[];
 }
 
 export interface PosVoucher {
@@ -612,6 +615,112 @@ const isRealHeldOrder = (order?: Partial<PosHeldOrder> | null): boolean => {
   return getOrderPaymentMethod(order) === "HOLD";
 };
 
+const getHeldOrderRawItems = (raw: any): any[] => {
+  const candidates = [
+    raw?.items,
+    raw?.orderItems,
+    raw?.orderItemResponses,
+    raw?.orderItemResponseList,
+    raw?.details,
+    raw?.orderDetails,
+    raw?.data?.items,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
+  return [];
+};
+
+const getOrderItemQuantity = (item: any): number => {
+  const quantity = numberValue(
+    item?.quantity,
+    item?.qty,
+    item?.orderQuantity,
+    item?.selectedQuantity,
+    item?.cartQuantity,
+    1
+  );
+
+  return quantity > 0 ? quantity : 1;
+};
+
+const getHeldOrderItemCount = (raw: any): number => {
+  const rawCount = numberValue(
+    raw?.itemCount,
+    raw?.totalItemCount,
+    raw?.lineItemCount,
+    raw?.productCount,
+    raw?.variantCount
+  );
+
+  if (rawCount > 0) {
+    return rawCount;
+  }
+
+  return getHeldOrderRawItems(raw).length;
+};
+
+const getHeldOrderTotalQuantity = (raw: any): number => {
+  const rawTotalQuantity = numberValue(
+    raw?.totalQuantity,
+    raw?.totalItemQuantity,
+    raw?.totalProductQuantity,
+    raw?.productQuantity,
+    raw?.itemQuantity
+  );
+
+  if (rawTotalQuantity > 0) {
+    return rawTotalQuantity;
+  }
+
+  return getHeldOrderRawItems(raw).reduce((total, item) => {
+    return total + getOrderItemQuantity(item);
+  }, 0);
+};
+
+const mapHeldOrderFromBackend = (raw: any): PosHeldOrder => {
+  const items = getHeldOrderRawItems(raw);
+  const status = String(raw?.status || raw?.orderStatus || "").trim();
+  const paymentMethod = String(
+    raw?.paymentMethod ||
+      raw?.payment_method ||
+      raw?.method ||
+      (status.toUpperCase().includes("HELD") ? "HOLD" : "HOLD")
+  )
+    .trim()
+    .toUpperCase();
+
+  return {
+    ...raw,
+    orderId: Number(raw?.orderId || raw?.id || 0),
+    status: status || raw?.status || "HELD",
+    paymentMethod,
+    totalAmount: numberValue(raw?.totalAmount, raw?.total, raw?.subTotal),
+    discountAmount: numberValue(raw?.discountAmount, raw?.discount),
+    finalAmount: numberValue(raw?.finalAmount, raw?.payableAmount, raw?.totalPay),
+    createdAt: raw?.createdAt || raw?.createdDate || raw?.created_at || "",
+    cashierId: raw?.cashierId ?? raw?.employeeId,
+    cashierName: raw?.cashierName || raw?.employeeName || raw?.staffName || "",
+    customerId: raw?.customerId,
+    customerName: raw?.customerName || raw?.name || "",
+    customerPhone: raw?.customerPhone || raw?.phone || "",
+    customerEmail: raw?.customerEmail || raw?.email || "",
+    ownOrder: raw?.ownOrder ?? raw?.isOwnOrder,
+    isOwnOrder: raw?.isOwnOrder ?? raw?.ownOrder,
+    canOpen: raw?.canOpen,
+    canCheckout: raw?.canCheckout,
+    canTransfer: raw?.canTransfer,
+    canCancel: raw?.canCancel,
+    itemCount: getHeldOrderItemCount(raw),
+    totalQuantity: getHeldOrderTotalQuantity(raw),
+    items,
+  };
+};
+
 const getTransferProviderFromPaymentMethod = (
   paymentMethod?: string | null
 ): NonEmptyTransferProvider => {
@@ -1119,9 +1228,20 @@ export const usePosStore = defineStore("posStore", {
           ? data
           : data?.data || data?.content || data?.items || [];
 
+<<<<<<< HEAD
         this.heldOrders = rawOrders.filter((order: PosHeldOrder) =>
           isRealHeldOrder(order)
         );
+=======
+        /*
+         * Khu phía trên chỉ hiển thị đơn lưu tạm thật sự.
+         * Đơn VNPay/VietQR đang pending nhưng chưa bấm Lưu tạm chỉ được
+         * khôi phục ở form thanh toán bên phải, không đưa vào heldOrders.
+         */
+        this.heldOrders = rawOrders
+          .map(mapHeldOrderFromBackend)
+          .filter((order: PosHeldOrder) => isRealHeldOrder(order));
+>>>>>>> e26834c7413bc64609844cf8d9ee9f831662cfe8
       } catch (error: any) {
         this.errorMsg = getBackendMessage(
           error,
@@ -1164,6 +1284,10 @@ export const usePosStore = defineStore("posStore", {
         (held) => Number(held.orderId) === numericOrderId
       );
 
+      const currentTotalQuantity = this.cart.reduce((total, item) => {
+        return total + Number(item.quantity || 0);
+      }, 0);
+
       const nextOrder: PosHeldOrder = {
         orderId: numericOrderId,
         status: isPendingOnlinePaymentOrder({
@@ -1191,6 +1315,16 @@ export const usePosStore = defineStore("posStore", {
         canCheckout: true,
         canTransfer: isRealHeldOrder({ paymentMethod: normalizedPaymentMethod }),
         canCancel: isRealHeldOrder({ paymentMethod: normalizedPaymentMethod }),
+        itemCount: this.cart.length || existingOrder?.itemCount || 0,
+        totalQuantity:
+          currentTotalQuantity || existingOrder?.totalQuantity || 0,
+        items: this.cart.map((item) => ({
+          variantId: item.product.id,
+          productVariantId: item.product.id,
+          sku: item.product.sku,
+          productName: item.product.name,
+          quantity: item.quantity,
+        })),
       };
 
       const existed = Boolean(existingOrder);
@@ -2582,39 +2716,62 @@ export const usePosStore = defineStore("posStore", {
 
     mapOrderItemToCartItem(item: any): CartItem {
       const sku = String(item.sku || item.productSku || "");
+      const itemQuantity = getOrderItemQuantity(item);
       const latestProduct = this.allProducts.find(
         (product) => product.sku.toLowerCase() === sku.toLowerCase()
       );
 
       if (latestProduct) {
         return {
-          product: { ...latestProduct },
-          quantity: Number(item.quantity || 1),
+          product: {
+            ...latestProduct,
+            stockQuantity: Math.max(
+              Number(latestProduct.stockQuantity || 0),
+              itemQuantity
+            ),
+          },
+          quantity: itemQuantity,
         };
       }
 
       const productName = String(item.productName || item.name || "Sản phẩm");
-      const subName = [item.capacityLabel, item.bottleTypeName]
+      const subName = [
+        item.capacityLabel || item.capacity || item.capacityName,
+        item.bottleTypeName || item.bottleType || item.bottleTypeLabel,
+      ]
         .filter(Boolean)
         .join(" - ");
 
       return {
         product: {
-          id: Number(item.variantId || item.productVariantId || 0),
+          id: Number(item.variantId || item.productVariantId || item.id || 0),
           sku,
           name: productName,
           subName: subName || item.variantName || "Biến thể mặc định",
-          price: Number(item.unitPrice || item.price || 0),
-          stockQuantity: Number(
-            item.stockQuantity ||
-              item.availableStock ||
-              item.productStock ||
-              item.quantity ||
-              1
+          price: Number(
+            item.unitPrice ||
+              item.finalPrice ||
+              item.price ||
+              item.salePrice ||
+              item.originalPrice ||
+              0
           ),
-          image: `https://ui-avatars.com/api/?name=${encodeURIComponent(
-            productName
-          )}&background=random&color=fff&size=200`,
+          stockQuantity: Math.max(
+            Number(
+              item.stockQuantity ||
+                item.availableStock ||
+                item.productStock ||
+                itemQuantity ||
+                1
+            ),
+            itemQuantity
+          ),
+          image:
+            item.image ||
+            item.imageUrl ||
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(
+              productName
+            )}&background=random&color=fff&size=200`,
           category: item.brandName || item.categoryName || "Đơn lưu tạm",
           manufacturingDate: toDateOnly(item.manufacturingDate),
           expirationDate: toDateOnly(item.expirationDate),
@@ -2625,7 +2782,7 @@ export const usePosStore = defineStore("posStore", {
           sellable: item.sellable ?? true,
           unavailableReason: item.unavailableReason || null,
         },
-        quantity: Number(item.quantity || 1),
+        quantity: itemQuantity,
       };
     },
 
@@ -2668,11 +2825,11 @@ export const usePosStore = defineStore("posStore", {
         this.activePendingPaymentTransferProvider = "";
         this.errorMsg = "";
 
-        const items = Array.isArray(data.items) ? data.items : [];
+        const items = getHeldOrderRawItems(data);
 
-        const heldCart = items.map((item: any) =>
-          this.mapOrderItemToCartItem(item)
-        );
+        const heldCart = items
+          .map((item: any) => this.mapOrderItemToCartItem(item))
+          .filter((item: CartItem) => item.product.id > 0 && item.quantity > 0);
 
         this.cart = heldCart;
 
@@ -2731,7 +2888,11 @@ export const usePosStore = defineStore("posStore", {
           await this.fetchAvailableVouchers();
         }
 
-        this.errorMsg = `Đã mở đơn lưu tạm #${this.activeHeldOrderId}. Có thể thêm/sửa sản phẩm và voucher, khách hàng được giữ nguyên.`;
+        const openedTotalQuantity = this.cart.reduce((total, item) => {
+          return total + Number(item.quantity || 0);
+        }, 0);
+
+        this.errorMsg = `Đã mở đơn lưu tạm #${this.activeHeldOrderId} với ${openedTotalQuantity} sản phẩm. Có thể thêm/sửa sản phẩm và voucher, khách hàng được giữ nguyên.`;
 
         return {
           success: true,

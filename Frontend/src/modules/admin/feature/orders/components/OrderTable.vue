@@ -86,7 +86,7 @@
             </a-button>
 
             <a-button
-              v-for="action in getAvailableActions(record.status)"
+              v-for="action in getAvailableActions(record)"
               :key="action.status"
               size="small"
               :type="action.type"
@@ -178,7 +178,21 @@ function getPaymentColor(method?: string) {
   return "cyan";
 }
 
-function getAvailableActions(status: number) {
+function isReturnWorkflowOrder(order: any) {
+  return Number(order?.status) === 6;
+}
+
+function getAvailableActions(order: any) {
+  const status = Number(order?.status);
+
+  /*
+   * Đơn đang yêu cầu hoàn hàng không được xử lý bằng nút đổi trạng thái thường.
+   * Luồng đúng phải xử lý trong chi tiết: Chấp nhận/Từ chối -> Đã hoàn tiền.
+   */
+  if (isReturnWorkflowOrder(order)) {
+    return [];
+  }
+
   switch (status) {
     case 0:
       return [
@@ -202,9 +216,7 @@ function getAvailableActions(status: number) {
       return [];
 
     case 6:
-      return [
-        { status: 7, label: "Hoàn tất", type: "primary", danger: false },
-      ];
+      return [];
 
     default:
       return [];
