@@ -1,6 +1,8 @@
 package org.example.datn_sd69.modules.order.controller;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.example.datn_sd69.modules.order.dto.request.RejectReturnRequest;
 import org.example.datn_sd69.modules.order.service.AdminOrderService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -88,6 +90,48 @@ public class AdminOrderController {
     public ResponseEntity<?> getOrderDetail(@PathVariable Integer orderId) {
         return ResponseEntity.ok(
                 adminOrderService.getOrderDetail(orderId)
+        );
+    }
+
+    /**
+     * Admin chấp nhận yêu cầu hoàn hàng.
+     * Sau bước này mới được xác nhận đã hoàn tiền.
+     *
+     * PATCH /api/admin/orders/{orderId}/return-accepted
+     */
+    @PatchMapping({"/{orderId}/return-accepted", "/{orderId}/return-accepted/"})
+    public ResponseEntity<?> acceptReturnRequest(@PathVariable Integer orderId) {
+        return ResponseEntity.ok(
+                adminOrderService.acceptReturnRequest(orderId)
+        );
+    }
+
+    /**
+     * Admin từ chối yêu cầu hoàn hàng.
+     * Bắt buộc truyền lý do để khách có thể xem vì sao bị từ chối.
+     *
+     * PATCH /api/admin/orders/{orderId}/return-rejected
+     */
+    @PatchMapping({"/{orderId}/return-rejected", "/{orderId}/return-rejected/"})
+    public ResponseEntity<?> rejectReturnRequest(
+            @PathVariable Integer orderId,
+            @Valid @RequestBody RejectReturnRequest request
+    ) {
+        return ResponseEntity.ok(
+                adminOrderService.rejectReturnRequest(orderId, request)
+        );
+    }
+
+    /**
+     * Chuyển đơn hoàn hàng sang trạng thái đã hoàn tiền.
+     * Chỉ được gọi sau khi yêu cầu hoàn hàng đã được chấp nhận.
+     *
+     * PATCH /api/admin/orders/{orderId}/return-refunded
+     */
+    @PatchMapping({"/{orderId}/return-refunded", "/{orderId}/return-refunded/"})
+    public ResponseEntity<?> markReturnRefunded(@PathVariable Integer orderId) {
+        return ResponseEntity.ok(
+                adminOrderService.markReturnRefunded(orderId)
         );
     }
 }

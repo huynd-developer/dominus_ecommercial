@@ -30,14 +30,15 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
     /**
      * Dùng cho màn hình Admin xem chi tiết đơn hàng.
      *
-     * Dùng LEFT JOIN FETCH để nếu capacity/bottleType bị null
+     * Dùng LEFT JOIN FETCH để nếu productVariant/capacity/bottleType bị null
      * thì item vẫn hiển thị, không bị mất khỏi chi tiết đơn.
      */
     @Query("""
         SELECT oi
         FROM OrderItem oi
-        JOIN FETCH oi.productVariant pv
+        LEFT JOIN FETCH oi.productVariant pv
         LEFT JOIN FETCH pv.product p
+        LEFT JOIN FETCH p.brand b
         LEFT JOIN FETCH pv.capacity c
         LEFT JOIN FETCH pv.bottleType bt
         WHERE oi.order.id = :orderId
@@ -109,8 +110,9 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
     @Query("""
         SELECT oi
         FROM OrderItem oi
-        JOIN FETCH oi.productVariant pv
+        LEFT JOIN FETCH oi.productVariant pv
         LEFT JOIN FETCH pv.product p
+        LEFT JOIN FETCH p.brand b
         LEFT JOIN FETCH pv.capacity c
         LEFT JOIN FETCH pv.bottleType bt
         WHERE oi.order.id = :orderId
