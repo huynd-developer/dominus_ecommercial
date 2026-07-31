@@ -2,6 +2,7 @@ package org.example.datn_sd69.modules.order.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.example.datn_sd69.modules.order.dto.request.AdminCancelOrderRequest;
 import org.example.datn_sd69.modules.order.dto.request.RejectReturnRequest;
 import org.example.datn_sd69.modules.order.service.AdminOrderService;
 import org.springframework.data.domain.PageRequest;
@@ -90,6 +91,22 @@ public class AdminOrderController {
     public ResponseEntity<?> getOrderDetail(@PathVariable Integer orderId) {
         return ResponseEntity.ok(
                 adminOrderService.getOrderDetail(orderId)
+        );
+    }
+
+    /**
+     * Admin hủy đơn khi đơn còn ở trạng thái chờ xác nhận.
+     * Bắt buộc có lý do hủy để admin/khách xem lại lịch sử.
+     *
+     * PATCH /api/admin/orders/{orderId}/cancel
+     */
+    @PatchMapping({"/{orderId}/cancel", "/{orderId}/cancel/"})
+    public ResponseEntity<?> cancelOrder(
+            @PathVariable Integer orderId,
+            @Valid @RequestBody AdminCancelOrderRequest request
+    ) {
+        return ResponseEntity.ok(
+                adminOrderService.cancelOrder(orderId, request)
         );
     }
 

@@ -827,11 +827,9 @@
                       </strong>
                     </div>
 
-                    <div>
+                    <div v-if="getOrderShippingFee(order) > 0">
                       <span>Phí vận chuyển:</span>
-                      <strong>{{
-                        formatMoney((order as any).shippingFee || 30000)
-                      }}</strong>
+                      <strong>{{ formatMoney(getOrderShippingFee(order)) }}</strong>
                     </div>
 
                     <div>
@@ -2680,7 +2678,7 @@ const getReturnRefundLabel = (order: any) => {
     case "CUSTOMER_CANCELLED":
       return "Số tiền yêu cầu hoàn";
     default:
-      return "Số tiền khách yêu cầu hoàn";
+      return "Tổng tiền hoàn";
   }
 };
 
@@ -2787,6 +2785,37 @@ const toPositiveNumberOrNull = (value: unknown) => {
   const numberValue = Number(value);
 
   return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null;
+};
+
+const getOrderShippingFee = (order: any) => {
+  return pickMoneyValue(
+    order?.shippingFee,
+    order?.shippingfee,
+    order?.shippingFeeAmount,
+    order?.shipFee,
+    order?.deliveryFee,
+    order?.shippingAmount
+  );
+};
+
+const getOrderReturnShippingFee = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  return pickMoneyValue(
+    order?.returnShippingFee,
+    order?.refundShippingFee,
+    order?.shippingFeeRefundAmount,
+    request?.returnShippingFee,
+    request?.refundShippingFee,
+    request?.shippingFeeRefundAmount
+  );
+};
+
+const getOrderReturnProductRefundAmount = (order: any) => {
+  const totalRefund = getOrderReturnRefundAmount(order);
+  const returnShippingFee = getOrderReturnShippingFee(order);
+
+  return Math.max(0, totalRefund - returnShippingFee);
 };
 
 const getOrderReturnRefundAmount = (order: any) => {

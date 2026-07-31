@@ -1,5 +1,6 @@
 import api from "@/common/api";
 import type {
+  AdminCancelOrderRequest,
   AdminOrderResponse,
   AdminOrderStatusCountResponse,
   OrderSearchParams,
@@ -69,6 +70,19 @@ export const orderService = {
       {
         status,
       }
+    );
+
+    return response.data;
+  },
+
+  /**
+   * Admin hủy đơn khi đơn còn ở trạng thái Chờ xác nhận.
+   * BE sẽ lưu lý do hủy và thời gian hủy để admin/khách xem lại.
+   */
+  async cancelOrder(orderId: number, data: AdminCancelOrderRequest) {
+    const response = await api.patch<AdminOrderResponse>(
+      `${ORDER_ADMIN_API}/${orderId}/cancel`,
+      data
     );
 
     return response.data;

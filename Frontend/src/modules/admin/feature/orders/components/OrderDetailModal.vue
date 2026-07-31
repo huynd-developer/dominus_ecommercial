@@ -208,6 +208,22 @@
                       }}</strong>
                     </div>
 
+                    <div
+                      v-if="getReturnProductRefundAmount(order) > 0"
+                      class="return-info-row"
+                    >
+                      <span>Tiền hàng hoàn:</span>
+                      <strong>{{ formatMoney(getReturnProductRefundAmount(order)) }}</strong>
+                    </div>
+
+                    <div
+                      v-if="getReturnShippingFee(order) > 0"
+                      class="return-info-row"
+                    >
+                      <span>Phí vận chuyển hoàn:</span>
+                      <strong>{{ formatMoney(getReturnShippingFee(order)) }}</strong>
+                    </div>
+
                     <div class="return-info-row return-money-row">
                       <span>Số tiền cần hoàn:</span>
                       <strong>{{
@@ -383,8 +399,16 @@
               <div class="col-md-4">
                 <div class="border rounded p-3">
                   <div class="d-flex justify-content-between mb-2">
-                    <span>Tổng tiền:</span>
+                    <span>Tổng tiền hàng:</span>
                     <strong>{{ formatMoney(order.totalAmount) }}</strong>
+                  </div>
+
+                  <div
+                    v-if="getOrderShippingFee(order) > 0"
+                    class="d-flex justify-content-between mb-2"
+                  >
+                    <span>Phí vận chuyển:</span>
+                    <strong>{{ formatMoney(getOrderShippingFee(order)) }}</strong>
                   </div>
 
                   <div class="d-flex justify-content-between mb-2">
@@ -399,9 +423,6 @@
                     </strong>
                   </div>
 
-                  <div v-if="order.voucher" class="mt-2 small text-muted">
-                    Voucher: {{ order.voucher.voucherCode }}
-                  </div>
                 </div>
               </div>
             </div>
@@ -616,6 +637,41 @@ function toMoneyNumber(value?: number | null) {
   const numberValue = Number(value || 0);
 
   return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+function pickMoneyValue(...values: unknown[]) {
+  for (const value of values) {
+    const numberValue = Number(value || 0);
+
+    if (Number.isFinite(numberValue) && numberValue > 0) {
+      return numberValue;
+    }
+  }
+
+  return 0;
+}
+
+function getOrderShippingFee(order?: AdminOrderResponse | null) {
+  return pickMoneyValue(
+    (order as any)?.shippingFee,
+    (order as any)?.shippingfee,
+    (order as any)?.shippingFeeAmount,
+    (order as any)?.shipFee,
+    (order as any)?.deliveryFee,
+    (order as any)?.shippingAmount
+  );
+}
+
+function getReturnShippingFee(order?: AdminOrderResponse | null) {
+  return pickMoneyValue(
+    (order as any)?.returnShippingFee,
+    (order as any)?.refundShippingFee,
+    (order as any)?.shippingFeeRefundAmount
+  );
+}
+
+function getReturnProductRefundAmount(order: AdminOrderResponse) {
+  return Math.max(0, getReturnRefundAmount(order) - getReturnShippingFee(order));
 }
 
 function getOrderItemOriginalPrice(item: AdminOrderItemResponse) {

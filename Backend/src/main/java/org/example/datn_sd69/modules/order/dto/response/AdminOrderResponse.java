@@ -38,6 +38,10 @@ public class AdminOrderResponse {
 
     private BigDecimal finalAmount;
 
+    private BigDecimal shippingFee;
+
+    private BigDecimal returnShippingFee;
+
     private String paymentMethod;
 
     /**

@@ -12,6 +12,7 @@ import org.example.datn_sd69.modules.order.dto.response.AdminOrderItemResponse;
 import org.example.datn_sd69.modules.order.dto.response.AdminReturnItemResponse;
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderResponse;
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderStatusCountResponse;
+import org.example.datn_sd69.modules.order.dto.request.AdminCancelOrderRequest;
 import org.example.datn_sd69.modules.order.dto.request.RejectReturnRequest;
 import org.example.datn_sd69.modules.order.service.AdminOrderService;
 import org.example.datn_sd69.repository.OrderItemRepository;
@@ -79,6 +80,17 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private static final Set<String> SUPPORTED_ORDER_TYPES = Set.of(
             "ONLINE",
             "IN_STORE"
+    );
+
+    private static final Set<String> ADMIN_CANCEL_REASONS = Set.of(
+            "Khách yêu cầu hủy đơn",
+            "Không liên hệ được khách hàng",
+            "Thông tin nhận hàng không hợp lệ",
+            "Sản phẩm tạm hết hàng",
+            "Khách đặt trùng đơn",
+            "Đơn hàng có dấu hiệu bất thường",
+            "Sai giá / sai thông tin sản phẩm",
+            "Khác"
     );
 
     private final OrderRepository orderRepository;
@@ -153,6 +165,31 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     public AdminOrderResponse getOrderDetail(Integer orderId) {
         Order order = findOrderOrThrow(orderId);
         return mapOrderToResponse(order, true);
+    }
+
+    @Override
+    @Transactional
+    public AdminOrderResponse cancelOrder(Integer orderId, AdminCancelOrderRequest request) {
+        Order order = findOrderOrThrow(orderId);
+
+        if (safeStatus(order) != STATUS_PENDING) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ được hủy đơn hàng khi đơn còn ở trạng thái chờ xác nhận"
+            );
+        }
+
+        String cancelReason = normalizeAdminCancelReason(request);
+
+        restoreStockWhenAdminCancel(order);
+
+        order.setStatus(STATUS_CANCELLED);
+        order.setCancelReason(cancelReason);
+        order.setCancelledAt(LocalDateTime.now());
+
+        Order savedOrder = orderRepository.save(order);
+
+        return mapOrderToResponse(savedOrder, true);
     }
 
     @Override
@@ -311,6 +348,91 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                 && Integer.valueOf(status).equals(item.getStatus()));
     }
 
+    private String normalizeAdminCancelReason(AdminCancelOrderRequest request) {
+        if (request == null || request.reason() == null || request.reason().trim().isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Vui lòng chọn lý do hủy đơn"
+            );
+        }
+
+        String reason = request.reason()
+                .trim()
+                .replaceAll("[\r\n\t]+", " ")
+                .replaceAll("\\s{2,}", " ");
+
+        if (!ADMIN_CANCEL_REASONS.contains(reason)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Lý do hủy đơn không hợp lệ"
+            );
+        }
+
+        String description = request.description() == null
+                ? null
+                : request.description()
+                .trim()
+                .replaceAll("[\r\n\t]+", " ")
+                .replaceAll("\\s{2,}", " ");
+
+        if (description != null && description.isEmpty()) {
+            description = null;
+        }
+
+        if ("Khác".equals(reason) && description == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Vui lòng nhập mô tả chi tiết khi chọn lý do Khác"
+            );
+        }
+
+        if (description != null && description.length() < 5) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Mô tả hủy đơn phải có ít nhất 5 ký tự"
+            );
+        }
+
+        String fullReason = description == null ? reason : reason + " - " + description;
+
+        if (fullReason.length() > 255) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Lý do hủy đơn không được vượt quá 255 ký tự"
+            );
+        }
+
+        return fullReason;
+    }
+
+    private void restoreStockWhenAdminCancel(Order order) {
+        if (order == null || order.getId() == null) {
+            return;
+        }
+
+        List<OrderItem> orderItems = orderItemRepository.findDetailByOrderId(order.getId());
+
+        if (orderItems == null || orderItems.isEmpty()) {
+            return;
+        }
+
+        for (OrderItem item : orderItems) {
+            if (item == null || item.getProductVariant() == null) {
+                continue;
+            }
+
+            ProductVariant variant = item.getProductVariant();
+            int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+
+            if (quantity <= 0) {
+                continue;
+            }
+
+            int currentStock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
+            variant.setStockQuantity(currentStock + quantity);
+        }
+    }
+
     private String normalizeRejectReason(RejectReturnRequest request) {
         if (request == null || request.reason() == null || request.reason().trim().isEmpty()) {
             throw new ResponseStatusException(
@@ -322,7 +444,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         String reason = request.reason()
                 .trim()
                 .replaceAll("[\r\n\t]+", " ")
-                .replaceAll("\s{2,}", " ");
+                .replaceAll("\\s{2,}", " ");
 
         if (reason.length() < 5) {
             throw new ResponseStatusException(
@@ -375,13 +497,14 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         response.setTotalAmount(defaultMoney(order.getTotalAmount()));
         response.setDiscountAmount(defaultMoney(order.getDiscountAmount()));
         response.setFinalAmount(defaultMoney(order.getFinalAmount()));
+        response.setShippingFee(defaultMoney(order.getShippingFee()));
 
         response.setPaymentMethod(order.getPaymentMethod());
         response.setStatus(order.getStatus());
         response.setStatusText(getStatusText(order.getStatus()));
         response.setCreatedAt(order.getCreatedAt());
         response.setCompletedAt(order.getCompletedAt());
-        response.setCancelReason(order.getCancelReason());
+        response.setCancelReason(normalizeOptionalText(order.getCancelReason()));
         response.setCancelledAt(order.getCancelledAt());
 
         // BỔ SUNG TRƯỜNG NÀY ĐỂ TRẢ VỀ CHO VUE
@@ -412,13 +535,20 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     }
 
     private int compareOrdersForAdminList(Order first, Order second) {
-        /*
-         * Tab Tất cả đơn phải giữ thứ tự thời gian của đơn hàng, không được
-         * đẩy riêng đơn yêu cầu hoàn hàng lên đầu. Đơn hoàn hàng chỉ nên được
-         * ưu tiên khi FE đang lọc đúng tab/trạng thái hoàn hàng.
-         */
-        LocalDateTime firstTime = getOrderSortTime(first);
-        LocalDateTime secondTime = getOrderSortTime(second);
+        boolean firstReturnRequested = safeStatus(first) == STATUS_RETURN_REQUESTED;
+        boolean secondReturnRequested = safeStatus(second) == STATUS_RETURN_REQUESTED;
+
+        if (firstReturnRequested != secondReturnRequested) {
+            return firstReturnRequested ? -1 : 1;
+        }
+
+        LocalDateTime firstTime = firstReturnRequested
+                ? getLatestReturnRequestedAt(first)
+                : getOrderSortTime(first);
+
+        LocalDateTime secondTime = secondReturnRequested
+                ? getLatestReturnRequestedAt(second)
+                : getOrderSortTime(second);
 
         int timeCompare = Comparator
                 .nullsLast(LocalDateTime::compareTo)
@@ -439,11 +569,11 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             return null;
         }
 
-        if (order.getCreatedAt() != null) {
-            return order.getCreatedAt();
+        if (order.getCompletedAt() != null) {
+            return order.getCompletedAt();
         }
 
-        return order.getCompletedAt();
+        return order.getCreatedAt();
     }
 
     private LocalDateTime getLatestReturnRequestedAt(Order order) {
@@ -489,14 +619,19 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         response.setReturnDescription(returnRequest.getDescription());
         response.setReturnRequestedAt(returnRequest.getCreatedAt());
         response.setRefundMethod(formatRefundMethod(returnRequest.getRefundMethod()));
-        response.setReturnRefundAmount(defaultMoney(returnRequest.getRefundAmount()));
-        response.setRefundAmount(defaultMoney(returnRequest.getRefundAmount()));
-        response.setBankName(returnRequest.getBankName());
-        response.setBankAccountNumber(returnRequest.getBankAccountNumber());
-        response.setBankAccountHolder(returnRequest.getBankAccountHolder());
 
         List<ReturnRequestItem> returnItems =
                 returnRequestItemRepository.findByReturnRequest_IdWithOrderItemDetail(returnRequest.getId());
+
+        BigDecimal returnShippingFee = resolveReturnShippingFee(order, returnRequest);
+        BigDecimal returnRefundAmount = resolveReturnRefundAmount(returnRequest, returnItems, returnShippingFee);
+
+        response.setReturnRefundAmount(returnRefundAmount);
+        response.setRefundAmount(returnRefundAmount);
+        response.setReturnShippingFee(returnShippingFee);
+        response.setBankName(returnRequest.getBankName());
+        response.setBankAccountNumber(returnRequest.getBankAccountNumber());
+        response.setBankAccountHolder(returnRequest.getBankAccountHolder());
 
         String processStatus = resolveReturnProcessStatus(returnItems);
         response.setReturnProcessStatus(processStatus);
@@ -557,6 +692,120 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         return status == STATUS_RETURN_REQUESTED
                 || status == STATUS_RETURN_COMPLETED
                 || returnRequest != null;
+    }
+
+    private BigDecimal resolveReturnShippingFee(Order order, ReturnRequest returnRequest) {
+        if (order == null || returnRequest == null) {
+            return BigDecimal.ZERO;
+        }
+
+        List<OrderItem> orderItems = orderItemRepository.findByOrderId(order.getId());
+        List<ReturnRequestItem> returnItems = returnRequestItemRepository.findByReturnRequest_IdWithOrderItemDetail(returnRequest.getId());
+
+        if (!isFullOrderReturn(orderItems, returnItems)) {
+            return BigDecimal.ZERO;
+        }
+
+        if (!isShopFaultReturnReason(returnRequest.getReturnType(), returnRequest.getReason())) {
+            return BigDecimal.ZERO;
+        }
+
+        return defaultMoney(order.getShippingFee());
+    }
+
+    private boolean isFullOrderReturn(List<OrderItem> orderItems, List<ReturnRequestItem> returnItems) {
+        if (orderItems == null || orderItems.isEmpty() || returnItems == null || returnItems.isEmpty()) {
+            return false;
+        }
+
+        for (OrderItem orderItem : orderItems) {
+            if (orderItem == null || orderItem.getId() == null) {
+                continue;
+            }
+
+            Integer orderedQuantity = orderItem.getQuantity();
+            if (orderedQuantity == null || orderedQuantity <= 0) {
+                continue;
+            }
+
+            Integer returnQuantity = returnItems.stream()
+                    .filter(item -> item != null
+                            && item.getOrderItem() != null
+                            && orderItem.getId().equals(item.getOrderItem().getId()))
+                    .map(ReturnRequestItem::getReturnQuantity)
+                    .findFirst()
+                    .orElse(null);
+
+            if (returnQuantity == null || !returnQuantity.equals(orderedQuantity)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private boolean isShopFaultReturnReason(Integer returnType, String reason) {
+        String cleanReason = reason == null ? "" : reason.trim();
+
+        if (cleanReason.isEmpty()) {
+            return false;
+        }
+
+        if (Integer.valueOf(RETURN_TYPE_RECEIVED_WITH_PROBLEM_VALUE).equals(returnType)) {
+            return cleanReason.equals("Thiếu hàng")
+                    || cleanReason.equals("Người bán gửi sai hàng")
+                    || cleanReason.startsWith("Hàng bể vỡ")
+                    || cleanReason.equals("Hàng lỗi, không hoạt động")
+                    || cleanReason.equals("Hàng hết hạn sử dụng")
+                    || cleanReason.equals("Khác với mô tả")
+                    || cleanReason.equals("Hàng đã qua sử dụng")
+                    || cleanReason.equals("Hàng giả, nhái");
+        }
+
+        if (Integer.valueOf(RETURN_TYPE_NOT_RECEIVED_OR_MISSING_VALUE).equals(returnType)) {
+            return cleanReason.equals("Chưa nhận được hàng")
+                    || cleanReason.equals("Thiếu hàng")
+                    || cleanReason.equals("Thùng hàng rỗng");
+        }
+
+        return false;
+    }
+
+    private BigDecimal resolveReturnRefundAmount(
+            ReturnRequest returnRequest,
+            List<ReturnRequestItem> returnItems,
+            BigDecimal returnShippingFee
+    ) {
+        if (returnRequest == null) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal storedRefundAmount = defaultMoney(returnRequest.getRefundAmount());
+        BigDecimal shippingFee = defaultMoney(returnShippingFee);
+
+        if (shippingFee.compareTo(BigDecimal.ZERO) <= 0) {
+            return storedRefundAmount;
+        }
+
+        BigDecimal itemRefundTotal = returnItems == null
+                ? BigDecimal.ZERO
+                : returnItems.stream()
+                .filter(item -> item != null)
+                .map(ReturnRequestItem::getRefundAmount)
+                .map(this::defaultMoney)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal expectedTotalWithShipping = itemRefundTotal.add(shippingFee);
+
+        if (storedRefundAmount.compareTo(expectedTotalWithShipping) >= 0) {
+            return storedRefundAmount;
+        }
+
+        if (storedRefundAmount.compareTo(itemRefundTotal) <= 0) {
+            return storedRefundAmount.add(shippingFee);
+        }
+
+        return storedRefundAmount;
     }
 
     private String formatReturnType(Integer returnType) {
@@ -883,6 +1132,19 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         }
 
         String cleanValue = imageUrl.trim();
+
+        return cleanValue.isEmpty() ? null : cleanValue;
+    }
+
+    private String normalizeOptionalText(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String cleanValue = value
+                .trim()
+                .replaceAll("[\r\n\t]+", " ")
+                .replaceAll("\\s{2,}", " ");
 
         return cleanValue.isEmpty() ? null : cleanValue;
     }

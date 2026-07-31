@@ -147,6 +147,12 @@ export interface CustomerOrderResponse {
   discountAmount: number;
   finalAmount: number;
 
+  /** Phí vận chuyển của đơn hàng. */
+  shippingFee?: number | null;
+
+  /** Phí vận chuyển được tính vào tiền hoàn, nếu có. */
+  returnShippingFee?: number | null;
+
   paymentMethod: string | null;
 
   /**

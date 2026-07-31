@@ -127,7 +127,7 @@ import OrderFilter from "../components/OrderFilter.vue";
 import OrderTable from "../components/OrderTable.vue";
 import OrderDetailModal from "../components/OrderDetailModal.vue";
 import { orderService } from "../services/order.service";
-import type { AdminOrderResponse } from "../types/order.type";
+import type { AdminCancelOrderRequest, AdminOrderResponse } from "../types/order.type";
 
 const orders = ref<AdminOrderResponse[]>([]);
 const selectedOrder = ref<AdminOrderResponse | null>(null);
@@ -191,6 +191,41 @@ const returnRejectReasonOptions = [
   {
     value: "WRONG_RETURN_REASON",
     label: "Khách chọn sai lý do hoàn hàng",
+  },
+  {
+    value: "OTHER",
+    label: "Khác",
+  },
+];
+
+const adminCancelReasonOptions = [
+  {
+    value: "CUSTOMER_REQUEST",
+    label: "Khách yêu cầu hủy đơn",
+  },
+  {
+    value: "CONTACT_FAILED",
+    label: "Không liên hệ được khách hàng",
+  },
+  {
+    value: "INVALID_SHIPPING_INFO",
+    label: "Thông tin nhận hàng không hợp lệ",
+  },
+  {
+    value: "OUT_OF_STOCK",
+    label: "Sản phẩm tạm hết hàng",
+  },
+  {
+    value: "DUPLICATE_ORDER",
+    label: "Khách đặt trùng đơn",
+  },
+  {
+    value: "SUSPICIOUS_ORDER",
+    label: "Đơn hàng có dấu hiệu bất thường",
+  },
+  {
+    value: "WRONG_PRICE_OR_INFO",
+    label: "Sai giá / sai thông tin sản phẩm",
   },
   {
     value: "OTHER",
@@ -449,6 +484,11 @@ async function confirmChangeStatus(
     return;
   }
 
+  if (nextStatus === 4) {
+    await confirmAdminCancelOrder(order);
+    return;
+  }
+
   if (nextStatus === 7) {
     await Swal.fire({
       icon: "warning",
@@ -503,6 +543,151 @@ async function confirmChangeStatus(
       confirmButtonColor: "#bd9a5f",
     });
   }
+}
+
+async function confirmAdminCancelOrder(order: AdminOrderResponse) {
+  if (!order || !order.orderId) return;
+
+  if (Number(order.status) !== 0) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Không thể hủy đơn",
+      text: "Chỉ được hủy đơn khi đơn còn ở trạng thái Chờ xác nhận.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  const result = await Swal.fire<AdminCancelOrderRequest>({
+    icon: "warning",
+    title: "Hủy đơn hàng?",
+    html: `
+      <div style="text-align:left">
+        <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
+        <p><b>Trạng thái hiện tại:</b> ${escapeAlertHtml(order.statusText || getStatusText(Number(order.status)))}</p>
+
+        <label for="admin-cancel-reason-code" style="display:block;font-weight:700;margin:14px 0 6px">
+          Lý do hủy <span style="color:#dc2626">*</span>
+        </label>
+        <select
+          id="admin-cancel-reason-code"
+          class="swal2-select"
+          style="display:block;width:100%;margin:0 0 12px 0;height:42px;border:1px solid #d1d5db;border-radius:8px;padding:0 10px"
+        >
+          <option value="">-- Chọn lý do hủy đơn --</option>
+          ${buildAdminCancelReasonOptionsHtml()}
+        </select>
+
+        <label for="admin-cancel-reason-detail" style="display:block;font-weight:700;margin:0 0 6px">
+          Mô tả chi tiết <span style="color:#6b7280;font-weight:500">(không bắt buộc, trừ khi chọn Khác)</span>
+        </label>
+        <textarea
+          id="admin-cancel-reason-detail"
+          class="swal2-textarea"
+          maxlength="180"
+          placeholder="Có thể nhập thêm ghi chú hủy đơn để lưu lịch sử xử lý..."
+          style="display:block;width:100%;height:110px;margin:0;border:1px solid #d1d5db;border-radius:8px;padding:10px;resize:vertical"
+        ></textarea>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Xác nhận hủy",
+    cancelButtonText: "Quay lại",
+    confirmButtonColor: "#dc2626",
+    cancelButtonColor: "#6b7280",
+    focusConfirm: false,
+    preConfirm: () => {
+      const reasonCodeElement = document.getElementById(
+        "admin-cancel-reason-code"
+      ) as HTMLSelectElement | null;
+      const detailElement = document.getElementById(
+        "admin-cancel-reason-detail"
+      ) as HTMLTextAreaElement | null;
+
+      const reasonCode = String(reasonCodeElement?.value || "").trim();
+      const description = normalizeAdminCancelDescription(detailElement?.value || "");
+
+      if (!reasonCode) {
+        Swal.showValidationMessage("Vui lòng chọn lý do hủy đơn.");
+        return false;
+      }
+
+      if (reasonCode === "OTHER" && !description) {
+        Swal.showValidationMessage("Vui lòng nhập mô tả chi tiết khi chọn lý do Khác.");
+        return false;
+      }
+
+      if (description && description.length < 5) {
+        Swal.showValidationMessage("Mô tả chi tiết phải có ít nhất 5 ký tự.");
+        return false;
+      }
+
+      const reasonLabel = getAdminCancelReasonLabel(reasonCode);
+      const fullReason = description ? `${reasonLabel} - ${description}` : reasonLabel;
+
+      if (fullReason.length > 255) {
+        Swal.showValidationMessage("Tổng lý do hủy không được vượt quá 255 ký tự.");
+        return false;
+      }
+
+      return {
+        reason: reasonLabel,
+        description: description || null,
+      };
+    },
+  });
+
+  if (!result.isConfirmed || !result.value) return;
+
+  loading.value = true;
+
+  try {
+    const response = await orderService.cancelOrder(order.orderId, result.value);
+
+    await Swal.fire({
+      icon: "success",
+      title: "Đã hủy đơn hàng",
+      text: response.statusText || "Lý do hủy đã được lưu vào đơn hàng.",
+      confirmButtonColor: "#bd9a5f",
+    });
+
+    await refreshOrderAfterWorkflow(order.orderId);
+  } catch (error: any) {
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể hủy đơn hàng",
+      text:
+        error?.response?.data?.message ||
+        "Chỉ được hủy đơn khi đơn còn ở trạng thái Chờ xác nhận.",
+      confirmButtonColor: "#bd9a5f",
+    });
+  } finally {
+    loading.value = false;
+  }
+}
+
+function buildAdminCancelReasonOptionsHtml() {
+  return adminCancelReasonOptions
+    .map(
+      (item) =>
+        `<option value="${escapeAlertHtml(item.value)}">${escapeAlertHtml(
+          item.label
+        )}</option>`
+    )
+    .join("");
+}
+
+function getAdminCancelReasonLabel(value: string) {
+  const option = adminCancelReasonOptions.find((item) => item.value === value);
+
+  return option?.label || value;
+}
+
+function normalizeAdminCancelDescription(value: string) {
+  return String(value || "")
+    .trim()
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s{2,}/g, " ");
 }
 
 async function confirmAcceptReturn(order: AdminOrderResponse) {

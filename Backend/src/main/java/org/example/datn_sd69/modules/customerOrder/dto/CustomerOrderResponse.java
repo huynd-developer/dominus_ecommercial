@@ -17,6 +17,12 @@ public record CustomerOrderResponse(
         BigDecimal discountAmount,
         BigDecimal finalAmount,
 
+        /** Phí vận chuyển của đơn hàng. */
+        BigDecimal shippingFee,
+
+        /** Phí vận chuyển được hoàn trong yêu cầu hoàn hàng, nếu có. */
+        BigDecimal returnShippingFee,
+
         String paymentMethod,
 
         Integer status,
@@ -96,6 +102,8 @@ public record CustomerOrderResponse(
                 totalAmount,
                 discountAmount,
                 finalAmount,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
                 paymentMethod,
                 status,
                 statusText,

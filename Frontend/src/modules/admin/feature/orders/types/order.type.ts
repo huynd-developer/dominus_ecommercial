@@ -126,6 +126,12 @@ export interface AdminOrderResponse {
   discountAmount: number;
   finalAmount: number;
 
+  /** Phí vận chuyển của đơn hàng. */
+  shippingFee?: number | null;
+
+  /** Phí vận chuyển được tính vào tiền hoàn, nếu có. */
+  returnShippingFee?: number | null;
+
   paymentMethod: string;
   status: OrderStatus;
   statusText: string;
@@ -231,6 +237,11 @@ export interface UpdateOrderStatusResponse {
   status: number;
   loyaltyPointsApplied?: boolean;
   loyaltyPointsEarned?: number;
+}
+
+export interface AdminCancelOrderRequest {
+  reason: string;
+  description?: string | null;
 }
 
 export interface RejectReturnRequest {

@@ -1,5 +1,6 @@
 package org.example.datn_sd69.modules.order.service;
 
+import org.example.datn_sd69.modules.order.dto.request.AdminCancelOrderRequest;
 import org.example.datn_sd69.modules.order.dto.request.RejectReturnRequest;
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderResponse;
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderStatusCountResponse;
@@ -31,6 +32,8 @@ public interface AdminOrderService {
             LocalDate fromDate,
             LocalDate toDate
     );
+
+    AdminOrderResponse cancelOrder(Integer orderId, AdminCancelOrderRequest request);
 
     AdminOrderResponse acceptReturnRequest(Integer orderId);
 
