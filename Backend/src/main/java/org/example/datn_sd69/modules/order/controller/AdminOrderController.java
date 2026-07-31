@@ -90,4 +90,16 @@ public class AdminOrderController {
                 adminOrderService.getOrderDetail(orderId)
         );
     }
+
+    /**
+     * Chuyển đơn hoàn hàng sang trạng thái đã hoàn tiền.
+     *
+     * PATCH /api/admin/orders/{orderId}/return-refunded
+     */
+    @PatchMapping({"/{orderId}/return-refunded", "/{orderId}/return-refunded/"})
+    public ResponseEntity<?> markReturnRefunded(@PathVariable Integer orderId) {
+        return ResponseEntity.ok(
+                adminOrderService.markReturnRefunded(orderId)
+        );
+    }
 }

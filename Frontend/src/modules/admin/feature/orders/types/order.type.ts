@@ -53,6 +53,37 @@ export interface AdminOrderItemResponse {
   ImageList?: any[];
 }
 
+export interface AdminReturnItemResponse {
+  returnRequestItemId?: number | null;
+  orderItemId?: number | null;
+  productVariantId?: number | null;
+  productId?: number | null;
+
+  productName?: string | null;
+  brandName?: string | null;
+  sku?: string | null;
+  capacity?: string | null;
+  bottleType?: string | null;
+  imageUrl?: string | null;
+
+  orderedQuantity?: number | null;
+  returnQuantity?: number | null;
+
+  unitFinalPrice?: number | null;
+  itemAmount?: number | null;
+  voucherAllocatedAmount?: number | null;
+  refundAmount?: number | null;
+
+  /**
+   * 0 = Chờ xử lý
+   * 1 = Đã chấp nhận
+   * 2 = Từ chối
+   * 3 = Đã hoàn tiền
+   */
+  status?: number | null;
+  statusText?: string | null;
+}
+
 export interface AdminOrderResponse {
   orderId: number;
   orderCode: string;
@@ -78,6 +109,29 @@ export interface AdminOrderResponse {
   completedAt?: string | null;
 
   totalQuantity?: number | null;
+  isPaymentReported?: boolean | null;
+
+  returnType?: string | number | null;
+  returnReason?: string | null;
+  returnDescription?: string | null;
+  returnEmail?: string | null;
+  returnRequestedAt?: string | null;
+
+  refundMethod?: string | number | null;
+  returnRefundAmount?: number | null;
+  refundAmount?: number | null;
+
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  bankAccountHolder?: string | null;
+
+  canMarkReturnRefunded?: boolean | null;
+
+  returnImages?: string[] | null;
+  returnVideos?: string[] | null;
+  returnMediaUrls?: string[] | null;
+  returnItems?: AdminReturnItemResponse[] | null;
+
   items: AdminOrderItemResponse[];
 }
 
@@ -129,6 +183,6 @@ export interface UpdateOrderStatusResponse {
   message: string;
   orderId: number;
   status: number;
-  loyaltyPointsApplied: boolean;
-  loyaltyPointsEarned: number;
+  loyaltyPointsApplied?: boolean;
+  loyaltyPointsEarned?: number;
 }

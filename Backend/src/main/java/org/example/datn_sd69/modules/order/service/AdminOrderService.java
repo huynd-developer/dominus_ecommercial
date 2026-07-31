@@ -23,10 +23,13 @@ public interface AdminOrderService {
     );
 
     AdminOrderResponse getOrderDetail(Integer orderId);
+
     AdminOrderStatusCountResponse getStatusCounts(
             String keyword,
             String orderType,
             LocalDate fromDate,
             LocalDate toDate
     );
+
+    AdminOrderResponse markReturnRefunded(Integer orderId);
 }

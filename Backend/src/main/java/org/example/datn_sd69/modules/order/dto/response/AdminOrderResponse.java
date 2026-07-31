@@ -48,7 +48,7 @@ public class AdminOrderResponse {
      * 4 = Đã hủy
      * 5 = Giao hàng thất bại
      * 6 = Yêu cầu hoàn hàng / đổi trả
-     * 7 = Hoàn hàng / đổi trả hoàn tất
+     * 7 = Hoàn hàng / đổi trả hoàn tất / đã hoàn tiền
      */
     private Integer status;
 
@@ -62,10 +62,43 @@ public class AdminOrderResponse {
 
     private Boolean isPaymentReported;
 
-    // --- BỔ SUNG CÁC TRƯỜNG DỮ LIỆU HOÀN HÀNG ---
+    // --- THÔNG TIN HOÀN HÀNG / HOÀN TIỀN ---
+    private String returnType;
+
     private String returnReason;
+
+    private String returnDescription;
+
+    private String returnEmail;
+
+    private LocalDateTime returnRequestedAt;
+
+    private String refundMethod;
+
+    private BigDecimal returnRefundAmount;
+
+    private BigDecimal refundAmount;
+
+    private String bankName;
+
+    private String bankAccountNumber;
+
+    private String bankAccountHolder;
+
+    /**
+     * true khi đơn đang ở trạng thái 6 và admin được bấm chuyển sang đã hoàn tiền.
+     */
+    private Boolean canMarkReturnRefunded;
+
     private List<String> returnImages = new ArrayList<>();
+
     private List<String> returnVideos = new ArrayList<>();
+
+    /**
+     * Danh sách sản phẩm khách yêu cầu hoàn.
+     * Chỉ cần dùng ở màn chi tiết đơn hàng.
+     */
+    private List<AdminReturnItemResponse> returnItems = new ArrayList<>();
 
     private List<AdminOrderItemResponse> items = new ArrayList<>();
 

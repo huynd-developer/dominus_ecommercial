@@ -113,6 +113,7 @@
       :show="showDetailModal"
       :order="selectedOrder"
       @close="closeDetail"
+      @mark-return-refunded="confirmMarkReturnRefunded"
     />
   </div>
 </template>
@@ -227,7 +228,7 @@ async function loadOrders() {
 
     const pageData = resolvePageData(rawData);
 
-    orders.value = pageData.content;
+    orders.value = prioritizeReturnRequestedOrders(pageData.content);
     totalElements.value = pageData.totalElements;
     totalPages.value = pageData.totalPages;
 
@@ -288,6 +289,35 @@ function resolvePageData(rawData: any) {
     totalPages: Number.isFinite(totalPagesValue) ? totalPagesValue : 0,
     currentPage: Number.isFinite(responsePage) ? responsePage : null,
   };
+}
+
+function getReturnSortTime(order: AdminOrderResponse) {
+  const rawDate = order.returnRequestedAt || order.createdAt || order.completedAt || null;
+
+  if (!rawDate) {
+    return 0;
+  }
+
+  const time = new Date(rawDate).getTime();
+
+  return Number.isFinite(time) ? time : 0;
+}
+
+function prioritizeReturnRequestedOrders(list: AdminOrderResponse[]) {
+  return [...list].sort((left, right) => {
+    const leftIsReturnRequested = Number(left.status) === 6;
+    const rightIsReturnRequested = Number(right.status) === 6;
+
+    if (leftIsReturnRequested !== rightIsReturnRequested) {
+      return leftIsReturnRequested ? -1 : 1;
+    }
+
+    if (leftIsReturnRequested && rightIsReturnRequested) {
+      return getReturnSortTime(right) - getReturnSortTime(left);
+    }
+
+    return 0;
+  });
 }
 
 function handleSearch(payload: {
@@ -412,6 +442,156 @@ async function confirmChangeStatus(
       confirmButtonColor: "#bd9a5f",
     });
   }
+}
+
+async function confirmMarkReturnRefunded(order: AdminOrderResponse) {
+  if (!order || !order.orderId) {
+    return;
+  }
+
+  if (Number(order.status) !== 6 && order.canMarkReturnRefunded !== true) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Không thể hoàn tiền",
+      text: "Đơn hàng này không ở trạng thái yêu cầu hoàn hàng.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  const bankTransferHtml = isBankTransferRefund(order)
+    ? `
+        <p><b>Ngân hàng:</b> ${escapeAlertHtml(order.bankName || "-")}</p>
+        <p><b>Số tài khoản:</b> ${escapeAlertHtml(
+          order.bankAccountNumber || "-"
+        )}</p>
+        <p><b>Chủ tài khoản:</b> ${escapeAlertHtml(
+          order.bankAccountHolder || "-"
+        )}</p>
+      `
+    : "";
+
+  const result = await Swal.fire({
+    icon: "question",
+    title: "Xác nhận đã hoàn tiền?",
+    html: `
+      <div style="text-align:left">
+        <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
+        <p><b>Số tiền hoàn:</b> ${formatMoneyForAlert(
+          order.returnRefundAmount ?? order.refundAmount ?? order.finalAmount
+        )}</p>
+        <p><b>Phương án:</b> ${escapeAlertHtml(
+          getRefundMethodTextForAlert(order)
+        )}</p>
+        ${bankTransferHtml}
+        <p class="mb-0 text-danger"><b>Lưu ý:</b> Chỉ bấm khi đã hoàn tiền thực tế cho khách.</p>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Đã hoàn tiền",
+    cancelButtonText: "Hủy",
+    confirmButtonColor: "#16a34a",
+    cancelButtonColor: "#6b7280",
+  });
+
+  if (!result.isConfirmed) {
+    return;
+  }
+
+  loading.value = true;
+
+  try {
+    const response = await orderService.markReturnRefunded(order.orderId);
+
+    await Swal.fire({
+      icon: "success",
+      title: "Đã cập nhật hoàn tiền",
+      text:
+        response.message ||
+        "Đơn hàng đã chuyển sang trạng thái hoàn hàng hoàn tất.",
+      confirmButtonColor: "#bd9a5f",
+    });
+
+    await loadOrders();
+
+    if (showDetailModal.value && selectedOrder.value?.orderId === order.orderId) {
+      selectedOrder.value = await orderService.getOrderDetail(order.orderId);
+    }
+  } catch (error: any) {
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể cập nhật hoàn tiền",
+      text:
+        error?.response?.data?.message ||
+        "Vui lòng kiểm tra trạng thái đơn hàng hoặc thử lại sau.",
+      confirmButtonColor: "#bd9a5f",
+    });
+  } finally {
+    loading.value = false;
+  }
+}
+
+function formatMoneyForAlert(value?: number | null) {
+  return Number(value || 0).toLocaleString("vi-VN", {
+    style: "currency",
+    currency: "VND",
+  });
+}
+
+function normalizeRefundMethodForAlert(value?: string | number | null) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function isBankTransferRefund(order: AdminOrderResponse) {
+  const method = normalizeRefundMethodForAlert(order.refundMethod);
+
+  return (
+    method === "1" ||
+    method === "BANK_TRANSFER" ||
+    method.includes("BANK") ||
+    method.includes("TRANSFER") ||
+    method.includes("CHUYEN KHOAN") ||
+    method.includes("NGAN HANG")
+  );
+}
+
+function getRefundMethodTextForAlert(order: AdminOrderResponse) {
+  const method = normalizeRefundMethodForAlert(order.refundMethod);
+
+  if (
+    method === "1" ||
+    method === "BANK_TRANSFER" ||
+    method.includes("BANK") ||
+    method.includes("TRANSFER") ||
+    method.includes("CHUYEN KHOAN") ||
+    method.includes("NGAN HANG")
+  ) {
+    return "Chuyển khoản ngân hàng";
+  }
+
+  if (
+    method === "2" ||
+    method === "STORE" ||
+    method.includes("CUA HANG") ||
+    method.includes("TAI QUAY")
+  ) {
+    return "Hoàn tại cửa hàng";
+  }
+
+  return String(order.refundMethod || "-");
+}
+
+function escapeAlertHtml(value?: string | number | null) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function getStatusText(status: number) {

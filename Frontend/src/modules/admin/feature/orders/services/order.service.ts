@@ -72,4 +72,12 @@ export const orderService = {
 
     return response.data;
   },
+
+  async markReturnRefunded(orderId: number) {
+    const response = await api.patch<UpdateOrderStatusResponse>(
+      `${ORDER_ADMIN_API}/${orderId}/return-refunded`
+    );
+
+    return response.data;
+  },
 };

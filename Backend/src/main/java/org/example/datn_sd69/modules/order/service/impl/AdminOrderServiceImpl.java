@@ -5,13 +5,21 @@ import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.Order;
 import org.example.datn_sd69.entity.OrderItem;
 import org.example.datn_sd69.entity.ProductVariant;
+import org.example.datn_sd69.entity.ReturnRequest;
+import org.example.datn_sd69.entity.ReturnRequestItem;
+import org.example.datn_sd69.entity.ReturnRequestMedia;
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderItemResponse;
+import org.example.datn_sd69.modules.order.dto.response.AdminReturnItemResponse;
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderResponse;
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderStatusCountResponse;
 import org.example.datn_sd69.modules.order.service.AdminOrderService;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
+import org.example.datn_sd69.repository.ReturnRequestItemRepository;
+import org.example.datn_sd69.repository.ReturnRequestMediaRepository;
+import org.example.datn_sd69.repository.ReturnRequestRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -24,6 +32,7 @@ import java.time.format.DateTimeParseException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -40,6 +49,20 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private static final int STATUS_DELIVERY_FAILED = 5;
     private static final int STATUS_RETURN_REQUESTED = 6;
     private static final int STATUS_RETURN_COMPLETED = 7;
+
+    private static final int RETURN_ITEM_STATUS_PENDING = 0;
+    private static final int RETURN_ITEM_STATUS_ACCEPTED = 1;
+    private static final int RETURN_ITEM_STATUS_REJECTED = 2;
+    private static final int RETURN_ITEM_STATUS_COMPLETED = 3;
+
+    private static final int RETURN_TYPE_RECEIVED_WITH_PROBLEM_VALUE = 1;
+    private static final int RETURN_TYPE_NOT_RECEIVED_OR_MISSING_VALUE = 2;
+
+    private static final int REFUND_METHOD_BANK_TRANSFER_VALUE = 1;
+    private static final int REFUND_METHOD_STORE_VALUE = 2;
+
+    private static final int MEDIA_TYPE_IMAGE = 1;
+    private static final int MEDIA_TYPE_VIDEO = 2;
 
     private static final Set<Integer> VALID_ORDER_STATUSES = Set.of(
             STATUS_PENDING,
@@ -59,6 +82,9 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    private final ReturnRequestRepository returnRequestRepository;
+    private final ReturnRequestItemRepository returnRequestItemRepository;
+    private final ReturnRequestMediaRepository returnRequestMediaRepository;
     private final EntityManager entityManager;
     private record KeywordDateRange(
             String keyword,
@@ -100,7 +126,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                         ? requestToDateTime
                         : keywordDateRange.toDateTime();
 
-        return orderRepository.searchAdminOrders(
+        Page<Order> orderPage = orderRepository.searchAdminOrders(
                 normalizeKeyword(keywordDateRange.keyword()),
                 normalizeSearchStatus(status),
                 normalizeOrderType(orderType),
@@ -110,7 +136,15 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                 minAmount,
                 maxAmount,
                 pageable
-        ).map(order -> mapOrderToResponse(order, false));
+        );
+
+        List<AdminOrderResponse> responses = orderPage.getContent()
+                .stream()
+                .sorted(this::compareOrdersForAdminList)
+                .map(order -> mapOrderToResponse(order, false))
+                .toList();
+
+        return new PageImpl<>(responses, pageable, orderPage.getTotalElements());
     }
 
     @Override
@@ -118,6 +152,46 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     public AdminOrderResponse getOrderDetail(Integer orderId) {
         Order order = findOrderOrThrow(orderId);
         return mapOrderToResponse(order, true);
+    }
+
+    @Override
+    @Transactional
+    public AdminOrderResponse markReturnRefunded(Integer orderId) {
+        Order order = findOrderOrThrow(orderId);
+
+        if (safeStatus(order) != STATUS_RETURN_REQUESTED) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ đơn đang yêu cầu hoàn hàng mới được chuyển sang đã hoàn tiền"
+            );
+        }
+
+        ReturnRequest returnRequest = getLatestReturnRequest(order);
+
+        if (returnRequest == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Không tìm thấy yêu cầu hoàn hàng của đơn này"
+            );
+        }
+
+        List<ReturnRequestItem> returnItems =
+                returnRequestItemRepository.findByReturnRequest_Id(returnRequest.getId());
+
+        if (returnItems == null || returnItems.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Yêu cầu hoàn hàng chưa có sản phẩm cần hoàn"
+            );
+        }
+
+        returnItems.forEach(item -> item.setStatus(RETURN_ITEM_STATUS_COMPLETED));
+        returnRequestItemRepository.saveAll(returnItems);
+
+        order.setStatus(STATUS_RETURN_COMPLETED);
+        Order savedOrder = orderRepository.save(order);
+
+        return mapOrderToResponse(savedOrder, true);
     }
 
     private AdminOrderResponse mapOrderToResponse(Order order, boolean includeItems) {
@@ -164,6 +238,8 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         // BỔ SUNG TRƯỜNG NÀY ĐỂ TRẢ VỀ CHO VUE
         response.setIsPaymentReported(order.getIsPaymentReported() != null && order.getIsPaymentReported());
 
+        applyLatestReturnRequestInfo(response, order, includeItems);
+
         if (includeItems) {
             var items = orderItemRepository.findDetailByOrderId(order.getId());
 
@@ -184,6 +260,243 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         }
 
         return response;
+    }
+
+    private int compareOrdersForAdminList(Order first, Order second) {
+        boolean firstReturnRequested = safeStatus(first) == STATUS_RETURN_REQUESTED;
+        boolean secondReturnRequested = safeStatus(second) == STATUS_RETURN_REQUESTED;
+
+        if (firstReturnRequested != secondReturnRequested) {
+            return firstReturnRequested ? -1 : 1;
+        }
+
+        LocalDateTime firstTime = firstReturnRequested
+                ? getLatestReturnRequestedAt(first)
+                : getOrderSortTime(first);
+
+        LocalDateTime secondTime = secondReturnRequested
+                ? getLatestReturnRequestedAt(second)
+                : getOrderSortTime(second);
+
+        int timeCompare = Comparator
+                .nullsLast(LocalDateTime::compareTo)
+                .compare(secondTime, firstTime);
+
+        if (timeCompare != 0) {
+            return timeCompare;
+        }
+
+        return Integer.compare(
+                second == null || second.getId() == null ? 0 : second.getId(),
+                first == null || first.getId() == null ? 0 : first.getId()
+        );
+    }
+
+    private LocalDateTime getOrderSortTime(Order order) {
+        if (order == null) {
+            return null;
+        }
+
+        if (order.getCompletedAt() != null) {
+            return order.getCompletedAt();
+        }
+
+        return order.getCreatedAt();
+    }
+
+    private LocalDateTime getLatestReturnRequestedAt(Order order) {
+        ReturnRequest returnRequest = getLatestReturnRequest(order);
+
+        if (returnRequest != null && returnRequest.getCreatedAt() != null) {
+            return returnRequest.getCreatedAt();
+        }
+
+        return getOrderSortTime(order);
+    }
+
+    private ReturnRequest getLatestReturnRequest(Order order) {
+        if (order == null || order.getId() == null) {
+            return null;
+        }
+
+        return returnRequestRepository
+                .findTopByOrder_IdOrderByCreatedAtDesc(order.getId())
+                .orElse(null);
+    }
+
+    private void applyLatestReturnRequestInfo(
+            AdminOrderResponse response,
+            Order order,
+            boolean includeItems
+    ) {
+        if (response == null || order == null) {
+            return;
+        }
+
+        if (!isReturnOrder(order)) {
+            response.setCanMarkReturnRefunded(false);
+            return;
+        }
+
+        ReturnRequest returnRequest = getLatestReturnRequest(order);
+
+        if (returnRequest == null) {
+            response.setCanMarkReturnRefunded(false);
+            return;
+        }
+
+        response.setReturnType(formatReturnType(returnRequest.getReturnType()));
+        response.setReturnReason(returnRequest.getReason());
+        response.setReturnDescription(returnRequest.getDescription());
+        response.setReturnRequestedAt(returnRequest.getCreatedAt());
+        response.setRefundMethod(formatRefundMethod(returnRequest.getRefundMethod()));
+        response.setReturnRefundAmount(defaultMoney(returnRequest.getRefundAmount()));
+        response.setRefundAmount(defaultMoney(returnRequest.getRefundAmount()));
+        response.setBankName(returnRequest.getBankName());
+        response.setBankAccountNumber(returnRequest.getBankAccountNumber());
+        response.setBankAccountHolder(returnRequest.getBankAccountHolder());
+        response.setCanMarkReturnRefunded(safeStatus(order) == STATUS_RETURN_REQUESTED);
+
+        if (order.getCustomer() != null && order.getCustomer().getUser() != null) {
+            response.setReturnEmail(order.getCustomer().getUser().getEmail());
+        }
+
+        List<ReturnRequestMedia> medias =
+                returnRequestMediaRepository.findByReturnRequest_Id(returnRequest.getId());
+
+        response.setReturnImages(
+                medias.stream()
+                        .filter(media -> media != null && Integer.valueOf(MEDIA_TYPE_IMAGE).equals(media.getMediaType()))
+                        .map(ReturnRequestMedia::getMediaUrl)
+                        .map(this::cleanImageUrl)
+                        .filter(value -> value != null)
+                        .toList()
+        );
+
+        response.setReturnVideos(
+                medias.stream()
+                        .filter(media -> media != null && Integer.valueOf(MEDIA_TYPE_VIDEO).equals(media.getMediaType()))
+                        .map(ReturnRequestMedia::getMediaUrl)
+                        .map(this::cleanImageUrl)
+                        .filter(value -> value != null)
+                        .toList()
+        );
+
+        if (includeItems) {
+            List<ReturnRequestItem> returnItems =
+                    returnRequestItemRepository.findByReturnRequest_Id(returnRequest.getId());
+
+            response.setReturnItems(
+                    returnItems.stream()
+                            .map(this::mapReturnItemToResponse)
+                            .toList()
+            );
+        } else {
+            response.setReturnItems(new ArrayList<>());
+        }
+    }
+
+    private boolean isReturnOrder(Order order) {
+        int status = safeStatus(order);
+        return status == STATUS_RETURN_REQUESTED || status == STATUS_RETURN_COMPLETED;
+    }
+
+    private String formatReturnType(Integer returnType) {
+        if (returnType == null) {
+            return null;
+        }
+
+        return switch (returnType) {
+            case RETURN_TYPE_RECEIVED_WITH_PROBLEM_VALUE -> "RECEIVED_WITH_PROBLEM";
+            case RETURN_TYPE_NOT_RECEIVED_OR_MISSING_VALUE -> "NOT_RECEIVED_OR_MISSING";
+            default -> "UNKNOWN";
+        };
+    }
+
+    private String formatRefundMethod(Integer refundMethod) {
+        if (refundMethod == null) {
+            return null;
+        }
+
+        return switch (refundMethod) {
+            case REFUND_METHOD_BANK_TRANSFER_VALUE -> "BANK_TRANSFER";
+            case REFUND_METHOD_STORE_VALUE -> "STORE";
+            default -> "UNKNOWN";
+        };
+    }
+
+    private AdminReturnItemResponse mapReturnItemToResponse(ReturnRequestItem returnItem) {
+        AdminReturnItemResponse response = new AdminReturnItemResponse();
+
+        if (returnItem == null) {
+            return response;
+        }
+
+        response.setReturnRequestItemId(returnItem.getId());
+        response.setReturnQuantity(returnItem.getReturnQuantity() == null ? 0 : returnItem.getReturnQuantity());
+        response.setRefundAmount(defaultMoney(returnItem.getRefundAmount()));
+        response.setStatus(returnItem.getStatus());
+        response.setStatusText(getReturnItemStatusText(returnItem.getStatus()));
+
+        OrderItem orderItem = returnItem.getOrderItem();
+
+        if (orderItem == null) {
+            return response;
+        }
+
+        response.setOrderItemId(orderItem.getId());
+        response.setOrderedQuantity(orderItem.getQuantity() == null ? 0 : orderItem.getQuantity());
+        response.setUnitFinalPrice(defaultMoney(orderItem.getFinalPrice()));
+
+        BigDecimal itemAmount = defaultMoney(orderItem.getFinalPrice())
+                .multiply(BigDecimal.valueOf(response.getReturnQuantity() == null ? 0 : response.getReturnQuantity()));
+
+        response.setItemAmount(itemAmount);
+        response.setVoucherAllocatedAmount(itemAmount.subtract(defaultMoney(returnItem.getRefundAmount())).max(BigDecimal.ZERO));
+
+        ProductVariant variant = orderItem.getProductVariant();
+
+        if (variant == null) {
+            response.setImageUrl(cleanImageUrl(orderItem.getImage()));
+            return response;
+        }
+
+        response.setProductVariantId(variant.getId());
+        response.setSku(variant.getSku());
+        response.setImageUrl(resolveOrderItemImage(orderItem, variant));
+
+        if (variant.getProduct() != null) {
+            response.setProductId(variant.getProduct().getId());
+            response.setProductName(variant.getProduct().getName());
+
+            if (variant.getProduct().getBrand() != null) {
+                response.setBrandName(variant.getProduct().getBrand().getName());
+            }
+        }
+
+        if (variant.getCapacity() != null && variant.getCapacity().getValue() != null) {
+            response.setCapacity(formatCapacity(variant.getCapacity().getValue()));
+        }
+
+        if (variant.getBottleType() != null) {
+            response.setBottleType(variant.getBottleType().getName());
+        }
+
+        return response;
+    }
+
+    private String getReturnItemStatusText(Integer status) {
+        if (status == null) {
+            return "Chờ xử lý";
+        }
+
+        return switch (status) {
+            case RETURN_ITEM_STATUS_PENDING -> "Chờ xử lý";
+            case RETURN_ITEM_STATUS_ACCEPTED -> "Đã chấp nhận";
+            case RETURN_ITEM_STATUS_REJECTED -> "Từ chối";
+            case RETURN_ITEM_STATUS_COMPLETED -> "Đã hoàn tiền";
+            default -> "Không xác định";
+        };
     }
 
     // --- HÀM HỖ TRỢ PARSE CHUỖI ẢNH/VIDEO THÀNH LIST ---
