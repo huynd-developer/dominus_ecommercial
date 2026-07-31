@@ -39,6 +39,25 @@ public class Review extends BaseEntity {
     @Column(name = "IsDeleted")
     private Boolean isDeleted = false;
 
+    @Column(name = "ApprovalStatus", nullable = false)
+    private Integer approvalStatus = 1;
+
+    @Column(name = "ApprovedAt")
+    private LocalDateTime approvedAt;
+
+    @Column(name = "RejectedAt")
+    private LocalDateTime rejectedAt;
+
+    @Nationalized
+    @Column(name = "RejectedReason", length = 255)
+    private String rejectedReason;
+
+    @Column(name = "EditedAt")
+    private LocalDateTime editedAt;
+
+    @Column(name = "EditCount", nullable = false)
+    private Integer editCount = 0;
+
     @PrePersist
     public void prePersist() {
         if (createdAt == null) {
@@ -47,6 +66,10 @@ public class Review extends BaseEntity {
 
         if (isDeleted == null) {
             isDeleted = false;
+        }
+
+        if (approvalStatus == null) {
+            approvalStatus = 1;
         }
     }
 

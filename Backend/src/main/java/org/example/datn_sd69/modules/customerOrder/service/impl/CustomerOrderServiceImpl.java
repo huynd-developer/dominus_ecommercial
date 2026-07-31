@@ -19,6 +19,7 @@ import org.example.datn_sd69.entity.ReturnRequestMedia;
 import org.example.datn_sd69.entity.User;
 import org.example.datn_sd69.modules.customerOrder.dto.CustomerOrderItemResponse;
 import org.example.datn_sd69.modules.customerOrder.dto.CustomerOrderResponse;
+import org.example.datn_sd69.modules.customerOrder.dto.CustomerReturnItemResponse;
 import org.example.datn_sd69.modules.customerOrder.service.CustomerOrderService;
 import org.example.datn_sd69.repository.CustomerRepository;
 import org.example.datn_sd69.repository.OrderItemRepository;
@@ -76,6 +77,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
     private static final int MAX_RETURN_IMAGE_COUNT = 6;
     private static final int MAX_RETURN_VIDEO_COUNT = 1;
+
+    private static final long RETURN_REQUEST_DEADLINE_DAYS = 15L;
 
     private static final long MAX_RETURN_IMAGE_SIZE = 20L * 1024L * 1024L;
     private static final long MAX_RETURN_VIDEO_SIZE = 200L * 1024L * 1024L;
@@ -282,6 +285,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         if (order.getStatus() == null || order.getStatus() != STATUS_COMPLETED) {
             throw badRequest("Chỉ có thể yêu cầu hoàn hàng đối với đơn hàng đã hoàn thành.");
         }
+
+        validateReturnRequestDeadline(order, LocalDateTime.now());
 
         if (returnRequestItemRepository.existsByReturnRequest_Order_IdAndStatus(order.getId(), RETURN_ITEM_STATUS_PENDING)) {
             throw badRequest("Đơn hàng đang có sản phẩm chờ xử lý hoàn hàng.");
@@ -501,6 +506,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
         ReturnRequest returnRequest = findLatestReturnRequestForCustomerView(order);
         List<String> returnMediaUrls = getReturnMediaUrls(returnRequest);
+        List<CustomerReturnItemResponse> returnItems = getReturnItemsForCustomerView(returnRequest);
 
         return new CustomerOrderResponse(
                 order.getId(),
@@ -523,6 +529,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 returnRequest != null ? returnRequest.getCreatedAt() : null,
                 returnRequest != null ? moneyOrZero(returnRequest.getRefundAmount()) : null,
                 returnMediaUrls,
+                returnItems,
                 itemResponses
         );
     }
@@ -555,6 +562,69 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 .filter(url -> url != null && !url.trim().isEmpty())
                 .map(String::trim)
                 .toList();
+    }
+
+    private List<CustomerReturnItemResponse> getReturnItemsForCustomerView(ReturnRequest returnRequest) {
+        if (returnRequest == null || returnRequest.getId() == null) {
+            return List.of();
+        }
+
+        return returnRequestItemRepository.findByReturnRequest_Id(returnRequest.getId())
+                .stream()
+                .filter(returnItem -> returnItem != null
+                        && !Integer.valueOf(RETURN_ITEM_STATUS_CUSTOMER_CANCELLED).equals(returnItem.getStatus()))
+                .map(this::mapToCustomerReturnItemResponse)
+                .toList();
+    }
+
+    private CustomerReturnItemResponse mapToCustomerReturnItemResponse(ReturnRequestItem returnItem) {
+        OrderItem orderItem = returnItem.getOrderItem();
+        ProductVariant variant = orderItem != null ? orderItem.getProductVariant() : null;
+        Product product = variant != null ? variant.getProduct() : null;
+        Brand brand = product != null ? product.getBrand() : null;
+
+        Integer orderedQuantity = orderItem != null && orderItem.getQuantity() != null
+                ? orderItem.getQuantity()
+                : 0;
+
+        Integer returnQuantity = returnItem.getReturnQuantity() == null
+                ? 0
+                : returnItem.getReturnQuantity();
+
+        BigDecimal unitFinalPrice = orderItem == null
+                ? BigDecimal.ZERO
+                : moneyOrZero(orderItem.getFinalPrice());
+
+        BigDecimal itemAmount = unitFinalPrice
+                .multiply(BigDecimal.valueOf(returnQuantity))
+                .setScale(2, RoundingMode.HALF_UP);
+
+        BigDecimal refundAmount = moneyOrZero(returnItem.getRefundAmount())
+                .setScale(2, RoundingMode.HALF_UP);
+
+        BigDecimal voucherAllocatedAmount = itemAmount.subtract(refundAmount);
+        if (voucherAllocatedAmount.compareTo(BigDecimal.ZERO) < 0) {
+            voucherAllocatedAmount = BigDecimal.ZERO;
+        }
+        voucherAllocatedAmount = voucherAllocatedAmount.setScale(2, RoundingMode.HALF_UP);
+
+        return new CustomerReturnItemResponse(
+                orderItem != null ? orderItem.getId() : null,
+                product != null ? product.getId() : null,
+                variant != null ? variant.getId() : null,
+                product != null ? product.getName() : null,
+                brand != null ? brand.getName() : null,
+                variant != null ? variant.getSku() : null,
+                orderItem != null ? orderItem.getImage() : null,
+                getCapacityText(variant),
+                getBottleTypeText(variant),
+                orderedQuantity,
+                returnQuantity,
+                unitFinalPrice.setScale(2, RoundingMode.HALF_UP),
+                itemAmount,
+                voucherAllocatedAmount,
+                refundAmount
+        );
     }
 
     private CustomerOrderItemResponse mapToOrderItemResponse(OrderItem item) {
@@ -596,6 +666,36 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 item.getNote(),
                 item.getImage()
         );
+    }
+
+    private void validateReturnRequestDeadline(Order order, LocalDateTime now) {
+        LocalDateTime completedAt = getOrderCompletedAt(order);
+
+        if (completedAt == null) {
+            throw badRequest("Đơn hàng chưa có thời gian hoàn thành, không thể yêu cầu hoàn hàng.");
+        }
+
+        LocalDateTime deadline = completedAt.plusDays(RETURN_REQUEST_DEADLINE_DAYS);
+
+        if (now.isAfter(deadline)) {
+            throw badRequest("Đã quá hạn 15 ngày yêu cầu trả hàng / hoàn tiền.");
+        }
+    }
+
+    private LocalDateTime getOrderCompletedAt(Order order) {
+        if (order == null) {
+            return null;
+        }
+
+        if (order.getCompletedAt() != null) {
+            return order.getCompletedAt();
+        }
+
+        /*
+         * Fallback cho dữ liệu cũ chưa có CompletedAt.
+         * Dữ liệu mới vẫn phải set CompletedAt khi đơn chuyển sang Hoàn thành.
+         */
+        return order.getCreatedAt();
     }
 
     private boolean canCancelOrder(Order order) {

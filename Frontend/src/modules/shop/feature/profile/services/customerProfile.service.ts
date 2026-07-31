@@ -10,7 +10,43 @@ import type {
   ReviewResponse,
   ReviewableOrderItemResponse,
   UpdateCustomerProfileRequest,
+  UpdateReviewRequest,
 } from "../types/profile.type";
+
+const appendReviewFormData = (
+  formData: FormData,
+  data: CreateReviewRequest | UpdateReviewRequest
+) => {
+  formData.append("rating", String(data.rating));
+
+  if (data.comment) {
+    formData.append("comment", data.comment);
+  }
+
+  const files = data.mediaFiles || data.files || [];
+  files.forEach((file) => {
+    formData.append("mediaFiles", file);
+  });
+
+  if ("deletedMediaIds" in data && data.deletedMediaIds) {
+    data.deletedMediaIds.forEach((mediaId) => {
+      formData.append("deletedMediaIds", String(mediaId));
+    });
+  }
+};
+
+const buildCreateReviewFormData = (data: CreateReviewRequest) => {
+  const formData = new FormData();
+  formData.append("orderItemId", String(data.orderItemId));
+  appendReviewFormData(formData, data);
+  return formData;
+};
+
+const buildUpdateReviewFormData = (data: UpdateReviewRequest) => {
+  const formData = new FormData();
+  appendReviewFormData(formData, data);
+  return formData;
+};
 
 export const customerProfileService = {
   getProfile() {
@@ -128,7 +164,19 @@ export const customerProfileService = {
   },
 
   createReview(data: CreateReviewRequest | FormData) {
-    return api.post<ReviewResponse>("/customer/reviews", data);
+    const payload = data instanceof FormData
+      ? data
+      : buildCreateReviewFormData(data);
+
+    return api.post<ReviewResponse>("/customer/reviews", payload);
+  },
+
+  updateReview(reviewId: number, data: UpdateReviewRequest | FormData) {
+    const payload = data instanceof FormData
+      ? data
+      : buildUpdateReviewFormData(data);
+
+    return api.patch<ReviewResponse>(`/customer/reviews/${reviewId}`, payload);
   },
 
   getMyReviews() {
