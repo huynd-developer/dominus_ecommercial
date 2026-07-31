@@ -17,6 +17,12 @@ public record CustomerOrderResponse(
         BigDecimal discountAmount,
         BigDecimal finalAmount,
 
+        /** Phí vận chuyển của đơn hàng. */
+        BigDecimal shippingFee,
+
+        /** Phí vận chuyển được hoàn trong yêu cầu hoàn hàng, nếu có. */
+        BigDecimal returnShippingFee,
+
         String paymentMethod,
 
         Integer status,
@@ -28,6 +34,19 @@ public record CustomerOrderResponse(
 
         String cancelReason,
         LocalDateTime cancelledAt,
+
+        String deliveryCompletedByName,
+        String deliveryFailedReason,
+        String deliveryFailedDescription,
+        LocalDateTime deliveryFailedAt,
+        String deliveryFailedByName,
+
+        /**
+         * Ảnh minh chứng giao hàng.
+         * Giữ tên MediaUrls để không làm vỡ FE đang dùng field cũ.
+         */
+        List<String> deliverySuccessMediaUrls,
+        List<String> deliveryFailedMediaUrls,
 
         String returnReason,
         String returnDescription,
@@ -96,6 +115,8 @@ public record CustomerOrderResponse(
                 totalAmount,
                 discountAmount,
                 finalAmount,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
                 paymentMethod,
                 status,
                 statusText,
@@ -103,6 +124,13 @@ public record CustomerOrderResponse(
                 createdAt,
                 cancelReason,
                 cancelledAt,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 returnReason,
                 returnDescription,
                 returnRequestedAt,

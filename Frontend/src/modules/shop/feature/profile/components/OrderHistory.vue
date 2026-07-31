@@ -71,6 +71,14 @@
 
         <div
           class="tab-item"
+          :class="{ active: currentTab === 5 }"
+          @click="currentTab = 5"
+        >
+          Giao thất bại
+        </div>
+
+        <div
+          class="tab-item"
           :class="{ active: currentTab === 'RETURN' }"
           @click="currentTab = 'RETURN'"
         >
@@ -204,6 +212,87 @@
                       <div class="timeline-content">
                         <div class="t-title">{{ track.title }}</div>
                         <div class="t-desc">{{ track.desc }}</div>
+
+                        <div
+                          v-if="
+                            track.title === 'Đã giao' &&
+                            Number(order.status) === 3 &&
+                            getDeliverySuccessMedia(order).length > 0
+                          "
+                          class="tracking-delivery-media"
+                        >
+                          <div class="return-media-list">
+                            <button
+                              v-for="(media, mediaIndex) in getDeliverySuccessMedia(order)"
+                              :key="`delivery-success-${media.url}-${mediaIndex}`"
+                              type="button"
+                              class="return-media-button"
+                              @click.stop="openDeliverySuccessMediaPreview(order, mediaIndex)"
+                            >
+                              <img
+                                :src="media.url"
+                                class="return-media-thumb"
+                                alt="Minh chứng giao hàng thành công"
+                                @error="handleImageError"
+                              />
+
+                              <span class="return-media-overlay">
+                                <i class="bi bi-zoom-in"></i>
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div
+                          v-if="
+                            track.title === 'Giao hàng thất bại' &&
+                            Number(order.status) === 5 &&
+                            (
+                              order.deliveryFailedDescription ||
+                              getDeliveryFailedMedia(order).length > 0
+                            )
+                          "
+                          class="tracking-delivery-media is-failed"
+                        >
+                          <div
+                            v-if="order.deliveryFailedDescription"
+                            class="tracking-delivery-note"
+                          >
+                            <span>Mô tả:</span>
+                            <strong>{{ order.deliveryFailedDescription }}</strong>
+                          </div>
+
+                          <div
+                            v-if="getDeliveryFailedMedia(order).length > 0"
+                            class="tracking-delivery-proof"
+                          >
+                            <div class="tracking-delivery-media-label text-danger">
+                              <i class="bi bi-x-circle me-1"></i>
+                              Ảnh minh chứng giao thất bại:
+                            </div>
+
+                            <div class="return-media-list">
+                              <button
+                                v-for="(media, mediaIndex) in getDeliveryFailedMedia(order)"
+                                :key="`delivery-failed-${media.url}-${mediaIndex}`"
+                                type="button"
+                                class="return-media-button"
+                                @click.stop="openDeliveryFailedMediaPreview(order, mediaIndex)"
+                              >
+                                <img
+                                  :src="media.url"
+                                  class="return-media-thumb"
+                                  alt="Minh chứng giao hàng thất bại"
+                                  @error="handleImageError"
+                                />
+
+                                <span class="return-media-overlay">
+                                  <i class="bi bi-zoom-in"></i>
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -827,11 +916,9 @@
                       </strong>
                     </div>
 
-                    <div>
+                    <div v-if="getOrderShippingFee(order) > 0">
                       <span>Phí vận chuyển:</span>
-                      <strong>{{
-                        formatMoney((order as any).shippingFee || 30000)
-                      }}</strong>
+                      <strong>{{ formatMoney(getOrderShippingFee(order)) }}</strong>
                     </div>
 
                     <div>
@@ -1873,6 +1960,16 @@ const getTrackingHistory = (order: any) => {
       active: true,
       isCancel: true,
     });
+  if (order.status === 5)
+    history.push({
+      time: order.deliveryFailedAt
+        ? new Date(order.deliveryFailedAt)
+        : new Date(baseDate + 48 * 60 * 60 * 1000),
+      title: "Giao hàng thất bại",
+      desc: order.deliveryFailedReason || "Đơn hàng giao không thành công.",
+      active: true,
+      isCancel: true,
+    });
   return history.reverse();
 };
 
@@ -2680,7 +2777,7 @@ const getReturnRefundLabel = (order: any) => {
     case "CUSTOMER_CANCELLED":
       return "Số tiền yêu cầu hoàn";
     default:
-      return "Số tiền khách yêu cầu hoàn";
+      return "Tổng tiền hoàn";
   }
 };
 
@@ -2787,6 +2884,37 @@ const toPositiveNumberOrNull = (value: unknown) => {
   const numberValue = Number(value);
 
   return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null;
+};
+
+const getOrderShippingFee = (order: any) => {
+  return pickMoneyValue(
+    order?.shippingFee,
+    order?.shippingfee,
+    order?.shippingFeeAmount,
+    order?.shipFee,
+    order?.deliveryFee,
+    order?.shippingAmount
+  );
+};
+
+const getOrderReturnShippingFee = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  return pickMoneyValue(
+    order?.returnShippingFee,
+    order?.refundShippingFee,
+    order?.shippingFeeRefundAmount,
+    request?.returnShippingFee,
+    request?.refundShippingFee,
+    request?.shippingFeeRefundAmount
+  );
+};
+
+const getOrderReturnProductRefundAmount = (order: any) => {
+  const totalRefund = getOrderReturnRefundAmount(order);
+  const returnShippingFee = getOrderReturnShippingFee(order);
+
+  return Math.max(0, totalRefund - returnShippingFee);
 };
 
 const getOrderReturnRefundAmount = (order: any) => {
@@ -3281,6 +3409,22 @@ const REVIEW_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
   thumbTitle: "Chọn ảnh/video đánh giá",
 };
 
+const DELIVERY_SUCCESS_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
+  title: "Ảnh minh chứng giao hàng thành công",
+  counterLabel: "ảnh minh chứng giao hàng",
+  emptyText: "Không có ảnh minh chứng giao hàng thành công để hiển thị.",
+  imageAlt: "Ảnh minh chứng giao hàng thành công",
+  thumbTitle: "Chọn ảnh minh chứng giao hàng",
+};
+
+const DELIVERY_FAILED_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
+  title: "Ảnh minh chứng giao hàng thất bại",
+  counterLabel: "ảnh minh chứng giao thất bại",
+  emptyText: "Không có ảnh minh chứng giao hàng thất bại để hiển thị.",
+  imageAlt: "Ảnh minh chứng giao hàng thất bại",
+  thumbTitle: "Chọn ảnh minh chứng giao thất bại",
+};
+
 const buildReturnPreviewMainHtml = (
   media: ReturnMediaView,
   options: MediaPreviewOptions,
@@ -3427,6 +3571,51 @@ const openReturnMediaPreview = async (order: any, index: number) => {
     getOrderReturnMedia(order),
     index,
     RETURN_MEDIA_PREVIEW_OPTIONS,
+  );
+};
+
+const getDeliveryMedia = (rawMedia: any): ReturnMediaView[] => {
+  const mediaList = Array.isArray(rawMedia) ? rawMedia : rawMedia ? [rawMedia] : [];
+
+  return mediaList
+    .map((media: any) => {
+      const url = getReturnMediaUrl(media);
+      if (!url) return null;
+      return { url, isVideo: false };
+    })
+    .filter((media): media is ReturnMediaView => media !== null);
+};
+
+const getDeliverySuccessMedia = (order: any): ReturnMediaView[] => {
+  return getDeliveryMedia(
+    order?.deliverySuccessMediaUrls ??
+      order?.deliveryCompletedMediaUrls ??
+      order?.deliveryProofUrls ??
+      [],
+  );
+};
+
+const getDeliveryFailedMedia = (order: any): ReturnMediaView[] => {
+  return getDeliveryMedia(
+    order?.deliveryFailedMediaUrls ??
+      order?.deliveryFailedProofUrls ??
+      [],
+  );
+};
+
+const openDeliverySuccessMediaPreview = async (order: any, index: number) => {
+  await openMediaPreview(
+    getDeliverySuccessMedia(order),
+    index,
+    DELIVERY_SUCCESS_MEDIA_PREVIEW_OPTIONS,
+  );
+};
+
+const openDeliveryFailedMediaPreview = async (order: any, index: number) => {
+  await openMediaPreview(
+    getDeliveryFailedMedia(order),
+    index,
+    DELIVERY_FAILED_MEDIA_PREVIEW_OPTIONS,
   );
 };
 
@@ -3892,6 +4081,50 @@ const getItemImage = (item: any) => {
   max-width: 200px;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
+}
+
+.tracking-delivery-media {
+  margin-top: 10px;
+  margin-bottom: 0;
+  margin-left: 0;
+  padding-top: 10px;
+  border-top: 1px dashed #dbe3ef;
+}
+
+.tracking-delivery-media.is-failed {
+  color: #ef4444;
+}
+
+.tracking-delivery-media-label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.tracking-delivery-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.tracking-delivery-note strong {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.tracking-delivery-proof {
+  margin-top: 10px;
+}
+
+@media (max-width: 640px) {
+  .tracking-delivery-media {
+    margin-left: 0;
+  }
 }
 
 .empty-box {
@@ -4573,6 +4806,56 @@ const getItemImage = (item: any) => {
   background: rgba(255, 255, 255, 0.58);
   font-size: 12px;
   font-weight: 700;
+}
+
+.delivery-info-box {
+  background: #fffdf8;
+  border: 1px solid #f3e2bd;
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.delivery-info-title {
+  color: #111827;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.delivery-info-card {
+  background: #ffffff;
+  border: 1px solid #edf0f3;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.delivery-info-card + .delivery-info-card {
+  margin-top: 12px;
+}
+
+.delivery-info-card.is-failed {
+  border-color: #fecaca;
+}
+
+.delivery-info-head {
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+
+.delivery-info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.delivery-info-row span {
+  color: #64748b;
+}
+
+.delivery-info-row strong {
+  color: #111827;
+  text-align: right;
 }
 
 .return-media-section {

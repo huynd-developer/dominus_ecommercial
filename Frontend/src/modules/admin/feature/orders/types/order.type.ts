@@ -126,12 +126,31 @@ export interface AdminOrderResponse {
   discountAmount: number;
   finalAmount: number;
 
+  /** Phí vận chuyển của đơn hàng. */
+  shippingFee?: number | null;
+
+  /** Phí vận chuyển được tính vào tiền hoàn, nếu có. */
+  returnShippingFee?: number | null;
+
   paymentMethod: string;
   status: OrderStatus;
   statusText: string;
 
   createdAt?: string | null;
   completedAt?: string | null;
+
+  /** Người xác nhận giao hàng thành công trong hệ thống. */
+  deliveryCompletedByName?: string | null;
+
+  /** Thông tin giao hàng thất bại. */
+  deliveryFailedReason?: string | null;
+  deliveryFailedDescription?: string | null;
+  deliveryFailedAt?: string | null;
+  deliveryFailedByName?: string | null;
+
+  /** Ảnh minh chứng giao hàng. */
+  deliverySuccessMediaUrls?: string[] | null;
+  deliveryFailedMediaUrls?: string[] | null;
 
   /** Lý do hủy đơn. Có thể do khách chọn hoặc admin nhập/chọn khi hủy. */
   cancelReason?: string | null;
@@ -231,6 +250,21 @@ export interface UpdateOrderStatusResponse {
   status: number;
   loyaltyPointsApplied?: boolean;
   loyaltyPointsEarned?: number;
+}
+
+export interface AdminCancelOrderRequest {
+  reason: string;
+  description?: string | null;
+}
+
+export interface MarkDeliveryCompletedRequest {
+  files: File[];
+}
+
+export interface MarkDeliveryFailedRequest {
+  reason: string;
+  description?: string | null;
+  files?: File[];
 }
 
 export interface RejectReturnRequest {

@@ -10,6 +10,7 @@ import java.util.Arrays;
 import org.example.datn_sd69.entity.Brand;
 import org.example.datn_sd69.entity.Customer;
 import org.example.datn_sd69.entity.Order;
+import org.example.datn_sd69.entity.OrderDeliveryEvidence;
 import org.example.datn_sd69.entity.OrderItem;
 import org.example.datn_sd69.entity.Product;
 import org.example.datn_sd69.entity.ProductVariant;
@@ -22,6 +23,7 @@ import org.example.datn_sd69.modules.customerOrder.dto.CustomerOrderResponse;
 import org.example.datn_sd69.modules.customerOrder.dto.CustomerReturnItemResponse;
 import org.example.datn_sd69.modules.customerOrder.service.CustomerOrderService;
 import org.example.datn_sd69.repository.CustomerRepository;
+import org.example.datn_sd69.repository.OrderDeliveryEvidenceRepository;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
 import org.example.datn_sd69.repository.ProductVariantRepository;
@@ -74,6 +76,9 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
     private static final int MEDIA_TYPE_IMAGE = 1;
     private static final int MEDIA_TYPE_VIDEO = 2;
+
+    private static final int DELIVERY_EVIDENCE_TYPE_SUCCESS = 1;
+    private static final int DELIVERY_EVIDENCE_TYPE_FAILED = 2;
 
     private static final int MAX_RETURN_IMAGE_COUNT = 6;
     private static final int MAX_RETURN_VIDEO_COUNT = 1;
@@ -183,6 +188,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
     private final OrderRepository orderRepository;
+    private final OrderDeliveryEvidenceRepository orderDeliveryEvidenceRepository;
     private final OrderItemRepository orderItemRepository;
     private final ProductVariantRepository productVariantRepository;
     private final ReturnRequestRepository returnRequestRepository;
@@ -369,6 +375,15 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             returnRequestItem.setStatus(RETURN_ITEM_STATUS_PENDING);
             returnRequestItems.add(returnRequestItem);
         }
+
+        BigDecimal returnShippingFee = calculateReturnShippingFee(
+                order,
+                orderItems,
+                returnItemPayloads,
+                cleanReturnType,
+                cleanReason
+        );
+        totalRefundAmount = totalRefundAmount.add(returnShippingFee).setScale(2, RoundingMode.HALF_UP);
 
         BigDecimal orderFinalAmount = moneyOrZero(order.getFinalAmount());
         if (totalRefundAmount.compareTo(orderFinalAmount) > 0) {
@@ -563,9 +578,16 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 .map(this::mapToCustomerReturnItemResponse)
                 .toList();
 
+        BigDecimal returnShippingFee = returnRequest == null
+                ? BigDecimal.ZERO
+                : calculateReturnShippingFeeForExistingRequest(order, rawReturnItems, returnRequest);
+
         String returnProcessStatus = returnRequest == null
                 ? null
                 : resolveReturnProcessStatus(order, rawReturnItems);
+
+        List<String> deliverySuccessMediaUrls = getDeliveryEvidenceUrls(order, DELIVERY_EVIDENCE_TYPE_SUCCESS);
+        List<String> deliveryFailedMediaUrls = getDeliveryEvidenceUrls(order, DELIVERY_EVIDENCE_TYPE_FAILED);
 
         return new CustomerOrderResponse(
                 order.getId(),
@@ -576,6 +598,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 moneyOrZero(order.getTotalAmount()),
                 moneyOrZero(order.getDiscountAmount()),
                 moneyOrZero(order.getFinalAmount()),
+                getOrderShippingFee(order),
+                returnShippingFee,
                 order.getPaymentMethod(),
                 order.getStatus(),
                 getStatusText(order.getStatus()),
@@ -583,10 +607,17 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 order.getCreatedAt(),
                 order.getCancelReason(),
                 order.getCancelledAt(),
+                normalizeOptional(order.getDeliveryCompletedByName()),
+                normalizeOptional(order.getDeliveryFailedReason()),
+                normalizeOptional(order.getDeliveryFailedDescription()),
+                order.getDeliveryFailedAt(),
+                normalizeOptional(order.getDeliveryFailedByName()),
+                deliverySuccessMediaUrls,
+                deliveryFailedMediaUrls,
                 returnRequest != null ? returnRequest.getReason() : null,
                 returnRequest != null ? returnRequest.getDescription() : null,
                 returnRequest != null ? returnRequest.getCreatedAt() : null,
-                returnRequest != null ? moneyOrZero(returnRequest.getRefundAmount()) : null,
+                returnRequest != null ? resolveReturnRefundAmount(returnRequest, rawReturnItems, returnShippingFee) : null,
                 returnMediaUrls,
                 returnItems,
                 returnProcessStatus,
@@ -602,6 +633,19 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 null,
                 itemResponses
         );
+    }
+
+    private List<String> getDeliveryEvidenceUrls(Order order, Integer evidenceType) {
+        if (order == null || order.getId() == null) {
+            return List.of();
+        }
+
+        return orderDeliveryEvidenceRepository
+                .findByOrder_IdAndEvidenceTypeOrderByCreatedAtAsc(order.getId(), evidenceType)
+                .stream()
+                .map(OrderDeliveryEvidence::getImageUrl)
+                .filter(url -> url != null && !url.trim().isEmpty())
+                .toList();
     }
 
     private ReturnRequest findLatestReturnRequestForCustomerView(Order order) {
@@ -1171,6 +1215,189 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         } catch (Exception e) {
             throw badRequest("Danh sách sản phẩm cần hoàn không hợp lệ.");
         }
+    }
+
+    private BigDecimal getOrderShippingFee(Order order) {
+        if (order == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return moneyOrZero(order.getShippingFee()).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal calculateReturnShippingFee(
+            Order order,
+            List<OrderItem> orderItems,
+            List<ReturnItemPayload> returnItemPayloads,
+            Integer returnType,
+            String reason
+    ) {
+        if (!isFullOrderReturnPayloads(orderItems, returnItemPayloads)) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        if (!isShopFaultReturnReason(returnType, reason)) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return getOrderShippingFee(order);
+    }
+
+    private BigDecimal calculateReturnShippingFeeForExistingRequest(
+            Order order,
+            List<ReturnRequestItem> returnItems,
+            ReturnRequest returnRequest
+    ) {
+        if (returnRequest == null || returnItems == null || returnItems.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        List<OrderItem> orderItems = orderItemRepository.findByOrderId(order.getId());
+
+        if (!isFullOrderReturnRequestItems(orderItems, returnItems)) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        if (!isShopFaultReturnReason(returnRequest.getReturnType(), returnRequest.getReason())) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return getOrderShippingFee(order);
+    }
+
+    private BigDecimal resolveReturnRefundAmount(
+            ReturnRequest returnRequest,
+            List<ReturnRequestItem> returnItems,
+            BigDecimal returnShippingFee
+    ) {
+        if (returnRequest == null) {
+            return null;
+        }
+
+        BigDecimal storedRefundAmount = moneyOrZero(returnRequest.getRefundAmount())
+                .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal shippingFee = moneyOrZero(returnShippingFee)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        if (shippingFee.compareTo(BigDecimal.ZERO) <= 0) {
+            return storedRefundAmount;
+        }
+
+        BigDecimal itemRefundTotal = sumReturnItemRefundAmount(returnItems);
+        BigDecimal expectedTotalWithShipping = itemRefundTotal.add(shippingFee)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        if (storedRefundAmount.compareTo(expectedTotalWithShipping) >= 0) {
+            return storedRefundAmount;
+        }
+
+        if (storedRefundAmount.compareTo(itemRefundTotal) <= 0) {
+            return storedRefundAmount.add(shippingFee).setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return storedRefundAmount;
+    }
+
+    private BigDecimal sumReturnItemRefundAmount(List<ReturnRequestItem> returnItems) {
+        if (returnItems == null || returnItems.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return returnItems.stream()
+                .filter(item -> item != null)
+                .map(ReturnRequestItem::getRefundAmount)
+                .map(this::moneyOrZero)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private boolean isFullOrderReturnPayloads(
+            List<OrderItem> orderItems,
+            List<ReturnItemPayload> returnItemPayloads
+    ) {
+        if (orderItems == null || orderItems.isEmpty()
+                || returnItemPayloads == null || returnItemPayloads.isEmpty()) {
+            return false;
+        }
+
+        Map<Integer, Integer> returnQuantityByOrderItemId = new HashMap<>();
+        for (ReturnItemPayload payload : returnItemPayloads) {
+            if (payload != null && payload.orderItemId() != null) {
+                returnQuantityByOrderItemId.put(payload.orderItemId(), payload.quantity());
+            }
+        }
+
+        return isFullOrderReturnByQuantityMap(orderItems, returnQuantityByOrderItemId);
+    }
+
+    private boolean isFullOrderReturnByQuantityMap(
+            List<OrderItem> orderItems,
+            Map<Integer, Integer> returnQuantityByOrderItemId
+    ) {
+        if (orderItems == null || orderItems.isEmpty()
+                || returnQuantityByOrderItemId == null || returnQuantityByOrderItemId.isEmpty()) {
+            return false;
+        }
+
+        for (OrderItem item : orderItems) {
+            if (item == null || item.getId() == null) {
+                continue;
+            }
+
+            Integer orderedQuantity = item.getQuantity();
+            if (orderedQuantity == null || orderedQuantity <= 0) {
+                continue;
+            }
+
+            Integer returnQuantity = returnQuantityByOrderItemId.get(item.getId());
+            if (returnQuantity == null || !returnQuantity.equals(orderedQuantity)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private boolean isFullOrderReturnRequestItems(
+            List<OrderItem> orderItems,
+            List<ReturnRequestItem> returnItems
+    ) {
+        if (orderItems == null || orderItems.isEmpty()
+                || returnItems == null || returnItems.isEmpty()) {
+            return false;
+        }
+
+        Map<Integer, Integer> returnQuantityByOrderItemId = new HashMap<>();
+        for (ReturnRequestItem returnItem : returnItems) {
+            if (returnItem != null
+                    && returnItem.getOrderItem() != null
+                    && returnItem.getOrderItem().getId() != null) {
+                returnQuantityByOrderItemId.put(
+                        returnItem.getOrderItem().getId(),
+                        returnItem.getReturnQuantity()
+                );
+            }
+        }
+
+        return isFullOrderReturnByQuantityMap(orderItems, returnQuantityByOrderItemId);
+    }
+
+    private boolean isShopFaultReturnReason(Integer returnType, String reason) {
+        String cleanReason = normalizeOptionalCollapsed(reason);
+
+        if (cleanReason == null || cleanReason.isEmpty()) {
+            return false;
+        }
+
+        if (Integer.valueOf(RETURN_TYPE_RECEIVED_WITH_PROBLEM_VALUE).equals(returnType)) {
+            return RECEIVED_PROBLEM_REASONS.contains(cleanReason);
+        }
+
+        if (Integer.valueOf(RETURN_TYPE_NOT_RECEIVED_OR_MISSING_VALUE).equals(returnType)) {
+            return NOT_RECEIVED_OR_MISSING_REASONS.contains(cleanReason);
+        }
+
+        return false;
     }
 
     private BigDecimal calculateItemRefundAmount(

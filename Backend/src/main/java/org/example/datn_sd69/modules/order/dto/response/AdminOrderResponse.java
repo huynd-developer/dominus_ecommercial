@@ -38,6 +38,10 @@ public class AdminOrderResponse {
 
     private BigDecimal finalAmount;
 
+    private BigDecimal shippingFee;
+
+    private BigDecimal returnShippingFee;
+
     private String paymentMethod;
 
     /**
@@ -57,6 +61,24 @@ public class AdminOrderResponse {
     private LocalDateTime createdAt;
 
     private LocalDateTime completedAt;
+
+    private String deliveryCompletedByName;
+
+    private String deliveryFailedReason;
+
+    private String deliveryFailedDescription;
+
+    private LocalDateTime deliveryFailedAt;
+
+    private String deliveryFailedByName;
+
+    /**
+     * Ảnh minh chứng giao hàng.
+     * Giữ tên MediaUrls để không làm vỡ FE đang dùng field cũ.
+     */
+    private List<String> deliverySuccessMediaUrls = new ArrayList<>();
+
+    private List<String> deliveryFailedMediaUrls = new ArrayList<>();
 
     /**
      * Lý do hủy đơn. Có thể do khách chọn hoặc admin nhập/chọn khi hủy.
