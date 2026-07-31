@@ -189,13 +189,19 @@ export interface CreateReviewRequest {
 }
 
 export interface UpdateReviewRequest {
+  /** reviewId optional vì service đã nhận reviewId ở tham số riêng. */
+  reviewId?: number;
   rating: number;
   comment?: string | null;
   mediaFiles?: File[];
   files?: File[];
+  deletedMediaIds?: number[];
 }
 
 export interface ReviewMediaResponse {
+  mediaId?: number | null;
+  id?: number | null;
+  reviewMediaId?: number | null;
   url?: string | null;
   mediaUrl?: string | null;
   mediaType?: string | null;
@@ -242,6 +248,7 @@ export interface ReviewResponse {
 
   mediaUrls?: string[] | null;
   mediaFiles?: Array<string | ReviewMediaResponse> | null;
+  reviewMedias?: Array<string | ReviewMediaResponse> | null;
   reviewMediaUrls?: string[] | null;
   reviewMediaFiles?: Array<string | ReviewMediaResponse> | null;
   images?: Array<string | ReviewMediaResponse> | null;

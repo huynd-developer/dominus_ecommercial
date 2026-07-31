@@ -15,7 +15,8 @@ public interface CustomerReviewService {
             Integer reviewId,
             Integer rating,
             String comment,
-            List<MultipartFile> mediaFiles
+            List<MultipartFile> mediaFiles,
+            List<Integer> deletedMediaIds
     );
 
     List<ReviewResponse> getMyReviews();

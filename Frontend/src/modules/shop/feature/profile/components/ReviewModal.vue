@@ -91,6 +91,16 @@
                     ></video>
 
                     <span class="existing-media-badge">Hiện tại</span>
+
+                    <button
+                      v-if="media.mediaId"
+                      type="button"
+                      class="btn-remove-media existing-media-remove"
+                      title="Xóa ảnh/video này khỏi đánh giá"
+                      @click.stop="markExistingMediaForDelete(media)"
+                    >
+                      <i class="bi bi-x"></i>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -122,7 +132,9 @@
                 </div>
               </div>
               <div class="small text-muted mt-2">Tối đa 5 file mới. Giới hạn dung lượng: 5MB/file.</div>
-              <div v-if="isEditMode" class="small text-muted mt-1">Ảnh/video cũ được giữ nguyên, ảnh/video mới sẽ được thêm vào đánh giá hiện tại.</div>
+              <div v-if="isEditMode" class="small text-muted mt-1">
+                Ảnh/video cũ được giữ nguyên nếu không bấm X. Ảnh/video mới sẽ được thêm vào đánh giá hiện tại.
+              </div>
             </div>
           </div>
 
@@ -171,8 +183,10 @@ const comment = ref('');
 const selectedFiles = ref<File[]>([]);
 const previewUrls = ref<{ type: string; url: string }[]>([]);
 const fileInput = ref<HTMLInputElement | null>(null);
+const deletedMediaIds = ref<number[]>([]);
 
 type ReviewMediaPreview = {
+  mediaId: number | null;
   url: string;
   isVideo: boolean;
 };
@@ -227,6 +241,23 @@ const getMediaUrl = (media: any) => {
       media?.ImageUrl ??
       ''
   );
+};
+
+const getMediaId = (media: any) => {
+  if (typeof media === 'string') {
+    return null;
+  }
+
+  const rawId =
+    media?.mediaId ??
+    media?.id ??
+    media?.reviewMediaId ??
+    media?.reviewMediaFileId ??
+    null;
+
+  const mediaId = Number(rawId);
+
+  return Number.isFinite(mediaId) && mediaId > 0 ? mediaId : null;
 };
 
 const isVideoMedia = (media: any, url: string) => {
@@ -285,14 +316,20 @@ const existingReviewMedia = computed<ReviewMediaPreview[]>(() => {
   return getExistingReviewRawMedia(props.existingReview)
     .map((media: any) => {
       const url = getMediaUrl(media);
+      const mediaId = getMediaId(media);
 
       if (!url || usedUrls.has(url)) {
+        return null;
+      }
+
+      if (mediaId && deletedMediaIds.value.includes(mediaId)) {
         return null;
       }
 
       usedUrls.add(url);
 
       return {
+        mediaId,
         url,
         isVideo: isVideoMedia(media, url),
       };
@@ -302,6 +339,7 @@ const existingReviewMedia = computed<ReviewMediaPreview[]>(() => {
 
 const resetSelectedMedia = () => {
   selectedFiles.value = [];
+  deletedMediaIds.value = [];
   previewUrls.value.forEach((preview) => URL.revokeObjectURL(preview.url));
   previewUrls.value = [];
 };
@@ -435,6 +473,16 @@ const handleFileSelect = (event: Event) => {
   input.value = '';
 };
 
+const markExistingMediaForDelete = (media: ReviewMediaPreview) => {
+  if (!media.mediaId) {
+    return;
+  }
+
+  if (!deletedMediaIds.value.includes(media.mediaId)) {
+    deletedMediaIds.value.push(media.mediaId);
+  }
+};
+
 const removeMedia = (index: number) => {
   if (previewUrls.value[index]) {
     URL.revokeObjectURL(previewUrls.value[index].url);
@@ -465,7 +513,8 @@ const handleSubmit = async () => {
   emit('submit', {
     rating: rating.value,
     comment: comment.value,
-    files: selectedFiles.value
+    files: selectedFiles.value,
+    deletedMediaIds: [...deletedMediaIds.value]
   });
 };
 </script>
@@ -599,6 +648,11 @@ const handleSubmit = async () => {
   padding: 1px 6px;
   font-size: 10px;
   line-height: 16px;
+}
+
+.existing-media-remove {
+  top: -6px;
+  right: -6px;
 }
 
 .media-preview-list {

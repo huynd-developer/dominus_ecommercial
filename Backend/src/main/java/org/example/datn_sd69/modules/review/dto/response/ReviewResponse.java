@@ -25,6 +25,20 @@ public record ReviewResponse(
         LocalDateTime rejectedAt,
         String rejectedReason,
 
-        List<String> mediaUrls
+        /*
+         * Giữ lại mediaUrls để không phá FE cũ đang đọc list URL.
+         */
+        List<String> mediaUrls,
+
+        /*
+         * mediaFiles có mediaId để FE có thể đánh dấu xóa ảnh/video cũ khi sửa đánh giá.
+         */
+        List<ReviewMediaResponse> mediaFiles,
+
+        LocalDateTime editedAt,
+        Integer editCount,
+        Boolean canEdit,
+        LocalDateTime editDeadline,
+        String editMessage
 ) {
 }

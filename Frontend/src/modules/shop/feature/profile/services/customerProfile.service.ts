@@ -27,6 +27,12 @@ const appendReviewFormData = (
   files.forEach((file) => {
     formData.append("mediaFiles", file);
   });
+
+  if ("deletedMediaIds" in data && data.deletedMediaIds) {
+    data.deletedMediaIds.forEach((mediaId) => {
+      formData.append("deletedMediaIds", String(mediaId));
+    });
+  }
 };
 
 const buildCreateReviewFormData = (data: CreateReviewRequest) => {
@@ -158,13 +164,17 @@ export const customerProfileService = {
   },
 
   createReview(data: CreateReviewRequest | FormData) {
-    const payload = data instanceof FormData ? data : buildCreateReviewFormData(data);
+    const payload = data instanceof FormData
+      ? data
+      : buildCreateReviewFormData(data);
 
     return api.post<ReviewResponse>("/customer/reviews", payload);
   },
 
   updateReview(reviewId: number, data: UpdateReviewRequest | FormData) {
-    const payload = data instanceof FormData ? data : buildUpdateReviewFormData(data);
+    const payload = data instanceof FormData
+      ? data
+      : buildUpdateReviewFormData(data);
 
     return api.patch<ReviewResponse>(`/customer/reviews/${reviewId}`, payload);
   },

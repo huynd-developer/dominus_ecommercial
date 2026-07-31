@@ -41,10 +41,17 @@ public class CustomerReviewController {
             @RequestParam @Min(value = 1, message = "Số sao đánh giá phải từ 1 đến 5")
             @Max(value = 5, message = "Số sao đánh giá phải từ 1 đến 5") Integer rating,
             @RequestParam(required = false) String comment,
-            @RequestParam(name = "mediaFiles", required = false) List<MultipartFile> mediaFiles
+            @RequestParam(name = "mediaFiles", required = false) List<MultipartFile> mediaFiles,
+            @RequestParam(name = "deletedMediaIds", required = false) List<Integer> deletedMediaIds
     ) {
         return ResponseEntity.ok(
-                customerReviewService.updateReview(reviewId, rating, comment, mediaFiles)
+                customerReviewService.updateReview(
+                        reviewId,
+                        rating,
+                        comment,
+                        mediaFiles,
+                        deletedMediaIds
+                )
         );
     }
 

@@ -1,5 +1,6 @@
 package org.example.datn_sd69.modules.review.service.impl;
 
+import jakarta.persistence.EntityManager;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +13,7 @@ import org.example.datn_sd69.entity.Review;
 import org.example.datn_sd69.entity.ReviewMedia;
 import org.example.datn_sd69.entity.User;
 import org.example.datn_sd69.modules.review.dto.request.CreateReviewRequest;
+import org.example.datn_sd69.modules.review.dto.response.ReviewMediaResponse;
 import org.example.datn_sd69.modules.review.dto.response.ReviewResponse;
 import org.example.datn_sd69.modules.review.dto.response.ReviewableOrderItemResponse;
 import org.example.datn_sd69.modules.review.service.CustomerReviewService;
@@ -29,9 +31,12 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -53,6 +58,7 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
     private final Cloudinary cloudinary;
+    private final EntityManager entityManager;
 
     @Override
     @Transactional
@@ -128,7 +134,8 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
             Integer reviewId,
             Integer rating,
             String comment,
-            List<MultipartFile> mediaFiles
+            List<MultipartFile> mediaFiles,
+            List<Integer> deletedMediaIds
     ) {
         User currentUser = getCurrentUser();
 
@@ -155,12 +162,16 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
             );
         }
 
-        validateReviewEditDeadline(review, LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+
+        validateReviewEditDeadline(review, now);
         validateReviewEditCount(review);
 
         List<MultipartFile> validMediaFiles = getValidMediaFiles(mediaFiles);
         boolean hasNewMedia = !validMediaFiles.isEmpty();
-        LocalDateTime now = LocalDateTime.now();
+
+        List<Integer> cleanDeletedMediaIds = normalizeDeletedMediaIds(deletedMediaIds);
+        boolean hasDeletedMedia = deleteReviewMediaFiles(review, cleanDeletedMediaIds) > 0;
 
         review.setRating(rating);
         review.setComment(normalizeComment(comment));
@@ -169,16 +180,28 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
 
         if (hasNewMedia) {
             uploadReviewMediaFiles(review, validMediaFiles);
-            review.setApprovalStatus(REVIEW_APPROVAL_PENDING);
-            review.setApprovedAt(null);
-            review.setRejectedAt(null);
-            review.setRejectedReason(null);
-        } else if ((review.getReviewMedias() == null || review.getReviewMedias().isEmpty())
-                && !Objects.equals(review.getApprovalStatus(), REVIEW_APPROVAL_HIDDEN)) {
-            review.setApprovalStatus(REVIEW_APPROVAL_APPROVED);
-            review.setApprovedAt(now);
-            review.setRejectedAt(null);
-            review.setRejectedReason(null);
+        }
+
+        boolean hasAnyMediaAfterUpdate = review.getReviewMedias() != null
+                && !review.getReviewMedias().isEmpty();
+
+        /*
+         * Sau khi khách sửa đánh giá:
+         * - Còn ảnh/video => đưa về chờ duyệt lại.
+         * - Không còn ảnh/video => tự duyệt, trừ review đang bị admin ẩn.
+         */
+        if (!Objects.equals(review.getApprovalStatus(), REVIEW_APPROVAL_HIDDEN)) {
+            if (hasAnyMediaAfterUpdate) {
+                review.setApprovalStatus(REVIEW_APPROVAL_PENDING);
+                review.setApprovedAt(null);
+                review.setRejectedAt(null);
+                review.setRejectedReason(null);
+            } else {
+                review.setApprovalStatus(REVIEW_APPROVAL_APPROVED);
+                review.setApprovedAt(now);
+                review.setRejectedAt(null);
+                review.setRejectedReason(null);
+            }
         }
 
         Review savedReview = reviewRepository.save(review);
@@ -323,6 +346,64 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
         }
     }
 
+    private List<Integer> normalizeDeletedMediaIds(List<Integer> deletedMediaIds) {
+        if (deletedMediaIds == null || deletedMediaIds.isEmpty()) {
+            return List.of();
+        }
+
+        return deletedMediaIds.stream()
+                .filter(Objects::nonNull)
+                .filter(mediaId -> mediaId > 0)
+                .distinct()
+                .toList();
+    }
+
+    private int deleteReviewMediaFiles(Review review, List<Integer> deletedMediaIds) {
+        if (review == null || deletedMediaIds == null || deletedMediaIds.isEmpty()) {
+            return 0;
+        }
+
+        if (review.getReviewMedias() == null || review.getReviewMedias().isEmpty()) {
+            throw badRequest("Ảnh/video cần xóa không tồn tại trong đánh giá này");
+        }
+
+        Set<Integer> requestedIds = new HashSet<>(deletedMediaIds);
+        Set<Integer> existingIds = new HashSet<>();
+
+        for (ReviewMedia media : review.getReviewMedias()) {
+            if (media != null && media.getId() != null) {
+                existingIds.add(media.getId());
+            }
+        }
+
+        if (!existingIds.containsAll(requestedIds)) {
+            throw badRequest("Ảnh/video cần xóa không thuộc đánh giá này");
+        }
+
+        int deletedCount = 0;
+        Iterator<ReviewMedia> iterator = review.getReviewMedias().iterator();
+
+        while (iterator.hasNext()) {
+            ReviewMedia media = iterator.next();
+
+            if (media == null || media.getId() == null || !requestedIds.contains(media.getId())) {
+                continue;
+            }
+
+            iterator.remove();
+            media.setReview(null);
+
+            ReviewMedia managedMedia = entityManager.contains(media)
+                    ? media
+                    : entityManager.merge(media);
+
+            entityManager.remove(managedMedia);
+            deletedCount++;
+        }
+
+        return deletedCount;
+    }
+
     private String resolveMediaType(MultipartFile file) {
         String contentType = file == null ? null : file.getContentType();
 
@@ -341,12 +422,33 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
         Brand brand = product != null ? product.getBrand() : null;
 
         List<String> mediaUrls = new ArrayList<>();
+        List<ReviewMediaResponse> mediaFiles = new ArrayList<>();
+
         if (review.getReviewMedias() != null && !review.getReviewMedias().isEmpty()) {
             mediaUrls = review.getReviewMedias().stream()
                     .map(ReviewMedia::getMediaUrl)
                     .filter(Objects::nonNull)
                     .toList();
+
+            mediaFiles = review.getReviewMedias().stream()
+                    .filter(Objects::nonNull)
+                    .filter(media -> media.getMediaUrl() != null && !media.getMediaUrl().trim().isEmpty())
+                    .map(media -> new ReviewMediaResponse(
+                            media.getId(),
+                            media.getMediaUrl(),
+                            media.getMediaUrl(),
+                            media.getMediaType(),
+                            isVideoReviewMedia(media)
+                    ))
+                    .toList();
         }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime editDeadline = review.getCreatedAt() == null
+                ? null
+                : review.getCreatedAt().plusDays(REVIEW_EDIT_DEADLINE_DAYS);
+        boolean canEdit = canEditReview(review, now);
+        String editMessage = getReviewEditMessage(review, now);
 
         return new ReviewResponse(
                 review.getId(),
@@ -368,7 +470,13 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
                 review.getApprovedAt(),
                 review.getRejectedAt(),
                 review.getRejectedReason(),
-                mediaUrls
+                mediaUrls,
+                mediaFiles,
+                review.getEditedAt(),
+                review.getEditCount() == null ? 0 : review.getEditCount(),
+                canEdit,
+                editDeadline,
+                editMessage
         );
     }
 
@@ -503,6 +611,71 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
          * Dữ liệu mới vẫn phải set CompletedAt khi đơn chuyển sang Hoàn thành.
          */
         return order.getCreatedAt();
+    }
+
+    private boolean isVideoReviewMedia(ReviewMedia media) {
+        if (media == null) {
+            return false;
+        }
+
+        String mediaType = media.getMediaType() == null
+                ? ""
+                : media.getMediaType().trim().toLowerCase();
+
+        if (mediaType.contains("video")) {
+            return true;
+        }
+
+        String mediaUrl = media.getMediaUrl() == null
+                ? ""
+                : media.getMediaUrl().trim().toLowerCase();
+
+        return mediaUrl.matches(".*\\.(mp4|webm|ogg|mov|m4v)(\\?.*)?$")
+                || mediaUrl.contains("/video/upload/");
+    }
+
+    private boolean canEditReview(Review review, LocalDateTime now) {
+        if (review == null || Boolean.TRUE.equals(review.getIsDeleted())) {
+            return false;
+        }
+
+        Integer editCount = review.getEditCount() == null ? 0 : review.getEditCount();
+
+        if (editCount >= MAX_REVIEW_EDIT_COUNT) {
+            return false;
+        }
+
+        LocalDateTime createdAt = review.getCreatedAt();
+
+        if (createdAt == null) {
+            return false;
+        }
+
+        return !now.isAfter(createdAt.plusDays(REVIEW_EDIT_DEADLINE_DAYS));
+    }
+
+    private String getReviewEditMessage(Review review, LocalDateTime now) {
+        if (review == null || Boolean.TRUE.equals(review.getIsDeleted())) {
+            return "Đánh giá này không còn được chỉnh sửa";
+        }
+
+        Integer editCount = review.getEditCount() == null ? 0 : review.getEditCount();
+
+        if (editCount >= MAX_REVIEW_EDIT_COUNT) {
+            return "Đã sử dụng quyền sửa đánh giá";
+        }
+
+        LocalDateTime createdAt = review.getCreatedAt();
+
+        if (createdAt == null) {
+            return "Không xác định được hạn sửa đánh giá";
+        }
+
+        if (now.isAfter(createdAt.plusDays(REVIEW_EDIT_DEADLINE_DAYS))) {
+            return "Đã quá hạn 30 ngày chỉnh sửa đánh giá";
+        }
+
+        return "Có thể chỉnh sửa đánh giá";
     }
 
     private User getCurrentUser() {

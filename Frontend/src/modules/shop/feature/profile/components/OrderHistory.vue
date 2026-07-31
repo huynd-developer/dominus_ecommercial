@@ -1303,6 +1303,7 @@ const submitReview = async (payload: {
   rating: number;
   comment: string | null;
   files: File[];
+  deletedMediaIds?: number[];
 }) => {
   if (!selectedReviewItem.value) {
     return;
@@ -1331,6 +1332,12 @@ const submitReview = async (payload: {
     if (payload.files && payload.files.length > 0) {
       payload.files.forEach((file) => {
         formData.append("mediaFiles", file);
+      });
+    }
+
+    if (isEditMode && payload.deletedMediaIds && payload.deletedMediaIds.length > 0) {
+      payload.deletedMediaIds.forEach((mediaId) => {
+        formData.append("deletedMediaIds", String(mediaId));
       });
     }
 
