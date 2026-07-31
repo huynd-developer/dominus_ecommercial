@@ -24,17 +24,10 @@
         <div class="item-info">
           <div class="name-row">
             <h4 class="item-name">{{ item.productName || "Sản phẩm" }}</h4>
-            <div class="badge-row">
-              <span v-if="item.hasPromotion" class="flash-sale-badge">
-                Flash Sale -{{ formatDiscount(item.discountPercent) }}%
-              </span>
-            </div>
+            <!-- ĐÃ ẨN TAG FLASH SALE THEO YÊU CẦU -->
           </div>
 
-          <div v-if="item.hasPromotion && item.promotionName" class="promotion-name">
-            {{ item.promotionName }}
-            <span v-if="item.promotionEndDate">· Kết thúc: {{ formatDateTime(item.promotionEndDate) }}</span>
-          </div>
+          <!-- ĐÃ ẨN TAG TÊN CHƯƠNG TRÌNH TRI ÂN THEO YÊU CẦU -->
 
           <div class="variant-grid">
             <template v-if="getVariantsList(item).length > 0">
@@ -44,7 +37,6 @@
                 @change="(e) => $emit('update-variant', item, Number((e.target as HTMLSelectElement).value))"
                 :disabled="isUpdating"
               >
-                <!-- ĐÃ SỬA LẠI CHỖ HIỂN THỊ TEXT BÊN TRONG -->
                 <option
                   v-for="v in getVariantsList(item)"
                   :key="v.id || v.productVariantId || v.variantId"
@@ -84,13 +76,14 @@
         </div>
 
         <div class="item-action">
+          <!-- ĐÃ SỬA LẠI KHỐI GIÁ: ẨN GIÁ GỐC, GOM % XUỐNG CÙNG DÒNG -->
           <template v-if="item.hasPromotion">
-            <span class="unit-price old-unit-price">Giá gốc: {{ formatCurrency(item.originalPrice) }}</span>
-            <span class="unit-price sale-unit-price">Giá sale: {{ formatCurrency(item.price) }}</span>
+            <span class="unit-price text-muted">Giá sale: {{ formatCurrency(item.price) }}</span>
             <div class="promotion-price-box">
-              <span class="old-price">{{ formatCurrency(getOriginalLineTotal(item)) }}</span>
-              <span class="discount-badge">-{{ formatDiscount(item.discountPercent) }}%</span>
               <span class="price">{{ formatCurrency(getLineTotal(item)) }}</span>
+              <span class="discount-badge-new" v-if="(item.discountPercent || 0) > 0">
+                -{{ formatDiscount(item.discountPercent || 0) }}%
+              </span>
             </div>
           </template>
           <template v-else>
@@ -177,15 +170,8 @@ const changeQuantity = (item: CartItem, delta: number) => {
 
 const getVariantId = (item: CartItem) => Number(item?.productVariantId || item?.variantId || item?.id || 0);
 
-// ==========================================
-// T FIX LẠI HÀM LẤY DANH SÁCH BIẾN THỂ
-// Tìm mọi nơi, mọi tên biến mà Spring Boot có thể nhả ra
-// ==========================================
-// ==========================================
-// T FIX LẠI HÀM LẤY DANH SÁCH BIẾN THỂ (FIX LỖI TYPESCRIPT)
-// ==========================================
 const getVariantsList = (item: CartItem) => {
-  const i = item as any; // Ép kiểu về any để tránh lỗi TS
+  const i = item as any;
   const possibleProducts = [
     i?.product, i?.Product,
     i?.productVariant?.product, i?.ProductVariant?.Product,
@@ -311,17 +297,10 @@ const isItemAvailable = (item: CartItem) => {
   return true;
 };
 
-// ==========================================
-// FIX HIỂN THỊ CHỮ TRONG DROPDOWN
-// ==========================================
 const formatVariantLabel = (v: any) => {
   if (!v) return "";
-  
-  // Rà quét mọi cách đặt tên biến của Backend
   let cap = v.capacityName || v.capacity?.name || v.capacity?.value || v.capacity || v.volume || "";
   let bot = v.bottleTypeName || v.bottleType?.name || v.bottleType?.value || v.bottleType || "";
-
-  // Xóa chữ 'ml' nếu Backend lỡ gửi kèm để tránh hiển thị '50mlml'
   cap = String(cap).replace(/ml/i, '').trim();
 
   let label = "";
@@ -333,7 +312,6 @@ const formatVariantLabel = (v: any) => {
 };
 
 const getLineTotal = (item: CartItem) => Number(item?.price || 0) * Number(item?.quantity || 0);
-const getOriginalLineTotal = (item: CartItem) => Number(item?.originalPrice || item?.price || 0) * Number(item?.quantity || 0);
 const formatCurrency = (val?: number | null) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(val || 0));
 const formatDiscount = (value?: number | null) => {
   const num = Number(value || 0);
@@ -359,9 +337,6 @@ const formatDiscount = (value?: number | null) => {
 .item-info { flex: 1; display: flex; flex-direction: column; gap: 8px; }
 .name-row { display: flex; flex-direction: column; gap: 6px; }
 .item-name { font-size: 19px; font-weight: 700; margin: 0; color: #0a142f; line-height: 1.35; }
-.badge-row { display: flex; flex-wrap: wrap; gap: 6px; }
-.flash-sale-badge { width: fit-content; background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800; }
-.promotion-name { width: fit-content; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 700; }
 .variant-grid { display: flex; flex-wrap: wrap; gap: 8px; }
 .item-variant { font-size: 15px; color: #718096; margin: 0; }
 .item-variant strong { color: #b78d52; font-weight: 700; font-size: 15px; background: rgba(183, 141, 82, 0.1); padding: 4px 10px; border-radius: 6px; }
@@ -406,13 +381,13 @@ const formatDiscount = (value?: number | null) => {
 .qty-wrapper input { width: 55px; text-align: center; border: none; font-size: 16px; font-weight: 600; outline: none; border-left: 1px solid #cbd5e0; border-right: 1px solid #cbd5e0; color: #0a142f; }
 .item-action { text-align: right; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 10px; min-height: 130px; }
 .unit-price { color: #64748b; font-size: 13px; white-space: nowrap; }
-.old-unit-price { text-decoration: line-through; color: #94a3b8; }
-.sale-unit-price { color: #dc2626; font-weight: 800; }
-.promotion-price-box { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-.old-price { color: #94a3b8; font-size: 14px; text-decoration: line-through; white-space: nowrap; }
-.discount-badge { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 800; }
-.price { font-weight: 800; font-size: 22px; color: #e53e3e; white-space: nowrap; }
-.btn-delete { background: #fff5f5; border: 1px solid #fed7d7; cursor: pointer; color: #e53e3e; display: flex; padding: 12px; border-radius: 8px; transition: 0.2s; }
+
+/* CSS MỚI CHO HIỂN THỊ GIÁ NGANG HÀNG NHAU */
+.promotion-price-box { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.discount-badge-new { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 800; }
+.price { font-weight: 800; font-size: 20px; color: #e53e3e; white-space: nowrap; margin-bottom: 0; }
+
+.btn-delete { background: #fff5f5; border: 1px solid #fed7d7; cursor: pointer; color: #e53e3e; display: flex; padding: 12px; border-radius: 8px; transition: 0.2s; margin-top: 8px; }
 .btn-delete svg { width: 22px; height: 22px; }
 .btn-delete:hover { background: #e53e3e; color: white; border-color: #e53e3e; box-shadow: 0 4px 10px rgba(229, 62, 62, 0.2); }
 

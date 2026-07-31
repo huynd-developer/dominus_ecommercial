@@ -35,4 +35,6 @@ public class FlashSaleProductResponse {
     private BigDecimal salePrice;
 
     private Integer stockQuantity;
+
+    private String imageUrl;
 }

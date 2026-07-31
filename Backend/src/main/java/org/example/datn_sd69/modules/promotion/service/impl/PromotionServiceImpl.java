@@ -12,6 +12,7 @@ import org.example.datn_sd69.modules.promotion.dto.response.PromotionProductVari
 import org.example.datn_sd69.modules.promotion.dto.response.PromotionResponse;
 import org.example.datn_sd69.modules.promotion.dto.response.PromotionVariantResponse;
 import org.example.datn_sd69.modules.promotion.service.PromotionService;
+import org.example.datn_sd69.repository.ProductImageRepository;
 import org.example.datn_sd69.repository.ProductVariantRepository;
 import org.example.datn_sd69.repository.PromotionRepository;
 import org.example.datn_sd69.repository.PromotionVariantRepository;
@@ -42,6 +43,7 @@ public class PromotionServiceImpl implements PromotionService {
     private final PromotionRepository promotionRepository;
     private final PromotionVariantRepository promotionVariantRepository;
     private final ProductVariantRepository productVariantRepository;
+    private final ProductImageRepository productImageRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -495,6 +497,23 @@ public class PromotionServiceImpl implements PromotionService {
         BigDecimal originalPrice = variant.getPrice();
         BigDecimal salePrice = calculateSalePrice(originalPrice, promotionVariant.getDiscountPercent());
 
+        // LẤY ẢNH CHÍNH CỦA SẢN PHẨM
+        String imageUrl = null;
+        if (variant.getProduct() != null && variant.getProduct().getId() != null) {
+            // Hoặc nếu m có repository image, có thể query ảnh chính.
+            // Cách an toàn nhất là lấy từ danh sách ảnh của sản phẩm thông qua productRepository hoặc productImageRepository:
+            imageUrl = productImageRepository.findByProduct_Id(variant.getProduct().getId())
+                    .stream()
+                    .filter(img -> Boolean.TRUE.equals(img.getIsPrimary()))
+                    .map(img -> img.getImageUrl())
+                    .findFirst()
+                    .orElseGet(() -> {
+                        // Nếu không có ảnh chính thì lấy tạm ảnh đầu tiên
+                        var imgs = productImageRepository.findByProduct_Id(variant.getProduct().getId());
+                        return imgs.isEmpty() ? null : imgs.get(0).getImageUrl();
+                    });
+        }
+
         return FlashSaleProductResponse.builder()
                 .promotionId(promotionVariant.getPromotion().getId())
                 .promotionName(promotionVariant.getPromotion().getName())
@@ -509,6 +528,7 @@ public class PromotionServiceImpl implements PromotionService {
                 .discountPercent(promotionVariant.getDiscountPercent())
                 .salePrice(salePrice)
                 .stockQuantity(variant.getStockQuantity())
+                .imageUrl(imageUrl) // <-- GÁN ẢNH VÀO ĐÂY LÀ XONG
                 .build();
     }
 

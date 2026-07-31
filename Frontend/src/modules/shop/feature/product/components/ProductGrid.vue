@@ -742,7 +742,7 @@ watch(
 
 .product-card.luxury-card {
   background: #fff;
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -750,6 +750,7 @@ watch(
   flex-direction: column;
   position: relative;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  border: 1px solid #eaeaea;
 }
 
 .product-card.luxury-card:hover {
@@ -757,21 +758,24 @@ watch(
   transform: translateY(-4px);
 }
 
+/* ĐÃ SỬA: Đồng bộ bo góc, khung vuông đầy đặn và object-fit cover giống trang chi tiết */
 .card-img-wrapper {
   position: relative;
   background: #f8f9fa;
-  padding: 40px 20px;
-  height: 280px;
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .card-img-wrapper img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  mix-blend-mode: multiply;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   transition: 0.4s ease;
 }
 
@@ -795,6 +799,7 @@ watch(
   color: #a0aec0;
   transition: 0.2s;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  z-index: 2;
 }
 
 .btn-heart-small:hover:not(:disabled) {
@@ -828,6 +833,7 @@ watch(
   font-weight: bold;
   padding: 4px 8px;
   border-radius: 4px;
+  z-index: 2;
 }
 
 .card-info {
