@@ -109,4 +109,48 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
             "bottleType"
     })
     Optional<ProductVariant> findBySkuIgnoreCaseAndIsDeletedFalse(String sku);
+
+    // ================= POS =================
+
+    /**
+     * Danh sách biến thể hiển thị tại POS.
+     *
+     * Lý do phải lọc cả Product cha:
+     * - Khi xóa mềm Product, ProductVariant có thể vẫn còn IsDeleted = false.
+     * - Nếu POS chỉ lọc ProductVariant.IsDeleted thì sản phẩm cha đã xóa vẫn bị lọt ra quầy.
+     */
+    @EntityGraph(attributePaths = {
+            "product",
+            "product.brand",
+            "capacity",
+            "bottleType"
+    })
+    @Query("""
+        SELECT v
+        FROM ProductVariant v
+        JOIN v.product p
+        WHERE COALESCE(v.isDeleted, false) = false
+          AND COALESCE(p.isDeleted, false) = false
+        ORDER BY p.name ASC, v.sku ASC
+    """)
+    List<ProductVariant> findVisibleVariantsForPos();
+
+    /**
+     * Tìm SKU tại POS, không cho lấy biến thể thuộc Product cha đã xóa mềm.
+     */
+    @EntityGraph(attributePaths = {
+            "product",
+            "product.brand",
+            "capacity",
+            "bottleType"
+    })
+    @Query("""
+        SELECT v
+        FROM ProductVariant v
+        JOIN v.product p
+        WHERE LOWER(v.sku) = LOWER(:sku)
+          AND COALESCE(v.isDeleted, false) = false
+          AND COALESCE(p.isDeleted, false) = false
+    """)
+    Optional<ProductVariant> findPosVisibleBySku(@Param("sku") String sku);
 }

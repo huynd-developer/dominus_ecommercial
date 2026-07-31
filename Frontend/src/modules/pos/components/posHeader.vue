@@ -9,7 +9,7 @@
 
           <div class="min-w-0">
             <div class="held-title text-truncate">
-              Đơn hàng đang xử lý ({{ posStore.heldOrders.length }})
+              Đơn hàng đang xử lý ({{ visibleHeldOrders.length }})
             </div>
 
             <div class="held-subtitle text-truncate">
@@ -36,7 +36,7 @@
       </div>
 
       <div
-        v-if="posStore.heldOrders.length === 0"
+        v-if="visibleHeldOrders.length === 0"
         class="held-empty-card d-flex align-items-center justify-content-center"
       >
         <i class="bi bi-inbox me-2"></i>
@@ -69,6 +69,10 @@
 
               <div class="held-cashier text-truncate">
                 NV: {{ held.cashierName || "Không rõ" }}
+              </div>
+
+              <div class="held-quantity text-truncate">
+                {{ getHeldQuantityText(held) }}
               </div>
 
               <div class="held-money">
@@ -118,8 +122,70 @@ import { usePosStore } from "../stores/posStore";
 const posStore = usePosStore();
 
 const visibleHeldOrders = computed(() => {
-  return (posStore.heldOrders || []).slice(0, 5);
+  const activeHeldOrderId = Number(posStore.activeHeldOrderId || 0);
+
+  return (posStore.heldOrders || [])
+    .filter((held) => Number(held.orderId || 0) !== activeHeldOrderId)
+    .slice(0, 5);
 });
+
+const getHeldItems = (held: any) => {
+  const rawItems = held?.items;
+
+  return Array.isArray(rawItems) ? rawItems : [];
+};
+
+const getHeldItemCount = (held: any) => {
+  const count = Number(
+    held?.itemCount ??
+      held?.totalItemCount ??
+      held?.lineItemCount ??
+      getHeldItems(held).length
+  );
+
+  return Number.isFinite(count) && count > 0 ? count : 0;
+};
+
+const getHeldTotalQuantity = (held: any) => {
+  const directQuantity = Number(
+    held?.totalQuantity ??
+      held?.totalItemQuantity ??
+      held?.totalProductQuantity ??
+      held?.productQuantity ??
+      0
+  );
+
+  if (Number.isFinite(directQuantity) && directQuantity > 0) {
+    return directQuantity;
+  }
+
+  return getHeldItems(held).reduce((total: number, item: any) => {
+    const quantity = Number(
+      item?.quantity ?? item?.qty ?? item?.orderQuantity ?? item?.selectedQuantity ?? 0
+    );
+
+    return total + (Number.isFinite(quantity) && quantity > 0 ? quantity : 0);
+  }, 0);
+};
+
+const getHeldQuantityText = (held: any) => {
+  const itemCount = getHeldItemCount(held);
+  const totalQuantity = getHeldTotalQuantity(held);
+
+  if (itemCount > 0 && totalQuantity > 0) {
+    return `${itemCount} dòng • SL ${totalQuantity}`;
+  }
+
+  if (totalQuantity > 0) {
+    return `SL ${totalQuantity}`;
+  }
+
+  if (itemCount > 0) {
+    return `${itemCount} dòng sản phẩm`;
+  }
+
+  return "Chưa có dữ liệu số lượng";
+};
 
 const formatPrice = (val?: number | null) => {
   return new Intl.NumberFormat("vi-VN").format(Number(val || 0));
@@ -330,12 +396,17 @@ onUnmounted(() => {
 }
 
 .held-phone,
-.held-cashier {
+.held-cashier,
+.held-quantity {
   color: #64748b;
   font-size: 0.66rem;
   font-weight: 700;
   line-height: 1.2;
   margin-top: 2px;
+}
+
+.held-quantity {
+  color: #cbd5e1;
 }
 
 .held-money {
