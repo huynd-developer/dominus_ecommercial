@@ -34,6 +34,7 @@ public record CustomerOrderResponse(
         LocalDateTime returnRequestedAt,
         BigDecimal returnRefundAmount,
         List<String> returnMediaUrls,
+        List<CustomerReturnItemResponse> returnItems,
 
         List<CustomerOrderItemResponse> items
 ) {

@@ -6,7 +6,7 @@
       <div>
         <h5 class="mb-0 fw-bold">Lịch sử đơn hàng</h5>
         <div class="small text-muted mt-1">
-          Đánh giá sản phẩm chỉ mở khi đơn hàng đã hoàn thành
+          Đánh giá/hoàn hàng chỉ mở trong thời hạn sau khi đơn hoàn thành
         </div>
       </div>
 
@@ -324,10 +324,26 @@
                           </div>
 
                           <div
-                            v-if="
-                              getReviewMediaByOrderItemId(item.orderItemId)
-                                .length > 0
-                            "
+                            v-if="getReviewApprovalText(getMyReviewByOrderItemId(item.orderItemId))"
+                            class="review-approval-status mt-1"
+                            :class="getReviewApprovalClass(getMyReviewByOrderItemId(item.orderItemId))"
+                          >
+                            {{ getReviewApprovalText(getMyReviewByOrderItemId(item.orderItemId)) }}
+                          </div>
+
+                          <button
+                            v-if="canEditExistingReview(getMyReviewByOrderItemId(item.orderItemId))"
+                            type="button"
+                            class="btn btn-sm btn-outline-dark review-edit-btn mt-2"
+                            :disabled="submittingReview"
+                            @click.stop="openEditReview(order, item)"
+                          >
+                            <i class="bi bi-pencil-square me-1"></i>
+                            Sửa đánh giá
+                          </button>
+
+                          <div
+                            v-if="getReviewMediaByOrderItemId(item.orderItemId).length > 0"
                             class="review-media-section"
                           >
                             <div class="review-media-label">
@@ -512,6 +528,90 @@
                     </div>
 
                     <div
+                      v-if="getOrderReturnRefundAmount(order) > 0"
+                      class="return-info-line return-refund-line"
+                    >
+                      <span>Hoàn tiền dự kiến:</span>
+                      <strong>{{ formatMoney(getOrderReturnRefundAmount(order)) }}</strong>
+                    </div>
+
+                    <div class="return-selected-section">
+                      <div class="return-media-label">Sản phẩm yêu cầu hoàn:</div>
+
+                      <div
+                        v-if="getOrderReturnSelectedItems(order).length > 0"
+                        class="return-selected-list"
+                      >
+                        <button
+                          v-for="returnItem in getOrderReturnSelectedItems(order)"
+                          :key="`return-item-${returnItem.orderItemId || returnItem.productVariantId || returnItem.productId}`"
+                          type="button"
+                          class="return-selected-item"
+                          @click.stop="goToProductDetail(returnItem)"
+                        >
+                          <img
+                            :src="returnItem.image || FALLBACK_IMAGE"
+                            class="return-selected-img"
+                            :alt="returnItem.productName || 'Sản phẩm hoàn hàng'"
+                            @error="handleImageError"
+                          />
+
+                          <div class="return-selected-content">
+                            <div class="return-selected-name">
+                              {{ returnItem.productName || "Sản phẩm" }}
+                            </div>
+
+                            <div class="return-selected-meta">
+                              <span v-if="returnItem.brandName">
+                                {{ returnItem.brandName }}
+                              </span>
+                              <span>
+                                {{ getCapacityText(returnItem) }}
+                              </span>
+                              <span>
+                                {{ getBottleTypeText(returnItem) }}
+                              </span>
+                            </div>
+
+                            <div class="return-selected-bottom">
+                              <span>
+                                SL hoàn:
+                                <strong>{{ returnItem.returnQuantity || 0 }}</strong>
+                              </span>
+
+                              <span v-if="Number(returnItem.itemAmount || 0) > 0">
+                                Tiền hàng:
+                                <strong>{{ formatMoney(returnItem.itemAmount) }}</strong>
+                              </span>
+
+                              <span
+                                v-if="Number(returnItem.voucherAllocatedAmount || 0) > 0"
+                                class="return-selected-discount"
+                              >
+                                Voucher phân bổ:
+                                <strong>
+                                  -{{ formatMoney(returnItem.voucherAllocatedAmount) }}
+                                </strong>
+                              </span>
+
+                              <span
+                                v-if="Number(returnItem.refundAmount || 0) > 0"
+                                class="return-selected-refund"
+                              >
+                                Hoàn:
+                                <strong>{{ formatMoney(returnItem.refundAmount) }}</strong>
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      </div>
+
+                      <div v-else class="return-selected-empty">
+                        Chưa có dữ liệu sản phẩm yêu cầu hoàn
+                      </div>
+                    </div>
+
+                    <div
                       v-if="getOrderReturnMedia(order).length > 0"
                       class="return-media-section"
                     >
@@ -663,7 +763,7 @@
                   </button>
 
                   <button
-                    v-if="order.status === 3"
+                    v-if="canRequestReturn(order)"
                     type="button"
                     class="btn btn-outline-danger btn-sm"
                     :disabled="store.orderLoading"
@@ -672,6 +772,14 @@
                     Yêu cầu hoàn hàng
                   </button>
 
+                  <span
+                    v-else-if="isCompletedOrder(order) && getReturnDeadlineText(order)"
+                    class="text-muted small align-self-center"
+                  >
+                    {{ getReturnDeadlineText(order) }}
+                  </span>
+
+                  <!-- NÚT HỦY YÊU CẦU HOÀN HÀNG -->
                   <button
                     v-if="order.status === 6"
                     type="button"
@@ -705,6 +813,8 @@
       v-model="reviewModalVisible"
       :item="selectedReviewItem"
       :loading="submittingReview"
+      :mode="reviewModalMode"
+      :existing-review="selectedEditingReview"
       @submit="submitReview"
     />
     <ReturnRequestModal
@@ -738,10 +848,15 @@ const router = useRouter();
 
 const currentTab = ref<number | "ALL">("ALL");
 
+const RETURN_REQUEST_DEADLINE_DAYS = 15;
+const REVIEW_EDIT_DEADLINE_DAYS = 30;
+
 const reviewLoading = ref(false);
 const submittingReview = ref(false);
 const reviewModalVisible = ref(false);
+const reviewModalMode = ref<"create" | "edit">("create");
 const selectedReviewItem = ref<ReviewableOrderItemResponse | null>(null);
+const selectedEditingReview = ref<ReviewResponse | null>(null);
 const myReviews = ref<ReviewResponse[]>([]);
 const openedOrderId = ref<number | null>(null);
 
@@ -782,12 +897,163 @@ const generateOrderCode = (id: number | string | null | undefined) => {
   return `DH-${String(id).padStart(6, "0")}`;
 };
 
-const filteredOrders = computed(() => {
-  if (currentTab.value === "ALL") {
-    return store.orders;
+const getOrderSortTime = (value: unknown) => {
+  if (!value) {
+    return 0;
   }
+
+  const time = new Date(String(value)).getTime();
+
+  return Number.isFinite(time) ? time : 0;
+};
+
+const getOrderLatestActionTime = (order: any) => {
+  const status = Number(order?.status);
+
+  if (status === 6 || status === 7) {
+    return Math.max(
+      getOrderSortTime(order?.returnRequestedAt),
+      getOrderSortTime(order?.returnRequest?.createdAt),
+      getOrderSortTime(order?.latestReturnRequest?.createdAt),
+      getOrderSortTime(order?.returnInfo?.createdAt),
+      getOrderSortTime(order?.updatedAt),
+      getOrderSortTime(order?.createdAt)
+    );
+  }
+
+  if (status === 4) {
+    return Math.max(
+      getOrderSortTime(order?.cancelledAt),
+      getOrderSortTime(order?.canceledAt),
+      getOrderSortTime(order?.cancelAt),
+      getOrderSortTime(order?.updatedAt),
+      getOrderSortTime(order?.createdAt)
+    );
+  }
+
+  if (status === 3) {
+    return Math.max(
+      getOrderSortTime(order?.completedAt),
+      getOrderSortTime(order?.updatedAt),
+      getOrderSortTime(order?.createdAt)
+    );
+  }
+
+  return Math.max(
+    getOrderSortTime(order?.updatedAt),
+    getOrderSortTime(order?.createdAt)
+  );
+};
+
+const sortOrdersByLatestAction = (orders: CustomerOrderResponse[]) => {
+  return [...orders].sort((firstOrder: any, secondOrder: any) => {
+    const secondOrderTime = getOrderLatestActionTime(secondOrder);
+    const firstOrderTime = getOrderLatestActionTime(firstOrder);
+
+    if (secondOrderTime !== firstOrderTime) {
+      return secondOrderTime - firstOrderTime;
+    }
+
+    return Number(secondOrder?.orderId || 0) - Number(firstOrder?.orderId || 0);
+  });
+};
+
+const parseTime = (value: unknown) => {
+  if (!value) {
+    return 0;
+  }
+
+  const time = new Date(String(value)).getTime();
+
+  return Number.isFinite(time) ? time : 0;
+};
+
+const addDaysToTime = (time: number, days: number) => {
+  return time + days * 24 * 60 * 60 * 1000;
+};
+
+const getDaysLeftFromDeadline = (deadlineTime: number) => {
+  if (!Number.isFinite(deadlineTime) || deadlineTime <= 0) {
+    return 0;
+  }
+
+  const diff = deadlineTime - Date.now();
+
+  if (diff <= 0) {
+    return 0;
+  }
+
+  return Math.ceil(diff / (24 * 60 * 60 * 1000));
+};
+
+const getOrderCompletedBaseTime = (order: any) => {
+  return (
+    parseTime(order?.completedAt) ||
+    parseTime(order?.completedDate) ||
+    parseTime(order?.deliveredAt) ||
+    parseTime(order?.updatedAt) ||
+    parseTime(order?.createdAt)
+  );
+};
+
+const isCompletedOrder = (order: any) => {
+  return Number(order?.status) === 3;
+};
+
+const getReturnDeadlineTime = (order: any) => {
+  const completedTime = getOrderCompletedBaseTime(order);
+
+  if (!completedTime) {
+    return 0;
+  }
+
+  return addDaysToTime(completedTime, RETURN_REQUEST_DEADLINE_DAYS);
+};
+
+const canRequestReturn = (order: any) => {
+  if (!isCompletedOrder(order)) {
+    return false;
+  }
+
+  const deadlineTime = getReturnDeadlineTime(order);
+
+  return deadlineTime > 0 && Date.now() <= deadlineTime;
+};
+
+const getReturnDeadlineText = (order: any) => {
+  if (!isCompletedOrder(order)) {
+    return "";
+  }
+
+  const deadlineTime = getReturnDeadlineTime(order);
+
+  if (!deadlineTime) {
+    return "Không xác định được hạn hoàn hàng";
+  }
+
+  const daysLeft = getDaysLeftFromDeadline(deadlineTime);
+
+  if (daysLeft <= 0) {
+    return "Đã quá hạn 15 ngày yêu cầu hoàn hàng";
+  }
+
+  return `Còn ${daysLeft} ngày để yêu cầu hoàn hàng`;
+};
+
+const filteredOrders = computed(() => {
+  const orders =
+    currentTab.value === "ALL"
+      ? store.orders
+      : store.orders.filter(
+          (order: CustomerOrderResponse) => order.status === currentTab.value
+        );
+
+  return sortOrdersByLatestAction(orders as CustomerOrderResponse[]);
+});
+
+const completedOrders = computed(() => {
   return store.orders.filter(
-    (order: CustomerOrderResponse) => order.status === currentTab.value,
+    (order: CustomerOrderResponse) => order.status === 3
   );
 });
 
@@ -904,14 +1170,175 @@ const loadReviewableItems = async (orderId: number, showToast: boolean) => {
   }
 };
 
-const getMyReviewByOrderItemId = (orderItemId: number) =>
-  myReviews.value.find((review) => review.orderItemId === orderItemId);
-const getReviewState = (orderId: number, orderItemId: number) =>
-  reviewableMap[orderId]?.find((item) => item.orderItemId === orderItemId);
-const canReview = (orderId: number, orderItemId: number) =>
-  getReviewState(orderId, orderItemId)?.canReview === true;
-const isReviewed = (orderId: number, orderItemId: number) =>
-  getReviewState(orderId, orderItemId)?.reviewed === true;
+const getMyReviewByOrderItemId = (orderItemId: number) => {
+  return myReviews.value.find((review) => review.orderItemId === orderItemId);
+};
+
+const getReviewApprovalStatus = (review: any) => {
+  const rawStatus =
+    review?.approvalStatus ??
+    review?.status ??
+    review?.reviewStatus ??
+    null;
+
+  if (rawStatus === null || rawStatus === undefined || rawStatus === "") {
+    return null;
+  }
+
+  const status = String(rawStatus).trim().toUpperCase();
+
+  if (status === "0" || status === "PENDING" || status === "PENDING_APPROVAL") {
+    return "PENDING_APPROVAL";
+  }
+
+  if (status === "1" || status === "APPROVED") {
+    return "APPROVED";
+  }
+
+  if (status === "2" || status === "REJECTED") {
+    return "REJECTED";
+  }
+
+  if (status === "3" || status === "HIDDEN") {
+    return "HIDDEN";
+  }
+
+  return null;
+};
+
+const getReviewApprovalText = (review: any) => {
+  const approvalStatusText = String(review?.approvalStatusText || "").trim();
+
+  if (approvalStatusText) {
+    return approvalStatusText;
+  }
+
+  const status = getReviewApprovalStatus(review);
+
+  if (status === "PENDING_APPROVAL") {
+    return "Đang chờ duyệt ảnh/video";
+  }
+
+  if (status === "APPROVED") {
+    return "Đã hiển thị";
+  }
+
+  if (status === "REJECTED") {
+    return "Đánh giá không được duyệt";
+  }
+
+  if (status === "HIDDEN") {
+    return "Đánh giá đã bị ẩn";
+  }
+
+  return "";
+};
+
+const getReviewApprovalClass = (review: any) => {
+  const status = getReviewApprovalStatus(review);
+
+  return {
+    "is-pending": status === "PENDING_APPROVAL",
+    "is-approved": status === "APPROVED",
+    "is-rejected": status === "REJECTED",
+    "is-hidden": status === "HIDDEN",
+  };
+};
+
+const getReviewEditCount = (review: any) => {
+  const editCount = Number(review?.editCount ?? review?.editedCount ?? 0);
+
+  return Number.isFinite(editCount) && editCount > 0 ? editCount : 0;
+};
+
+const getReviewEditDeadlineTime = (review: any) => {
+  const createdTime = parseTime(review?.createdAt);
+
+  if (!createdTime) {
+    return 0;
+  }
+
+  return addDaysToTime(createdTime, REVIEW_EDIT_DEADLINE_DAYS);
+};
+
+const canEditExistingReview = (review: any) => {
+  if (!review) {
+    return false;
+  }
+
+  if (review?.canEdit !== null && review?.canEdit !== undefined) {
+    return Boolean(review.canEdit);
+  }
+
+  if (getReviewEditCount(review) >= 1 || Boolean(review?.editedAt)) {
+    return false;
+  }
+
+  const deadlineTime = getReviewEditDeadlineTime(review);
+
+  return deadlineTime > 0 && Date.now() <= deadlineTime;
+};
+
+const getReviewEditHint = (review: any) => {
+  if (!review) {
+    return "";
+  }
+
+  if (review?.canEdit === false) {
+    return review?.editMessage || "Đánh giá này không còn được chỉnh sửa";
+  }
+
+  if (getReviewEditCount(review) >= 1 || Boolean(review?.editedAt)) {
+    return "Đã sử dụng quyền sửa đánh giá";
+  }
+
+  const deadlineTime = getReviewEditDeadlineTime(review);
+
+  if (!deadlineTime) {
+    return "Không xác định được hạn sửa đánh giá";
+  }
+
+  const daysLeft = getDaysLeftFromDeadline(deadlineTime);
+
+  if (daysLeft <= 0) {
+    return "Đã quá hạn 30 ngày sửa đánh giá";
+  }
+
+  return `Còn ${daysLeft} ngày để sửa đánh giá`;
+};
+
+const getReviewState = (orderId: number, orderItemId: number) => {
+  return reviewableMap[orderId]?.find(
+    (item) => item.orderItemId === orderItemId
+  );
+};
+
+const canReview = (orderId: number, orderItemId: number) => {
+  return getReviewState(orderId, orderItemId)?.canReview === true;
+};
+
+const isReviewed = (orderId: number, orderItemId: number) => {
+  return getReviewState(orderId, orderItemId)?.reviewed === true;
+};
+
+const buildReviewItemFromOrderItem = (order: any, item: any): ReviewableOrderItemResponse => {
+  return {
+    orderItemId: Number(item?.orderItemId || item?.id || 0),
+    orderId: Number(order?.orderId || order?.id || 0),
+
+    productVariantId: item?.productVariantId ?? item?.variantId ?? null,
+    productId: item?.productId ?? null,
+    productName: item?.productName ?? item?.name ?? "Sản phẩm không xác định",
+    brandName: item?.brandName ?? item?.brand ?? null,
+    sku: item?.sku ?? null,
+    image: item?.image ?? item?.imageUrl ?? null,
+
+    orderStatus: Number(order?.status || 0),
+    reviewed: true,
+    canReview: false,
+    message: "Bạn đã đánh giá sản phẩm này",
+  };
+};
 
 const openReview = async (orderId: number, orderItemId: number) => {
   let state = getReviewState(orderId, orderItemId);
@@ -937,7 +1364,41 @@ const openReview = async (orderId: number, orderItemId: number) => {
     });
     return;
   }
+
+  reviewModalMode.value = "create";
+  selectedEditingReview.value = null;
   selectedReviewItem.value = state;
+  reviewModalVisible.value = true;
+};
+
+const openEditReview = async (order: CustomerOrderResponse, item: any) => {
+  const review = getMyReviewByOrderItemId(Number(item?.orderItemId || item?.id || 0));
+
+  if (!review) {
+    await Swal.fire({
+      icon: "error",
+      title: "Không tìm thấy đánh giá",
+      text: "Không tìm thấy đánh giá cần chỉnh sửa.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  if (!canEditExistingReview(review)) {
+    await Swal.fire({
+      icon: "info",
+      title: "Không thể sửa đánh giá",
+      text: getReviewEditHint(review) || "Đánh giá này không còn được chỉnh sửa.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  reviewModalMode.value = "edit";
+  selectedEditingReview.value = review;
+  selectedReviewItem.value =
+    getReviewState(order.orderId, Number(item?.orderItemId || item?.id || 0)) ||
+    buildReviewItemFromOrderItem(order, item);
   reviewModalVisible.value = true;
 };
 
@@ -945,27 +1406,66 @@ const submitReview = async (payload: {
   rating: number;
   comment: string | null;
   files: File[];
+  deletedMediaIds?: number[];
 }) => {
-  if (!selectedReviewItem.value) return;
+  if (!selectedReviewItem.value) {
+    return;
+  }
+
+  const isEditMode = reviewModalMode.value === "edit" && selectedEditingReview.value;
   const orderId = selectedReviewItem.value.orderId;
   const orderItemId = selectedReviewItem.value.orderItemId;
+  const hasReviewMedia = payload.files?.some((file) => file && file.size > 0) === true;
+
   try {
     submittingReview.value = true;
     const formData = new FormData();
-    formData.append("orderItemId", String(orderItemId));
+
+    if (!isEditMode) {
+      formData.append("orderItemId", String(orderItemId));
+    }
+
     formData.append("rating", String(payload.rating));
     if (payload.comment) formData.append("comment", payload.comment);
     if (payload.files && payload.files.length > 0) {
       payload.files.forEach((file) => formData.append("mediaFiles", file));
     }
-    await customerProfileService.createReview(formData as any);
+
+    if (isEditMode && payload.deletedMediaIds && payload.deletedMediaIds.length > 0) {
+      payload.deletedMediaIds.forEach((mediaId) => {
+        formData.append("deletedMediaIds", String(mediaId));
+      });
+    }
+
+    if (isEditMode) {
+      await customerProfileService.updateReview(
+        selectedEditingReview.value!.reviewId,
+        formData as any
+      );
+    } else {
+      await customerProfileService.createReview(formData as any);
+    }
+
     reviewModalVisible.value = false;
     selectedReviewItem.value = null;
-    toast("success", "Gửi đánh giá thành công");
+    selectedEditingReview.value = null;
+    reviewModalMode.value = "create";
+
+    toast(
+      "success",
+      isEditMode
+        ? hasReviewMedia
+          ? "Cập nhật đánh giá thành công. Ảnh/video đang chờ duyệt."
+          : "Cập nhật đánh giá thành công"
+        : hasReviewMedia
+          ? "Gửi đánh giá thành công. Ảnh/video đang chờ duyệt."
+          : "Gửi đánh giá thành công"
+    );
+
     await fetchMyReviews();
     await loadReviewableItems(orderId, false);
   } catch (error) {
-    showError(error, "Không gửi được đánh giá");
+    showError(error, isEditMode ? "Không cập nhật được đánh giá" : "Không gửi được đánh giá");
   } finally {
     submittingReview.value = false;
   }
@@ -1377,7 +1877,312 @@ const getOrderReturnDescription = (order: any) => {
   return String(description || "").trim();
 };
 
-type ReturnMediaView = { url: string; isVideo: boolean };
+type ReturnSelectedItemView = {
+  orderItemId: number | null;
+  productId: number | null;
+  productVariantId: number | null;
+  productName: string | null;
+  brandName: string | null;
+  sku: string | null;
+  image: string;
+  capacity: string | null;
+  capacityName?: string | null;
+  bottleType: string | null;
+  bottleTypeName?: string | null;
+  orderedQuantity: number;
+  returnQuantity: number;
+  unitFinalPrice: number;
+  itemAmount: number;
+  voucherAllocatedAmount: number;
+  refundAmount: number;
+};
+
+const toPositiveNumberOrNull = (value: unknown) => {
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null;
+};
+
+const getOrderReturnRefundAmount = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  return pickMoneyValue(
+    order?.returnRefundAmount,
+    order?.refundAmount,
+    order?.estimatedRefundAmount,
+    order?.returnEstimatedRefundAmount,
+    request?.refundAmount,
+    request?.returnRefundAmount,
+    request?.estimatedRefundAmount
+  );
+};
+
+const getRawReturnItemsPayload = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  const rawItems =
+    order?.returnItems ??
+    order?.returnRequestItems ??
+    order?.returnedItems ??
+    order?.refundItems ??
+    order?.exchangeItems ??
+    request?.items ??
+    request?.returnItems ??
+    request?.returnRequestItems ??
+    request?.returnedItems ??
+    request?.refundItems ??
+    [];
+
+  return Array.isArray(rawItems) ? rawItems : [rawItems];
+};
+
+const getReturnPayloadOrderItemId = (payload: any) => {
+  return toPositiveNumberOrNull(
+    payload?.orderItemId ??
+      payload?.orderItem?.id ??
+      payload?.orderItem?.orderItemId ??
+      payload?.itemId ??
+      payload?.orderDetailId ??
+      null
+  );
+};
+
+const getReturnPayloadProductId = (payload: any) => {
+  return toPositiveNumberOrNull(
+    payload?.productId ??
+      payload?.product?.id ??
+      payload?.product?.productId ??
+      payload?.orderItem?.productId ??
+      payload?.orderItem?.product?.id ??
+      payload?.orderItem?.product?.productId ??
+      payload?.productVariant?.productId ??
+      payload?.productVariant?.product?.id ??
+      payload?.productVariant?.product?.productId ??
+      null
+  );
+};
+
+const getReturnPayloadVariantId = (payload: any) => {
+  return toPositiveNumberOrNull(
+    payload?.productVariantId ??
+      payload?.variantId ??
+      payload?.productVariant?.id ??
+      payload?.productVariant?.variantId ??
+      payload?.orderItem?.productVariantId ??
+      payload?.orderItem?.variantId ??
+      payload?.orderItem?.productVariant?.id ??
+      payload?.orderItem?.productVariant?.variantId ??
+      null
+  );
+};
+
+const findBaseOrderItemForReturn = (order: any, payload: any) => {
+  const orderItems = Array.isArray(order?.items) ? order.items : [];
+
+  const orderItemId = getReturnPayloadOrderItemId(payload);
+  const variantId = getReturnPayloadVariantId(payload);
+  const productId = getReturnPayloadProductId(payload);
+
+  return (
+    orderItems.find((item: any) => {
+      if (orderItemId && Number(item?.orderItemId ?? item?.id) === orderItemId) {
+        return true;
+      }
+
+      if (
+        variantId &&
+        Number(item?.productVariantId ?? item?.variantId) === variantId
+      ) {
+        return true;
+      }
+
+      if (productId && Number(item?.productId) === productId) {
+        return true;
+      }
+
+      return false;
+    }) ?? null
+  );
+};
+
+const getReturnItemQuantity = (payload: any) => {
+  return (
+    toPositiveNumberOrNull(
+      payload?.returnQuantity ??
+        payload?.quantity ??
+        payload?.qty ??
+        payload?.returnedQuantity ??
+        payload?.requestQuantity ??
+        payload?.orderItemQuantity ??
+        null
+    ) ?? 0
+  );
+};
+
+const getReturnItemRefundAmount = (
+  order: any,
+  payload: any,
+  selectedItemCount: number
+) => {
+  const itemRefund = pickMoneyValue(
+    payload?.refundAmount,
+    payload?.returnRefundAmount,
+    payload?.estimatedRefundAmount,
+    payload?.amount,
+    payload?.returnAmount
+  );
+
+  if (itemRefund > 0) {
+    return itemRefund;
+  }
+
+  const orderRefund = getOrderReturnRefundAmount(order);
+
+  if (selectedItemCount === 1 && orderRefund > 0) {
+    return orderRefund;
+  }
+
+  return 0;
+};
+
+const getOrderReturnSelectedItems = (order: any): ReturnSelectedItemView[] => {
+  const rawItems = getRawReturnItemsPayload(order).filter(
+    (payload: any) => payload !== null && payload !== undefined
+  );
+
+  if (rawItems.length === 0) {
+    return [];
+  }
+
+  return rawItems
+    .map((payload: any) => {
+      const baseItem = findBaseOrderItemForReturn(order, payload);
+
+      const mergedItem = {
+        ...(baseItem || {}),
+        ...(payload?.orderItem || {}),
+        ...payload,
+      };
+
+      const orderItemId =
+        getReturnPayloadOrderItemId(payload) ??
+        toPositiveNumberOrNull(baseItem?.orderItemId ?? baseItem?.id ?? null);
+
+      const productId =
+        getReturnPayloadProductId(payload) ?? getProductIdFromItem(baseItem);
+
+      const productVariantId =
+        getReturnPayloadVariantId(payload) ?? getProductVariantIdFromItem(baseItem);
+
+      const orderedQuantity =
+        toPositiveNumberOrNull(
+          payload?.orderedQuantity ??
+            payload?.orderQuantity ??
+            payload?.quantityPurchased ??
+            payload?.orderItem?.quantity ??
+            baseItem?.quantity ??
+            null
+        ) ?? 0;
+      const returnQuantity = getReturnItemQuantity(payload);
+      const unitFinalPrice = pickMoneyValue(
+        payload?.unitFinalPrice,
+        payload?.finalPrice,
+        payload?.unitPrice,
+        payload?.orderItem?.finalPrice,
+        payload?.orderItem?.unitFinalPrice,
+        baseItem?.finalPrice,
+        baseItem?.unitFinalPrice,
+        baseItem?.unitPrice
+      );
+      const rawItemAmount = pickMoneyValue(
+        payload?.itemAmount,
+        payload?.returnItemAmount,
+        payload?.lineAmount,
+        payload?.lineTotal,
+        payload?.subtotal
+      );
+      const itemAmount =
+        rawItemAmount > 0
+          ? rawItemAmount
+          : unitFinalPrice > 0 && returnQuantity > 0
+            ? unitFinalPrice * returnQuantity
+            : 0;
+      const voucherAllocatedAmount = pickMoneyValue(
+        payload?.voucherAllocatedAmount,
+        payload?.allocatedVoucherAmount,
+        payload?.discountAllocatedAmount,
+        payload?.orderDiscountAllocatedAmount
+      );
+      const refundAmount = getReturnItemRefundAmount(
+        order,
+        payload,
+        rawItems.length
+      );
+
+      return {
+        orderItemId,
+        productId,
+        productVariantId,
+        productName:
+          payload?.productName ??
+          payload?.name ??
+          payload?.orderItem?.productName ??
+          baseItem?.productName ??
+          null,
+        brandName:
+          payload?.brandName ??
+          payload?.brand ??
+          payload?.orderItem?.brandName ??
+          baseItem?.brandName ??
+          null,
+        sku:
+          payload?.sku ??
+          payload?.orderItem?.sku ??
+          baseItem?.sku ??
+          null,
+        image:
+          getItemImage(mergedItem) || FALLBACK_IMAGE,
+        capacity:
+          payload?.capacity ??
+          payload?.capacityName ??
+          payload?.orderItem?.capacity ??
+          payload?.orderItem?.capacityName ??
+          baseItem?.capacity ??
+          baseItem?.capacityName ??
+          null,
+        capacityName:
+          payload?.capacityName ??
+          payload?.orderItem?.capacityName ??
+          baseItem?.capacityName ??
+          null,
+        bottleType:
+          payload?.bottleType ??
+          payload?.bottleTypeName ??
+          payload?.orderItem?.bottleType ??
+          payload?.orderItem?.bottleTypeName ??
+          baseItem?.bottleType ??
+          baseItem?.bottleTypeName ??
+          null,
+        bottleTypeName:
+          payload?.bottleTypeName ??
+          payload?.orderItem?.bottleTypeName ??
+          baseItem?.bottleTypeName ??
+          null,
+        orderedQuantity,
+        returnQuantity,
+        unitFinalPrice,
+        itemAmount,
+        voucherAllocatedAmount,
+        refundAmount,
+      };
+    })
+    .filter((item) => item.orderItemId || item.productVariantId || item.productId);
+};
+
+type ReturnMediaView = {
+  url: string;
+  isVideo: boolean;
+};
 
 const getLocalBackendBaseUrl = () => {
   const isLocalhost =
@@ -1810,6 +2615,11 @@ const getDefaultReturnEmail = () => {
 };
 
 const requestReturn = (order: CustomerOrderResponse) => {
+  if (!canRequestReturn(order)) {
+    toast("warning", getReturnDeadlineText(order) || "Đơn hàng không còn đủ điều kiện hoàn hàng");
+    return;
+  }
+
   selectedReturnOrder.value = order;
   returnModalVisible.value = true;
 };
@@ -2324,6 +3134,105 @@ const getItemImage = (item: any) => {
   word-break: break-word;
 }
 
+.return-refund-line {
+  margin-top: 8px;
+}
+
+.return-refund-line strong {
+  color: #9a6a1f;
+}
+
+.return-selected-section {
+  margin-top: 12px;
+}
+
+.return-selected-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.return-selected-item {
+  width: 100%;
+  display: flex;
+  gap: 10px;
+  padding: 9px;
+  border: 1px solid #f3e2bd;
+  border-radius: 12px;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.return-selected-item:hover {
+  border-color: #bd9a5f;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.return-selected-img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  flex-shrink: 0;
+  background: #f8fafc;
+}
+
+.return-selected-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.return-selected-name {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.return-selected-meta,
+.return-selected-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.return-selected-bottom strong {
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.return-selected-discount strong {
+  color: #dc2626;
+}
+
+.return-selected-refund strong {
+  color: #9a6a1f;
+}
+
+.return-selected-empty {
+  padding: 10px 12px;
+  border: 1px dashed #f3e2bd;
+  border-radius: 12px;
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.58);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .return-media-section {
   margin-top: 12px;
 }
@@ -2443,6 +3352,48 @@ const getItemImage = (item: any) => {
   color: #374151;
   margin-top: 4px;
   font-style: italic;
+}
+
+.review-approval-status {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.review-approval-status.is-pending {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+}
+
+.review-approval-status.is-approved {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.review-approval-status.is-rejected,
+.review-approval-status.is-hidden {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.review-edit-hint {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.review-edit-btn {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
 }
 
 .review-media-section {

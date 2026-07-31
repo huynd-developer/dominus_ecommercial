@@ -86,6 +86,11 @@ public class PublicProductReviewServiceImpl implements PublicProductReviewServic
             return false;
         }
 
+        // Chỉ hiển thị review đã được duyệt ra ngoài chi tiết sản phẩm
+        if (!Objects.equals(review.getApprovalStatus(), 1)) {
+            return false;
+        }
+
         OrderItem orderItem = review.getOrderItem();
 
         if (orderItem == null) {

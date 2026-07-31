@@ -11,7 +11,7 @@
         <div style="background: #fff; width: 100%; max-width: 500px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); display: flex; flex-direction: column; max-height: 90vh;">
           
           <div class="modal-header" style="padding: 16px; border-bottom: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: center;">
-            <h5 class="fw-bold mb-0">Đánh giá sản phẩm</h5>
+            <h5 class="fw-bold mb-0">{{ modalTitle }}</h5>
             <button type="button" class="btn-close" @click="closeModal"></button>
           </div>
 
@@ -52,17 +52,63 @@
                 v-model="comment"
                 class="form-control review-textarea"
                 rows="4"
-                maxlength="100"
-                placeholder="Hãy chia sẻ nhận xét của bạn về sản phẩm này nhé (tối đa 100 ký tự)..."
+                maxlength="1000"
+                placeholder="Hãy chia sẻ nhận xét của bạn về sản phẩm này nhé (tối đa 1000 ký tự)..."
               ></textarea>
               <!-- BỘ ĐẾM KÝ TỰ -->
               <div class="text-end small mt-1 text-muted">
-                {{ comment.length }}/100
+                {{ comment.length }}/1000
               </div>
             </div>
 
             <!-- Upload Ảnh/Video -->
             <div class="media-upload-section">
+              <div
+                v-if="isEditMode && existingReviewMedia.length > 0"
+                class="existing-media-section mb-3"
+              >
+                <div class="existing-media-title">Ảnh/video hiện tại:</div>
+
+                <div class="media-preview-list">
+                  <div
+                    v-for="(media, index) in existingReviewMedia"
+                    :key="`existing-${media.url}-${index}`"
+                    class="media-preview-item existing-media-item"
+                  >
+                    <img
+                      v-if="!media.isVideo"
+                      :src="media.url"
+                      class="preview-media"
+                      alt="Ảnh đánh giá hiện tại"
+                    />
+                    <video
+                      v-else
+                      :src="media.url"
+                      class="preview-media"
+                      muted
+                      playsinline
+                      preload="metadata"
+                    ></video>
+
+                    <span class="existing-media-badge">Hiện tại</span>
+
+                    <button
+                      v-if="media.mediaId"
+                      type="button"
+                      class="btn-remove-media existing-media-remove"
+                      title="Xóa ảnh/video này khỏi đánh giá"
+                      @click.stop="markExistingMediaForDelete(media)"
+                    >
+                      <i class="bi bi-x"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="isEditMode" class="existing-media-title mb-2">
+                Thêm ảnh/video mới:
+              </div>
+
               <div class="media-preview-list">
                 <div v-for="(media, index) in previewUrls" :key="index" class="media-preview-item">
                   <img v-if="media.type === 'image'" :src="media.url" class="preview-media" />
@@ -85,7 +131,10 @@
                   />
                 </div>
               </div>
-              <div class="small text-muted mt-2">Tối đa 5 file. Giới hạn dung lượng: 5MB/file.</div>
+              <div class="small text-muted mt-2">Tối đa 5 file mới. Giới hạn dung lượng: 5MB/file.</div>
+              <div v-if="isEditMode" class="small text-muted mt-1">
+                Ảnh/video cũ được giữ nguyên nếu không bấm X. Ảnh/video mới sẽ được thêm vào đánh giá hiện tại.
+              </div>
             </div>
           </div>
 
@@ -95,7 +144,7 @@
             </button>
             <button type="button" class="btn btn-primary btn-submit" @click="handleSubmit" :disabled="loading || !isValid">
               <span v-if="loading" class="spinner-border spinner-border-sm me-1"></span>
-              Hoàn thành
+              {{ submitButtonText }}
             </button>
           </div>
         </div>
@@ -108,15 +157,24 @@
 import { ref, watch, computed } from 'vue';
 import Swal from 'sweetalert2';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: boolean;
   item: any;
   loading: boolean;
-}>();
+  mode?: "create" | "edit";
+  existingReview?: any | null;
+}>(), {
+  mode: "create",
+  existingReview: null,
+});
 
 const emit = defineEmits(['update:modelValue', 'submit']);
 
 const fallbackImage = "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#9ca3af" font-family="Arial" font-size="12">Không có ảnh</text></svg>`);
+
+const isEditMode = computed(() => props.mode === "edit");
+const modalTitle = computed(() => (isEditMode.value ? "Sửa đánh giá sản phẩm" : "Đánh giá sản phẩm"));
+const submitButtonText = computed(() => (isEditMode.value ? "Cập nhật" : "Hoàn thành"));
 
 // State
 const rating = ref(5);
@@ -125,17 +183,178 @@ const comment = ref('');
 const selectedFiles = ref<File[]>([]);
 const previewUrls = ref<{ type: string; url: string }[]>([]);
 const fileInput = ref<HTMLInputElement | null>(null);
+const deletedMediaIds = ref<number[]>([]);
+
+type ReviewMediaPreview = {
+  mediaId: number | null;
+  url: string;
+  isVideo: boolean;
+};
+
+const normalizeMediaUrl = (url: unknown) => {
+  const rawUrl = String(url || '').trim();
+
+  if (!rawUrl) {
+    return '';
+  }
+
+  if (
+    rawUrl.startsWith('http://') ||
+    rawUrl.startsWith('https://') ||
+    rawUrl.startsWith('data:') ||
+    rawUrl.startsWith('blob:')
+  ) {
+    return rawUrl;
+  }
+
+  if (rawUrl.startsWith('/')) {
+    const isLocalhost =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
+
+    if (isLocalhost) {
+      return `${window.location.protocol}//${window.location.hostname}:8080${rawUrl}`;
+    }
+
+    return `${window.location.origin}${rawUrl}`;
+  }
+
+  return rawUrl;
+};
+
+const getMediaUrl = (media: any) => {
+  if (typeof media === 'string') {
+    return normalizeMediaUrl(media);
+  }
+
+  return normalizeMediaUrl(
+    media?.url ??
+      media?.mediaUrl ??
+      media?.MediaUrl ??
+      media?.secureUrl ??
+      media?.secure_url ??
+      media?.fileUrl ??
+      media?.FileUrl ??
+      media?.path ??
+      media?.Path ??
+      media?.imageUrl ??
+      media?.ImageUrl ??
+      ''
+  );
+};
+
+const getMediaId = (media: any) => {
+  if (typeof media === 'string') {
+    return null;
+  }
+
+  const rawId =
+    media?.mediaId ??
+    media?.id ??
+    media?.reviewMediaId ??
+    media?.reviewMediaFileId ??
+    null;
+
+  const mediaId = Number(rawId);
+
+  return Number.isFinite(mediaId) && mediaId > 0 ? mediaId : null;
+};
+
+const isVideoMedia = (media: any, url: string) => {
+  if (typeof media !== 'string') {
+    if (media?.isVideo === true) {
+      return true;
+    }
+
+    const mediaType = String(
+      media?.mediaType ??
+        media?.type ??
+        media?.contentType ??
+        media?.resourceType ??
+        ''
+    )
+      .trim()
+      .toLowerCase();
+
+    if (mediaType.includes('video')) {
+      return true;
+    }
+  }
+
+  return /\.(mp4|webm|ogg|mov|m4v)(\?|#|$)/i.test(url) || url.includes('/video/upload/');
+};
+
+const getExistingReviewRawMedia = (review: any) => {
+  if (!review) {
+    return [];
+  }
+
+  const rawMedia =
+    review?.mediaFiles ??
+    review?.mediaUrls ??
+    review?.mediaUrl ??
+    review?.reviewMedias ??
+    review?.reviewMediaUrls ??
+    review?.reviewMediaFiles ??
+    review?.reviewMedia ??
+    review?.medias ??
+    review?.media ??
+    review?.images ??
+    review?.files ??
+    [];
+
+  return Array.isArray(rawMedia) ? rawMedia : [rawMedia];
+};
+
+const existingReviewMedia = computed<ReviewMediaPreview[]>(() => {
+  if (!isEditMode.value) {
+    return [];
+  }
+
+  const usedUrls = new Set<string>();
+
+  return getExistingReviewRawMedia(props.existingReview)
+    .map((media: any) => {
+      const url = getMediaUrl(media);
+      const mediaId = getMediaId(media);
+
+      if (!url || usedUrls.has(url)) {
+        return null;
+      }
+
+      if (mediaId && deletedMediaIds.value.includes(mediaId)) {
+        return null;
+      }
+
+      usedUrls.add(url);
+
+      return {
+        mediaId,
+        url,
+        isVideo: isVideoMedia(media, url),
+      };
+    })
+    .filter((media: ReviewMediaPreview | null): media is ReviewMediaPreview => Boolean(media));
+});
+
+const resetSelectedMedia = () => {
+  selectedFiles.value = [];
+  deletedMediaIds.value = [];
+  previewUrls.value.forEach((preview) => URL.revokeObjectURL(preview.url));
+  previewUrls.value = [];
+};
 
 // Reset modal khi mở
-watch(() => props.modelValue, (newVal) => {
-  if (newVal) {
-    rating.value = 5;
-    comment.value = '';
-    selectedFiles.value = [];
-    previewUrls.value.forEach(p => URL.revokeObjectURL(p.url)); // Xóa bộ nhớ
-    previewUrls.value = [];
+watch(
+  () => [props.modelValue, props.mode, props.existingReview] as const,
+  ([newVal]) => {
+    if (newVal) {
+      rating.value = Number(props.existingReview?.rating || 5);
+      comment.value = String(props.existingReview?.comment || "");
+      resetSelectedMedia();
+    }
   }
-});
+);
 
 const getRatingText = (val: number) => {
   const texts = ['Tệ', 'Không hài lòng', 'Bình thường', 'Hài lòng', 'Tuyệt vời'];
@@ -183,9 +402,8 @@ const getVariantText = (reviewItem: any) => {
   return capacityText ? `Dung tích: ${capacityText}` : '';
 };
 
-// Cập nhật điều kiện độ dài comment <= 100
 const isValid = computed(() => {
-  return rating.value > 0 && comment.value.length <= 200;
+  return rating.value > 0 && comment.value.length <= 1000;
 });
 
 const closeModal = () => {
@@ -255,6 +473,16 @@ const handleFileSelect = (event: Event) => {
   input.value = '';
 };
 
+const markExistingMediaForDelete = (media: ReviewMediaPreview) => {
+  if (!media.mediaId) {
+    return;
+  }
+
+  if (!deletedMediaIds.value.includes(media.mediaId)) {
+    deletedMediaIds.value.push(media.mediaId);
+  }
+};
+
 const removeMedia = (index: number) => {
   if (previewUrls.value[index]) {
     URL.revokeObjectURL(previewUrls.value[index].url);
@@ -263,12 +491,30 @@ const removeMedia = (index: number) => {
   selectedFiles.value.splice(index, 1);
 };
 
-const handleSubmit = () => {
+const handleSubmit = async () => {
+  if (isEditMode.value) {
+    const result = await Swal.fire({
+      icon: 'warning',
+      title: 'Xác nhận sửa đánh giá?',
+      text: 'Đây là lần sửa duy nhất. Sau khi hoàn tất, bạn sẽ không thể sửa đánh giá này nữa.',
+      showCancelButton: true,
+      confirmButtonText: 'Đồng ý sửa',
+      cancelButtonText: 'Quay lại',
+      confirmButtonColor: '#bd9a5f',
+      cancelButtonColor: '#6b7280',
+    });
+
+    if (!result.isConfirmed) {
+      return;
+    }
+  }
+
   // Gửi data kèm file về cho OrderHistory.vue xử lý
   emit('submit', {
     rating: rating.value,
     comment: comment.value,
-    files: selectedFiles.value
+    files: selectedFiles.value,
+    deletedMediaIds: [...deletedMediaIds.value]
   });
 };
 </script>
@@ -359,6 +605,54 @@ const handleSubmit = () => {
 .review-textarea:focus {
   border-color: #bd9a5f;
   box-shadow: 0 0 0 0.25rem rgba(189, 154, 95, 0.25);
+}
+
+.edit-review-note {
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.existing-media-section {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.existing-media-title {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.existing-media-section .existing-media-title {
+  margin-bottom: 8px;
+}
+
+.existing-media-item {
+  background: #fff;
+}
+
+.existing-media-badge {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #fff;
+  padding: 1px 6px;
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.existing-media-remove {
+  top: -6px;
+  right: -6px;
 }
 
 .media-preview-list {

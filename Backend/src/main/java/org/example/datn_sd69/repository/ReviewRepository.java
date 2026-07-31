@@ -26,21 +26,21 @@ public interface ReviewRepository extends JpaRepository<Review, Integer> {
 
     List<Review> findByIsDeletedFalseOrderByCreatedAtDesc();
 
-    // THÊM MỚI: điểm trung bình của 1 sản phẩm (bỏ qua review đã xoá mềm)
     @Query("""
-            SELECT COALESCE(AVG(r.rating), 0)
-            FROM Review r
-            WHERE r.orderItem.productVariant.product.id = :productId
-              AND r.isDeleted = false
-            """)
+        SELECT COALESCE(AVG(r.rating), 0)
+        FROM Review r
+        WHERE r.orderItem.productVariant.product.id = :productId
+          AND r.isDeleted = false
+          AND r.approvalStatus = 1
+        """)
     Double findAverageRatingByProductId(@Param("productId") Integer productId);
 
-    // THÊM MỚI: số lượt đánh giá của 1 sản phẩm
     @Query("""
-            SELECT COUNT(r)
-            FROM Review r
-            WHERE r.orderItem.productVariant.product.id = :productId
-              AND r.isDeleted = false
-            """)
+        SELECT COUNT(r)
+        FROM Review r
+        WHERE r.orderItem.productVariant.product.id = :productId
+          AND r.isDeleted = false
+          AND r.approvalStatus = 1
+        """)
     Long countReviewsByProductId(@Param("productId") Integer productId);
 }

@@ -65,13 +65,13 @@
       <p>Đang tải đánh giá...</p>
     </div>
 
-    <div v-else-if="reviews.length === 0" class="empty-review">
+    <div v-else-if="publicReviews.length === 0" class="empty-review">
       Chưa có đánh giá nào cho sản phẩm này.
     </div>
 
     <div v-else class="review-list">
       <div
-        v-for="review in reviews"
+        v-for="review in publicReviews"
         :key="review.reviewId"
         class="review-item"
       >
@@ -104,26 +104,41 @@
           Khách hàng không để lại bình luận.
         </div>
 
-        <!-- ĐÃ THÊM: Khu vực hiển thị Ảnh/Video đánh giá -->
-        <div v-if="review.mediaFiles && review.mediaFiles.length > 0" class="review-media-list mt-3">
-          <div v-for="(media, index) in review.mediaFiles" :key="index" class="media-item">
-            <!-- Nếu là Video -->
-            <video 
-              v-if="media.type === 'video' || (media.url && media.url.match(/\.(mp4|webm|ogg)$/i)) || (typeof media === 'string' && media.match(/\.(mp4|webm|ogg)$/i))"
-              :src="media.url || media"
-              controls
+        <div
+          v-if="getReviewMediaList(review).length > 0"
+          class="review-media-list mt-3"
+        >
+          <button
+            v-for="(media, index) in getReviewMediaList(review)"
+            :key="`${media.url}-${index}`"
+            type="button"
+            class="media-item"
+            :title="media.isVideo ? 'Xem video đánh giá' : 'Xem ảnh đánh giá'"
+            @click="openMedia(media)"
+          >
+            <video
+              v-if="media.isVideo"
+              :src="media.url"
+              muted
+              playsinline
+              preload="metadata"
               class="media-preview"
             ></video>
-            
-            <!-- Nếu là Ảnh -->
-            <img 
+
+            <img
               v-else
-              :src="media.url || media" 
-              class="media-preview img-thumbnail-custom" 
-              alt="Ảnh đánh giá" 
-              @click="openMedia(media.url || media)"
+              :src="media.url"
+              class="media-preview img-thumbnail-custom"
+              alt="Ảnh đánh giá"
             />
-          </div>
+
+            <span class="media-overlay">
+              <i
+                class="bi"
+                :class="media.isVideo ? 'bi-play-circle' : 'bi-zoom-in'"
+              ></i>
+            </span>
+          </button>
         </div>
 
       </div>
@@ -160,11 +175,28 @@
       {{ errorMessage }}
     </div>
 
-    <!-- ĐÃ THÊM: Popup xem ảnh to -->
-    <div v-if="showMediaModal" class="media-modal-backdrop" @click="showMediaModal = false">
+    <div
+      v-if="showMediaModal && selectedMedia"
+      class="media-modal-backdrop"
+      @click="closeMedia"
+    >
       <div class="media-modal-content" @click.stop>
-        <button class="btn-close-modal" @click="showMediaModal = false">×</button>
-        <img :src="selectedMediaUrl" class="img-fluid" alt="Ảnh phóng to" />
+        <button class="btn-close-modal" type="button" @click="closeMedia">×</button>
+
+        <video
+          v-if="selectedMedia.isVideo"
+          :src="selectedMedia.url"
+          class="media-modal-video"
+          controls
+          autoplay
+        ></video>
+
+        <img
+          v-else
+          :src="selectedMedia.url"
+          class="img-fluid"
+          alt="Ảnh phóng to"
+        />
       </div>
     </div>
 
@@ -199,14 +231,158 @@ const pageSize = ref(5);
 const totalPages = ref(0);
 const totalElements = ref(0);
 
-// ĐÃ THÊM: Biến quản lý trạng thái hiển thị ảnh to
-const selectedMediaUrl = ref<string | undefined>("");
+const BACKEND_URL = "http://localhost:8080";
+
+type ReviewMediaView = {
+  url: string;
+  isVideo: boolean;
+};
+
+const selectedMedia = ref<ReviewMediaView | null>(null);
 const showMediaModal = ref(false);
 
-// ĐÃ THÊM: Hàm mở ảnh to
-const openMedia = (url: string) => {
-  selectedMediaUrl.value = url;
+const getReviewApprovalRawStatus = (review: any) => {
+  return (
+    review?.approvalStatus ??
+    review?.ApprovalStatus ??
+    review?.approval_status ??
+    review?.moderationStatus ??
+    review?.reviewApprovalStatus ??
+    null
+  );
+};
+
+const isPublicApprovedReview = (review: any) => {
+  const rawStatus = getReviewApprovalRawStatus(review);
+
+  if (rawStatus === null || rawStatus === undefined || rawStatus === "") {
+    return true;
+  }
+
+  const status = String(rawStatus).trim().toUpperCase();
+
+  return (
+    status === "1" ||
+    status === "APPROVED" ||
+    status === "VISIBLE" ||
+    status === "PUBLIC" ||
+    status === "PUBLISHED"
+  );
+};
+
+const publicReviews = computed(() => {
+  return reviews.value.filter((review) => isPublicApprovedReview(review));
+});
+
+const normalizeMediaUrl = (url: unknown) => {
+  const rawUrl = String(url || "").trim();
+
+  if (!rawUrl) {
+    return "";
+  }
+
+  if (
+    rawUrl.startsWith("http://") ||
+    rawUrl.startsWith("https://") ||
+    rawUrl.startsWith("data:") ||
+    rawUrl.startsWith("blob:")
+  ) {
+    return rawUrl;
+  }
+
+  if (rawUrl.startsWith("/")) {
+    return `${BACKEND_URL}${rawUrl}`;
+  }
+
+  return `${BACKEND_URL}/${rawUrl}`;
+};
+
+const getMediaUrl = (media: any) => {
+  if (typeof media === "string") {
+    return normalizeMediaUrl(media);
+  }
+
+  return normalizeMediaUrl(
+    media?.url ??
+      media?.mediaUrl ??
+      media?.MediaUrl ??
+      media?.secureUrl ??
+      media?.secure_url ??
+      media?.fileUrl ??
+      media?.FileUrl ??
+      media?.path ??
+      media?.Path ??
+      media?.imageUrl ??
+      media?.ImageUrl ??
+      ""
+  );
+};
+
+const isVideoMedia = (media: any, url: string) => {
+  if (typeof media !== "string") {
+    if (media?.isVideo === true) {
+      return true;
+    }
+
+    const mediaType = String(
+      media?.mediaType ??
+        media?.type ??
+        media?.contentType ??
+        media?.resourceType ??
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    if (mediaType.includes("video")) {
+      return true;
+    }
+  }
+
+  return /\.(mp4|webm|ogg|mov|m4v)(\?|#|$)/i.test(url) || url.includes("/video/upload/");
+};
+
+const getReviewMediaList = (review: any): ReviewMediaView[] => {
+  const rawMedia =
+    review?.mediaFiles ??
+    review?.mediaUrls ??
+    review?.mediaUrl ??
+    review?.reviewMedias ??
+    review?.reviewMediaUrls ??
+    review?.reviewMedia ??
+    review?.medias ??
+    review?.media ??
+    [];
+
+  const mediaArray = Array.isArray(rawMedia) ? rawMedia : [rawMedia];
+  const usedUrls = new Set<string>();
+
+  return mediaArray
+    .map((media) => {
+      const url = getMediaUrl(media);
+
+      if (!url || usedUrls.has(url)) {
+        return null;
+      }
+
+      usedUrls.add(url);
+
+      return {
+        url,
+        isVideo: isVideoMedia(media, url),
+      };
+    })
+    .filter((media): media is ReviewMediaView => Boolean(media));
+};
+
+const openMedia = (media: ReviewMediaView) => {
+  selectedMedia.value = media;
   showMediaModal.value = true;
+};
+
+const closeMedia = () => {
+  showMediaModal.value = false;
+  selectedMedia.value = null;
 };
 
 const extractContent = <T,>(data: PageResponse<T> | T[]): T[] => {
@@ -272,7 +448,6 @@ const fetchReviews = async (page = pageNumber.value) => {
     ]);
 
     summary.value = summaryRes.data;
-    // Chú ý: Dữ liệu review.mediaFiles phải được Backend trả về sẵn ở đây
     reviews.value = extractContent<PublicProductReviewResponse>(reviewsRes.data);
 
     emit("summary-loaded", summaryRes.data);
@@ -544,9 +719,6 @@ watch(
   }
 }
 
-/* =========================================
-   ĐÃ THÊM: CSS cho phần hiển thị Ảnh/Video 
-   ========================================= */
 .review-media-list {
   display: flex;
   flex-wrap: wrap;
@@ -560,25 +732,44 @@ watch(
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid #e5e7eb;
+  background: #ffffff;
   cursor: pointer;
   transition: transform 0.2s ease, border-color 0.2s ease;
   position: relative;
+  padding: 0;
 }
 
 .media-item:hover {
   transform: scale(1.05);
   border-color: #bd9a5f;
   z-index: 10;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .media-preview {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
-/* CSS cho Popup xem ảnh to */
+.media-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 22px;
+  background: rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.media-item:hover .media-overlay {
+  opacity: 1;
+}
+
 .media-modal-backdrop {
   position: fixed;
   top: 0;
@@ -589,7 +780,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 999999; 
+  z-index: 999999;
   padding: 20px;
   backdrop-filter: blur(4px);
 }
@@ -603,19 +794,25 @@ watch(
   align-items: center;
 }
 
-.media-modal-content img {
+.media-modal-content img,
+.media-modal-video {
   max-width: 100%;
   max-height: 90vh;
   object-fit: contain;
   border-radius: 8px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.media-modal-video {
+  width: min(900px, 92vw);
+  background: #000000;
 }
 
 .btn-close-modal {
   position: absolute;
   top: -45px;
   right: -10px;
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   color: white;
   border: none;
   width: 40px;
@@ -631,6 +828,7 @@ watch(
 }
 
 .btn-close-modal:hover {
-  background: #dc2626; 
+  background: #dc2626;
 }
+
 </style>
