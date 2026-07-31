@@ -12,6 +12,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.example.datn_sd69.entity.base.BaseEntity;
+import org.hibernate.annotations.Nationalized;
 
 import java.time.LocalDateTime;
 
@@ -30,15 +31,9 @@ public class OrderDeliveryEvidence extends BaseEntity {
     @Column(name = "EvidenceType", nullable = false)
     private Integer evidenceType;
 
-    @Column(name = "MediaUrl", length = 1000, nullable = false)
-    private String mediaUrl;
-
-    /**
-     * 1 = Ảnh
-     * 2 = Video
-     */
-    @Column(name = "MediaType", nullable = false)
-    private Integer mediaType;
+    @Nationalized
+    @Column(name = "ImageUrl", length = 1000, nullable = false)
+    private String imageUrl;
 
     @Column(name = "CreatedAt", nullable = false)
     private LocalDateTime createdAt;

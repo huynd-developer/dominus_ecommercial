@@ -72,6 +72,10 @@ public class AdminOrderResponse {
 
     private String deliveryFailedByName;
 
+    /**
+     * Ảnh minh chứng giao hàng.
+     * Giữ tên MediaUrls để không làm vỡ FE đang dùng field cũ.
+     */
     private List<String> deliverySuccessMediaUrls = new ArrayList<>();
 
     private List<String> deliveryFailedMediaUrls = new ArrayList<>();

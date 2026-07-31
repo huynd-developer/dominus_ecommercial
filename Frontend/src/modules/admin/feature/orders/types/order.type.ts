@@ -148,7 +148,7 @@ export interface AdminOrderResponse {
   deliveryFailedAt?: string | null;
   deliveryFailedByName?: string | null;
 
-  /** Ảnh/video minh chứng giao hàng. */
+  /** Ảnh minh chứng giao hàng. */
   deliverySuccessMediaUrls?: string[] | null;
   deliveryFailedMediaUrls?: string[] | null;
 

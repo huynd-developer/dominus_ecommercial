@@ -122,7 +122,7 @@ export const orderService = {
 
   /**
    * Xác nhận giao hàng thành công.
-   * Bắt buộc gửi ảnh/video minh chứng.
+   * Bắt buộc gửi ảnh minh chứng.
    */
   async markDeliveryCompleted(
     orderId: number,
@@ -143,7 +143,7 @@ export const orderService = {
 
   /**
    * Xác nhận giao hàng thất bại.
-   * Bắt buộc có lý do, mô tả nếu chọn Khác, ảnh/video nếu lý do nhạy cảm.
+   * Bắt buộc có lý do, mô tả nếu chọn Khác, ảnh nếu lý do nhạy cảm.
    */
   async markDeliveryFailed(orderId: number, data: MarkDeliveryFailedRequest) {
     const response = await api.patch<AdminOrderResponse>(

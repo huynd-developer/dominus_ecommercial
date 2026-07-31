@@ -212,146 +212,92 @@
                       <div class="timeline-content">
                         <div class="t-title">{{ track.title }}</div>
                         <div class="t-desc">{{ track.desc }}</div>
+
+                        <div
+                          v-if="
+                            track.title === 'Đã giao' &&
+                            Number(order.status) === 3 &&
+                            getDeliverySuccessMedia(order).length > 0
+                          "
+                          class="tracking-delivery-media"
+                        >
+                          <div class="return-media-list">
+                            <button
+                              v-for="(media, mediaIndex) in getDeliverySuccessMedia(order)"
+                              :key="`delivery-success-${media.url}-${mediaIndex}`"
+                              type="button"
+                              class="return-media-button"
+                              @click.stop="openDeliverySuccessMediaPreview(order, mediaIndex)"
+                            >
+                              <img
+                                :src="media.url"
+                                class="return-media-thumb"
+                                alt="Minh chứng giao hàng thành công"
+                                @error="handleImageError"
+                              />
+
+                              <span class="return-media-overlay">
+                                <i class="bi bi-zoom-in"></i>
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div
+                          v-if="
+                            track.title === 'Giao hàng thất bại' &&
+                            Number(order.status) === 5 &&
+                            (
+                              order.deliveryFailedDescription ||
+                              getDeliveryFailedMedia(order).length > 0
+                            )
+                          "
+                          class="tracking-delivery-media is-failed"
+                        >
+                          <div
+                            v-if="order.deliveryFailedDescription"
+                            class="tracking-delivery-note"
+                          >
+                            <span>Mô tả:</span>
+                            <strong>{{ order.deliveryFailedDescription }}</strong>
+                          </div>
+
+                          <div
+                            v-if="getDeliveryFailedMedia(order).length > 0"
+                            class="tracking-delivery-proof"
+                          >
+                            <div class="tracking-delivery-media-label text-danger">
+                              <i class="bi bi-x-circle me-1"></i>
+                              Ảnh minh chứng giao thất bại:
+                            </div>
+
+                            <div class="return-media-list">
+                              <button
+                                v-for="(media, mediaIndex) in getDeliveryFailedMedia(order)"
+                                :key="`delivery-failed-${media.url}-${mediaIndex}`"
+                                type="button"
+                                class="return-media-button"
+                                @click.stop="openDeliveryFailedMediaPreview(order, mediaIndex)"
+                              >
+                                <img
+                                  :src="media.url"
+                                  class="return-media-thumb"
+                                  alt="Minh chứng giao hàng thất bại"
+                                  @error="handleImageError"
+                                />
+
+                                <span class="return-media-overlay">
+                                  <i class="bi bi-zoom-in"></i>
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
                 <!-- KẾT THÚC KHỐI THEO DÕI -->
-
-                <div v-if="hasDeliveryInfo(order)" class="delivery-info-box mb-4">
-                  <div class="delivery-info-title">
-                    <i class="bi bi-box-seam me-2"></i>
-                    Thông tin giao hàng
-                  </div>
-
-                  <div v-if="hasDeliveryCompletedInfo(order)" class="delivery-info-card">
-                    <div class="delivery-info-head text-success">
-                      <i class="bi bi-check-circle me-1"></i>
-                      Giao hàng thành công
-                    </div>
-
-                    <div class="delivery-info-row">
-                      <span>Thời gian:</span>
-                      <strong>{{ formatDate(order.completedAt) }}</strong>
-                    </div>
-
-                    <div class="delivery-info-row">
-                      <span>Xác nhận bởi:</span>
-                      <strong>{{ order.deliveryCompletedByName || "Cửa hàng" }}</strong>
-                    </div>
-
-                    <div
-                      v-if="getDeliverySuccessMedia(order).length > 0"
-                      class="return-media-section"
-                    >
-                      <div class="return-media-label">
-                        Minh chứng giao hàng:
-                      </div>
-
-                      <div class="return-media-list">
-                        <button
-                          v-for="(media, index) in getDeliverySuccessMedia(order)"
-                          :key="`delivery-success-${media.url}-${index}`"
-                          type="button"
-                          class="return-media-button"
-                          @click.stop="openDeliverySuccessMediaPreview(order, index)"
-                        >
-                          <video
-                            v-if="media.isVideo"
-                            :src="media.url"
-                            class="return-media-thumb"
-                            muted
-                            preload="metadata"
-                          ></video>
-
-                          <img
-                            v-else
-                            :src="media.url"
-                            class="return-media-thumb"
-                            alt="Minh chứng giao hàng thành công"
-                            @error="handleImageError"
-                          />
-
-                          <span class="return-media-overlay">
-                            <i
-                              class="bi"
-                              :class="media.isVideo ? 'bi-play-circle' : 'bi-zoom-in'"
-                            ></i>
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div v-if="hasDeliveryFailedInfo(order)" class="delivery-info-card is-failed">
-                    <div class="delivery-info-head text-danger">
-                      <i class="bi bi-x-circle me-1"></i>
-                      Giao hàng thất bại
-                    </div>
-
-                    <div class="delivery-info-row">
-                      <span>Lý do:</span>
-                      <strong>{{ order.deliveryFailedReason || "-" }}</strong>
-                    </div>
-
-                    <div class="delivery-info-row">
-                      <span>Mô tả:</span>
-                      <strong>{{ order.deliveryFailedDescription || "-" }}</strong>
-                    </div>
-
-                    <div class="delivery-info-row">
-                      <span>Thời gian:</span>
-                      <strong>{{ formatDate(order.deliveryFailedAt) }}</strong>
-                    </div>
-
-                    <div class="delivery-info-row">
-                      <span>Xác nhận bởi:</span>
-                      <strong>{{ order.deliveryFailedByName || "Cửa hàng" }}</strong>
-                    </div>
-
-                    <div
-                      v-if="getDeliveryFailedMedia(order).length > 0"
-                      class="return-media-section"
-                    >
-                      <div class="return-media-label">
-                        Minh chứng giao thất bại:
-                      </div>
-
-                      <div class="return-media-list">
-                        <button
-                          v-for="(media, index) in getDeliveryFailedMedia(order)"
-                          :key="`delivery-failed-${media.url}-${index}`"
-                          type="button"
-                          class="return-media-button"
-                          @click.stop="openDeliveryFailedMediaPreview(order, index)"
-                        >
-                          <video
-                            v-if="media.isVideo"
-                            :src="media.url"
-                            class="return-media-thumb"
-                            muted
-                            preload="metadata"
-                          ></video>
-
-                          <img
-                            v-else
-                            :src="media.url"
-                            class="return-media-thumb"
-                            alt="Minh chứng giao hàng thất bại"
-                            @error="handleImageError"
-                          />
-
-                          <span class="return-media-overlay">
-                            <i
-                              class="bi"
-                              :class="media.isVideo ? 'bi-play-circle' : 'bi-zoom-in'"
-                            ></i>
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
                 <div class="order-items">
                   <div
@@ -3464,19 +3410,19 @@ const REVIEW_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
 };
 
 const DELIVERY_SUCCESS_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
-  title: "Minh chứng giao hàng thành công",
-  counterLabel: "minh chứng giao hàng",
-  emptyText: "Không có minh chứng giao hàng thành công để hiển thị.",
-  imageAlt: "Minh chứng giao hàng thành công",
-  thumbTitle: "Chọn minh chứng giao hàng",
+  title: "Ảnh minh chứng giao hàng thành công",
+  counterLabel: "ảnh minh chứng giao hàng",
+  emptyText: "Không có ảnh minh chứng giao hàng thành công để hiển thị.",
+  imageAlt: "Ảnh minh chứng giao hàng thành công",
+  thumbTitle: "Chọn ảnh minh chứng giao hàng",
 };
 
 const DELIVERY_FAILED_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
-  title: "Minh chứng giao hàng thất bại",
-  counterLabel: "minh chứng giao thất bại",
-  emptyText: "Không có minh chứng giao hàng thất bại để hiển thị.",
-  imageAlt: "Minh chứng giao hàng thất bại",
-  thumbTitle: "Chọn minh chứng giao thất bại",
+  title: "Ảnh minh chứng giao hàng thất bại",
+  counterLabel: "ảnh minh chứng giao thất bại",
+  emptyText: "Không có ảnh minh chứng giao hàng thất bại để hiển thị.",
+  imageAlt: "Ảnh minh chứng giao hàng thất bại",
+  thumbTitle: "Chọn ảnh minh chứng giao thất bại",
 };
 
 const buildReturnPreviewMainHtml = (
@@ -3635,7 +3581,7 @@ const getDeliveryMedia = (rawMedia: any): ReturnMediaView[] => {
     .map((media: any) => {
       const url = getReturnMediaUrl(media);
       if (!url) return null;
-      return { url, isVideo: isReturnMediaVideo(media, url) };
+      return { url, isVideo: false };
     })
     .filter((media): media is ReturnMediaView => media !== null);
 };
@@ -3655,30 +3601,6 @@ const getDeliveryFailedMedia = (order: any): ReturnMediaView[] => {
       order?.deliveryFailedProofUrls ??
       [],
   );
-};
-
-const hasDeliveryCompletedInfo = (order: any) => {
-  return Boolean(
-    Number(order?.status) === 3 ||
-      hasTextValue(order?.completedAt) ||
-      hasTextValue(order?.deliveryCompletedByName) ||
-      getDeliverySuccessMedia(order).length > 0,
-  );
-};
-
-const hasDeliveryFailedInfo = (order: any) => {
-  return Boolean(
-    Number(order?.status) === 5 ||
-      hasTextValue(order?.deliveryFailedReason) ||
-      hasTextValue(order?.deliveryFailedDescription) ||
-      hasTextValue(order?.deliveryFailedAt) ||
-      hasTextValue(order?.deliveryFailedByName) ||
-      getDeliveryFailedMedia(order).length > 0,
-  );
-};
-
-const hasDeliveryInfo = (order: any) => {
-  return hasDeliveryCompletedInfo(order) || hasDeliveryFailedInfo(order);
 };
 
 const openDeliverySuccessMediaPreview = async (order: any, index: number) => {
@@ -4159,6 +4081,50 @@ const getItemImage = (item: any) => {
   max-width: 200px;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
+}
+
+.tracking-delivery-media {
+  margin-top: 10px;
+  margin-bottom: 0;
+  margin-left: 0;
+  padding-top: 10px;
+  border-top: 1px dashed #dbe3ef;
+}
+
+.tracking-delivery-media.is-failed {
+  color: #ef4444;
+}
+
+.tracking-delivery-media-label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.tracking-delivery-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.tracking-delivery-note strong {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.tracking-delivery-proof {
+  margin-top: 10px;
+}
+
+@media (max-width: 640px) {
+  .tracking-delivery-media {
+    margin-left: 0;
+  }
 }
 
 .empty-box {

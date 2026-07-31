@@ -17,5 +17,9 @@ public class MarkDeliveryFailedRequest {
 
     private String description;
 
+    /**
+     * Ảnh minh chứng giao hàng thất bại.
+     * Bắt buộc hay không phụ thuộc lý do, validate trong service.
+     */
     private List<MultipartFile> files = new ArrayList<>();
 }

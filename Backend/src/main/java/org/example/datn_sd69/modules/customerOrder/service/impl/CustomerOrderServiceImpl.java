@@ -643,7 +643,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         return orderDeliveryEvidenceRepository
                 .findByOrder_IdAndEvidenceTypeOrderByCreatedAtAsc(order.getId(), evidenceType)
                 .stream()
-                .map(OrderDeliveryEvidence::getMediaUrl)
+                .map(OrderDeliveryEvidence::getImageUrl)
                 .filter(url -> url != null && !url.trim().isEmpty())
                 .toList();
     }

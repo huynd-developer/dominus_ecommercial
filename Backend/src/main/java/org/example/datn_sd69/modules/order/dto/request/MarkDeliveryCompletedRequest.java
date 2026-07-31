@@ -13,5 +13,9 @@ import java.util.List;
 @AllArgsConstructor
 public class MarkDeliveryCompletedRequest {
 
+    /**
+     * Ảnh minh chứng giao hàng thành công.
+     * Validate số lượng, dung lượng và định dạng xử lý trong service.
+     */
     private List<MultipartFile> files = new ArrayList<>();
 }

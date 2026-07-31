@@ -84,21 +84,22 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private static final Set<String> DELIVERY_FAILED_REASONS = Set.of(
             "Không liên hệ được khách hàng",
             "Khách từ chối nhận hàng",
-            "Sai địa chỉ giao hàng",
-            "Khách hẹn giao lại",
-            "Đơn hàng bị thất lạc",
+            "Sai hoặc thiếu địa chỉ giao hàng",
+            "Không có người nhận hàng",
             "Hàng bị hư hỏng khi giao",
-            "Khu vực giao hàng không hỗ trợ",
+            "Khách hẹn giao lại nhưng shop không thể tiếp tục giao",
             "Khác"
     );
 
     private static final Set<String> DELIVERY_FAILED_REQUIRES_EVIDENCE_REASONS = Set.of(
             "Không liên hệ được khách hàng",
             "Khách từ chối nhận hàng",
-            "Sai địa chỉ giao hàng",
+            "Sai hoặc thiếu địa chỉ giao hàng",
             "Hàng bị hư hỏng khi giao",
             "Khác"
     );
+
+    private static final int MAX_DELIVERY_IMAGE_COUNT = 2;
 
     private static final Set<String> ALLOWED_DELIVERY_IMAGE_EXTENSIONS = Set.of(
             ".jpg",
@@ -107,14 +108,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             ".webp"
     );
 
-    private static final Set<String> ALLOWED_DELIVERY_VIDEO_EXTENSIONS = Set.of(
-            ".mp4",
-            ".mov",
-            ".webm"
-    );
-
-    private static final long MAX_DELIVERY_IMAGE_SIZE = 20L * 1024L * 1024L;
-    private static final long MAX_DELIVERY_VIDEO_SIZE = 200L * 1024L * 1024L;
+    private static final long MAX_DELIVERY_IMAGE_SIZE = 10L * 1024L * 1024L;
 
     private static final String DELIVERY_EVIDENCE_CLOUDINARY_FOLDER = "order-delivery-evidence";
 
@@ -645,78 +639,56 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         if (required && files.isEmpty()) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Vui lòng tải lên ảnh/video minh chứng giao hàng"
+                    "Vui lòng tải lên ảnh minh chứng giao hàng"
+            );
+        }
+
+        if (files.size() > MAX_DELIVERY_IMAGE_COUNT) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ được tải tối đa 2 ảnh minh chứng giao hàng"
             );
         }
 
         for (MultipartFile file : files) {
-            validateSingleDeliveryEvidenceFile(file);
+            validateSingleDeliveryEvidenceImage(file);
         }
     }
 
-    private void validateSingleDeliveryEvidenceFile(MultipartFile file) {
+    private void validateSingleDeliveryEvidenceImage(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             return;
         }
 
-        Integer mediaType = resolveDeliveryMediaType(file);
-        long maxSize = Integer.valueOf(MEDIA_TYPE_VIDEO).equals(mediaType)
-                ? MAX_DELIVERY_VIDEO_SIZE
-                : MAX_DELIVERY_IMAGE_SIZE;
-
-        if (file.getSize() > maxSize) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    Integer.valueOf(MEDIA_TYPE_VIDEO).equals(mediaType)
-                            ? "Video minh chứng không được vượt quá 200MB"
-                            : "Ảnh minh chứng không được vượt quá 20MB"
-            );
-        }
-    }
-
-    private Integer resolveDeliveryMediaType(MultipartFile file) {
-        String filename = file == null || file.getOriginalFilename() == null
+        String filename = file.getOriginalFilename() == null
                 ? ""
                 : file.getOriginalFilename().trim();
-
         String extension = getFileExtension(filename);
-        String contentType = file == null || file.getContentType() == null
+
+        if (extension.isBlank() || !ALLOWED_DELIVERY_IMAGE_EXTENSIONS.contains(extension)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ảnh minh chứng chỉ hỗ trợ JPG, JPEG, PNG hoặc WEBP"
+            );
+        }
+
+        String contentType = file.getContentType() == null
                 ? ""
-                : file.getContentType().toLowerCase(Locale.ROOT);
+                : file.getContentType().trim().toLowerCase(Locale.ROOT);
 
-        if (contentType.startsWith("image/") || ALLOWED_DELIVERY_IMAGE_EXTENSIONS.contains(extension)) {
-            if (!ALLOWED_DELIVERY_IMAGE_EXTENSIONS.contains(extension)
-                    && !".jpg".equals(extension)
-                    && !".jpeg".equals(extension)
-                    && !".png".equals(extension)
-                    && !".webp".equals(extension)) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Ảnh minh chứng chỉ hỗ trợ JPG, JPEG, PNG, WEBP"
-                );
-            }
-
-            return MEDIA_TYPE_IMAGE;
+        if (!contentType.isBlank() && !contentType.startsWith("image/")) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ được tải lên file ảnh minh chứng"
+            );
         }
 
-        if (contentType.startsWith("video/") || ALLOWED_DELIVERY_VIDEO_EXTENSIONS.contains(extension)) {
-            if (!ALLOWED_DELIVERY_VIDEO_EXTENSIONS.contains(extension)
-                    && !".mp4".equals(extension)
-                    && !".mov".equals(extension)
-                    && !".webm".equals(extension)) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Video minh chứng chỉ hỗ trợ MP4, MOV, WEBM"
-                );
-            }
-
-            return MEDIA_TYPE_VIDEO;
+        if (file.getSize() > MAX_DELIVERY_IMAGE_SIZE) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Mỗi ảnh minh chứng không được vượt quá 10MB"
+            );
         }
-
-        throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "File minh chứng chỉ hỗ trợ ảnh JPG/JPEG/PNG/WEBP hoặc video MP4/MOV/WEBM"
-        );
     }
 
     private String getFileExtension(String filename) {
@@ -748,14 +720,12 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         List<OrderDeliveryEvidence> evidences = new ArrayList<>();
 
         for (MultipartFile file : files) {
-            Integer mediaType = resolveDeliveryMediaType(file);
-            String mediaUrl = uploadDeliveryEvidenceFile(file);
+            String imageUrl = uploadDeliveryEvidenceFile(file);
 
             OrderDeliveryEvidence evidence = new OrderDeliveryEvidence();
             evidence.setOrder(order);
             evidence.setEvidenceType(evidenceType);
-            evidence.setMediaType(mediaType);
-            evidence.setMediaUrl(mediaUrl);
+            evidence.setImageUrl(imageUrl);
             evidence.setCreatedAt(LocalDateTime.now());
 
             evidences.add(evidence);
@@ -772,7 +742,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                             "folder",
                             DELIVERY_EVIDENCE_CLOUDINARY_FOLDER,
                             "resource_type",
-                            "auto"
+                            "image"
                     )
             );
 
@@ -781,7 +751,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             if (secureUrl == null || secureUrl.toString().isBlank()) {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
-                        "Không lấy được đường dẫn file minh chứng sau khi tải lên"
+                        "Không lấy được đường dẫn ảnh minh chứng sau khi tải lên"
                 );
             }
 
@@ -789,7 +759,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         } catch (IOException exception) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Không thể tải file minh chứng giao hàng"
+                    "Không thể tải ảnh minh chứng giao hàng"
             );
         }
     }
@@ -812,7 +782,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         return orderDeliveryEvidenceRepository
                 .findByOrder_IdAndEvidenceTypeOrderByCreatedAtAsc(order.getId(), evidenceType)
                 .stream()
-                .map(OrderDeliveryEvidence::getMediaUrl)
+                .map(OrderDeliveryEvidence::getImageUrl)
                 .filter(url -> url != null && !url.trim().isEmpty())
                 .toList();
     }

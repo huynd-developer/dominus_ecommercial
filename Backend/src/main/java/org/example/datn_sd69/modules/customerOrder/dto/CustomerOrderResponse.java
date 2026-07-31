@@ -40,6 +40,11 @@ public record CustomerOrderResponse(
         String deliveryFailedDescription,
         LocalDateTime deliveryFailedAt,
         String deliveryFailedByName,
+
+        /**
+         * Ảnh minh chứng giao hàng.
+         * Giữ tên MediaUrls để không làm vỡ FE đang dùng field cũ.
+         */
         List<String> deliverySuccessMediaUrls,
         List<String> deliveryFailedMediaUrls,
 
