@@ -868,8 +868,6 @@ const saveData = async () => {
   if (!validateForm()) return;
 
   try {
-    appStore.startLoading();
-
     const payload = {
       name: formData.value.name.trim(),
       description: formData.value.description
@@ -902,6 +900,24 @@ const saveData = async () => {
     } as any;
 
     if (isEdit.value && props.productSelected) {
+      // 1. NẾU LÀ SỬA SẢN PHẨM -> HIỂN THỊ POPUP XÁC NHẬN
+      const confirmResult = await Swal.fire({
+        title: "Xác nhận cập nhật?",
+        text: "Bạn có chắc chắn muốn lưu các thay đổi cho sản phẩm này không?",
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonColor: "#2563eb",
+        cancelButtonColor: "#ef4444",
+        confirmButtonText: "Đồng ý",
+        cancelButtonText: "Hủy bỏ",
+      });
+
+      // Nếu người dùng bấm Hủy -> Dừng lại, không chạy code bên dưới
+      if (!confirmResult.isConfirmed) return;
+
+      // Người dùng đã Đồng ý -> Bắt đầu loading và gọi API
+      appStore.startLoading();
+      
       await productService.updateProduct(props.productSelected.id, payload);
 
       for (const imageId of deletedImageIds.value) {
@@ -944,6 +960,8 @@ const saveData = async () => {
         timerProgressBar: true,
       });
     } else {
+      // 2. NẾU LÀ THÊM MỚI SẢN PHẨM -> CHẠY LUÔN KHÔNG CẦN CONFIRM
+      appStore.startLoading();
       const created = await productService.createProduct(payload);
 
       for (const image of imageList.value) {
@@ -984,6 +1002,7 @@ const saveData = async () => {
       text: e?.response?.data?.message ?? "Không thể lưu sản phẩm",
     });
   } finally {
+    // Đảm bảo phải tắt loading dù API chạy thành công hay thất bại
     appStore.stopLoading();
   }
 };

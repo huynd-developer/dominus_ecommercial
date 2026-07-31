@@ -1,7 +1,7 @@
 <template>
   <div class="detail-view-container">
     <nav class="breadcrumb">
-      <span class="back-link" @click="emit('back')">
+      <span class="back-link" @click="emit('back')" title="Quay lại">
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -15,11 +15,18 @@
       </span>
 
       <span class="divider">/</span>
-      Nước hoa
-      <span class="divider">/</span>
-      {{ genderText }}
-      <span class="divider">/</span>
-      {{ brandText }}
+      <span class="breadcrumb-item clickable" @click="navigateToShop('all')">Nước hoa</span>
+      
+      <template v-if="genderText && genderText !== 'Đang cập nhật'">
+        <span class="divider">/</span>
+        <span class="breadcrumb-item clickable" @click="navigateToShop('gender', product?.gender)">{{ genderText }}</span>
+      </template>
+
+      <template v-if="brandText && brandText !== 'Đang cập nhật'">
+        <span class="divider">/</span>
+        <span class="breadcrumb-item clickable" @click="navigateToShop('brand', product?.brand)">{{ brandText }}</span>
+      </template>
+
       <span class="divider">/</span>
       <span class="active">
         {{ product?.name || "Đang cập nhật" }}
@@ -82,23 +89,6 @@
         <div class="header-info">
           <div class="brand">
             {{ brandText }}
-          </div>
-
-          <div class="share">
-            <svg
-              class="icon-sm"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <circle cx="18" cy="5" r="3" />
-              <circle cx="6" cy="12" r="3" />
-              <circle cx="18" cy="19" r="3" />
-              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-            </svg>
-            Chia sẻ
           </div>
         </div>
 
@@ -226,13 +216,6 @@
               @click="selectVariant(variant)"
             >
              <span>{{ getCapacityText(variant) }}</span>
-
-              <span
-                v-if="isVariantFlashSale(variant)"
-                class="variant-sale-chip"
-              >
-                -{{ formatDiscount(variant.discountPercent) }}%
-              </span>
 
               <span
                 v-if="
@@ -486,6 +469,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "back"): void;
   (e: "buy-now"): void;
+  (e: "filter-category", filter: { type: string; value: any }): void;
+  (e: "navigate-shop", filter: { type: string; value: any }): void;
 }>();
 
 const selectedVariant = ref<any>(null);
@@ -519,7 +504,6 @@ const isCustomerLoggedIn = () => {
   return hasToken() && getCurrentRole() === "USER";
 };
 
-// ĐÃ SỬA: Đổi "No Image" thành "Không có ảnh"
 const getPlaceholderImage = () => {
   return (
     "data:image/svg+xml;utf8," +
@@ -627,38 +611,45 @@ const productGalleryImages = computed(() => {
   const images: string[] = [];
   const productData = props.product;
 
-  appendImage(images, productData?.mainImage);
-  appendImage(images, productData?.mainImageUrl);
-  appendImage(images, productData?.thumbnailUrl);
-  appendImage(images, productData?.imageUrl);
-  appendImage(images, productData?.ImageUrl);
-  appendImage(images, productData?.image);
+  const addUnique = (url: unknown) => {
+    const formatted = getImageUrlFromObject(url);
+    if (formatted && !images.includes(formatted)) {
+      images.push(formatted);
+    }
+  };
 
-  appendImageList(images, productData?.images);
-  appendImageList(images, productData?.Images);
+  if (productData?.primaryImageUrl) {
+    addUnique(productData.primaryImageUrl);
+  }
+
+  if (Array.isArray(productData?.images)) {
+    const primaryObj = productData.images.find((img: any) => Boolean(img?.isPrimary));
+    if (primaryObj) {
+      addUnique(primaryObj?.imageUrl || primaryObj);
+    }
+
+    productData.images.forEach((img: any) => {
+      addUnique(img?.imageUrl || img);
+    });
+  }
+
+  addUnique(productData?.mainImage);
+  addUnique(productData?.mainImageUrl);
+  addUnique(productData?.thumbnailUrl);
+  addUnique(productData?.imageUrl);
+  addUnique(productData?.image);
+
   appendImageList(images, productData?.galleryImages);
   appendImageList(images, productData?.imageList);
-  appendImageList(images, productData?.ImageList);
   appendImageList(images, productData?.productImages);
-  appendImageList(images, productData?.ProductImages);
-  appendImageList(images, productData?.productImageList);
-  appendImageList(images, productData?.ProductImageList);
 
   if (selectedVariant.value) {
-    getVariantImageList(selectedVariant.value).forEach((imageUrl) => {
-      if (!images.includes(imageUrl)) {
-        images.push(imageUrl);
-      }
-    });
+    getVariantImageList(selectedVariant.value).forEach((imageUrl) => addUnique(imageUrl));
   }
 
   if (Array.isArray(productData?.variants)) {
     productData.variants.forEach((variant: any) => {
-      getVariantImageList(variant).forEach((imageUrl) => {
-        if (!images.includes(imageUrl)) {
-          images.push(imageUrl);
-        }
-      });
+      getVariantImageList(variant).forEach((imageUrl) => addUnique(imageUrl));
     });
   }
 
@@ -689,6 +680,12 @@ const handleImageError = (event: Event) => {
 
   target.onerror = null;
   target.src = getPlaceholderImage();
+};
+
+const navigateToShop = (type: string, value: any = null) => {
+  emit("back"); // Về lại trang danh sách trước
+  emit("filter-category", { type, value }); // Sau đó áp dụng bộ lọc ngay lập tức
+  emit("navigate-shop", { type, value });
 };
 
 const brandText = computed(() => {
@@ -775,11 +772,6 @@ const selectedSkuText = computed(() => {
   );
 });
 
-/* ===== Hiển thị sao/đánh giá =====
-   Quy tắc nghiệp vụ:
-   - Chưa có đánh giá: mặc định hiển thị 5.0 và 5 sao.
-   - Đã có đánh giá: hiển thị đúng điểm trung bình theo lượt đánh giá.
-   - reviewSummary từ ProductReviews được ưu tiên vì là dữ liệu mới nhất. */
 const DEFAULT_RATING = 5;
 const MAX_RATING = 5;
 
@@ -1462,6 +1454,13 @@ const goToCart = () => {
 watch(
   () => props.product,
   (newProduct) => {
+    if (newProduct) {
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    }
+
     reviewSummary.value = null;
     isFavorited.value = false;
 
@@ -1477,7 +1476,19 @@ watch(
       quantity.value = 1;
     }
 
-    selectedImageUrl.value = productGalleryImages.value[0] || "";
+    let primaryUrl = "";
+    if (newProduct?.primaryImageUrl) {
+      primaryUrl = getImageUrlFromObject(newProduct.primaryImageUrl);
+    } else if (Array.isArray(newProduct?.images)) {
+      const primaryObj = newProduct.images.find((img: any) => Boolean(img?.isPrimary));
+      if (primaryObj) {
+        primaryUrl = getImageUrlFromObject(primaryObj?.imageUrl || primaryObj);
+      } else if (newProduct.images.length > 0) {
+        primaryUrl = getImageUrlFromObject(newProduct.images[0]?.imageUrl || newProduct.images[0]);
+      }
+    }
+
+    selectedImageUrl.value = primaryUrl || productGalleryImages.value[0] || "";
   },
   {
     immediate: true,
@@ -1524,6 +1535,18 @@ watch(
   color: #c69c6d;
 }
 
+.breadcrumb-item.clickable {
+  cursor: pointer;
+  color: #4a5568;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.breadcrumb-item.clickable:hover {
+  color: #c69c6d;
+  text-decoration: underline;
+}
+
 .divider {
   color: #cbd5e0;
 }
@@ -1549,18 +1572,21 @@ watch(
 
 .main-image-wrapper {
   background: #f8f9fa;
-  border-radius: 12px;
-  padding: 40px;
-  text-align: center;
+  border-radius: 16px;
+  overflow: hidden;
   position: relative;
   margin-bottom: 15px;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #eaeaea;
 }
 
 .main-image {
   width: 100%;
-  max-height: 430px;
-  object-fit: contain;
-  mix-blend-mode: multiply;
+  height: 100%;
+  object-fit: cover;
 }
 
 .btn-heart {
@@ -1580,6 +1606,7 @@ watch(
   align-items: center;
   justify-content: center;
   transition: 0.2s;
+  z-index: 2;
 }
 
 .btn-heart:hover {
@@ -1651,20 +1678,6 @@ watch(
   color: #c69c6d;
   font-weight: 600;
   font-size: 16px;
-}
-
-.share {
-  font-size: 13px;
-  color: #718096;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.icon-sm {
-  width: 16px;
-  height: 16px;
 }
 
 .title {
