@@ -132,6 +132,9 @@ const buildDetails = (data: any) => {
   const totalAmountVal = getNumber(data?.totalAmount) || rawVnpAmount;
   const finalAmountVal = getNumber(data?.finalAmount) || rawVnpAmount;
   const discountAmountVal = getNumber(data?.discountAmount);
+  
+  // Lấy phí ship từ dữ liệu trả về của backend (hoặc mặc định 30k nếu đơn có ship)
+  const shippingFeeVal = getNumber(data?.shippingFee ?? 30000);
 
   const details: ResultDetail[] = [
     { label: "Mã đơn hàng", value: orderIdVal ? (String(orderIdVal).startsWith('#') ? orderIdVal : `#${orderIdVal}`) : "-" },
@@ -143,6 +146,9 @@ const buildDetails = (data: any) => {
   if (discountAmountVal > 0) {
     details.push({ label: "Giảm giá", value: `-${formatCurrency(discountAmountVal)}`, money: true });
   }
+
+  // Thêm hiển thị Phí vận chuyển vào kết quả trả về của VNPay
+  details.push({ label: "Phí vận chuyển", value: formatCurrency(shippingFeeVal), money: true });
 
   details.push({ label: "Tổng thanh toán", value: formatCurrency(finalAmountVal), money: true });
 

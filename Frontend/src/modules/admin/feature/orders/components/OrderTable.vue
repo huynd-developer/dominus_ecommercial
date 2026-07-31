@@ -49,7 +49,7 @@
             
             <template v-if="record.status === 0 && ['VIETQR', 'VNPAY'].includes((record.paymentMethod || '').toUpperCase())">
               <a-tag v-if="record.isPaymentReported" color="success" class="mt-1 fw-bold">
-                <i class="bi bi-check-circle-fill me-1"></i> Khách đã báo thanh toán
+                <i class="bi bi-check-circle-fill me-1"></i> Khách đã thanh toán!
               </a-tag>
             </template>
           </div>

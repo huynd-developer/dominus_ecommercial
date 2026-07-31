@@ -140,24 +140,41 @@
               />
             </div>
 
+            <!-- ĐÃ FIX LỖI GIÁ Ở ĐÂY -->
             <div class="vm-details">
               <h6>{{ product.name }}</h6>
-              <p class="vm-price">
-                {{
-                  formatCurrency(
-                    selectedVariant
-                      ? selectedVariant.price ||
-                          selectedVariant.salePrice ||
+              <div class="d-flex align-items-end gap-2">
+                <p class="vm-price mb-0">
+                  {{
+                    formatCurrency(
+                      selectedVariant
+                        ? selectedVariant.salePrice ||
+                          selectedVariant.price ||
                           product.salePrice
-                      : product.salePrice
-                  )
-                }}
-              </p>
+                        : product.salePrice
+                    )
+                  }}
+                </p>
+                <span
+                  v-if="selectedVariant && selectedVariant.salePrice && selectedVariant.salePrice < selectedVariant.price"
+                  class="text-decoration-line-through text-muted small"
+                >
+                  {{ formatCurrency(selectedVariant.price) }}
+                </span>
+                <span
+                  v-else-if="!selectedVariant && product.discountPercent > 0"
+                  class="text-decoration-line-through text-muted small"
+                >
+                  {{ formatCurrency(product.originalPrice) }}
+                </span>
+              </div>
             </div>
+            <!-- END FIX -->
+
           </div>
 
           <div class="vm-variants">
-            <p class="vm-label">Tùy chọn dung tích:</p>
+            <p class="vm-label">Tùy chọn phân loại:</p>
 
             <div v-if="isLoadingVariants" class="text-center py-4">
               <span
@@ -344,17 +361,11 @@ const shortBrand = computed(() =>
     .toUpperCase()
 );
 
-/* ===== Hiển thị sao/đánh giá =====
-   Quy tắc nghiệp vụ:
-   - Chưa có đánh giá: mặc định hiển thị 5.0 và 5 sao.
-   - Đã có đánh giá: hiển thị đúng điểm trung bình theo lượt đánh giá.
-   - Ưu tiên averageRating nếu API danh sách trả về field này. */
 const DEFAULT_RATING = 5;
 const MAX_RATING = 5;
 
 const toFiniteNumber = (value: unknown, fallback = 0) => {
   const numberValue = Number(value);
-
   return Number.isFinite(numberValue) ? numberValue : fallback;
 };
 
@@ -364,7 +375,6 @@ const clampRating = (value: unknown) => {
 
 const normalizedReviewCount = computed(() => {
   const count = toFiniteNumber(props.product.reviewCount, 0);
-
   return Math.max(0, Math.floor(count));
 });
 
@@ -383,7 +393,6 @@ const hasActualReviews = computed(() => {
   if (hasReviewCountSource.value) {
     return normalizedReviewCount.value > 0;
   }
-
   return rawAverageRating.value > 0;
 });
 
@@ -398,10 +407,8 @@ const ratingDisplay = computed(() => {
 const starsDisplay = computed(() => {
   const rounded = Math.round(ratingValue.value);
   const filled = Math.max(0, Math.min(MAX_RATING, rounded));
-
   return "★".repeat(filled) + "☆".repeat(MAX_RATING - filled);
 });
-/* ===== Hết phần sao/đánh giá ===== */
 
 const getBottleStyle = (color?: string): Record<string, string> => ({
   "--bottle-color": color || "#0a192f",
@@ -412,11 +419,7 @@ const formatCurrency = (value: number) =>
 
 const normalizeImageUrl = (url: unknown) => {
   const rawUrl = String(url || "").trim();
-
-  if (!rawUrl) {
-    return "";
-  }
-
+  if (!rawUrl) return "";
   if (
     rawUrl.startsWith("http://") ||
     rawUrl.startsWith("https://") ||
@@ -425,23 +428,15 @@ const normalizeImageUrl = (url: unknown) => {
   ) {
     return rawUrl;
   }
-
   if (rawUrl.startsWith("/")) {
     return `${BACKEND_URL}${rawUrl}`;
   }
-
   return `${BACKEND_URL}/${rawUrl}`;
 };
 
 const getImageUrlFromObject = (value: any) => {
-  if (!value) {
-    return "";
-  }
-
-  if (typeof value === "string") {
-    return normalizeImageUrl(value);
-  }
-
+  if (!value) return "";
+  if (typeof value === "string") return normalizeImageUrl(value);
   return normalizeImageUrl(
     value?.imageUrl ??
       value?.ImageUrl ??
@@ -465,28 +460,22 @@ const getImageUrlFromObject = (value: any) => {
 
 const appendImage = (images: string[], value: any) => {
   const imageUrl = getImageUrlFromObject(value);
-
   if (imageUrl && !images.includes(imageUrl)) {
     images.push(imageUrl);
   }
 };
 
 const appendImageList = (images: string[], value: any) => {
-  if (!value) {
-    return;
-  }
-
+  if (!value) return;
   if (Array.isArray(value)) {
     value.forEach((item) => appendImage(images, item));
     return;
   }
-
   appendImage(images, value);
 };
 
 const getVariantImageList = (variant: any) => {
   const images: string[] = [];
-
   appendImage(images, variant?.mainImage);
   appendImage(images, variant?.mainImageUrl);
   appendImage(images, variant?.MainImageUrl);
@@ -505,13 +494,11 @@ const getVariantImageList = (variant: any) => {
   appendImageList(images, variant?.ProductImages);
   appendImageList(images, variant?.productImageList);
   appendImageList(images, variant?.ProductImageList);
-
   return images;
 };
 
 const productImages = computed(() => {
   const images: string[] = [];
-
   appendImage(images, props.product?.mainImage);
   appendImage(images, props.product?.MainImage);
   appendImage(images, props.product?.mainImageUrl);
@@ -543,27 +530,17 @@ const productImages = computed(() => {
       });
     });
   }
-
   return images;
 });
 
-const productImage = computed(() => {
-  return productImages.value[0] || "";
-});
-
-const hasProductImage = computed(() => {
-  return Boolean(productImage.value) && !imageLoadError.value;
-});
+const productImage = computed(() => productImages.value[0] || "");
+const hasProductImage = computed(() => Boolean(productImage.value) && !imageLoadError.value);
 
 const modalImage = computed(() => {
   if (selectedVariant.value) {
     const variantImage = getVariantImageList(selectedVariant.value)[0];
-
-    if (variantImage) {
-      return variantImage;
-    }
+    if (variantImage) return variantImage;
   }
-
   return productImage.value || getPlaceholderImage();
 });
 
@@ -588,11 +565,7 @@ const handleProductImageError = () => {
 
 const handleModalImageError = (event: Event) => {
   const target = event.target as HTMLImageElement | null;
-
-  if (!target) {
-    return;
-  }
-
+  if (!target) return;
   target.onerror = null;
   target.src = getPlaceholderImage();
 };
@@ -601,7 +574,6 @@ const formatVariantName = (v: any) => {
   if (!v) return "Loại";
 
   let cap = null;
-
   if (v.capacity && typeof v.capacity === "object") {
     cap = v.capacity.value ?? v.capacity.name;
   } else if (v.capacityValue != null) {
@@ -612,18 +584,25 @@ const formatVariantName = (v: any) => {
     cap = v.capacity;
   }
 
+  let capString = "";
   if (cap != null && cap !== "") {
     const numeric = Number(cap);
-    if (!Number.isNaN(numeric)) return `${numeric}ml`;
-    const text = String(cap);
-    return text.toLowerCase().includes("ml") ? text : `${text}ml`;
+    if (!Number.isNaN(numeric)) {
+      capString = `${numeric}ml`;
+    } else {
+      const text = String(cap);
+      capString = text.toLowerCase().includes("ml") ? text : `${text}ml`;
+    }
   }
 
-  if (v.bottleType) {
-    return typeof v.bottleType === "object" ? v.bottleType.name : v.bottleType;
-  }
+  const bottle = v.bottleTypeName || v.bottleType;
+  const bottleString = typeof bottle === "object" ? bottle?.name : bottle;
 
-  return "Loại " + (v.productVariantId || v.id);
+  if (capString && bottleString) {
+    return `${capString} - ${bottleString}`;
+  }
+  
+  return capString || bottleString || ("Loại " + (v.productVariantId || v.id));
 };
 
 const showToast = (
@@ -633,9 +612,7 @@ const showToast = (
   showCartLink = false
 ) => {
   toast.value = { show: true, type, title, message, showCartLink };
-
   if (toastTimer) window.clearTimeout(toastTimer);
-
   toastTimer = window.setTimeout(() => {
     toast.value.show = false;
   }, 2800);
@@ -643,9 +620,7 @@ const showToast = (
 
 const checkLoginBeforeAction = () => {
   const token = localStorage.getItem("token");
-
-  const rawRole =
-    localStorage.getItem("role") || localStorage.getItem("userRole") || "";
+  const rawRole = localStorage.getItem("role") || localStorage.getItem("userRole") || "";
   const role = rawRole.replace("ROLE_", "").toUpperCase().trim();
 
   if (!token) {
@@ -654,30 +629,19 @@ const checkLoginBeforeAction = () => {
       "Yêu cầu đăng nhập",
       "Vui lòng đăng nhập để tiếp tục trải nghiệm mua sắm tại Dominus."
     );
-
     setTimeout(() => {
-      router
-        .push({
-          name: "Login",
-          query: {
-            redirect: router.currentRoute.value.fullPath,
-          },
-        })
-        .catch(() => {});
+      router.push({
+        name: "Login",
+        query: { redirect: router.currentRoute.value.fullPath },
+      }).catch(() => {});
     }, 1500);
-
     return false;
   }
 
   if (role !== "USER" && role !== "CUSTOMER") {
-    showToast(
-      "error",
-      "Từ chối thao tác",
-      "Chức năng này chỉ dành cho tài khoản Khách hàng."
-    );
+    showToast("error", "Từ chối thao tác", "Chức năng này chỉ dành cho tài khoản Khách hàng.");
     return false;
   }
-
   return true;
 };
 
@@ -687,24 +651,47 @@ const openVariantModal = async (type: "CART" | "BUY") => {
   actionType.value = type;
   selectedVariant.value = null;
   fullVariants.value = [];
-
   showVariantModal.value = true;
   isLoadingVariants.value = true;
 
   try {
+    // 1. Lập bản đồ và tập hợp ID các biến thể thực sự nằm trong Flash Sale từ props
+    const flashSalePriceMap = new Map<number, number>();
+    const flashSaleVariantIds = new Set<number>();
+    
+    if (props.product?.variants && Array.isArray(props.product.variants)) {
+      props.product.variants.forEach((pv: any) => {
+        const vId = Number(pv.productVariantId || pv.variantId || pv.id);
+        if (vId) {
+          flashSaleVariantIds.add(vId);
+          if (pv.salePrice != null) {
+            flashSalePriceMap.set(vId, Number(pv.salePrice));
+          }
+        }
+      });
+    }
+
+    // 2. Gọi API lấy đầy đủ thông tin biến thể từ database
     const res = await api.get(`/v1/products/${getProductId()}`);
     const data = res.data?.data || res.data;
-
-    let rawVariants =
-      data?.variants || data?.productVariants || data?.productVariantList;
+    let rawVariants = data?.variants || data?.productVariants || data?.productVariantList;
 
     if (!rawVariants || rawVariants.length === 0) {
       rawVariants = props.product.variants || [props.product];
     }
 
-    const processedVariants = rawVariants.map((v: any) => {
-      let cap = null;
+    // 3. Nếu đây là sản phẩm Flash Sale, chỉ giữ lại các biến thể có tham gia chương trình
+    if ((props.product as any)?.isFlashSale && flashSaleVariantIds.size > 0) {
+      rawVariants = rawVariants.filter((v: any) => {
+        const vId = Number(v.productVariantId || v.variantId || v.id);
+        return flashSaleVariantIds.has(vId);
+      });
+    }
 
+    const processedVariants = rawVariants.map((v: any) => {
+      const vId = Number(v.productVariantId || v.variantId || v.id);
+
+      let cap = null;
       if (v.capacityName != null) {
         cap = v.capacityName;
       } else if (v.capacity && typeof v.capacity === "object") {
@@ -725,37 +712,48 @@ const openVariantModal = async (type: "CART" | "BUY") => {
         displayCap = numericCap > 0 ? `${numericCap}ml` : String(cap);
       }
 
-      if (!displayCap || numericCap === 0) {
-        const bottle = v.bottleTypeName || v.bottleType;
-        displayCap = typeof bottle === "object" ? bottle?.name : bottle;
+      const bottle = v.bottleTypeName || v.bottleType;
+      const bottleName = typeof bottle === "object" ? bottle?.name : bottle;
+
+      if (displayCap && bottleName) {
+        displayCap = `${displayCap} - ${bottleName}`;
+      } else if (bottleName) {
+        displayCap = bottleName;
+      } else if (!displayCap) {
+        displayCap = "Loại " + (vId || "");
       }
 
-      if (!displayCap) {
-        displayCap = "Loại " + (v.productVariantId || v.id);
-      }
+      const mappedSalePrice = flashSalePriceMap.get(vId) ?? v.salePrice ?? v.promotionPrice ?? v.price;
+      const mappedPrice = v.price ?? v.originalPrice;
 
       return {
         ...v,
+        productVariantId: vId,
+        id: vId,
+        salePrice: mappedSalePrice,
+        price: mappedPrice,
         displayCapacity: displayCap,
         numericCapacity: numericCap,
       };
     });
 
-    processedVariants.sort(
-      (a: any, b: any) => a.numericCapacity - b.numericCapacity
-    );
-
+    processedVariants.sort((a: any, b: any) => a.numericCapacity - b.numericCapacity);
     fullVariants.value = processedVariants;
+
+    if (fullVariants.value.length > 0) {
+      selectedVariant.value = fullVariants.value[0];
+    }
   } catch (error) {
     console.error("Lỗi lấy danh sách biến thể:", error);
-
     const fallbackVariants = props.product.variants || [props.product];
-
     fullVariants.value = fallbackVariants.map((v: any) => ({
       ...v,
-      displayCapacity: "Loại " + (v.productVariantId || v.id),
+      displayCapacity: formatVariantName(v),
       numericCapacity: 0,
     }));
+    if (fullVariants.value.length > 0) {
+      selectedVariant.value = fullVariants.value[0];
+    }
   } finally {
     isLoadingVariants.value = false;
   }
@@ -774,47 +772,30 @@ const confirmAction = async () => {
   if (actionType.value === "CART") {
     try {
       addCartLoading.value = true;
-
       await api.post("/v1/customer/cart/add", {
         productVariantId: variantId,
         quantity: 1,
       });
-
       window.dispatchEvent(new Event("cart-updated"));
       showVariantModal.value = false;
-      showToast(
-        "success",
-        "Thêm thành công",
-        "Đã thêm 1 sản phẩm vào giỏ.",
-        true
-      );
+      showToast("success", "Thêm thành công", "Đã thêm 1 sản phẩm vào giỏ.", true);
     } catch (error: any) {
-      showToast(
-        "error",
-        "Lỗi",
-        error?.response?.data?.message || "Không thể thêm vào giỏ."
-      );
+      showToast("error", "Lỗi", error?.response?.data?.message || "Không thể thêm vào giỏ.");
     } finally {
       addCartLoading.value = false;
     }
   } else {
     try {
       buyNowLoading.value = true;
-
       await api.post("/v1/customer/cart/add", {
         productVariantId: variantId,
         quantity: 1,
       });
-
       window.dispatchEvent(new Event("cart-updated"));
       showVariantModal.value = false;
       router.push({ name: "Checkout" });
     } catch (error: any) {
-      showToast(
-        "error",
-        "Lỗi",
-        error?.response?.data?.message || "Không thể mua ngay lúc này."
-      );
+      showToast("error", "Lỗi", error?.response?.data?.message || "Không thể mua ngay lúc này.");
     } finally {
       buyNowLoading.value = false;
     }
@@ -823,12 +804,10 @@ const confirmAction = async () => {
 
 const loadFavoriteStatus = async () => {
   const variantId = Number(props.product.productVariantId || props.product.id);
-
   if (!variantId || !localStorage.getItem("token")) {
     isFavorited.value = false;
     return;
   }
-
   try {
     const res = await favoriteService.checkFavorite(variantId);
     isFavorited.value = Boolean(res.data?.favorited);
@@ -839,23 +818,17 @@ const loadFavoriteStatus = async () => {
 
 const handleToggleFavorite = async () => {
   const variantId = Number(props.product.productVariantId || props.product.id);
-
   if (!variantId || Number.isNaN(variantId)) return;
   if (!checkLoginBeforeAction()) return;
 
   try {
     favoriteLoading.value = true;
-
     const res = await favoriteService.toggleFavorite(variantId);
-
     isFavorited.value = Boolean(res.data?.favorited);
 
     window.dispatchEvent(
       new CustomEvent("favorite-updated", {
-        detail: {
-          productVariantId: variantId,
-          favorited: isFavorited.value,
-        },
+        detail: { productVariantId: variantId, favorited: isFavorited.value },
       })
     );
 
@@ -872,36 +845,21 @@ const handleToggleFavorite = async () => {
 };
 
 const handleFavoriteUpdated = (event: Event) => {
-  const customEvent = event as CustomEvent<{
-    productVariantId?: number;
-    favorited?: boolean;
-  }>;
-
+  const customEvent = event as CustomEvent<{ productVariantId?: number; favorited?: boolean }>;
   const variantId = Number(customEvent.detail?.productVariantId || 0);
 
-  if (
-    !variantId ||
-    variantId !== Number(props.product.productVariantId || props.product.id)
-  ) {
+  if (!variantId || variantId !== Number(props.product.productVariantId || props.product.id)) {
     return;
   }
-
   isFavorited.value = Boolean(customEvent.detail?.favorited);
 };
 
-const getProductId = () =>
-  Number(props.product.productId || props.product.id || 0);
+const getProductId = () => Number(props.product.productId || props.product.id || 0);
 
 const goToDetail = () => {
   const productId = getProductId();
-
   if (productId > 0) {
-    router.push({
-      name: "SingleProduct",
-      params: {
-        id: productId,
-      },
-    });
+    router.push({ name: "SingleProduct", params: { id: productId } });
   } else {
     router.push("/product");
   }
@@ -914,7 +872,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("favorite-updated", handleFavoriteUpdated);
-
   if (toastTimer) window.clearTimeout(toastTimer);
 });
 </script>
@@ -983,33 +940,29 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
 }
 
-/* 1. KHUNG CHỨA ẢNH: Ép thành hình vuông chuẩn 1:1 */
 .product-image-wrapper {
   width: 100%;
-  aspect-ratio: 1 / 1; /* Điểm mấu chốt: Ép tỷ lệ 1:1 vuông vức cho mọi ảnh */
-  background-color: #f9fafb; /* Lót nền xám nhạt để đồng bộ với các ảnh bị thiếu nền */
-  border-radius: 16px 16px 0 0; /* Bo góc phần trên khớp với khung ngoài của product-card */
-  overflow: hidden; /* Giữ ảnh không bị tràn ra ngoài khi zoom */
+  aspect-ratio: 1 / 1; 
+  background-color: #f9fafb; 
+  border-radius: 16px 16px 0 0; 
+  overflow: hidden; 
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Đã xóa bỏ height cố định (235px) và padding (14px) gây méo layout cũ */
 }
 
-/* 2. HÌNH ẢNH SẢN PHẨM: Tự động lấp đầy khung vuông */
 .product-real-image {
   width: 100%;
   height: 100%;
-  object-fit: cover; /* Tự động zoom và cắt viền để lấp đầy khung, tuyệt đối không làm méo hình */
+  object-fit: cover; 
   object-position: center;
   display: block;
-  transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1); /* Đổi sang timing function mượt hơn */
+  transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1); 
 }
 
-/* 3. HIỆU ỨNG HOVER ZOOM ẢNH */
 .product-card:hover .product-real-image {
-  transform: scale(1.08); /* Tăng độ zoom từ 1.02 lên 1.08 cho hiệu ứng rõ rệt, sang trọng hơn */
+  transform: scale(1.08); 
 }
 
 .product-bottle {
@@ -1379,7 +1332,7 @@ onBeforeUnmount(() => {
 
 .vm-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr); /* Tối ưu từ 3 xuống 2 cột vì tên lúc này dài hơn */
   gap: 12px;
   margin-bottom: 28px;
 }

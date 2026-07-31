@@ -275,6 +275,7 @@
       </p>
     </div>
 
+    <!-- KHUNG TỔNG KẾT & HIỂN THỊ PHÍ VẬN CHUYỂN -->
     <div class="summary-preview">
       <div class="summary-line">
         <span>Tạm tính</span>
@@ -284,6 +285,14 @@
       <div class="summary-line">
         <span>Giảm giá</span>
         <span class="discount-value">-{{ formatCurrency(discountAmount) }}</span>
+      </div>
+
+      <div class="summary-line">
+        <span>
+          Phí vận chuyển
+          <span v-if="isCalculatingShip" class="spinner-border spinner-border-sm text-muted ms-1" style="width: 10px; height: 10px;"></span>
+        </span>
+        <span>{{ formatCurrency(shippingFee) }}</span>
       </div>
 
       <div class="summary-line total-line">
@@ -323,6 +332,8 @@ const props = withDefaults(
     totalItems: number;
     totalAmount: number;
     discountAmount: number;
+    shippingFee?: number;
+    isCalculatingShip?: boolean;
     finalTotal: number;
     isSubmitting: boolean;
     updatingItemKey?: string | number | null;
@@ -331,6 +342,8 @@ const props = withDefaults(
   {
     updatingItemKey: null,
     selectedVoucherCode: "",
+    shippingFee: 30000,
+    isCalculatingShip: false,
   }
 );
 
@@ -342,7 +355,6 @@ const emit = defineEmits<{
   (e: "cancel-voucher"): void;
 }>();
 
-// ĐÃ SỬA: Chuyển sang "Không có ảnh" tiếng Việt
 const FALLBACK_IMAGE =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(`
@@ -393,7 +405,6 @@ const getItemKey = (item: any) => {
   );
 };
 
-// ĐÃ SỬA: Hàm lấy link ảnh đào sâu chống xịt
 const getItemImage = (item: any) => {
   if (!item) return FALLBACK_IMAGE;
   let url = item?.image || item?.imageUrl || item?.thumbnailUrl || item?.mainImage;
@@ -705,16 +716,22 @@ const getErrorMessage = (error: any, fallback: string) => {
 };
 
 watch(
-  () => props.selectedVoucherCode,
-  (value) => {
-    const code = String(value || "").trim();
-
-    if (code && !voucherCode.value) {
-      voucherCode.value = code;
-      isVoucherApplied.value = Number(props.discountAmount || 0) > 0;
+  () => props.totalAmount,
+  (newValue, oldValue) => {
+    // THÊM ĐIỀU KIỆN CHẶN: Nếu đang submit thanh toán hoặc tiền về 0 thì KHÔNG ĐƯỢC tự động hủy voucher
+    if (
+      !props.isSubmitting &&
+      Number(newValue || 0) > 0 &&
+      oldValue !== undefined &&
+      Number(newValue || 0) !== Number(oldValue || 0) &&
+      isVoucherApplied.value
+    ) {
+      handleCancelVoucher();
+      voucherMessage.value =
+        "Đã hủy voucher vì giỏ hàng thay đổi. Vui lòng áp dụng lại.";
+      voucherMessageClass.value = "text-danger";
     }
-  },
-  { immediate: true }
+  }
 );
 
 watch(

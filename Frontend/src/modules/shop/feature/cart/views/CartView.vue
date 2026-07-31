@@ -16,6 +16,7 @@
         v-if="cartItems.length > 0"
         :totalAmount="totalAmount"
         :discountAmount="discountAmount"
+        :shippingFee="shippingFee" 
         :finalTotal="finalTotal"
         :canCheckout="canCheckout"
         @checkout="goToCheckout"
@@ -53,34 +54,16 @@ interface CartItem {
   price?: number | null;
   stockQuantity?: number | null;
   note?: string | null;
-
   image?: string | null;
-  Image?: string | null;
   imageUrl?: string | null;
-  ImageUrl?: string | null;
   thumbnailUrl?: string | null;
-  ThumbnailUrl?: string | null;
   mainImage?: string | null;
-  MainImage?: string | null;
-  mainImageUrl?: string | null;
-  MainImageUrl?: string | null;
   productImage?: string | null;
-  productImageUrl?: string | null;
   variantImage?: string | null;
-  variantImageUrl?: string | null;
   images?: any[] | null;
-  Images?: any[] | null;
-  imageList?: any[] | null;
-  ImageList?: any[] | null;
-  productImages?: any[] | null;
-  ProductImages?: any[] | null;
   product?: any;
-  Product?: any;
   variant?: any;
-  Variant?: any;
   productVariant?: any;
-  ProductVariant?: any;
-
   manufacturingDate?: string | null;
   expirationDate?: string | null;
   variantStatus?: number | null;
@@ -91,546 +74,286 @@ interface CartItem {
 }
 
 const router = useRouter();
-
 const cartItems = ref<CartItem[]>([]);
 const isLoading = ref(true);
 const isUpdating = ref(false);
-
 const discountAmount = ref(0);
 const appliedVoucherCode = ref("");
 
-const toDateOnly = (value?: string | null) => {
-  if (!value) return null;
-  return String(value).substring(0, 10);
-};
-
+const toDateOnly = (value?: string | null) => value ? String(value).substring(0, 10) : null;
 const isBeforeToday = (value?: string | null) => {
   const dateOnly = toDateOnly(value);
-
   if (!dateOnly) return false;
-
   const date = new Date(`${dateOnly}T00:00:00`);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
+  const today = new Date(); today.setHours(0, 0, 0, 0);
   return !Number.isNaN(date.getTime()) && date.getTime() < today.getTime();
 };
-
 const isAfterToday = (value?: string | null) => {
   const dateOnly = toDateOnly(value);
-
   if (!dateOnly) return false;
-
   const date = new Date(`${dateOnly}T00:00:00`);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
+  const today = new Date(); today.setHours(0, 0, 0, 0);
   return !Number.isNaN(date.getTime()) && date.getTime() > today.getTime();
 };
 
-const getItemPrice = (item: CartItem) => {
-  return Number(item?.price || 0);
-};
-
-const getItemQuantity = (item: CartItem) => {
-  return Number(item?.quantity || 0);
-};
-
-const isItemExpired = (item: CartItem) => {
-  return Boolean(item?.expired) || isBeforeToday(item?.expirationDate);
-};
+const getItemPrice = (item: CartItem) => Number(item?.price || 0);
+const getItemQuantity = (item: CartItem) => Number(item?.quantity || 0);
+const isItemExpired = (item: CartItem) => Boolean(item?.expired) || isBeforeToday(item?.expirationDate);
 
 const getUnavailableReason = (item: CartItem) => {
-  if (!item) {
-    return "Sản phẩm không hợp lệ.";
-  }
-
-  if (item.unavailableReason) {
-    return item.unavailableReason;
-  }
-
-  if (item.available === false || item.sellable === false) {
-    return "Sản phẩm hiện không khả dụng.";
-  }
-
-  if (item.variantStatus != null && Number(item.variantStatus) !== 1) {
-    return "Sản phẩm đang ngừng bán.";
-  }
-
+  if (!item) return "Sản phẩm không hợp lệ.";
+  if (item.unavailableReason) return item.unavailableReason;
+  if (item.available === false || item.sellable === false) return "Sản phẩm hiện không khả dụng.";
+  if (item.variantStatus != null && Number(item.variantStatus) !== 1) return "Sản phẩm đang ngừng bán.";
   const quantity = getItemQuantity(item);
   const stockQuantity = Number(item?.stockQuantity || 0);
-
-  if (quantity <= 0) {
-    return "Số lượng sản phẩm không hợp lệ.";
-  }
-
-  if (stockQuantity <= 0) {
-    return "Sản phẩm đã hết hàng.";
-  }
-
-  if (quantity > stockQuantity) {
-    return `Số lượng trong giỏ vượt quá tồn kho. Sản phẩm chỉ còn ${stockQuantity}.`;
-  }
-
-  if (isAfterToday(item.manufacturingDate)) {
-    return "Sản phẩm chưa tới ngày được bán.";
-  }
-
-  if (isItemExpired(item)) {
-    return "Sản phẩm đã hết hạn sử dụng.";
-  }
-
+  if (quantity <= 0) return "Số lượng sản phẩm không hợp lệ.";
+  if (stockQuantity <= 0) return "Sản phẩm đã hết hàng.";
+  if (quantity > stockQuantity) return `Số lượng trong giỏ vượt quá tồn kho. Sản phẩm chỉ còn ${stockQuantity}.`;
+  if (isAfterToday(item.manufacturingDate)) return "Sản phẩm chưa tới ngày được bán.";
+  if (isItemExpired(item)) return "Sản phẩm đã hết hạn sử dụng.";
   return "Sản phẩm hiện không khả dụng.";
 };
 
 const isItemAvailable = (item: CartItem) => {
   if (!item) return false;
-
-  if (item.available === false || item.sellable === false) {
-    return false;
-  }
-
-  if (item.variantStatus != null && Number(item.variantStatus) !== 1) {
-    return false;
-  }
-
+  if (item.available === false || item.sellable === false) return false;
+  if (item.variantStatus != null && Number(item.variantStatus) !== 1) return false;
   const quantity = getItemQuantity(item);
   const stockQuantity = Number(item?.stockQuantity || 0);
-
-  if (quantity <= 0 || stockQuantity <= 0 || quantity > stockQuantity) {
-    return false;
-  }
-
-  if (isAfterToday(item.manufacturingDate)) {
-    return false;
-  }
-
-  if (isItemExpired(item)) {
-    return false;
-  }
-
+  if (quantity <= 0 || stockQuantity <= 0 || quantity > stockQuantity) return false;
+  if (isAfterToday(item.manufacturingDate)) return false;
+  if (isItemExpired(item)) return false;
   return true;
 };
 
-const totalAmount = computed(() => {
-  return cartItems.value.reduce((sum, item) => {
-    if (!isItemAvailable(item)) return sum;
-    return sum + getItemPrice(item) * getItemQuantity(item);
-  }, 0);
-});
+const totalAmount = computed(() => cartItems.value.reduce((sum, item) => isItemAvailable(item) ? sum + getItemPrice(item) * getItemQuantity(item) : sum, 0));
+const canCheckout = computed(() => cartItems.value.length > 0 && cartItems.value.every((item) => isItemAvailable(item)));
 
-const finalTotal = computed(() => {
-  return Math.max(0, totalAmount.value - discountAmount.value);
-});
-
-const canCheckout = computed(() => {
-  return (
-    cartItems.value.length > 0 &&
-    cartItems.value.every((item) => isItemAvailable(item))
-  );
-});
-
-const showToast = async (
-  icon: "success" | "error" | "warning" | "info",
-  title: string
-) => {
-  await Swal.fire({
-    toast: true,
-    position: "top-end",
-    icon,
-    title,
-    showConfirmButton: false,
-    timer: 1800,
-    timerProgressBar: true,
-  });
+const showToast = async (icon: "success" | "error" | "warning" | "info", title: string) => {
+  await Swal.fire({ toast: true, position: "top-end", icon, title, showConfirmButton: false, timer: 1800, timerProgressBar: true });
 };
-
 const showError = async (title: string, text: string) => {
-  await Swal.fire({
-    icon: "error",
-    title,
-    text,
-    confirmButtonText: "Đóng",
-    confirmButtonColor: "#bd9a5f",
-  });
+  await Swal.fire({ icon: "error", title, text, confirmButtonText: "Đóng", confirmButtonColor: "#bd9a5f" });
 };
 
 const handleApplyVoucher = (discount: number, voucherCode: string) => {
   discountAmount.value = Number(discount || 0);
   appliedVoucherCode.value = voucherCode || "";
-
-  if (voucherCode) {
-    localStorage.setItem("applied_voucher", voucherCode);
-  } else {
-    localStorage.removeItem("applied_voucher");
-  }
+  if (voucherCode) localStorage.setItem("applied_voucher", voucherCode);
+  else localStorage.removeItem("applied_voucher");
 };
 
 const resetVoucher = () => {
   const hadVoucher = discountAmount.value > 0 || appliedVoucherCode.value;
-
   discountAmount.value = 0;
   appliedVoucherCode.value = "";
   localStorage.removeItem("applied_voucher");
-
-  if (hadVoucher) {
-    showToast(
-      "info",
-      "Vui lòng áp dụng lại mã giảm giá do giỏ hàng đã thay đổi!"
-    );
-  }
+  if (hadVoucher) showToast("info", "Vui lòng áp dụng lại mã giảm giá do giỏ hàng đã thay đổi!");
 };
 
 const extractCartItems = (payload: any): CartItem[] => {
-  const candidates = [
-    payload,
-    payload?.data,
-    payload?.content,
-    payload?.items,
-    payload?.cartItems,
-    payload?.cartItemList,
-    payload?.cart?.items,
-    payload?.cart?.cartItems,
-    payload?.data?.content,
-    payload?.data?.items,
-    payload?.data?.cartItems,
-    payload?.data?.cartItemList,
-    payload?.data?.cart?.items,
-    payload?.data?.cart?.cartItems,
-  ];
-
+  const candidates = [payload, payload?.data, payload?.content, payload?.items, payload?.cartItems, payload?.data?.content, payload?.data?.items, payload?.data?.cartItems];
   for (const candidate of candidates) {
-    if (Array.isArray(candidate)) {
-      return candidate;
-    }
+    if (Array.isArray(candidate)) return candidate;
   }
-
   return [];
 };
 
+// ==========================================
+// T FIX LẠI HÀM LẤY ID: QUÉT CẠN KIỆT MỌI NGÓC NGÁCH
+// Dùng TOÁN TỬ || để nếu cái trước trả về 0 thì nó vẫn tìm tiếp
+// ==========================================
+// ==========================================
+// FIX TYPESCRIPT LỖI GẠCH ĐỎ (DÙNG AS ANY ĐỂ BỎ QUA CHECK TYPE)
+// ==========================================
 const getItemProductId = (item: CartItem) => {
+  const i = item as any; // Ép kiểu về any để TS không bắt bẻ các biến viết hoa
   return Number(
-    item?.productId ??
-      item?.ProductId ??
-      item?.product?.productId ??
-      item?.product?.id ??
-      item?.Product?.productId ??
-      item?.Product?.id ??
-      0
+    i?.productId || i?.ProductId ||
+    i?.product?.id || i?.product?.productId || i?.Product?.id || i?.Product?.productId ||
+    i?.productVariant?.productId || i?.productVariant?.product?.id ||
+    i?.ProductVariant?.ProductId || i?.ProductVariant?.Product?.Id ||
+    i?.variant?.productId || i?.variant?.product?.id ||
+    0
   );
 };
 
 const getItemVariantId = (item: CartItem) => {
+  const i = item as any;
   return Number(
-    item?.productVariantId ??
-      item?.variantId ??
-      item?.productVariant?.productVariantId ??
-      item?.productVariant?.variantId ??
-      item?.productVariant?.id ??
-      item?.ProductVariant?.productVariantId ??
-      item?.ProductVariant?.variantId ??
-      item?.ProductVariant?.id ??
-      item?.variant?.productVariantId ??
-      item?.variant?.variantId ??
-      item?.variant?.id ??
-      item?.Variant?.productVariantId ??
-      item?.Variant?.variantId ??
-      item?.Variant?.id ??
-      0
-  );
-};
-
-const isEmptyImageValue = (value: unknown) => {
-  if (value === null || value === undefined) {
-    return true;
-  }
-
-  const text = String(value).trim();
-
-  return (
-    text === "" ||
-    text === "-" ||
-    text.toUpperCase() === "N/A" ||
-    text.toUpperCase() === "NULL" ||
-    text.toUpperCase() === "UNDEFINED"
+    i?.productVariantId || i?.ProductVariantId ||
+    i?.variantId || i?.VariantId ||
+    i?.productVariant?.id || i?.ProductVariant?.Id ||
+    i?.variant?.id || i?.Variant?.Id ||
+    0
   );
 };
 
 const extractImageValue = (value: any, visited = new WeakSet<object>()): string => {
-  if (!value) {
-    return "";
-  }
-
-  if (typeof value === "string" || typeof value === "number") {
-    return isEmptyImageValue(value) ? "" : String(value).trim();
-  }
-
+  if (!value) return "";
+  if (typeof value === "string" || typeof value === "number") return String(value).trim();
   if (Array.isArray(value)) {
     for (const item of value) {
       const image = extractImageValue(item, visited);
-
-      if (image) {
-        return image;
-      }
+      if (image) return image;
     }
-
     return "";
   }
-
   if (typeof value === "object") {
-    if (visited.has(value)) {
-      return "";
-    }
-
+    if (visited.has(value)) return "";
     visited.add(value);
-
     const candidates = [
-      value?.image,
-      value?.Image,
-      value?.imageUrl,
-      value?.ImageUrl,
-      value?.url,
-      value?.Url,
-      value?.mediaUrl,
-      value?.MediaUrl,
-      value?.path,
-      value?.Path,
-      value?.fileUrl,
-      value?.FileUrl,
-      value?.thumbnailUrl,
-      value?.ThumbnailUrl,
-      value?.mainImage,
-      value?.MainImage,
-      value?.mainImageUrl,
-      value?.MainImageUrl,
-      value?.productImage,
-      value?.productImageUrl,
-      value?.ProductImageUrl,
-      value?.variantImage,
-      value?.variantImageUrl,
-      value?.VariantImageUrl,
-      value?.images,
-      value?.Images,
-      value?.imageList,
-      value?.ImageList,
-      value?.galleryImages,
-      value?.GalleryImages,
-      value?.productImages,
-      value?.ProductImages,
-      value?.productImageList,
-      value?.ProductImageList,
-      value?.variantImages,
-      value?.VariantImages,
-      value?.product,
-      value?.Product,
-      value?.variant,
-      value?.Variant,
-      value?.productVariant,
-      value?.ProductVariant,
-      value?.variants,
-      value?.Variants,
-      value?.productVariants,
-      value?.ProductVariants,
+      value?.image, value?.imageUrl, value?.mainImage, value?.thumbnailUrl,
+      value?.productImage, value?.variantImage, value?.product, value?.productVariant
     ];
-
     for (const candidate of candidates) {
       const image = extractImageValue(candidate, visited);
-
-      if (image) {
-        return image;
-      }
+      if (image) return image;
     }
   }
-
   return "";
 };
 
 const getProductVariants = (productData: any) => {
   const candidates = [
-    productData?.variants,
-    productData?.Variants,
-    productData?.productVariants,
-    productData?.ProductVariants,
-    productData?.productVariantList,
-    productData?.ProductVariantList,
+    productData?.variants, productData?.Variants, 
+    productData?.productVariants, productData?.ProductVariants, 
+    productData?.productVariantList, productData?.ProductVariantList,
+    productData?.productVariantResponses, productData?.productVariantDTOs
   ];
-
   for (const candidate of candidates) {
-    if (Array.isArray(candidate)) {
-      return candidate;
-    }
+    if (Array.isArray(candidate)) return candidate;
   }
-
   return [];
 };
 
 const findMatchingVariant = (productData: any, variantId: number) => {
-  if (!variantId) {
-    return null;
-  }
-
-  return (
-    getProductVariants(productData).find((variant: any) => {
-      const currentVariantId = Number(
-        variant?.productVariantId ?? variant?.variantId ?? variant?.id ?? variant?.Id ?? 0
-      );
-
-      return currentVariantId === variantId;
-    }) || null
-  );
+  if (!variantId) return null;
+  return getProductVariants(productData).find((variant: any) => {
+    return Number(variant?.productVariantId || variant?.id || variant?.Id || 0) === variantId;
+  }) || null;
 };
 
 const productDetailCache = new Map<number, any>();
 
 const fetchProductDetail = async (productId: number) => {
-  if (!productId) {
-    return null;
-  }
-
-  if (productDetailCache.has(productId)) {
-    return productDetailCache.get(productId);
-  }
-
+  if (!productId) return null;
+  if (productDetailCache.has(productId)) return productDetailCache.get(productId);
   try {
-    const res = await api.get(`/v1/products/${productId}`);
-    const data = res.data?.data ?? res.data;
+    let res = await api.get(`/v1/products/${productId}`).catch(() => null);
+    if (!res) {
+      // Đề phòng endpoint là /customer/products
+      res = await api.get(`/customer/products/${productId}`).catch(() => null);
+    }
+    if (!res) return null;
 
+    const data = res.data?.data ?? res.data?.result ?? res.data;
     productDetailCache.set(productId, data);
     return data;
   } catch (error) {
-    console.warn("Không thể lấy ảnh sản phẩm cho giỏ hàng:", productId, error);
     productDetailCache.set(productId, null);
     return null;
   }
 };
 
 const enrichCartItemImage = async (item: CartItem): Promise<CartItem> => {
-  // BỎ DÒNG ĐI TẮT CHECK ẢNH ĐI.
   if (!item) return item;
-
+  
   const productId = getItemProductId(item);
-  if (!productId) {
-    return item;
-  }
+  if (!productId) return item; 
 
-  // LUÔN GỌI API ĐỂ LẤY FULL DATA SẢN PHẨM (ĐỂ LẤY LIST BIẾN THỂ)
   const productData = await fetchProductDetail(productId);
-
-  if (!productData) {
-    return item;
-  }
+  if (!productData) return item;
 
   const matchedVariant = findMatchingVariant(productData, getItemVariantId(item));
   const imageUrl = extractImageValue(matchedVariant) || extractImageValue(productData);
 
   return {
     ...item,
-    // Ưu tiên ảnh gốc của giỏ hàng, nếu không có thì lấy ảnh vừa fetch
     imageUrl: extractImageValue(item) || imageUrl, 
-    // Quan trọng nhất: Bơm full data (chứa variants) vào item!
-    product: item.product ?? productData, 
-    productVariant: item.productVariant ?? matchedVariant ?? undefined,
+    product: productData, 
+    productVariant: matchedVariant || item.productVariant,
   };
 };
 
 const enrichCartItemsWithImages = async (items: CartItem[]) => {
-  const enrichedItems = await Promise.all(items.map((item) => enrichCartItemImage(item)));
-
-  return enrichedItems;
+  return await Promise.all(items.map((item) => enrichCartItemImage(item)));
 };
 
 const loadCart = async () => {
   try {
     isLoading.value = true;
-
     const res = await api.get("/v1/customer/cart/my-cart");
+    
+    // --- THÊM 2 DÒNG NÀY ĐỂ BẮT SỐNG DATA ---
+    console.log("📦 DỮ LIỆU GIỎ HÀNG GỐC:", res.data);
     const items = extractCartItems(res.data);
+    console.log("🛒 TỪNG ITEM TRONG GIỎ:", items);
+    // ----------------------------------------
 
     cartItems.value = await enrichCartItemsWithImages(items);
-
-    if (!canCheckout.value) {
-      resetVoucher();
-    }
+    if (!canCheckout.value) resetVoucher();
   } catch (err: any) {
-    console.error("Lỗi tải giỏ hàng:", err);
-
-    await showError(
-      "Không tải được giỏ hàng",
-      err?.response?.data?.message ||
-        err?.response?.data ||
-        "Vui lòng đăng nhập lại hoặc thử lại sau."
-    );
-
-    if (err?.response?.status === 401 || err?.response?.status === 403) {
-      router.push("/login");
-    }
+    await showError("Lỗi", "Không tải được giỏ hàng");
+    if (err?.response?.status === 401 || err?.response?.status === 403) router.push("/login");
   } finally {
     isLoading.value = false;
   }
 };
 
 const updateQty = async (item: CartItem, newQty: number) => {
-  if (!item?.cartItemId) return;
-
-  if (newQty < 1) {
-    return;
-  }
-
+  if (!item?.cartItemId || newQty < 1) return;
   const stockQuantity = Number(item?.stockQuantity || 0);
 
-  if (stockQuantity <= 0) {
-    await showToast("warning", "Sản phẩm đã hết hàng");
-    return;
-  }
+  if (stockQuantity <= 0) return showToast("warning", "Sản phẩm đã hết hàng");
+  if (newQty > stockQuantity) return showToast("warning", `Sản phẩm chỉ còn ${stockQuantity} trong kho`);
 
-  if (newQty > stockQuantity) {
-    await showToast(
-      "warning",
-      `Sản phẩm chỉ còn ${stockQuantity} trong kho`
-    );
-    return;
-  }
-
-  if (
-    item.available === false ||
-    item.sellable === false ||
-    item.variantStatus !== 1 ||
-    isAfterToday(item.manufacturingDate) ||
-    isItemExpired(item)
-  ) {
-    await Swal.fire({
-      icon: "warning",
-      title: "Không thể cập nhật",
-      text: getUnavailableReason(item),
-      confirmButtonColor: "#bd9a5f",
+  try {
+    isUpdating.value = true;
+    await api.put("/v1/customer/cart/update", {
+      cartItemId: item.cartItemId,
+      productVariantId: getItemVariantId(item),
+      quantity: newQty,
     });
-
+    item.quantity = newQty;
+    resetVoucher();
+    await showToast("success", "Đã cập nhật số lượng");
+  } catch (err: any) {
+    await showError("Lỗi", "Không thể cập nhật giỏ hàng");
     await loadCart();
-    return;
+  } finally {
+    isUpdating.value = false;
   }
+};
+
+// ==========================================
+// T FIX LẠI LOGIC ĐỔI BIẾN THỂ (ADD MỚI -> DELETE CŨ)
+// ==========================================
+const updateVariant = async (item: CartItem, newVariantId: number) => {
+  if (!item?.cartItemId || !newVariantId) return;
+  if (getItemVariantId(item) === newVariantId) return;
 
   try {
     isUpdating.value = true;
 
-    await api.put(`/v1/customer/cart/update/${item.cartItemId}`, {
-      quantity: newQty,
+    // 1. GỌI API THÊM BIẾN THỂ MỚI VÀO GIỎ TRƯỚC
+    await api.post("/v1/customer/cart/add", {
+      productVariantId: newVariantId,
+      quantity: item.quantity,
+      note: item.note || ""
     });
 
-    item.quantity = newQty;
+    // 2. THÊM THÀNH CÔNG THÌ ĐÁ CÁI ITEM CŨ KHỎI GIỎ HÀNG
+    await api.delete(`/v1/customer/cart/remove/${item.cartItemId}`);
+
     resetVoucher();
-
-    await showToast("success", "Đã cập nhật số lượng");
+    await showToast("success", "Đã đổi phân loại sản phẩm");
+    await loadCart(); 
   } catch (err: any) {
-    console.error("Lỗi cập nhật số lượng:", err);
-
-    await showError(
-      "Không thể cập nhật giỏ hàng",
-      err?.response?.data?.message ||
-        err?.response?.data ||
-        "Vui lòng thử lại sau."
-    );
-
-    await loadCart();
+    console.error("Lỗi đổi biến thể:", err);
+    await showError("Lỗi", err?.response?.data?.message || "Không thể đổi loại sản phẩm. Vui lòng thử lại!");
+    await loadCart(); 
   } finally {
     isUpdating.value = false;
   }
@@ -638,94 +361,42 @@ const updateQty = async (item: CartItem, newQty: number) => {
 
 const removeItem = async (cartItemId: number) => {
   if (!cartItemId) return;
-
   try {
     isUpdating.value = true;
-
     await api.delete(`/v1/customer/cart/remove/${cartItemId}`);
-
-    cartItems.value = cartItems.value.filter(
-      (item) => item.cartItemId !== cartItemId
-    );
-
+    cartItems.value = cartItems.value.filter((item) => item.cartItemId !== cartItemId);
     resetVoucher();
-
     await showToast("success", "Đã xóa sản phẩm khỏi giỏ");
   } catch (err: any) {
-    console.error("Không thể xóa sản phẩm:", err);
-
-    await showError(
-      "Không thể xóa sản phẩm",
-      err?.response?.data?.message ||
-        err?.response?.data ||
-        "Vui lòng thử lại sau."
-    );
-
+    await showError("Lỗi", "Không thể xóa sản phẩm");
     await loadCart();
   } finally {
     isUpdating.value = false;
   }
 };
 
+
 const goToCheckout = async () => {
-  if (cartItems.value.length === 0) {
-    await showToast("warning", "Giỏ hàng đang trống");
-    return;
-  }
-
+  if (cartItems.value.length === 0) return showToast("warning", "Giỏ hàng đang trống");
   const invalidItem = cartItems.value.find((item) => !isItemAvailable(item));
-
   if (invalidItem) {
-    await Swal.fire({
-      icon: "warning",
-      title: "Giỏ hàng chưa hợp lệ",
-      text: getUnavailableReason(invalidItem),
-      confirmButtonText: "Đã hiểu",
-      confirmButtonColor: "#bd9a5f",
-    });
-
-    await loadCart();
-    return;
+    await Swal.fire({ icon: "warning", title: "Cảnh báo", text: getUnavailableReason(invalidItem) });
+    return loadCart();
   }
-
   router.push("/checkout");
 };
 
-onMounted(() => {
-  loadCart();
+// Thêm biến phí ship (fix cứng 30k theo đúng DB của m)
+const shippingFee = ref(30000);
+
+// Tìm biến finalTotal cũ và chép đè đoạn này vào để nó cộng thêm phí ship
+const finalTotal = computed(() => {
+  if (cartItems.value.length === 0) return 0;
+  // Tổng tiền = (Tạm tính - Giảm giá) + Phí ship
+  return Math.max(0, totalAmount.value - discountAmount.value) + shippingFee.value;
 });
 
-const updateVariant = async (item: CartItem, newVariantId: number) => {
-  if (!item?.cartItemId || !newVariantId) return;
-  
-  // Nếu khách chọn lại đúng cái đang dùng thì bỏ qua
-  if (getItemVariantId(item) === newVariantId) return;
-
-  try {
-    isUpdating.value = true;
-
-    // Cập nhật lại giỏ hàng với Variant ID mới. 
-    await api.put(`/v1/customer/cart/update/${item.cartItemId}`, {
-      productVariantId: newVariantId,
-      quantity: item.quantity // Giữ nguyên số lượng hiện tại
-    });
-
-    resetVoucher(); // Đổi hàng thì giá thay đổi -> Phải bắt khách add lại voucher
-    await showToast("success", "Đã đổi phân loại sản phẩm");
-    
-    // Bắt buộc gọi lại loadCart() để tải lại data, ảnh và giá mới từ server
-    await loadCart(); 
-  } catch (err: any) {
-    console.error("Lỗi cập nhật biến thể:", err);
-    await showError(
-      "Không thể đổi loại sản phẩm",
-      err?.response?.data?.message || err?.response?.data || "Vui lòng thử lại sau."
-    );
-    await loadCart(); // Lỗi cũng load lại cho chắc data
-  } finally {
-    isUpdating.value = false;
-  }
-};
+onMounted(() => loadCart());
 </script>
 
 <style scoped>
@@ -735,7 +406,6 @@ const updateVariant = async (item: CartItem, newVariantId: number) => {
   padding-bottom: 50px;
   color: #06132b;
 }
-
 .main-content.full-width {
   max-width: 1400px;
   width: 100%;
@@ -745,10 +415,7 @@ const updateVariant = async (item: CartItem, newVariantId: number) => {
   gap: 30px;
   align-items: flex-start;
 }
-
 @media (max-width: 992px) {
-  .main-content.full-width {
-    flex-direction: column;
-  }
+  .main-content.full-width { flex-direction: column; }
 }
 </style>
