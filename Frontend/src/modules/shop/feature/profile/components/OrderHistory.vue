@@ -520,6 +520,25 @@
                             }}
                           </div>
 
+                          <div
+                            v-if="
+                              getReviewRejectReason(
+                                getMyReviewByOrderItemId(item.orderItemId)
+                              )
+                            "
+                            class="review-reject-reason mt-1"
+                          >
+                            <i class="bi bi-info-circle me-1"></i>
+                            <span>Lý do:</span>
+                            <strong>
+                              {{
+                                getReviewRejectReason(
+                                  getMyReviewByOrderItemId(item.orderItemId)
+                                )
+                              }}
+                            </strong>
+                          </div>
+
                           <button
                             v-if="
                               canEditExistingReview(
@@ -1609,6 +1628,23 @@ const getReviewApprovalClass = (review: any) => {
     "is-rejected": status === "REJECTED",
     "is-hidden": status === "HIDDEN",
   };
+};
+
+const getReviewRejectReason = (review: any) => {
+  if (!review || getReviewApprovalStatus(review) !== "REJECTED") {
+    return "";
+  }
+
+  const reason =
+    review?.rejectedReason ??
+    review?.rejectReason ??
+    review?.rejectionReason ??
+    review?.approvalRejectReason ??
+    review?.reviewRejectReason ??
+    review?.reasonReject ??
+    null;
+
+  return String(reason || "").trim();
 };
 
 const getReviewEditCount = (review: any) => {
@@ -5578,6 +5614,23 @@ const getItemImage = (item: any) => {
   background: #fef2f2;
   color: #b91c1c;
   border: 1px solid #fecaca;
+}
+
+.review-reject-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  color: #b91c1c;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.review-reject-reason span {
+  font-weight: 700;
+}
+
+.review-reject-reason strong {
+  font-weight: 600;
 }
 
 .review-edit-hint {
