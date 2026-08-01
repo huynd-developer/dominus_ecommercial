@@ -41,6 +41,10 @@ public class PosHoldRequest {
     @Size(max = 50, message = "Mã voucher không được vượt quá 50 ký tự")
     private String voucherCode;
 
+    /**
+     * Validate từng dòng sản phẩm qua PosItemRequest.
+     * Mỗi SKU vẫn được service cộng dồn và chặn tối đa 10 lọ để tránh gửi trùng dòng lách validate.
+     */
     @Valid
     @NotEmpty(message = "Phiếu treo phải có ít nhất 1 sản phẩm")
     private List<PosItemRequest> items;

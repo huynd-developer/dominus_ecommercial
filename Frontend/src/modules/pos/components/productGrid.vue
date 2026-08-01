@@ -226,7 +226,7 @@
                   class="qty-number-grid qty-input-grid"
                   type="number"
                   min="1"
-                  :max="Number(product.stockQuantity || 0)"
+                  :max="getProductMaxQuantity(product)"
                   :value="getCartItem(product)?.quantity || 1"
                   :disabled="posStore.cashPaid > 0"
                   title="Nhập số lượng"
@@ -242,7 +242,7 @@
                   :disabled="
                     posStore.cashPaid > 0 ||
                     (getCartItem(product)?.quantity || 0) >=
-                      Number(product.stockQuantity || 0)
+                      getProductMaxQuantity(product)
                   "
                   title="Tăng số lượng"
                   @click.stop="increaseQuantity(product)"
@@ -282,8 +282,8 @@
       </template>
 
       <template v-else>
-        Tick checkbox để thêm sản phẩm vào đơn. Sản phẩm đã tick sẽ hiện nút
-        tăng giảm số lượng và xóa.
+        Tick checkbox để thêm sản phẩm vào đơn. Mỗi sản phẩm chỉ được mua tối đa
+        10 lọ trong một đơn hàng.
       </template>
     </div>
   </div>
@@ -301,6 +301,8 @@ const posStore = usePosStore();
 const selectedCapacity = ref<string>("");
 const selectedBottleType = ref<string>("");
 const selectedStockFilter = ref<"" | "AVAILABLE" | "LOW">("");
+
+const MAX_POS_ITEM_QUANTITY_PER_PRODUCT = 10;
 
 const brandSelectOptions = computed<string[]>(() => {
   return (posStore.categories || [])
@@ -670,6 +672,30 @@ const isProductSelected = (product: PosProduct) => {
   return Boolean(getCartItem(product));
 };
 
+const getProductMaxQuantity = (product?: PosProduct | null) => {
+  const stockQuantity = Number(product?.stockQuantity || 0);
+
+  if (!Number.isFinite(stockQuantity) || stockQuantity <= 0) {
+    return 0;
+  }
+
+  return Math.min(Math.trunc(stockQuantity), MAX_POS_ITEM_QUANTITY_PER_PRODUCT);
+};
+
+const getProductMaxQuantityMessage = (product?: PosProduct | null) => {
+  const maxQuantity = getProductMaxQuantity(product);
+
+  if (maxQuantity <= 0) {
+    return "Sản phẩm đã hết hàng.";
+  }
+
+  if (maxQuantity < MAX_POS_ITEM_QUANTITY_PER_PRODUCT) {
+    return `Kho chỉ còn tối đa ${maxQuantity} lọ cho sản phẩm này.`;
+  }
+
+  return `Mỗi sản phẩm chỉ được mua tối đa ${MAX_POS_ITEM_QUANTITY_PER_PRODUCT} lọ trong một đơn hàng.`;
+};
+
 const checkboxTitle = (product: PosProduct) => {
   return isProductSelected(product)
     ? "Bỏ chọn sản phẩm khỏi đơn"
@@ -707,6 +733,14 @@ const increaseQuantity = (product: PosProduct) => {
     return;
   }
 
+  const maxQuantity = getProductMaxQuantity(product);
+
+  if (item.quantity >= maxQuantity) {
+    posStore.errorMsg = getProductMaxQuantityMessage(product);
+    posStore.updateQuantity(product.sku, maxQuantity);
+    return;
+  }
+
   posStore.updateQuantity(product.sku, item.quantity + 1);
 };
 
@@ -734,9 +768,9 @@ const handleQuantityInput = (
     return;
   }
 
-  const stock = Number(product.stockQuantity || 0);
+  const maxQuantity = getProductMaxQuantity(product);
 
-  if (stock <= 0) {
+  if (maxQuantity <= 0) {
     posStore.errorMsg = "Sản phẩm đã hết hàng.";
     input.value = String(item.quantity || 1);
     return;
@@ -754,7 +788,11 @@ const handleQuantityInput = (
     return;
   }
 
-  const quantity = Math.min(Math.max(Math.trunc(parsedValue), 1), stock);
+  const quantity = Math.min(Math.max(Math.trunc(parsedValue), 1), maxQuantity);
+
+  if (Math.trunc(parsedValue) > maxQuantity) {
+    posStore.errorMsg = getProductMaxQuantityMessage(product);
+  }
 
   posStore.updateQuantity(product.sku, quantity);
   input.value = String(quantity);
