@@ -1,5 +1,6 @@
 package org.example.datn_sd69.modules.review.service.impl;
 
+import jakarta.persistence.EntityManager;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import lombok.RequiredArgsConstructor;
@@ -9,9 +10,10 @@ import org.example.datn_sd69.entity.OrderItem;
 import org.example.datn_sd69.entity.Product;
 import org.example.datn_sd69.entity.ProductVariant;
 import org.example.datn_sd69.entity.Review;
-import org.example.datn_sd69.entity.ReviewMedia; // ĐÃ THÊM
+import org.example.datn_sd69.entity.ReviewMedia;
 import org.example.datn_sd69.entity.User;
 import org.example.datn_sd69.modules.review.dto.request.CreateReviewRequest;
+import org.example.datn_sd69.modules.review.dto.response.ReviewMediaResponse;
 import org.example.datn_sd69.modules.review.dto.response.ReviewResponse;
 import org.example.datn_sd69.modules.review.dto.response.ReviewableOrderItemResponse;
 import org.example.datn_sd69.modules.review.service.CustomerReviewService;
@@ -24,14 +26,17 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile; // ĐÃ THÊM
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList; // ĐÃ THÊM
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -39,12 +44,21 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
 
     private static final int ORDER_STATUS_COMPLETED = 3;
     private static final int MAX_COMMENT_LENGTH = 1000;
+    private static final int REVIEW_CREATE_DEADLINE_DAYS = 15;
+    private static final int REVIEW_EDIT_DEADLINE_DAYS = 30;
+    private static final int MAX_REVIEW_EDIT_COUNT = 1;
+
+    private static final int REVIEW_APPROVAL_PENDING = 0;
+    private static final int REVIEW_APPROVAL_APPROVED = 1;
+    private static final int REVIEW_APPROVAL_REJECTED = 2;
+    private static final int REVIEW_APPROVAL_HIDDEN = 3;
 
     private final ReviewRepository reviewRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
     private final Cloudinary cloudinary;
+    private final EntityManager entityManager;
 
     @Override
     @Transactional
@@ -64,9 +78,13 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
 
         validateOrderBelongsToCurrentUser(order, currentUser.getId());
 
+        LocalDateTime now = LocalDateTime.now();
+
         if (!Objects.equals(order.getStatus(), ORDER_STATUS_COMPLETED)) {
             throw badRequest("Chỉ được đánh giá khi đơn hàng đã hoàn thành");
         }
+
+        validateReviewCreateDeadline(order, now);
 
         if (orderItem.getProductVariant() == null) {
             throw badRequest("Sản phẩm không còn tồn tại nên không thể đánh giá");
@@ -81,44 +99,108 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
             throw badRequest("Bạn đã đánh giá sản phẩm này trong đơn hàng");
         }
 
+        List<MultipartFile> validMediaFiles = getValidMediaFiles(request.mediaFiles());
+        boolean hasMedia = !validMediaFiles.isEmpty();
+
         Review review = new Review();
         review.setUser(currentUser);
         review.setOrderItem(orderItem);
         review.setRating(request.rating());
         review.setComment(normalizeComment(request.comment()));
-        review.setCreatedAt(LocalDateTime.now());
+        review.setCreatedAt(now);
         review.setIsDeleted(false);
 
-        // ĐÃ THÊM: Xử lý danh sách file upload
-        if (request.mediaFiles() != null && !request.mediaFiles().isEmpty()) {
-            for (MultipartFile file : request.mediaFiles()) {
-                if (!file.isEmpty()) {
-                    try {
-                        Map uploadResult = cloudinary.uploader().upload(
-                                file.getBytes(),
-                                ObjectUtils.asMap("resource_type", "auto") // Ép nó tự động nhận diện video/audio/image
-                        );
+        if (hasMedia) {
+            review.setApprovalStatus(REVIEW_APPROVAL_PENDING);
+            review.setApprovedAt(null);
+        } else {
+            review.setApprovalStatus(REVIEW_APPROVAL_APPROVED);
+            review.setApprovedAt(now);
+        }
 
-                        // Lấy URL trả về từ Cloudinary[cite: 16]
-                        String fileUrl = uploadResult.get("secure_url").toString();
+        review.setRejectedAt(null);
+        review.setRejectedReason(null);
 
-                        ReviewMedia media = new ReviewMedia();
-                        media.setReview(review);
-                        media.setMediaUrl(fileUrl);
+        uploadReviewMediaFiles(review, validMediaFiles);
 
-                        // Phân loại là video hay ảnh
-                        String contentType = file.getContentType();
-                        if (contentType != null && contentType.startsWith("video/")) {
-                            media.setMediaType("video");
-                        } else {
-                            media.setMediaType("image");
-                        }
+        Review savedReview = reviewRepository.save(review);
 
-                        review.getReviewMedias().add(media);
-                    } catch (Exception e) {
-                        throw new RuntimeException("Lỗi upload file lên Cloudinary: " + e.getMessage());
-                    }
-                }
+        return mapToReviewResponse(savedReview);
+    }
+
+    @Override
+    @Transactional
+    public ReviewResponse updateReview(
+            Integer reviewId,
+            Integer rating,
+            String comment,
+            List<MultipartFile> mediaFiles,
+            List<Integer> deletedMediaIds
+    ) {
+        User currentUser = getCurrentUser();
+
+        if (reviewId == null || reviewId <= 0) {
+            throw badRequest("reviewId phải là số nguyên dương");
+        }
+
+        validateReviewUpdatePayload(rating, comment);
+
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy đánh giá"
+                ));
+
+        if (Boolean.TRUE.equals(review.getIsDeleted())) {
+            throw badRequest("Đánh giá đã bị xóa, không thể chỉnh sửa");
+        }
+
+        if (review.getUser() == null || !Objects.equals(review.getUser().getId(), currentUser.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Bạn không có quyền chỉnh sửa đánh giá này"
+            );
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        validateReviewEditDeadline(review, now);
+        validateReviewEditCount(review);
+
+        List<MultipartFile> validMediaFiles = getValidMediaFiles(mediaFiles);
+        boolean hasNewMedia = !validMediaFiles.isEmpty();
+
+        List<Integer> cleanDeletedMediaIds = normalizeDeletedMediaIds(deletedMediaIds);
+        boolean hasDeletedMedia = deleteReviewMediaFiles(review, cleanDeletedMediaIds) > 0;
+
+        review.setRating(rating);
+        review.setComment(normalizeComment(comment));
+        review.setEditedAt(now);
+        review.setEditCount((review.getEditCount() == null ? 0 : review.getEditCount()) + 1);
+
+        if (hasNewMedia) {
+            uploadReviewMediaFiles(review, validMediaFiles);
+        }
+
+        boolean hasAnyMediaAfterUpdate = review.getReviewMedias() != null
+                && !review.getReviewMedias().isEmpty();
+
+        /*
+         * Sau khi khách sửa đánh giá:
+         * - Còn ảnh/video => đưa về chờ duyệt lại.
+         * - Không còn ảnh/video => tự duyệt, trừ review đang bị admin ẩn.
+         */
+        if (!Objects.equals(review.getApprovalStatus(), REVIEW_APPROVAL_HIDDEN)) {
+            if (hasAnyMediaAfterUpdate) {
+                review.setApprovalStatus(REVIEW_APPROVAL_PENDING);
+                review.setApprovedAt(null);
+                review.setRejectedAt(null);
+                review.setRejectedReason(null);
+            } else {
+                review.setApprovalStatus(REVIEW_APPROVAL_APPROVED);
+                review.setApprovedAt(now);
+                review.setRejectedAt(null);
+                review.setRejectedReason(null);
             }
         }
 
@@ -220,6 +302,118 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
         return trimmed;
     }
 
+    private List<MultipartFile> getValidMediaFiles(List<MultipartFile> mediaFiles) {
+        if (mediaFiles == null || mediaFiles.isEmpty()) {
+            return List.of();
+        }
+
+        return mediaFiles.stream()
+                .filter(file -> file != null && !file.isEmpty())
+                .toList();
+    }
+
+    private void uploadReviewMediaFiles(Review review, List<MultipartFile> mediaFiles) {
+        if (review == null || mediaFiles == null || mediaFiles.isEmpty()) {
+            return;
+        }
+
+        for (MultipartFile file : mediaFiles) {
+            try {
+                Map<?, ?> uploadResult = cloudinary.uploader().upload(
+                        file.getBytes(),
+                        ObjectUtils.asMap("resource_type", "auto")
+                );
+
+                Object secureUrl = uploadResult.get("secure_url");
+
+                if (secureUrl == null || String.valueOf(secureUrl).trim().isEmpty()) {
+                    throw new IllegalStateException("Cloudinary không trả về secure_url");
+                }
+
+                ReviewMedia media = new ReviewMedia();
+                media.setReview(review);
+                media.setMediaUrl(String.valueOf(secureUrl));
+                media.setMediaType(resolveMediaType(file));
+
+                review.getReviewMedias().add(media);
+            } catch (Exception e) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Lỗi upload ảnh/video đánh giá: " + e.getMessage(),
+                        e
+                );
+            }
+        }
+    }
+
+    private List<Integer> normalizeDeletedMediaIds(List<Integer> deletedMediaIds) {
+        if (deletedMediaIds == null || deletedMediaIds.isEmpty()) {
+            return List.of();
+        }
+
+        return deletedMediaIds.stream()
+                .filter(Objects::nonNull)
+                .filter(mediaId -> mediaId > 0)
+                .distinct()
+                .toList();
+    }
+
+    private int deleteReviewMediaFiles(Review review, List<Integer> deletedMediaIds) {
+        if (review == null || deletedMediaIds == null || deletedMediaIds.isEmpty()) {
+            return 0;
+        }
+
+        if (review.getReviewMedias() == null || review.getReviewMedias().isEmpty()) {
+            throw badRequest("Ảnh/video cần xóa không tồn tại trong đánh giá này");
+        }
+
+        Set<Integer> requestedIds = new HashSet<>(deletedMediaIds);
+        Set<Integer> existingIds = new HashSet<>();
+
+        for (ReviewMedia media : review.getReviewMedias()) {
+            if (media != null && media.getId() != null) {
+                existingIds.add(media.getId());
+            }
+        }
+
+        if (!existingIds.containsAll(requestedIds)) {
+            throw badRequest("Ảnh/video cần xóa không thuộc đánh giá này");
+        }
+
+        int deletedCount = 0;
+        Iterator<ReviewMedia> iterator = review.getReviewMedias().iterator();
+
+        while (iterator.hasNext()) {
+            ReviewMedia media = iterator.next();
+
+            if (media == null || media.getId() == null || !requestedIds.contains(media.getId())) {
+                continue;
+            }
+
+            iterator.remove();
+            media.setReview(null);
+
+            ReviewMedia managedMedia = entityManager.contains(media)
+                    ? media
+                    : entityManager.merge(media);
+
+            entityManager.remove(managedMedia);
+            deletedCount++;
+        }
+
+        return deletedCount;
+    }
+
+    private String resolveMediaType(MultipartFile file) {
+        String contentType = file == null ? null : file.getContentType();
+
+        if (contentType != null && contentType.toLowerCase().startsWith("video/")) {
+            return "video";
+        }
+
+        return "image";
+    }
+
     private ReviewResponse mapToReviewResponse(Review review) {
         OrderItem orderItem = review.getOrderItem();
         Order order = orderItem != null ? orderItem.getOrder() : null;
@@ -227,13 +421,34 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
         Product product = variant != null ? variant.getProduct() : null;
         Brand brand = product != null ? product.getBrand() : null;
 
-        // ĐÃ THÊM: Map danh sách URL ảnh để nhét vào Response
         List<String> mediaUrls = new ArrayList<>();
+        List<ReviewMediaResponse> mediaFiles = new ArrayList<>();
+
         if (review.getReviewMedias() != null && !review.getReviewMedias().isEmpty()) {
             mediaUrls = review.getReviewMedias().stream()
                     .map(ReviewMedia::getMediaUrl)
+                    .filter(Objects::nonNull)
+                    .toList();
+
+            mediaFiles = review.getReviewMedias().stream()
+                    .filter(Objects::nonNull)
+                    .filter(media -> media.getMediaUrl() != null && !media.getMediaUrl().trim().isEmpty())
+                    .map(media -> new ReviewMediaResponse(
+                            media.getId(),
+                            media.getMediaUrl(),
+                            media.getMediaUrl(),
+                            media.getMediaType(),
+                            isVideoReviewMedia(media)
+                    ))
                     .toList();
         }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime editDeadline = review.getCreatedAt() == null
+                ? null
+                : review.getCreatedAt().plusDays(REVIEW_EDIT_DEADLINE_DAYS);
+        boolean canEdit = canEditReview(review, now);
+        String editMessage = getReviewEditMessage(review, now);
 
         return new ReviewResponse(
                 review.getId(),
@@ -250,8 +465,33 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
                 review.getRating(),
                 review.getComment(),
                 review.getCreatedAt(),
-                mediaUrls // ĐÃ THÊM trường này vào DTO
+                review.getApprovalStatus(),
+                getApprovalStatusText(review.getApprovalStatus()),
+                review.getApprovedAt(),
+                review.getRejectedAt(),
+                review.getRejectedReason(),
+                mediaUrls,
+                mediaFiles,
+                review.getEditedAt(),
+                review.getEditCount() == null ? 0 : review.getEditCount(),
+                canEdit,
+                editDeadline,
+                editMessage
         );
+    }
+
+    private String getApprovalStatusText(Integer status) {
+        if (status == null) {
+            return "Đã hiển thị";
+        }
+
+        return switch (status) {
+            case REVIEW_APPROVAL_PENDING -> "Đang chờ duyệt ảnh/video";
+            case REVIEW_APPROVAL_APPROVED -> "Đã hiển thị";
+            case REVIEW_APPROVAL_REJECTED -> "Đánh giá không được duyệt";
+            case REVIEW_APPROVAL_HIDDEN -> "Đánh giá đã bị ẩn";
+            default -> "Không xác định";
+        };
     }
 
     private ReviewableOrderItemResponse mapToReviewableOrderItemResponse(
@@ -259,7 +499,6 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
             OrderItem orderItem,
             Integer currentUserId
     ) {
-        // ... (Giữ nguyên không thay đổi)
         ProductVariant variant = orderItem.getProductVariant();
         Product product = variant != null ? variant.getProduct() : null;
         Brand brand = product != null ? product.getBrand() : null;
@@ -271,12 +510,15 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
 
         boolean completed = Objects.equals(order.getStatus(), ORDER_STATUS_COMPLETED);
         boolean hasProduct = variant != null;
-        boolean canReview = completed && hasProduct && !reviewed;
+        boolean withinReviewDeadline = isWithinReviewCreateDeadline(order, LocalDateTime.now());
+        boolean canReview = completed && hasProduct && withinReviewDeadline && !reviewed;
 
         String message;
 
         if (!completed) {
             message = "Chỉ được đánh giá khi đơn hàng đã hoàn thành";
+        } else if (!withinReviewDeadline) {
+            message = "Đã quá hạn 15 ngày đánh giá sản phẩm";
         } else if (!hasProduct) {
             message = "Sản phẩm không còn tồn tại nên không thể đánh giá";
         } else if (reviewed) {
@@ -303,8 +545,140 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
         );
     }
 
+    private void validateReviewUpdatePayload(Integer rating, String comment) {
+        if (rating == null) {
+            throw badRequest("Số sao đánh giá không được để trống");
+        }
+
+        if (rating < 1 || rating > 5) {
+            throw badRequest("Số sao đánh giá phải từ 1 đến 5");
+        }
+
+        if (comment != null && comment.length() > MAX_COMMENT_LENGTH) {
+            throw badRequest("Bình luận tối đa 1000 ký tự");
+        }
+    }
+
+    private void validateReviewCreateDeadline(Order order, LocalDateTime now) {
+        if (!isWithinReviewCreateDeadline(order, now)) {
+            throw badRequest("Đã quá hạn 15 ngày đánh giá sản phẩm.");
+        }
+    }
+
+    private boolean isWithinReviewCreateDeadline(Order order, LocalDateTime now) {
+        LocalDateTime completedAt = getOrderCompletedAt(order);
+
+        if (completedAt == null) {
+            return false;
+        }
+
+        return !now.isAfter(completedAt.plusDays(REVIEW_CREATE_DEADLINE_DAYS));
+    }
+
+    private void validateReviewEditDeadline(Review review, LocalDateTime now) {
+        LocalDateTime createdAt = review == null ? null : review.getCreatedAt();
+
+        if (createdAt == null) {
+            throw badRequest("Đánh giá chưa có thời gian tạo, không thể chỉnh sửa.");
+        }
+
+        if (now.isAfter(createdAt.plusDays(REVIEW_EDIT_DEADLINE_DAYS))) {
+            throw badRequest("Đã quá hạn 30 ngày chỉnh sửa đánh giá.");
+        }
+    }
+
+    private void validateReviewEditCount(Review review) {
+        Integer editCount = review == null || review.getEditCount() == null
+                ? 0
+                : review.getEditCount();
+
+        if (editCount >= MAX_REVIEW_EDIT_COUNT) {
+            throw badRequest("Bạn chỉ được chỉnh sửa đánh giá 1 lần.");
+        }
+    }
+
+    private LocalDateTime getOrderCompletedAt(Order order) {
+        if (order == null) {
+            return null;
+        }
+
+        if (order.getCompletedAt() != null) {
+            return order.getCompletedAt();
+        }
+
+        /*
+         * Fallback cho dữ liệu cũ chưa có CompletedAt.
+         * Dữ liệu mới vẫn phải set CompletedAt khi đơn chuyển sang Hoàn thành.
+         */
+        return order.getCreatedAt();
+    }
+
+    private boolean isVideoReviewMedia(ReviewMedia media) {
+        if (media == null) {
+            return false;
+        }
+
+        String mediaType = media.getMediaType() == null
+                ? ""
+                : media.getMediaType().trim().toLowerCase();
+
+        if (mediaType.contains("video")) {
+            return true;
+        }
+
+        String mediaUrl = media.getMediaUrl() == null
+                ? ""
+                : media.getMediaUrl().trim().toLowerCase();
+
+        return mediaUrl.matches(".*\\.(mp4|webm|ogg|mov|m4v)(\\?.*)?$")
+                || mediaUrl.contains("/video/upload/");
+    }
+
+    private boolean canEditReview(Review review, LocalDateTime now) {
+        if (review == null || Boolean.TRUE.equals(review.getIsDeleted())) {
+            return false;
+        }
+
+        Integer editCount = review.getEditCount() == null ? 0 : review.getEditCount();
+
+        if (editCount >= MAX_REVIEW_EDIT_COUNT) {
+            return false;
+        }
+
+        LocalDateTime createdAt = review.getCreatedAt();
+
+        if (createdAt == null) {
+            return false;
+        }
+
+        return !now.isAfter(createdAt.plusDays(REVIEW_EDIT_DEADLINE_DAYS));
+    }
+
+    private String getReviewEditMessage(Review review, LocalDateTime now) {
+        if (review == null || Boolean.TRUE.equals(review.getIsDeleted())) {
+            return "Đánh giá này không còn được chỉnh sửa";
+        }
+
+        Integer editCount = review.getEditCount() == null ? 0 : review.getEditCount();
+
+        if (editCount >= MAX_REVIEW_EDIT_COUNT) {
+            return "Đã sử dụng quyền sửa đánh giá";
+        }
+
+        LocalDateTime createdAt = review.getCreatedAt();
+
+        if (createdAt == null) {
+            return "Không xác định được hạn sửa đánh giá";
+        }
+
+        if (now.isAfter(createdAt.plusDays(REVIEW_EDIT_DEADLINE_DAYS))) {
+            return "Đã quá hạn 30 ngày chỉnh sửa đánh giá";
+        }
+
+        return "Có thể chỉnh sửa đánh giá";
+    }
+
     private User getCurrentUser() {
-        // ... (Giữ nguyên không thay đổi)
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication == null || !authentication.isAuthenticated()) {

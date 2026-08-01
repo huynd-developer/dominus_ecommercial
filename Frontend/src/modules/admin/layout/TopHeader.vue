@@ -287,6 +287,13 @@ const menuItems = [
         icon: "bi-cylinder",
         roles: ["OWNER", "MANAGER"],
       },
+      {
+        id: "reviews",
+        path: "/admin/reviews",
+        name: "Đánh giá sản phẩm",
+        icon: "bi-star-half", 
+        roles: ["OWNER", "MANAGER"],
+      },
     ],
   },
   {

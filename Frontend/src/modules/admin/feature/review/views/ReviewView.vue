@@ -77,42 +77,85 @@
                   <b>Lý do:</b> {{ item.rejectedReason }}
                 </small>
               </td>
-              <td>
-                <button v-if="item.media && item.media.length > 0" @click="openMediaModal(item.media)" class="btn btn-sm btn-outline-info">
-                  <i class="bi bi-paperclip"></i> Xem Media ({{ item.media.length }})
-                </button>
-                <span v-else class="text-muted small">Không có</span>
-              </td>
+              
+  <!-- CỘT HÌNH ẢNH / VIDEO (Đã thu gọn hiển thị 1 ảnh + số lượng) -->
+<td>
+  <div v-if="item.media && item.media.length > 0" 
+       class="d-inline-block position-relative" 
+       style="cursor: pointer; width: 50px; height: 50px;" 
+       @click="openMediaModal(item.media, 0)" 
+       title="Nhấn để xem chi tiết">
+    
+    <!-- Chỉ hiển thị media đầu tiên [0] -->
+    <!-- Thumbnail Ảnh -->
+    <img 
+    v-if="item.media[0]?.mediaType === 'image' || item.media[0]?.mediaType === 'IMAGE'" 
+    :src="item.media[0]?.mediaUrl" 
+    alt="Review Image"
+    class="img-thumbnail p-0 rounded-2 border w-100 h-100"
+    style="object-fit: cover;"
+    />
+    
+    <!-- Thumbnail Video -->
+    <div v-else-if="item.media[0]?.mediaType === 'video' || item.media[0]?.mediaType === 'VIDEO'" 
+     class="position-relative w-100 h-100">
+    <video 
+        :src="item.media[0]?.mediaUrl"
+        class="img-thumbnail p-0 rounded-2 border w-100 h-100"
+        style="object-fit: cover;"
+        muted
+    ></video>
+    <div class="position-absolute top-50 start-50 translate-middle text-white" style="background: rgba(0,0,0,0.4); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">
+        <i class="bi bi-play-fill" style="font-size: 14px;"></i>
+    </div>
+    </div>
+
+    <!-- Lớp phủ (Overlay) hiển thị số lượng ảnh còn lại -->
+    <div v-if="item.media.length > 1" 
+         class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center rounded-2"
+         style="background: rgba(0, 0, 0, 0.6); color: white; font-weight: bold; font-size: 14px; z-index: 2;">
+      +{{ item.media.length - 1 }}
+    </div>
+
+  </div>
+  <span v-else class="text-muted small">Không có</span>
+</td>
+
               <td>
                 <span class="badge" :class="getStatusBadgeClass(item.approvalStatus)">
                   {{ getStatusText(item.approvalStatus) }}
                 </span>
               </td>
               <td class="text-center">
-                <!-- Chờ duyệt (0) -> Duyệt hoặc Từ chối -->
-                <template v-if="item.approvalStatus === 0">
-                  <button @click="handleApprove(item.id)" class="btn btn-sm btn-success me-1" title="Duyệt">
-                    <i class="bi bi-check-lg"></i>
-                  </button>
-                  <button @click="openRejectModal(item.id)" class="btn btn-sm btn-outline-danger" title="Từ chối">
-                    <i class="bi bi-x-lg"></i>
-                  </button>
-                </template>
+  <!-- 1. Chờ duyệt (0) -> Duyệt hoặc Từ chối: Cần quyền MANAGER hoặc OWNER -->
+  <template v-if="item.approvalStatus === 0 && (authStore.isManager || authStore.isOwner)">
+    <button @click="handleApprove(item.id)" class="btn btn-sm btn-success me-1" title="Duyệt">
+      <i class="bi bi-check-lg"></i>
+    </button>
+    <button @click="openRejectModal(item.id)" class="btn btn-sm btn-outline-danger" title="Từ chối">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </template>
 
-                <!-- Đã duyệt (1) -> Ẩn -->
-                <template v-if="item.approvalStatus === 1">
-                  <button @click="handleHide(item.id)" class="btn btn-sm btn-outline-secondary" title="Ẩn bài">
-                    <i class="bi bi-eye-slash"></i> Ẩn
-                  </button>
-                </template>
+  <!-- 2. Đã duyệt (1) -> Ẩn: CHỈ DUY NHẤT OWNER mới có quyền -->
+  <template v-if="item.approvalStatus === 1 && authStore.isOwner">
+    <button @click="handleHide(item.id)" class="btn btn-sm btn-outline-secondary" title="Ẩn bài">
+      <i class="bi bi-eye-slash"></i> Ẩn
+    </button>
+  </template>
 
-                <!-- Từ chối (2) hoặc Đã ẩn (3) -> Duyệt lại -->
-                <template v-if="item.approvalStatus === 2 || item.approvalStatus === 3">
-                  <button @click="handleApprove(item.id)" class="btn btn-sm btn-outline-success" title="Duyệt lại">
-                    <i class="bi bi-arrow-counterclockwise"></i> Duyệt lại
-                  </button>
-                </template>
-              </td>
+  <!-- 3. Từ chối (2) hoặc Đã ẩn (3) -> Duyệt lại: Cần quyền MANAGER hoặc OWNER -->
+  <template v-if="(item.approvalStatus === 2 || item.approvalStatus === 3) && (authStore.isManager || authStore.isOwner)">
+    <button @click="handleApprove(item.id)" class="btn btn-sm btn-outline-success" title="Duyệt lại">
+      <i class="bi bi-arrow-counterclockwise"></i> Duyệt lại
+    </button>
+  </template>
+
+  <!-- 4. Hiển thị nhãn cho Nhân viên thu ngân (CASHIER) hoặc tài khoản không đủ quyền -->
+  <span v-if="!authStore.isManager && !authStore.isOwner" class="text-muted fst-italic small">
+    Không có quyền thao tác
+  </span>
+</td>
             </tr>
             <tr v-if="reviews.length === 0">
               <td colspan="6" class="text-center py-4 text-muted">Không tìm thấy đánh giá nào</td>
@@ -123,22 +166,66 @@
     </div>
 
     <!-- MODAL XEM MEDIA -->
-    <div v-if="showMediaModal" class="modal d-block" style="background: rgba(0,0,0,0.7); z-index: 1050;">
-      <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Hình ảnh & Video đính kèm</h5>
-            <button @click="showMediaModal = false" class="btn-close"></button>
+   <!-- MODAL XEM MEDIA (Dạng Gallery/Lightbox) -->
+<div v-if="showMediaModal" class="modal d-block" style="background: rgba(0,0,0,0.85); z-index: 1050;">
+  <!-- Nút đóng góc phải -->
+  <button @click="showMediaModal = false" class="btn btn-outline-light position-absolute border-0" style="top: 20px; right: 20px; z-index: 1060; border-radius: 50%; padding: 8px 12px;">
+    <i class="bi bi-x-lg fs-4"></i>
+  </button>
+
+  <div class="modal-dialog modal-dialog-centered modal-xl" style="height: 100vh; margin: 0 auto; max-width: 900px;" @click.self="showMediaModal = false">
+    <div class="modal-content bg-transparent border-0 w-100 d-flex flex-column justify-content-center h-100">
+      
+      <!-- KHUNG HIỂN THỊ CHÍNH -->
+      <div class="position-relative d-flex justify-content-center align-items-center w-100" style="flex: 1; max-height: 75vh;">
+        
+        <!-- Nút Trái -->
+        <button v-if="activeMediaIndex > 0" @click="prevMedia" class="btn btn-light position-absolute start-0 translate-middle-y" style="top: 50%; border-radius: 50%; padding: 10px 15px; opacity: 0.7;">
+          <i class="bi bi-chevron-left fs-4"></i>
+        </button>
+
+        <!-- Ảnh / Video đang xem -->
+        <template v-if="currentMedia[activeMediaIndex]">
+          <img v-if="currentMedia[activeMediaIndex].mediaType === 'image' || currentMedia[activeMediaIndex].mediaType === 'IMAGE'" 
+                :src="currentMedia[activeMediaIndex].mediaUrl" 
+                class="img-fluid rounded shadow" 
+                style="max-height: 75vh; object-fit: contain;">
+                
+          <video v-else 
+                  :src="currentMedia[activeMediaIndex].mediaUrl" 
+                  controls autoplay 
+                  class="img-fluid rounded shadow" 
+                  style="max-height: 75vh; outline: none;"></video>
+        </template>
+
+        <!-- Nút Phải -->
+        <button v-if="activeMediaIndex < currentMedia.length - 1" @click="nextMedia" class="btn btn-light position-absolute end-0 translate-middle-y" style="top: 50%; border-radius: 50%; padding: 10px 15px; opacity: 0.7;">
+          <i class="bi bi-chevron-right fs-4"></i>
+        </button>
+      </div>
+
+      <!-- DANH SÁCH THUMBNAIL BÊN DƯỚI (Chỉ hiện khi có >= 2 media) -->
+      <div class="d-flex justify-content-center gap-2 mt-4" v-if="currentMedia.length > 1">
+        <div v-for="(m, i) in currentMedia" :key="i" 
+             @click="activeMediaIndex = i"
+             class="overflow-hidden rounded border border-2"
+             :class="activeMediaIndex === i ? 'border-primary opacity-100' : 'border-secondary opacity-50'"
+             style="width: 60px; height: 60px; cursor: pointer; transition: all 0.2s;">
+             
+          <img v-if="m.mediaType === 'image' || m.mediaType === 'IMAGE'" 
+               :src="m.mediaUrl" class="w-100 h-100" style="object-fit: cover;">
+               
+          <div v-else class="w-100 h-100 bg-dark position-relative d-flex align-items-center justify-content-center">
+            <video :src="m.mediaUrl" class="w-100 h-100 position-absolute" style="object-fit: cover; opacity: 0.6;"></video>
+            <i class="bi bi-play-circle-fill text-white position-relative z-1 fs-4"></i>
           </div>
-          <div class="modal-body d-flex flex-wrap gap-3 justify-content-center">
-            <template v-for="m in currentMedia" :key="m.id">
-              <img v-if="m.mediaType === 'image' || m.mediaType === 'IMAGE'" :src="m.mediaUrl" class="img-thumbnail" style="max-height: 300px; object-fit: contain;">
-              <video v-else :src="m.mediaUrl" controls class="img-thumbnail" style="max-height: 300px;"></video>
-            </template>
-          </div>
+          
         </div>
       </div>
+
     </div>
+  </div>
+</div>
 
     <!-- MODAL TỪ CHỐI -->
     <div v-if="showRejectModal" class="modal d-block" style="background: rgba(0,0,0,0.5); z-index: 1050;">
@@ -170,15 +257,16 @@ import { ref, onMounted } from 'vue';
 import { reviewService } from '@/modules/admin/feature/review/services/review.service';
 import type { Review, ReviewMedia } from '@/modules/admin/feature/review/types/review.type';
 import Swal from 'sweetalert2';
+import { useAuthStore } from '@/modules/auth/stores/authStore'; // Nhớ sửa lại đường dẫn import cho đúng với dự án của bạn
 
 const reviews = ref<Review[]>([]);
-
+const authStore = useAuthStore();
 // 2. SỬA LỖI 1: Nới lỏng kiểu dữ liệu thành (number | string)
 const currentTab = ref<number | string>(''); 
 const filters = ref({ keyword: '', rating: '', hasMedia: '' });
 
-const showMediaModal = ref(false);
-const currentMedia = ref<ReviewMedia[]>([]);
+// const showMediaModal = ref(false);
+// const currentMedia = ref<ReviewMedia[]>([]);
 
 const showRejectModal = ref(false);
 const selectedReviewId = ref<number | null>(null);
@@ -246,10 +334,28 @@ const getStatusBadgeClass = (status: number) => {
     default: return 'bg-light text-dark';
   }
 };
+const showMediaModal = ref(false);
+const currentMedia = ref<any[]>([]);
+const activeMediaIndex = ref(0);
 
-const openMediaModal = (media: ReviewMedia[]) => {
+
+const openMediaModal = (media: any[], index: number = 0) => {
   currentMedia.value = media;
+  activeMediaIndex.value = index;
   showMediaModal.value = true;
+};
+
+const nextMedia = () => {
+  if (activeMediaIndex.value < currentMedia.value.length - 1) {
+    activeMediaIndex.value++;
+  }
+};
+
+// Hàm quay lại ảnh trước đó
+const prevMedia = () => {
+  if (activeMediaIndex.value > 0) {
+    activeMediaIndex.value--;
+  }
 };
 
 const openRejectModal = (id: number) => {

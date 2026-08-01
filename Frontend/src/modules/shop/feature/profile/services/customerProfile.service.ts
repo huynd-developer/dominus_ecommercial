@@ -6,10 +6,47 @@ import type {
   CustomerOrderResponse,
   CustomerProfileResponse,
   FavoriteResponse,
+  ReturnRequestSubmitPayload,
   ReviewResponse,
   ReviewableOrderItemResponse,
   UpdateCustomerProfileRequest,
+  UpdateReviewRequest,
 } from "../types/profile.type";
+
+const appendReviewFormData = (
+  formData: FormData,
+  data: CreateReviewRequest | UpdateReviewRequest
+) => {
+  formData.append("rating", String(data.rating));
+
+  if (data.comment) {
+    formData.append("comment", data.comment);
+  }
+
+  const files = data.mediaFiles || data.files || [];
+  files.forEach((file) => {
+    formData.append("mediaFiles", file);
+  });
+
+  if ("deletedMediaIds" in data && data.deletedMediaIds) {
+    data.deletedMediaIds.forEach((mediaId) => {
+      formData.append("deletedMediaIds", String(mediaId));
+    });
+  }
+};
+
+const buildCreateReviewFormData = (data: CreateReviewRequest) => {
+  const formData = new FormData();
+  formData.append("orderItemId", String(data.orderItemId));
+  appendReviewFormData(formData, data);
+  return formData;
+};
+
+const buildUpdateReviewFormData = (data: UpdateReviewRequest) => {
+  const formData = new FormData();
+  appendReviewFormData(formData, data);
+  return formData;
+};
 
 export const customerProfileService = {
   getProfile() {
@@ -46,9 +83,7 @@ export const customerProfileService = {
   },
 
   deleteFavorite(favoriteId: number) {
-    return api.delete<{ message: string }>(
-      `/customer/favorites/${favoriteId}`
-    );
+    return api.delete<{ message: string }>(`/customer/favorites/${favoriteId}`);
   },
 
   deleteFavoriteByVariant(productVariantId: number) {
@@ -78,8 +113,47 @@ export const customerProfileService = {
    * PATCH /api/customer/orders/{orderId}/cancel
    */
   cancelOrder(orderId: number) {
-    return api.patch<{ message: string }>(
-      `/customer/orders/${orderId}/cancel`
+    return api.patch<{ message: string }>(`/customer/orders/${orderId}/cancel`);
+  },
+
+  /**
+   * BE:
+   * PUT /api/customer/orders/{orderId}/request-return
+   */
+  requestReturnOrder(orderId: number, data: ReturnRequestSubmitPayload) {
+    const formData = new FormData();
+
+    formData.append("returnType", data.returnType);
+    formData.append("reason", data.reason);
+    formData.append("description", data.description || "");
+    formData.append("email", data.email || "");
+    formData.append("refundMethod", data.refundMethod);
+
+    if (data.refundMethod === "BANK_TRANSFER") {
+      formData.append("bankName", data.bankName || "");
+      formData.append("bankAccountNumber", data.bankAccountNumber || "");
+      formData.append("bankAccountHolder", data.bankAccountHolder || "");
+    }
+
+    formData.append("returnItems", JSON.stringify(data.returnItems || []));
+
+    data.files.forEach((file) => {
+      formData.append("mediaFiles", file);
+    });
+
+    return api.put<{ message: string }>(
+      `/customer/orders/${orderId}/request-return`,
+      formData
+    );
+  },
+
+  /**
+   * BE:
+   * PUT /api/customer/orders/{orderId}/cancel-return
+   */
+  cancelReturnRequest(orderId: number) {
+    return api.put<{ message: string }>(
+      `/customer/orders/${orderId}/cancel-return`
     );
   },
 
@@ -89,8 +163,20 @@ export const customerProfileService = {
     );
   },
 
-  createReview(data: CreateReviewRequest) {
-    return api.post<ReviewResponse>("/customer/reviews", data);
+  createReview(data: CreateReviewRequest | FormData) {
+    const payload = data instanceof FormData
+      ? data
+      : buildCreateReviewFormData(data);
+
+    return api.post<ReviewResponse>("/customer/reviews", payload);
+  },
+
+  updateReview(reviewId: number, data: UpdateReviewRequest | FormData) {
+    const payload = data instanceof FormData
+      ? data
+      : buildUpdateReviewFormData(data);
+
+    return api.patch<ReviewResponse>(`/customer/reviews/${reviewId}`, payload);
   },
 
   getMyReviews() {

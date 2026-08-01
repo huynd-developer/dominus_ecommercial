@@ -53,6 +53,17 @@ public class OrderController {
         return ResponseEntity.ok(result);
     }
 
+    /**
+     * BỔ SUNG: API báo cáo đã thanh toán từ phía Khách Hàng
+     */
+    @PostMapping("/{orderId}/report-payment")
+    @PreAuthorize("hasAuthority('USER')")
+    public ResponseEntity<?> reportPayment(@PathVariable Integer orderId) {
+        // Có thể thêm check xem đơn này có đúng của ông khách đang login không nếu cần bảo mật kỹ hơn
+        orderService.reportPayment(orderId);
+        return ResponseEntity.ok(Map.of("message", "Đã báo cáo thanh toán thành công"));
+    }
+
     private Integer getCustomerId(Principal principal) {
         if (principal == null || principal.getName() == null || principal.getName().trim().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Bạn chưa đăng nhập");
