@@ -1,0 +1,404 @@
+<template>
+  <div class="container-fluid py-4" style="background-color: #f8f9fc; min-height: 100vh;">
+    <h3 class="fw-bold mb-4">Quản lý đánh giá khách hàng</h3>
+
+    <!-- TABS VÀ BỘ LỌC -->
+    <div class="card shadow-sm border-0 rounded-3 mb-4">
+      <div class="card-header bg-white border-bottom-0 pt-3">
+        <ul class="nav nav-tabs card-header-tabs">
+          <li class="nav-item" v-for="tab in tabs" :key="tab.value">
+            <a class="nav-link cursor-pointer fw-medium" 
+               :class="{ active: currentTab === tab.value }" 
+               @click="changeTab(tab.value)">
+              {{ tab.label }}
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="card-body bg-white border-top">
+        <div class="row g-3">
+          <div class="col-md-5">
+            <div class="input-group">
+              <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+              <input v-model="filters.keyword" @keyup.enter="fetchReviews" type="text" class="form-control" placeholder="Tìm tên KH, email, tên SP, SKU, nội dung...">
+            </div>
+          </div>
+          <div class="col-md-2">
+            <select v-model="filters.rating" @change="fetchReviews" class="form-select">
+              <option value="">Tất cả số sao</option>
+              <option v-for="i in 5" :key="i" :value="i">{{ i }} Sao ⭐</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <select v-model="filters.hasMedia" @change="fetchReviews" class="form-select">
+              <option value="">Tất cả loại đánh giá</option>
+              <option :value="true">Có Ảnh / Video</option>
+              <option :value="false">Chỉ Text</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button @click="fetchReviews" class="btn btn-primary w-100">Lọc dữ liệu</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BẢNG ĐÁNH GIÁ -->
+    <div class="card shadow-sm border-0 rounded-3">
+      <div class="card-body p-0 table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width: 20%;">Sản phẩm</th>
+              <th style="width: 18%;">Khách hàng</th>
+              <th style="width: 25%;">Đánh giá & Bình luận</th>
+              <th style="width: 12%;">Hình ảnh / Video</th>
+              <th style="width: 10%;">Trạng thái</th>
+              <th style="width: 15%;" class="text-center">Hành động</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in reviews" :key="item.id">
+              <td>
+                <div class="fw-bold text-dark">{{ item.productName || 'N/A' }}</div>
+                <small class="text-muted">SKU: {{ item.productSku || 'N/A' }}</small>
+              </td>
+              <td>
+                <div class="fw-medium">{{ item.customerName || 'N/A' }}</div>
+                <small class="text-muted">{{ item.customerEmail || 'N/A' }}</small>
+              </td>
+              <td>
+                <div class="text-warning">
+                  <i v-for="i in item.rating" :key="i" class="bi bi-star-fill"></i>
+                </div>
+                <div class="text-dark mt-1">{{ item.comment }}</div>
+                <small class="text-muted d-block mt-1">{{ new Date(item.createdAt).toLocaleString('vi-VN') }}</small>
+                <small v-if="item.rejectedReason" class="text-danger d-block mt-1">
+                  <b>Lý do:</b> {{ item.rejectedReason }}
+                </small>
+              </td>
+              
+  <!-- CỘT HÌNH ẢNH / VIDEO (Đã thu gọn hiển thị 1 ảnh + số lượng) -->
+<td>
+  <div v-if="item.media && item.media.length > 0" 
+       class="d-inline-block position-relative" 
+       style="cursor: pointer; width: 50px; height: 50px;" 
+       @click="openMediaModal(item.media, 0)" 
+       title="Nhấn để xem chi tiết">
+    
+    <!-- Chỉ hiển thị media đầu tiên [0] -->
+    <!-- Thumbnail Ảnh -->
+    <img 
+    v-if="item.media[0]?.mediaType === 'image' || item.media[0]?.mediaType === 'IMAGE'" 
+    :src="item.media[0]?.mediaUrl" 
+    alt="Review Image"
+    class="img-thumbnail p-0 rounded-2 border w-100 h-100"
+    style="object-fit: cover;"
+    />
+    
+    <!-- Thumbnail Video -->
+    <div v-else-if="item.media[0]?.mediaType === 'video' || item.media[0]?.mediaType === 'VIDEO'" 
+     class="position-relative w-100 h-100">
+    <video 
+        :src="item.media[0]?.mediaUrl"
+        class="img-thumbnail p-0 rounded-2 border w-100 h-100"
+        style="object-fit: cover;"
+        muted
+    ></video>
+    <div class="position-absolute top-50 start-50 translate-middle text-white" style="background: rgba(0,0,0,0.4); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">
+        <i class="bi bi-play-fill" style="font-size: 14px;"></i>
+    </div>
+    </div>
+
+    <!-- Lớp phủ (Overlay) hiển thị số lượng ảnh còn lại -->
+    <div v-if="item.media.length > 1" 
+         class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center rounded-2"
+         style="background: rgba(0, 0, 0, 0.6); color: white; font-weight: bold; font-size: 14px; z-index: 2;">
+      +{{ item.media.length - 1 }}
+    </div>
+
+  </div>
+  <span v-else class="text-muted small">Không có</span>
+</td>
+
+              <td>
+                <span class="badge" :class="getStatusBadgeClass(item.approvalStatus)">
+                  {{ getStatusText(item.approvalStatus) }}
+                </span>
+              </td>
+              <td class="text-center">
+  <!-- 1. Chờ duyệt (0) -> Duyệt hoặc Từ chối: Cần quyền MANAGER hoặc OWNER -->
+  <template v-if="item.approvalStatus === 0 && (authStore.isManager || authStore.isOwner)">
+    <button @click="handleApprove(item.id)" class="btn btn-sm btn-success me-1" title="Duyệt">
+      <i class="bi bi-check-lg"></i>
+    </button>
+    <button @click="openRejectModal(item.id)" class="btn btn-sm btn-outline-danger" title="Từ chối">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </template>
+
+  <!-- 2. Đã duyệt (1) -> Ẩn: CHỈ DUY NHẤT OWNER mới có quyền -->
+  <template v-if="item.approvalStatus === 1 && authStore.isOwner">
+    <button @click="handleHide(item.id)" class="btn btn-sm btn-outline-secondary" title="Ẩn bài">
+      <i class="bi bi-eye-slash"></i> Ẩn
+    </button>
+  </template>
+
+  <!-- 3. Từ chối (2) hoặc Đã ẩn (3) -> Duyệt lại: Cần quyền MANAGER hoặc OWNER -->
+  <template v-if="(item.approvalStatus === 2 || item.approvalStatus === 3) && (authStore.isManager || authStore.isOwner)">
+    <button @click="handleApprove(item.id)" class="btn btn-sm btn-outline-success" title="Duyệt lại">
+      <i class="bi bi-arrow-counterclockwise"></i> Duyệt lại
+    </button>
+  </template>
+
+  <!-- 4. Hiển thị nhãn cho Nhân viên thu ngân (CASHIER) hoặc tài khoản không đủ quyền -->
+  <span v-if="!authStore.isManager && !authStore.isOwner" class="text-muted fst-italic small">
+    Không có quyền thao tác
+  </span>
+</td>
+            </tr>
+            <tr v-if="reviews.length === 0">
+              <td colspan="6" class="text-center py-4 text-muted">Không tìm thấy đánh giá nào</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MODAL XEM MEDIA -->
+   <!-- MODAL XEM MEDIA (Dạng Gallery/Lightbox) -->
+<div v-if="showMediaModal" class="modal d-block" style="background: rgba(0,0,0,0.85); z-index: 1050;">
+  <!-- Nút đóng góc phải -->
+  <button @click="showMediaModal = false" class="btn btn-outline-light position-absolute border-0" style="top: 20px; right: 20px; z-index: 1060; border-radius: 50%; padding: 8px 12px;">
+    <i class="bi bi-x-lg fs-4"></i>
+  </button>
+
+  <div class="modal-dialog modal-dialog-centered modal-xl" style="height: 100vh; margin: 0 auto; max-width: 900px;" @click.self="showMediaModal = false">
+    <div class="modal-content bg-transparent border-0 w-100 d-flex flex-column justify-content-center h-100">
+      
+      <!-- KHUNG HIỂN THỊ CHÍNH -->
+      <div class="position-relative d-flex justify-content-center align-items-center w-100" style="flex: 1; max-height: 75vh;">
+        
+        <!-- Nút Trái -->
+        <button v-if="activeMediaIndex > 0" @click="prevMedia" class="btn btn-light position-absolute start-0 translate-middle-y" style="top: 50%; border-radius: 50%; padding: 10px 15px; opacity: 0.7;">
+          <i class="bi bi-chevron-left fs-4"></i>
+        </button>
+
+        <!-- Ảnh / Video đang xem -->
+        <template v-if="currentMedia[activeMediaIndex]">
+          <img v-if="currentMedia[activeMediaIndex].mediaType === 'image' || currentMedia[activeMediaIndex].mediaType === 'IMAGE'" 
+                :src="currentMedia[activeMediaIndex].mediaUrl" 
+                class="img-fluid rounded shadow" 
+                style="max-height: 75vh; object-fit: contain;">
+                
+          <video v-else 
+                  :src="currentMedia[activeMediaIndex].mediaUrl" 
+                  controls autoplay 
+                  class="img-fluid rounded shadow" 
+                  style="max-height: 75vh; outline: none;"></video>
+        </template>
+
+        <!-- Nút Phải -->
+        <button v-if="activeMediaIndex < currentMedia.length - 1" @click="nextMedia" class="btn btn-light position-absolute end-0 translate-middle-y" style="top: 50%; border-radius: 50%; padding: 10px 15px; opacity: 0.7;">
+          <i class="bi bi-chevron-right fs-4"></i>
+        </button>
+      </div>
+
+      <!-- DANH SÁCH THUMBNAIL BÊN DƯỚI (Chỉ hiện khi có >= 2 media) -->
+      <div class="d-flex justify-content-center gap-2 mt-4" v-if="currentMedia.length > 1">
+        <div v-for="(m, i) in currentMedia" :key="i" 
+             @click="activeMediaIndex = i"
+             class="overflow-hidden rounded border border-2"
+             :class="activeMediaIndex === i ? 'border-primary opacity-100' : 'border-secondary opacity-50'"
+             style="width: 60px; height: 60px; cursor: pointer; transition: all 0.2s;">
+             
+          <img v-if="m.mediaType === 'image' || m.mediaType === 'IMAGE'" 
+               :src="m.mediaUrl" class="w-100 h-100" style="object-fit: cover;">
+               
+          <div v-else class="w-100 h-100 bg-dark position-relative d-flex align-items-center justify-content-center">
+            <video :src="m.mediaUrl" class="w-100 h-100 position-absolute" style="object-fit: cover; opacity: 0.6;"></video>
+            <i class="bi bi-play-circle-fill text-white position-relative z-1 fs-4"></i>
+          </div>
+          
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+    <!-- MODAL TỪ CHỐI -->
+    <div v-if="showRejectModal" class="modal d-block" style="background: rgba(0,0,0,0.5); z-index: 1050;">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title fw-bold">Từ chối đánh giá</h5>
+            <button @click="showRejectModal = false" class="btn-close"></button>
+          </div>
+          <div class="modal-body">
+            <label class="form-label">Lý do từ chối <span class="text-danger">*</span></label>
+            <textarea v-model="rejectReason" class="form-control" rows="3" placeholder="Ví dụ: Hình ảnh/video chứa nội dung không hợp lệ..."></textarea>
+          </div>
+          <div class="modal-footer">
+            <button @click="showRejectModal = false" class="btn btn-light">Hủy</button>
+            <button @click="submitReject" class="btn btn-danger" :disabled="!rejectReason.trim()">Xác nhận từ chối</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue';
+
+// 1. SỬA LỖI 2 & 3: Sử dụng alias '@' để trỏ chính xác vị trí file
+import { reviewService } from '@/modules/admin/feature/review/services/review.service';
+import type { Review, ReviewMedia } from '@/modules/admin/feature/review/types/review.type';
+import Swal from 'sweetalert2';
+import { useAuthStore } from '@/modules/auth/stores/authStore'; // Nhớ sửa lại đường dẫn import cho đúng với dự án của bạn
+
+const reviews = ref<Review[]>([]);
+const authStore = useAuthStore();
+// 2. SỬA LỖI 1: Nới lỏng kiểu dữ liệu thành (number | string)
+const currentTab = ref<number | string>(''); 
+const filters = ref({ keyword: '', rating: '', hasMedia: '' });
+
+// const showMediaModal = ref(false);
+// const currentMedia = ref<ReviewMedia[]>([]);
+
+const showRejectModal = ref(false);
+const selectedReviewId = ref<number | null>(null);
+const rejectReason = ref('');
+
+const tabs = [
+  { label: 'Tất cả', value: '' },
+  { label: 'Chờ duyệt', value: 0 },
+  { label: 'Đã duyệt', value: 1 },
+  { label: 'Từ chối', value: 2 },
+  { label: 'Đã ẩn', value: 3 }
+];
+
+const Toast = Swal.mixin({ 
+  toast: true, 
+  position: 'top-end', 
+  showConfirmButton: false, 
+  timer: 3000,
+  timerProgressBar: true
+});
+
+onMounted(() => {
+  fetchReviews();
+});
+
+// 2. SỬA LỖI 1: Đổi tham số val thành (number | string)
+const changeTab = (val: number | string) => {
+  currentTab.value = val;
+  fetchReviews();
+};
+
+const fetchReviews = async () => {
+  try {
+    const params = {
+      status: currentTab.value !== '' ? currentTab.value : undefined,
+      keyword: filters.value.keyword || undefined,
+      rating: filters.value.rating || undefined,
+      hasMedia: filters.value.hasMedia !== '' ? filters.value.hasMedia : undefined,
+      page: 0,
+      size: 50
+    };
+    const res = await reviewService.getReviews(params);
+    reviews.value = res.data.content;
+  } catch (error) {
+    Toast.fire({ icon: 'error', title: 'Lỗi tải danh sách đánh giá!' });
+  }
+};
+
+const getStatusText = (status: number) => {
+  switch (status) {
+    case 0: return 'Chờ duyệt';
+    case 1: return 'Đã duyệt';
+    case 2: return 'Từ chối';
+    case 3: return 'Đã ẩn';
+    default: return 'Khác';
+  }
+};
+
+const getStatusBadgeClass = (status: number) => {
+  switch (status) {
+    case 0: return 'bg-warning text-dark';
+    case 1: return 'bg-success';
+    case 2: return 'bg-danger';
+    case 3: return 'bg-secondary';
+    default: return 'bg-light text-dark';
+  }
+};
+const showMediaModal = ref(false);
+const currentMedia = ref<any[]>([]);
+const activeMediaIndex = ref(0);
+
+
+const openMediaModal = (media: any[], index: number = 0) => {
+  currentMedia.value = media;
+  activeMediaIndex.value = index;
+  showMediaModal.value = true;
+};
+
+const nextMedia = () => {
+  if (activeMediaIndex.value < currentMedia.value.length - 1) {
+    activeMediaIndex.value++;
+  }
+};
+
+// Hàm quay lại ảnh trước đó
+const prevMedia = () => {
+  if (activeMediaIndex.value > 0) {
+    activeMediaIndex.value--;
+  }
+};
+
+const openRejectModal = (id: number) => {
+  selectedReviewId.value = id;
+  rejectReason.value = '';
+  showRejectModal.value = true;
+};
+
+const handleApprove = async (id: number) => {
+  try {
+    await reviewService.approveReview(id);
+    Toast.fire({ icon: 'success', title: 'Đã duyệt thành công!' });
+    fetchReviews();
+  } catch (error) {
+    Toast.fire({ icon: 'error', title: 'Không thể duyệt!' });
+  }
+};
+
+const submitReject = async () => {
+  if (!selectedReviewId.value || !rejectReason.value.trim()) return;
+  try {
+    await reviewService.rejectReview(selectedReviewId.value, rejectReason.value);
+    showRejectModal.value = false;
+    Toast.fire({ icon: 'success', title: 'Đã từ chối đánh giá!' });
+    fetchReviews();
+  } catch (error) {
+    Toast.fire({ icon: 'error', title: 'Lỗi khi từ chối!' });
+  }
+};
+
+const handleHide = async (id: number) => {
+  try {
+    await reviewService.hideReview(id);
+    Toast.fire({ icon: 'success', title: 'Đã ẩn đánh giá!' });
+    fetchReviews();
+  } catch (error) {
+    Toast.fire({ icon: 'error', title: 'Không thể ẩn!' });
+  }
+};
+</script>
+
+<style scoped>
+.cursor-pointer { cursor: pointer; }
+.nav-tabs .nav-link { color: #495057; border-radius: 0; }
+.nav-tabs .nav-link.active { color: #0d6efd; font-weight: 600; border-bottom: 2px solid #0d6efd; background: transparent;}
+</style>
