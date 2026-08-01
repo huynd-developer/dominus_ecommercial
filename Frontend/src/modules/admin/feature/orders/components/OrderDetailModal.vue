@@ -795,13 +795,14 @@ function parseDeliveryActorInfo(value?: string | null): DeliveryActorInfo {
   const lines = cleanValue
     .split("\n")
     .map((line) => line.trim())
-    .filter(Boolean);
+    .filter((line): line is string => line.length > 0);
 
   if (lines.length >= 2) {
     const emailIndex = lines.findIndex((line) => Boolean(extractEmail(line)));
 
     if (emailIndex >= 0) {
-      const email = extractEmail(lines[emailIndex]);
+      const emailLine = lines[emailIndex] || "";
+      const email = extractEmail(emailLine);
       const name = lines
         .filter((_, index) => index !== emailIndex)
         .join(" ")
@@ -813,7 +814,13 @@ function parseDeliveryActorInfo(value?: string | null): DeliveryActorInfo {
       };
     }
 
-    return { name: lines[0], email: lines[1] || null };
+    const firstLine = lines[0] || "Nhân viên cửa hàng";
+    const secondLine = lines[1] || null;
+
+    return {
+      name: firstLine,
+      email: secondLine,
+    };
   }
 
   const email = extractEmail(cleanValue);
