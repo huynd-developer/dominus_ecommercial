@@ -13,6 +13,7 @@
             <option value="DAY">Hôm nay</option>
             <option value="WEEK">Tuần này</option>
             <option value="MONTH">Tháng này</option>
+            <option value="QUARTER">Quý này</option>
             <option value="YEAR">Năm nay</option>
             <option value="CUSTOM">Tùy chọn ngày</option>
           </select>

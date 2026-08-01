@@ -4,6 +4,7 @@ public enum ReportFilterType {
     DAY,
     WEEK,
     MONTH,
+    QUARTER,
     YEAR,
     CUSTOM
 }
