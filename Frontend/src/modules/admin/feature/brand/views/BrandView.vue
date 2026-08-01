@@ -186,17 +186,42 @@ onMounted(() => {
 const handleSearch = () => { brandStore.fetchBrands(searchKeyword.value, 0); };
 const changePage = (page: number) => { if (page >= 0 && page < brandStore.totalPages) brandStore.fetchBrands(searchKeyword.value, page); };
 
+// const handleFileChange = (event: Event) => {
+//   const target = event.target as HTMLInputElement;
+//   const file = target.files?.[0];
+//   if (!file) return; 
+
+//   if (file.size > 5 * 1024 * 1024) {
+//     Toast.fire({ icon: 'error', title: 'Dung lượng ảnh quá lớn (> 5MB)' });
+//     target.value = ''; 
+//     return;
+//   }
+  
+//   selectedFile.value = file;
+//   previewImageUrl.value = URL.createObjectURL(file); 
+// };
 const handleFileChange = (event: Event) => {
   const target = event.target as HTMLInputElement;
   const file = target.files?.[0];
+  
   if (!file) return; 
 
+  // 1. KIỂM TRA ĐỊNH DẠNG FILE (Chặn triệt để docx, pdf, mp4...)
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+  if (!allowedTypes.includes(file.type)) {
+    Toast.fire({ icon: 'error', title: 'Chỉ hỗ trợ tải lên file ảnh (JPG, PNG, WEBP)!' });
+    target.value = ''; // Reset input
+    return;
+  }
+
+  // 2. KIỂM TRA DUNG LƯỢNG (Tối đa 5MB)
   if (file.size > 5 * 1024 * 1024) {
     Toast.fire({ icon: 'error', title: 'Dung lượng ảnh quá lớn (> 5MB)' });
-    target.value = ''; 
+    target.value = ''; // Reset input
     return;
   }
   
+  // 3. NẾU HỢP LỆ THÌ LƯU VÀ HIỂN THỊ PREVIEW
   selectedFile.value = file;
   previewImageUrl.value = URL.createObjectURL(file); 
 };
