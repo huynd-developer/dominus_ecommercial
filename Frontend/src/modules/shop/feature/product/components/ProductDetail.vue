@@ -255,15 +255,11 @@
           </span>
         </div>
 
-        <div class="quantity-section" v-if="selectedVariant">
-          <h4>Số lượng</h4>
+        <div class="quantity-section" v-if="selectedVariant" style="display: flex; align-items: center; gap: 20px; margin-bottom: 30px; flex-wrap: wrap;">
+          <h4 style="margin: 0; min-width: 80px;">Số lượng</h4>
 
-          <div class="stock-info">
-            Tồn kho:
-            <strong>{{ normalizeStock(selectedVariant) }}</strong>
-          </div>
-
-          <div class="qty-control">
+          <!-- Ghi đè margin-bottom: 0 để input không bị đẩy lên cao -->
+          <div class="qty-control" style="margin-bottom: 0;">
             <button
               type="button"
               @click="decreaseQty"
@@ -281,6 +277,15 @@
             >
               +
             </button>
+          </div>
+
+          <div class="stock-info" style="margin: 0;">
+            <span v-if="normalizeStock(selectedVariant) > 0" style="color: #718096; font-size: 14px;">
+              Kho còn: <strong>{{ normalizeStock(selectedVariant) }}</strong> sản phẩm
+            </span>
+            <span v-else style="color: #d32f2f; font-weight: 600; font-size: 14px;">
+              <i class="bi bi-x-circle me-1"></i> Đã hết hàng
+            </span>
           </div>
         </div>
 
