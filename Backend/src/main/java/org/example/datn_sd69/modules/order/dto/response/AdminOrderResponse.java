@@ -73,6 +73,30 @@ public class AdminOrderResponse {
     private String deliveryFailedByName;
 
     /**
+     * Thông tin hoàn tiền riêng cho đơn giao hàng thất bại đã thanh toán trước.
+     * Không dùng DeliveryRefundStatus, trạng thái được suy ra từ amount/bank/refundedAt.
+     */
+    private BigDecimal deliveryRefundAmount;
+
+    private String deliveryRefundBankName;
+
+    private String deliveryRefundBankAccountNumber;
+
+    private String deliveryRefundBankAccountHolder;
+
+    private LocalDateTime deliveryRefundedAt;
+
+    private String deliveryRefundedByName;
+
+    private Boolean deliveryRefundRequired;
+
+    private Boolean deliveryRefundBankInfoProvided;
+
+    private Boolean deliveryRefundCompleted;
+
+    private Boolean canMarkDeliveryRefunded;
+
+    /**
      * Ảnh minh chứng giao hàng.
      * Giữ tên MediaUrls để không làm vỡ FE đang dùng field cũ.
      */

@@ -12,6 +12,7 @@ const FILTER_TYPES: ReportFilterType[] = [
   "DAY",
   "WEEK",
   "MONTH",
+  "QUARTER",
   "YEAR",
   "CUSTOM",
 ];
@@ -179,7 +180,10 @@ export const useOwnerReportStore = defineStore("ownerReport", {
     },
 
     summary: null as ReportSummaryResponse | null,
+
     chartData: [] as RevenueChartResponse[],
+    quarterlyChartData: [] as RevenueChartResponse[],
+
     bestSellingProducts: [] as BestSellingProductResponse[],
 
     loading: false,
@@ -326,14 +330,17 @@ export const useOwnerReportStore = defineStore("ownerReport", {
       try {
         const params = this.buildParams();
 
-        const [summaryRes, chartRes, bestSellingRes] = await Promise.all([
-          ownerReportService.getSummary(params),
-          ownerReportService.getRevenueChart(params),
-          ownerReportService.getBestSellingProducts(params),
-        ]);
+        const [summaryRes, chartRes, quarterlyChartRes, bestSellingRes] =
+          await Promise.all([
+            ownerReportService.getSummary(params),
+            ownerReportService.getRevenueChart(params),
+            ownerReportService.getQuarterlyRevenueChart(),
+            ownerReportService.getBestSellingProducts(params),
+          ]);
 
         this.summary = normalizeSummary(summaryRes.data);
         this.chartData = normalizeChartData(chartRes.data);
+        this.quarterlyChartData = normalizeChartData(quarterlyChartRes.data);
         this.bestSellingProducts = normalizeBestSellingProducts(
           bestSellingRes.data
         );
@@ -341,6 +348,7 @@ export const useOwnerReportStore = defineStore("ownerReport", {
         this.error = getErrorMessage(error);
         this.summary = null;
         this.chartData = [];
+        this.quarterlyChartData = [];
         this.bestSellingProducts = [];
       } finally {
         this.loading = false;

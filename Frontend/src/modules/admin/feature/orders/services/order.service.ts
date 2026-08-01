@@ -160,6 +160,17 @@ export const orderService = {
   },
 
   /**
+   * Admin xác nhận đã hoàn tiền thực tế cho đơn giao hàng thất bại.
+   */
+  async markDeliveryRefunded(orderId: number) {
+    const response = await api.patch<AdminOrderResponse>(
+      `${ORDER_ADMIN_API}/${orderId}/delivery-refunded`
+    );
+
+    return response.data;
+  },
+
+  /**
    * Admin chấp nhận yêu cầu hoàn hàng.
    * Sau bước này mới được bấm "Đã hoàn tiền".
    */

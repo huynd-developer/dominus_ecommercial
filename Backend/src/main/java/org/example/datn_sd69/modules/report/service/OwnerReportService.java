@@ -20,6 +20,8 @@ public interface OwnerReportService {
             String toDate
     );
 
+    List<RevenueChartResponse> getQuarterlyRevenueChart();
+
     List<BestSellingProductResponse> getBestSellingProducts(
             String filterType,
             String fromDate,

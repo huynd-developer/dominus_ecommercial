@@ -106,6 +106,10 @@ public class PosCheckoutRequest {
     @DecimalMin(value = "0.00", message = "Tiền chuyển khoản không được âm")
     private BigDecimal transferAmount;
 
+    /**
+     * Validate từng dòng sản phẩm qua PosItemRequest.
+     * Mỗi SKU vẫn được service cộng dồn và chặn tối đa 10 lọ để tránh gửi trùng dòng lách validate.
+     */
     @Valid
     @NotEmpty(message = "Hóa đơn phải có ít nhất 1 sản phẩm")
     private List<PosItemRequest> items;

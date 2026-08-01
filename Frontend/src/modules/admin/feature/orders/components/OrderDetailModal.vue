@@ -107,13 +107,21 @@
                     </div>
 
                     <div class="delivery-info-row">
-                      <span>Thời gian:</span>
+                      <span>Thời gian hoàn thành:</span>
                       <strong>{{ formatDate(order.completedAt) }}</strong>
                     </div>
 
-                    <div class="delivery-info-row">
+                    <div
+                      v-if="hasDeliveryActorInfo(order.deliveryCompletedByName)"
+                      class="delivery-info-row delivery-actor-row"
+                    >
                       <span>Người xác nhận:</span>
-                      <strong>{{ order.deliveryCompletedByName || "-" }}</strong>
+                      <div class="delivery-actor-value">
+                        <strong>{{ getDeliveryActorName(order.deliveryCompletedByName) }}</strong>
+                        <small v-if="getDeliveryActorEmail(order.deliveryCompletedByName)">
+                          {{ getDeliveryActorEmail(order.deliveryCompletedByName) }}
+                        </small>
+                      </div>
                     </div>
 
                     <div
@@ -171,9 +179,17 @@
                       <strong>{{ formatDate(order.deliveryFailedAt) }}</strong>
                     </div>
 
-                    <div class="delivery-info-row">
+                    <div
+                      v-if="hasDeliveryActorInfo(order.deliveryFailedByName)"
+                      class="delivery-info-row delivery-actor-row"
+                    >
                       <span>Người xác nhận:</span>
-                      <strong>{{ order.deliveryFailedByName || "-" }}</strong>
+                      <div class="delivery-actor-value">
+                        <strong>{{ getDeliveryActorName(order.deliveryFailedByName) }}</strong>
+                        <small v-if="getDeliveryActorEmail(order.deliveryFailedByName)">
+                          {{ getDeliveryActorEmail(order.deliveryFailedByName) }}
+                        </small>
+                      </div>
                     </div>
 
                     <div
@@ -205,6 +221,94 @@
                           />
                         </button>
                       </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-if="hasDeliveryRefundInfo(order)"
+              class="delivery-refund-section border rounded p-3 mb-3"
+            >
+              <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+                <div>
+                  <h6 class="fw-bold mb-1">
+                    <i class="bi bi-cash-coin me-1"></i>
+                    Hoàn tiền giao hàng thất bại
+                  </h6>
+                  <small class="text-muted">
+                    Chỉ áp dụng cho đơn đã thanh toán trước nhưng giao hàng thất bại.
+                  </small>
+                </div>
+
+                <span
+                  class="delivery-refund-badge"
+                  :class="getDeliveryRefundBadgeClass(order)"
+                >
+                  {{ getDeliveryRefundStatusText(order) }}
+                </span>
+              </div>
+
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <div class="delivery-refund-card h-100">
+                    <div class="delivery-refund-row refund-money-row">
+                      <span>Số tiền cần hoàn:</span>
+                      <strong>{{ formatMoney(getDeliveryRefundAmount(order)) }}</strong>
+                    </div>
+
+                    <div class="delivery-refund-row">
+                      <span>Phương thức thanh toán:</span>
+                      <strong>{{ formatPaymentMethod(order.paymentMethod) }}</strong>
+                    </div>
+
+                    <div
+                      v-if="order.deliveryRefundedAt"
+                      class="delivery-refund-row"
+                    >
+                      <span>Thời gian hoàn:</span>
+                      <strong>{{ formatDate(order.deliveryRefundedAt) }}</strong>
+                    </div>
+
+                    <div
+                      v-if="hasDeliveryActorInfo(order.deliveryRefundedByName)"
+                      class="delivery-refund-row delivery-actor-row"
+                    >
+                      <span>Người xác nhận:</span>
+                      <div class="delivery-actor-value">
+                        <strong>{{ getDeliveryActorName(order.deliveryRefundedByName) }}</strong>
+                        <small v-if="getDeliveryActorEmail(order.deliveryRefundedByName)">
+                          {{ getDeliveryActorEmail(order.deliveryRefundedByName) }}
+                        </small>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-md-6">
+                  <div class="delivery-refund-card h-100">
+                    <h6 class="fw-bold mb-2">Tài khoản khách nhận hoàn tiền</h6>
+
+                    <template v-if="hasDeliveryRefundBankInfo(order)">
+                      <div class="delivery-refund-row">
+                        <span>Ngân hàng:</span>
+                        <strong>{{ order.deliveryRefundBankName || "-" }}</strong>
+                      </div>
+
+                      <div class="delivery-refund-row">
+                        <span>Số tài khoản:</span>
+                        <strong>{{ order.deliveryRefundBankAccountNumber || "-" }}</strong>
+                      </div>
+
+                      <div class="delivery-refund-row">
+                        <span>Chủ tài khoản:</span>
+                        <strong>{{ order.deliveryRefundBankAccountHolder || "-" }}</strong>
+                      </div>
+                    </template>
+
+                    <div v-else class="delivery-refund-empty">
+                      Khách chưa cung cấp thông tin tài khoản hoàn tiền.
                     </div>
                   </div>
                 </div>
@@ -573,6 +677,16 @@
             Từ chối
           </button>
 
+
+          <button
+            v-if="order && canMarkDeliveryRefunded(order)"
+            class="btn btn-success"
+            type="button"
+            @click="$emit('mark-delivery-refunded', order)"
+          >
+            <i class="bi bi-cash-coin me-1"></i>
+            Đã chuyển tiền
+          </button>
           <button
             v-if="order && canMarkReturnRefunded(order)"
             class="btn btn-success"
@@ -634,6 +748,7 @@ defineEmits<{
   "accept-return": [order: AdminOrderResponse];
   "reject-return": [order: AdminOrderResponse];
   "mark-return-refunded": [order: AdminOrderResponse];
+  "mark-delivery-refunded": [order: AdminOrderResponse];
 }>();
 
 void props;
@@ -652,6 +767,92 @@ const FALLBACK_IMAGE =
       </text>
     </svg>
   `);
+
+type DeliveryActorInfo = {
+  name: string;
+  email: string | null;
+};
+
+function normalizeActorText(value?: string | null) {
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim();
+}
+
+function extractEmail(value: string) {
+  const match = value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match ? match[0] : null;
+}
+
+function parseDeliveryActorInfo(value?: string | null): DeliveryActorInfo {
+  const cleanValue = normalizeActorText(value);
+
+  if (!cleanValue) {
+    return { name: "", email: null };
+  }
+
+  const lines = cleanValue
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line): line is string => line.length > 0);
+
+  if (lines.length >= 2) {
+    const emailIndex = lines.findIndex((line) => Boolean(extractEmail(line)));
+
+    if (emailIndex >= 0) {
+      const emailLine = lines[emailIndex] || "";
+      const email = extractEmail(emailLine);
+      const name = lines
+        .filter((_, index) => index !== emailIndex)
+        .join(" ")
+        .trim();
+
+      return {
+        name: name || email || "Nhân viên cửa hàng",
+        email: email && email !== name ? email : null,
+      };
+    }
+
+    const firstLine = lines[0] || "Nhân viên cửa hàng";
+    const secondLine = lines[1] || null;
+
+    return {
+      name: firstLine,
+      email: secondLine,
+    };
+  }
+
+  const email = extractEmail(cleanValue);
+
+  if (!email) {
+    return { name: cleanValue, email: null };
+  }
+
+  const name = cleanValue
+    .replace(email, " ")
+    .replace(/[<>()\[\]]/g, " ")
+    .replace(/[|/\-–—]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  return {
+    name: name || "Nhân viên cửa hàng",
+    email,
+  };
+}
+
+function hasDeliveryActorInfo(value?: string | null) {
+  return Boolean(parseDeliveryActorInfo(value).name);
+}
+
+function getDeliveryActorName(value?: string | null) {
+  return parseDeliveryActorInfo(value).name || "-";
+}
+
+function getDeliveryActorEmail(value?: string | null) {
+  return parseDeliveryActorInfo(value).email;
+}
 
 function normalizeImageUrl(value?: string | null) {
   if (!value || !value.trim()) return "";
@@ -1028,6 +1229,77 @@ function canMarkReturnRefunded(order: AdminOrderResponse) {
   return Number(order.status) === 6 && getReturnProcessStatus(order) === 1;
 }
 
+function getDeliveryRefundAmount(order?: AdminOrderResponse | null) {
+  return Number((order as any)?.deliveryRefundAmount ?? 0);
+}
+
+function hasDeliveryRefundBankInfo(order?: AdminOrderResponse | null) {
+  return Boolean(
+    String((order as any)?.deliveryRefundBankName || "").trim() &&
+      String((order as any)?.deliveryRefundBankAccountNumber || "").trim() &&
+      String((order as any)?.deliveryRefundBankAccountHolder || "").trim()
+  );
+}
+
+function isDeliveryRefundCompleted(order?: AdminOrderResponse | null) {
+  return Boolean((order as any)?.deliveryRefundedAt);
+}
+
+function hasDeliveryRefundInfo(order?: AdminOrderResponse | null) {
+  return Boolean(
+    Number(order?.status) === 5 &&
+      (getDeliveryRefundAmount(order) > 0 ||
+        (order as any)?.deliveryRefundBankName ||
+        (order as any)?.deliveryRefundBankAccountNumber ||
+        (order as any)?.deliveryRefundBankAccountHolder ||
+        (order as any)?.deliveryRefundedAt)
+  );
+}
+
+function canMarkDeliveryRefunded(order?: AdminOrderResponse | null) {
+  if (!order) {
+    return false;
+  }
+
+  if (
+    order.canMarkDeliveryRefunded !== undefined &&
+    order.canMarkDeliveryRefunded !== null
+  ) {
+    return order.canMarkDeliveryRefunded === true;
+  }
+
+  return (
+    Number(order.status) === 5 &&
+    getDeliveryRefundAmount(order) > 0 &&
+    hasDeliveryRefundBankInfo(order) &&
+    !isDeliveryRefundCompleted(order)
+  );
+}
+
+function getDeliveryRefundStatusText(order?: AdminOrderResponse | null) {
+  if (!hasDeliveryRefundInfo(order)) {
+    return "Không cần hoàn tiền";
+  }
+
+  if (isDeliveryRefundCompleted(order)) {
+    return "Đã hoàn tiền";
+  }
+
+  if (hasDeliveryRefundBankInfo(order)) {
+    return "Chờ shop hoàn tiền";
+  }
+
+  return "Chờ khách nhập STK";
+}
+
+function getDeliveryRefundBadgeClass(order?: AdminOrderResponse | null) {
+  return {
+    "is-waiting-bank": hasDeliveryRefundInfo(order) && !hasDeliveryRefundBankInfo(order),
+    "is-ready-refund": hasDeliveryRefundInfo(order) && hasDeliveryRefundBankInfo(order) && !isDeliveryRefundCompleted(order),
+    "is-refunded": isDeliveryRefundCompleted(order),
+  };
+}
+
 function getOrderReturnRejectReason(order: AdminOrderResponse) {
   const reason =
     order.returnRejectReason ??
@@ -1247,6 +1519,79 @@ function formatPaymentMethod(method?: string | null) {
   color: #111827;
   font-weight: 800;
 }
+
+.delivery-refund-section {
+  border-color: #bfdbfe !important;
+  background: #eff6ff;
+}
+
+.delivery-refund-card {
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.delivery-refund-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.delivery-refund-row:last-child {
+  margin-bottom: 0;
+}
+
+.delivery-refund-row span {
+  color: #64748b;
+}
+
+.delivery-refund-row strong {
+  color: #0f172a;
+  text-align: right;
+  word-break: break-word;
+}
+
+.refund-money-row strong {
+  color: #dc2626;
+  font-size: 15px;
+}
+
+.delivery-refund-badge {
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.delivery-refund-badge.is-waiting-bank {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.delivery-refund-badge.is-ready-refund {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.delivery-refund-badge.is-refunded {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.delivery-refund-empty {
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 13px;
+  padding: 12px;
+}
+
 .return-section {
   border: 1px solid #fde68a;
   background: #fffbeb;
@@ -1355,6 +1700,34 @@ function formatPaymentMethod(method?: string | null) {
 .delivery-info-row strong {
   color: #111827;
   text-align: right;
+}
+
+.delivery-actor-row {
+  align-items: flex-start;
+}
+
+.delivery-actor-value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+  text-align: right;
+}
+
+.delivery-actor-value strong {
+  color: #111827;
+  font-weight: 800;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.delivery-actor-value small {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  word-break: break-all;
 }
 
 .delivery-media-label {

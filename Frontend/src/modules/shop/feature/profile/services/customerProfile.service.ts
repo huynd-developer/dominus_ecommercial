@@ -9,6 +9,7 @@ import type {
   ReturnRequestSubmitPayload,
   ReviewResponse,
   ReviewableOrderItemResponse,
+  SubmitDeliveryRefundBankRequest,
   UpdateCustomerProfileRequest,
   UpdateReviewRequest,
 } from "../types/profile.type";
@@ -114,6 +115,21 @@ export const customerProfileService = {
    */
   cancelOrder(orderId: number) {
     return api.patch<{ message: string }>(`/customer/orders/${orderId}/cancel`);
+  },
+
+  /**
+   * BE:
+   * PATCH /api/customer/orders/{orderId}/delivery-refund-bank
+   * Chỉ gửi 1 lần; BE sẽ chặn nếu khách đã cung cấp thông tin hoàn tiền.
+   */
+  submitDeliveryRefundBank(
+    orderId: number,
+    data: SubmitDeliveryRefundBankRequest
+  ) {
+    return api.patch<CustomerOrderResponse>(
+      `/customer/orders/${orderId}/delivery-refund-bank`,
+      data
+    );
   },
 
   /**

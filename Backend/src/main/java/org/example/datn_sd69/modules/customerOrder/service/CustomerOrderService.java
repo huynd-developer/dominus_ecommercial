@@ -1,6 +1,7 @@
 package org.example.datn_sd69.modules.customerOrder.service;
 
-import org.example.datn_sd69.modules.customerOrder.dto.CustomerOrderResponse;
+import org.example.datn_sd69.modules.customerOrder.dto.request.SubmitDeliveryRefundBankRequest;
+import org.example.datn_sd69.modules.customerOrder.dto.response.CustomerOrderResponse;
 import org.example.datn_sd69.modules.order.dto.request.CancelOrderRequest;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -13,6 +14,7 @@ public interface CustomerOrderService {
     CustomerOrderResponse getOrderDetail(Integer orderId);
 
     void cancelOrder(Integer orderId, CancelOrderRequest request);
+
     void requestReturnOrder(
             Integer orderId,
             String returnType,
@@ -28,4 +30,9 @@ public interface CustomerOrderService {
     );
 
     void cancelReturnRequest(Integer orderId);
+
+    CustomerOrderResponse submitDeliveryRefundBank(
+            Integer orderId,
+            SubmitDeliveryRefundBankRequest request
+    );
 }

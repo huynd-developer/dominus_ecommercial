@@ -28,6 +28,7 @@ public class OwnerReportController {
      * - DAY
      * - WEEK
      * - MONTH
+     * - QUARTER
      * - YEAR
      * - CUSTOM
      *
@@ -49,13 +50,14 @@ public class OwnerReportController {
     }
 
     /**
-     * Dữ liệu biểu đồ doanh thu.
+     * Dữ liệu biểu đồ doanh thu chính.
      *
-     * DAY    -> group theo giờ
-     * WEEK   -> group theo ngày
-     * MONTH  -> group theo ngày
-     * YEAR   -> group theo tháng
-     * CUSTOM -> <= 31 ngày group theo ngày, còn lại group theo tháng
+     * DAY     -> group theo giờ
+     * WEEK    -> group theo ngày
+     * MONTH   -> group theo ngày
+     * QUARTER -> group theo tháng trong quý hiện tại
+     * YEAR    -> group theo tháng
+     * CUSTOM  -> <= 31 ngày group theo ngày, còn lại group theo tháng
      */
     @GetMapping("/revenue-chart")
     public ResponseEntity<List<RevenueChartResponse>> getRevenueChart(
@@ -65,6 +67,22 @@ public class OwnerReportController {
     ) {
         return ResponseEntity.ok(
                 ownerReportService.getRevenueChart(filterType, fromDate, toDate)
+        );
+    }
+
+    /**
+     * Biểu đồ doanh thu theo quý trong năm hiện tại.
+     *
+     * Ví dụ:
+     * - Q1/2026
+     * - Q2/2026
+     * - Q3/2026
+     * - Q4/2026 nếu đã tới quý 4
+     */
+    @GetMapping("/quarterly-revenue-chart")
+    public ResponseEntity<List<RevenueChartResponse>> getQuarterlyRevenueChart() {
+        return ResponseEntity.ok(
+                ownerReportService.getQuarterlyRevenueChart()
         );
     }
 

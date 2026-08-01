@@ -1,4 +1,4 @@
-package org.example.datn_sd69.modules.customerOrder.dto;
+package org.example.datn_sd69.modules.customerOrder.dto.response;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
