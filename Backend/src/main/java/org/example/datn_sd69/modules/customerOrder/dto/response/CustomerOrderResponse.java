@@ -1,4 +1,4 @@
-package org.example.datn_sd69.modules.customerOrder.dto;
+package org.example.datn_sd69.modules.customerOrder.dto.response;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -17,6 +17,12 @@ public record CustomerOrderResponse(
         BigDecimal discountAmount,
         BigDecimal finalAmount,
 
+        /** Phí vận chuyển của đơn hàng. */
+        BigDecimal shippingFee,
+
+        /** Phí vận chuyển được hoàn trong yêu cầu hoàn hàng, nếu có. */
+        BigDecimal returnShippingFee,
+
         String paymentMethod,
 
         Integer status,
@@ -28,6 +34,34 @@ public record CustomerOrderResponse(
 
         String cancelReason,
         LocalDateTime cancelledAt,
+
+        String deliveryCompletedByName,
+        String deliveryFailedReason,
+        String deliveryFailedDescription,
+        LocalDateTime deliveryFailedAt,
+        String deliveryFailedByName,
+
+        /**
+         * Thông tin hoàn tiền riêng cho đơn giao hàng thất bại đã thanh toán trước.
+         * Không dùng DeliveryRefundStatus, FE tự suy ra bằng amount/bank/refundedAt.
+         */
+        BigDecimal deliveryRefundAmount,
+        String deliveryRefundBankName,
+        String deliveryRefundBankAccountNumber,
+        String deliveryRefundBankAccountHolder,
+        LocalDateTime deliveryRefundedAt,
+        String deliveryRefundedByName,
+        Boolean deliveryRefundRequired,
+        Boolean deliveryRefundBankInfoProvided,
+        Boolean deliveryRefundCompleted,
+        Boolean canSubmitDeliveryRefundBank,
+
+        /**
+         * Ảnh minh chứng giao hàng.
+         * Giữ tên MediaUrls để không làm vỡ FE đang dùng field cũ.
+         */
+        List<String> deliverySuccessMediaUrls,
+        List<String> deliveryFailedMediaUrls,
 
         String returnReason,
         String returnDescription,
@@ -96,6 +130,8 @@ public record CustomerOrderResponse(
                 totalAmount,
                 discountAmount,
                 finalAmount,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
                 paymentMethod,
                 status,
                 statusText,
@@ -103,6 +139,23 @@ public record CustomerOrderResponse(
                 createdAt,
                 cancelReason,
                 cancelledAt,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                false,
+                false,
+                false,
+                null,
+                null,
                 returnReason,
                 returnDescription,
                 returnRequestedAt,

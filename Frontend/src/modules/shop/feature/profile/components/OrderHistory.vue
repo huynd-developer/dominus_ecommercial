@@ -71,6 +71,14 @@
 
         <div
           class="tab-item"
+          :class="{ active: currentTab === 5 }"
+          @click="currentTab = 5"
+        >
+          Giao thất bại
+        </div>
+
+        <div
+          class="tab-item"
           :class="{ active: currentTab === 'RETURN' }"
           @click="currentTab = 'RETURN'"
         >
@@ -204,11 +212,180 @@
                       <div class="timeline-content">
                         <div class="t-title">{{ track.title }}</div>
                         <div class="t-desc">{{ track.desc }}</div>
+
+                        <div
+                          v-if="
+                            track.title === 'Đã giao' &&
+                            Number(order.status) === 3 &&
+                            getDeliverySuccessMedia(order).length > 0
+                          "
+                          class="tracking-delivery-media"
+                        >
+                          <div class="return-media-list">
+                            <button
+                              v-for="(media, mediaIndex) in getDeliverySuccessMedia(order)"
+                              :key="`delivery-success-${media.url}-${mediaIndex}`"
+                              type="button"
+                              class="return-media-button"
+                              @click.stop="openDeliverySuccessMediaPreview(order, mediaIndex)"
+                            >
+                              <img
+                                :src="media.url"
+                                class="return-media-thumb"
+                                alt="Minh chứng giao hàng thành công"
+                                @error="handleImageError"
+                              />
+
+                              <span class="return-media-overlay">
+                                <i class="bi bi-zoom-in"></i>
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div
+                          v-if="
+                            track.title === 'Giao hàng thất bại' &&
+                            Number(order.status) === 5 &&
+                            (
+                              order.deliveryFailedDescription ||
+                              getDeliveryFailedMedia(order).length > 0
+                            )
+                          "
+                          class="tracking-delivery-media is-failed"
+                        >
+                          <div
+                            v-if="order.deliveryFailedDescription"
+                            class="tracking-delivery-note"
+                          >
+                            <span>Mô tả:</span>
+                            <strong>{{ order.deliveryFailedDescription }}</strong>
+                          </div>
+
+                          <div
+                            v-if="getDeliveryFailedMedia(order).length > 0"
+                            class="tracking-delivery-proof"
+                          >
+                            <div class="tracking-delivery-media-label text-danger">
+                              <i class="bi bi-x-circle me-1"></i>
+                              Ảnh minh chứng giao thất bại:
+                            </div>
+
+                            <div class="return-media-list">
+                              <button
+                                v-for="(media, mediaIndex) in getDeliveryFailedMedia(order)"
+                                :key="`delivery-failed-${media.url}-${mediaIndex}`"
+                                type="button"
+                                class="return-media-button"
+                                @click.stop="openDeliveryFailedMediaPreview(order, mediaIndex)"
+                              >
+                                <img
+                                  :src="media.url"
+                                  class="return-media-thumb"
+                                  alt="Minh chứng giao hàng thất bại"
+                                  @error="handleImageError"
+                                />
+
+                                <span class="return-media-overlay">
+                                  <i class="bi bi-zoom-in"></i>
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
                 <!-- KẾT THÚC KHỐI THEO DÕI -->
+
+                <div
+                  v-if="isDeliveryRefundInfoVisible(order)"
+                  class="order-delivery-refund-info mb-3"
+                  :class="getDeliveryRefundBoxClass(order)"
+                >
+                  <div class="delivery-refund-top">
+                    <div>
+                      <div class="delivery-refund-title">
+                        <i class="bi bi-cash-coin me-1"></i>
+                        Hoàn tiền giao hàng thất bại
+                      </div>
+                      <div class="delivery-refund-desc">
+                        {{ getDeliveryRefundDescription(order) }}
+                      </div>
+                    </div>
+
+                    <span class="delivery-refund-badge">
+                      {{ getDeliveryRefundStatusText(order) }}
+                    </span>
+                  </div>
+
+                  <div class="delivery-refund-grid">
+                    <div class="delivery-refund-line delivery-refund-money">
+                      <span>Số tiền cần hoàn:</span>
+                      <strong>{{ formatMoney(getDeliveryRefundAmount(order)) }}</strong>
+                    </div>
+
+                    <template v-if="hasDeliveryRefundBankInfo(order)">
+                      <div class="delivery-refund-line">
+                        <span>Ngân hàng:</span>
+                        <strong>{{ order.deliveryRefundBankName || '-' }}</strong>
+                      </div>
+
+                      <div class="delivery-refund-line">
+                        <span>Số tài khoản:</span>
+                        <strong>{{ order.deliveryRefundBankAccountNumber || '-' }}</strong>
+                      </div>
+
+                      <div class="delivery-refund-line">
+                        <span>Chủ tài khoản:</span>
+                        <strong>{{ order.deliveryRefundBankAccountHolder || '-' }}</strong>
+                      </div>
+                    </template>
+
+                    <div
+                      v-if="order.deliveryRefundedAt"
+                      class="delivery-refund-line"
+                    >
+                      <span>Hoàn lúc:</span>
+                      <strong>{{ formatDate(order.deliveryRefundedAt) }}</strong>
+                    </div>
+
+                    <div
+                      v-if="order.deliveryRefundedByName"
+                      class="delivery-refund-line"
+                    >
+                      <span>Người xác nhận:</span>
+                      <strong>{{ order.deliveryRefundedByName }}</strong>
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="canSubmitDeliveryRefundBank(order)"
+                    class="delivery-refund-actions"
+                  >
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-outline-primary"
+                      :disabled="store.orderLoading"
+                      @click.stop="openDeliveryRefundBankModal(order)"
+                    >
+                      <i class="bi bi-bank me-1"></i>
+                      Nhập thông tin hoàn tiền
+                    </button>
+                  </div>
+
+                  <div
+                    v-else-if="
+                      hasAnyDeliveryRefundBankInfo(order) &&
+                      !isDeliveryRefundCompleted(order)
+                    "
+                    class="delivery-refund-once-note"
+                  >
+                    <i class="bi bi-info-circle me-1"></i>
+                    Thông tin tài khoản hoàn tiền đã được gửi một lần. Nếu thông tin chưa chính xác, vui lòng liên hệ shop trước khi shop chuyển tiền.
+                  </div>
+                </div>
 
                 <div class="order-items">
                   <div
@@ -827,11 +1004,9 @@
                       </strong>
                     </div>
 
-                    <div>
+                    <div v-if="getOrderShippingFee(order) > 0">
                       <span>Phí vận chuyển:</span>
-                      <strong>{{
-                        formatMoney((order as any).shippingFee || 30000)
-                      }}</strong>
+                      <strong>{{ formatMoney(getOrderShippingFee(order)) }}</strong>
                     </div>
 
                     <div>
@@ -1873,6 +2048,16 @@ const getTrackingHistory = (order: any) => {
       active: true,
       isCancel: true,
     });
+  if (order.status === 5)
+    history.push({
+      time: order.deliveryFailedAt
+        ? new Date(order.deliveryFailedAt)
+        : new Date(baseDate + 48 * 60 * 60 * 1000),
+      title: "Giao hàng thất bại",
+      desc: order.deliveryFailedReason || "Đơn hàng giao không thành công.",
+      active: true,
+      isCancel: true,
+    });
   return history.reverse();
 };
 
@@ -2680,7 +2865,7 @@ const getReturnRefundLabel = (order: any) => {
     case "CUSTOMER_CANCELLED":
       return "Số tiền yêu cầu hoàn";
     default:
-      return "Số tiền khách yêu cầu hoàn";
+      return "Tổng tiền hoàn";
   }
 };
 
@@ -2731,6 +2916,372 @@ const canCancelReturnRequest = (order: any) => {
     Number(order?.status) === 6 &&
     getOrderReturnProcessStatus(order) === "PENDING"
   );
+};
+
+const getDeliveryRefundAmount = (order: any) =>
+  toMoneyNumber(order?.deliveryRefundAmount);
+
+const isDeliveryRefundInfoVisible = (order: any) => {
+  return Number(order?.status) === 5 && getDeliveryRefundAmount(order) > 0;
+};
+
+const hasDeliveryRefundBankInfo = (order: any) => {
+  return Boolean(
+    String(order?.deliveryRefundBankName || "").trim() &&
+      String(order?.deliveryRefundBankAccountNumber || "").trim() &&
+      String(order?.deliveryRefundBankAccountHolder || "").trim(),
+  );
+};
+
+const hasAnyDeliveryRefundBankInfo = (order: any) => {
+  return Boolean(
+    String(order?.deliveryRefundBankName || "").trim() ||
+      String(order?.deliveryRefundBankAccountNumber || "").trim() ||
+      String(order?.deliveryRefundBankAccountHolder || "").trim(),
+  );
+};
+
+const isDeliveryRefundCompleted = (order: any) => {
+  return Boolean(order?.deliveryRefundedAt || order?.deliveryRefundCompleted);
+};
+
+const canSubmitDeliveryRefundBank = (order: any) => {
+  if (order?.canSubmitDeliveryRefundBank === false) {
+    return false;
+  }
+
+  return (
+    isDeliveryRefundInfoVisible(order) &&
+    !hasAnyDeliveryRefundBankInfo(order) &&
+    !isDeliveryRefundCompleted(order)
+  );
+};
+
+const getDeliveryRefundStatusText = (order: any) => {
+  if (!isDeliveryRefundInfoVisible(order)) {
+    return "Không cần hoàn tiền";
+  }
+
+  if (isDeliveryRefundCompleted(order)) {
+    return "Đã hoàn tiền";
+  }
+
+  if (hasDeliveryRefundBankInfo(order)) {
+    return "Chờ shop hoàn tiền";
+  }
+
+  if (hasAnyDeliveryRefundBankInfo(order)) {
+    return "Cần liên hệ shop";
+  }
+
+  return "Chờ nhập STK";
+};
+
+const getDeliveryRefundDescription = (order: any) => {
+  const amount = formatMoney(getDeliveryRefundAmount(order));
+
+  if (isDeliveryRefundCompleted(order)) {
+    return `Shop đã xác nhận hoàn ${amount} cho đơn giao thất bại.`;
+  }
+
+  if (hasDeliveryRefundBankInfo(order)) {
+    return `Shop đã nhận thông tin tài khoản và sẽ hoàn ${amount} cho bạn. Thông tin này không thể tự chỉnh sửa.`;
+  }
+
+  if (hasAnyDeliveryRefundBankInfo(order)) {
+    return "Thông tin tài khoản hoàn tiền chưa đầy đủ. Vui lòng liên hệ shop để được hỗ trợ.";
+  }
+
+  return `Đơn đã thanh toán trước nhưng giao thất bại. Vui lòng nhập thông tin tài khoản ngân hàng để shop hoàn ${amount}.`;
+};
+
+const getDeliveryRefundBoxClass = (order: any) => ({
+  "is-waiting-bank": canSubmitDeliveryRefundBank(order),
+  "is-waiting-shop":
+    isDeliveryRefundInfoVisible(order) &&
+    hasDeliveryRefundBankInfo(order) &&
+    !isDeliveryRefundCompleted(order),
+  "is-refunded": isDeliveryRefundCompleted(order),
+});
+
+const DELIVERY_REFUND_BANK_OPTIONS = [
+  "Vietcombank",
+  "BIDV",
+  "VietinBank",
+  "Agribank",
+  "MB Bank",
+  "Techcombank",
+  "ACB",
+  "VPBank",
+  "TPBank",
+  "Sacombank",
+  "VIB",
+  "SHB",
+  "HDBank",
+  "MSB",
+  "OCB",
+  "Eximbank",
+  "LPBank",
+  "SeABank",
+  "Nam A Bank",
+  "Bac A Bank",
+  "ABBank",
+  "PVcomBank",
+  "NCB",
+  "KienlongBank",
+  "VietBank",
+  "SaigonBank",
+];
+
+const normalizeDeliveryRefundInput = (value: unknown) =>
+  String(value ?? "")
+    .trim()
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s{2,}/g, " ");
+
+const normalizeDeliveryRefundAccountNumber = (value: unknown) =>
+  String(value ?? "").replace(/\s+/g, "").trim();
+
+const validateDeliveryRefundBankForm = (
+  bankName: string,
+  bankAccountNumber: string,
+  bankAccountHolder: string,
+) => {
+  if (!bankName) {
+    return "Vui lòng chọn ngân hàng.";
+  }
+
+  if (!DELIVERY_REFUND_BANK_OPTIONS.includes(bankName)) {
+    return "Vui lòng chọn ngân hàng trong danh sách hỗ trợ.";
+  }
+
+  if (bankName.length < 2 || bankName.length > 100) {
+    return "Tên ngân hàng phải từ 2 đến 100 ký tự.";
+  }
+
+  if (!/^[\p{L}0-9\s.()\-/&]+$/u.test(bankName)) {
+    return "Tên ngân hàng chứa ký tự không hợp lệ.";
+  }
+
+  if (!bankAccountNumber) {
+    return "Vui lòng nhập số tài khoản.";
+  }
+
+  if (!/^[0-9]{6,30}$/.test(bankAccountNumber)) {
+    return "Số tài khoản chỉ gồm số và phải từ 6 đến 30 chữ số.";
+  }
+
+  if (/^0+$/.test(bankAccountNumber)) {
+    return "Số tài khoản không hợp lệ.";
+  }
+
+  if (!bankAccountHolder) {
+    return "Vui lòng nhập tên chủ tài khoản.";
+  }
+
+  if (bankAccountHolder.length < 2 || bankAccountHolder.length > 100) {
+    return "Tên chủ tài khoản phải từ 2 đến 100 ký tự.";
+  }
+
+  if (bankAccountHolder.split(/\s+/).length < 2) {
+    return "Tên chủ tài khoản phải gồm ít nhất 2 từ.";
+  }
+
+  if (!/.*\p{L}.*/u.test(bankAccountHolder)) {
+    return "Tên chủ tài khoản phải có ít nhất một chữ cái.";
+  }
+
+  if (/\d/.test(bankAccountHolder)) {
+    return "Tên chủ tài khoản không được chứa số.";
+  }
+
+  if (!/^[\p{L}\s'.-]+$/u.test(bankAccountHolder)) {
+    return "Tên chủ tài khoản chỉ được chứa chữ cái, khoảng trắng, dấu chấm, dấu nháy hoặc dấu gạch ngang.";
+  }
+
+  return "";
+};
+
+const buildDeliveryRefundBankOptionsHtml = (selectedBank?: string | null) => {
+  const selected = String(selectedBank || "").trim();
+
+  return DELIVERY_REFUND_BANK_OPTIONS.map((bank) => {
+    const safeBank = escapeHtml(bank);
+    const selectedAttr = bank === selected ? " selected" : "";
+    return `<option value="${safeBank}"${selectedAttr}>${safeBank}</option>`;
+  }).join("");
+};
+
+const openDeliveryRefundBankModal = async (order: CustomerOrderResponse) => {
+  if (!canSubmitDeliveryRefundBank(order)) {
+    return;
+  }
+
+  const result = await Swal.fire<{
+    bankName: string;
+    bankAccountNumber: string;
+    bankAccountHolder: string;
+  }>({
+    title: "Nhập thông tin hoàn tiền",
+    html: `
+      <div class="delivery-refund-modal">
+        <div class="delivery-refund-modal-alert">
+          <i class="bi bi-info-circle"></i>
+          <span>Shop sẽ hoàn <strong>${escapeHtml(
+            formatMoney(getDeliveryRefundAmount(order)),
+          )}</strong> cho đơn ${escapeHtml(generateOrderCode(order.orderId))}. Thông tin này chỉ gửi được 1 lần và không thể tự chỉnh sửa.</span>
+        </div>
+
+        <label for="delivery-refund-bank-name" class="delivery-refund-modal-label">
+          Ngân hàng <span>*</span>
+        </label>
+        <select id="delivery-refund-bank-name" class="swal2-select delivery-refund-modal-control">
+          <option value="">-- Chọn ngân hàng --</option>
+          ${buildDeliveryRefundBankOptionsHtml(order.deliveryRefundBankName)}
+        </select>
+
+        <label for="delivery-refund-account-number" class="delivery-refund-modal-label">
+          Số tài khoản <span>*</span>
+        </label>
+        <input
+          id="delivery-refund-account-number"
+          class="swal2-input delivery-refund-modal-control"
+          inputmode="numeric"
+          maxlength="50"
+          placeholder="Ví dụ: 0123456789"
+          value="${escapeHtml(order.deliveryRefundBankAccountNumber || "")}"
+        />
+        <div class="delivery-refund-modal-help">
+          Chỉ nhập số và khoảng trắng. Hệ thống sẽ tự bỏ khoảng trắng trước khi lưu.
+        </div>
+
+        <label for="delivery-refund-account-holder" class="delivery-refund-modal-label">
+          Tên chủ tài khoản <span>*</span>
+        </label>
+        <input
+          id="delivery-refund-account-holder"
+          class="swal2-input delivery-refund-modal-control"
+          maxlength="100"
+          placeholder="Ví dụ: NGUYEN VAN NAM"
+          value="${escapeHtml(order.deliveryRefundBankAccountHolder || "")}"
+        />
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Gửi thông tin",
+    cancelButtonText: "Quay lại",
+    reverseButtons: true,
+    focusConfirm: false,
+    customClass: {
+      popup: "swal-custom-popup delivery-refund-swal",
+      title: "swal-custom-title",
+      cancelButton: "swal-custom-cancel",
+      confirmButton: "swal-gold-confirm",
+    },
+    didOpen: () => {
+      const accountInput = document.getElementById(
+        "delivery-refund-account-number",
+      ) as HTMLInputElement | null;
+      const accountHolderInput = document.getElementById(
+        "delivery-refund-account-holder",
+      ) as HTMLInputElement | null;
+
+      accountInput?.addEventListener("input", () => {
+        accountInput.value = accountInput.value
+          .replace(/[^0-9\s]/g, "")
+          .replace(/\s{2,}/g, " ");
+      });
+
+      accountHolderInput?.addEventListener("input", () => {
+        accountHolderInput.value = accountHolderInput.value
+          .replace(/[^\p{L}\s'.-]/gu, "")
+          .replace(/\s{2,}/g, " ")
+          .toUpperCase();
+      });
+    },
+    preConfirm: () => {
+      const bankElement = document.getElementById(
+        "delivery-refund-bank-name",
+      ) as HTMLSelectElement | null;
+      const accountNumberElement = document.getElementById(
+        "delivery-refund-account-number",
+      ) as HTMLInputElement | null;
+      const accountHolderElement = document.getElementById(
+        "delivery-refund-account-holder",
+      ) as HTMLInputElement | null;
+
+      const bankName = normalizeDeliveryRefundInput(bankElement?.value);
+      const bankAccountNumber = normalizeDeliveryRefundAccountNumber(
+        accountNumberElement?.value,
+      );
+      const bankAccountHolder = normalizeDeliveryRefundInput(
+        accountHolderElement?.value,
+      ).toUpperCase();
+
+      const validationMessage = validateDeliveryRefundBankForm(
+        bankName,
+        bankAccountNumber,
+        bankAccountHolder,
+      );
+
+      if (validationMessage) {
+        Swal.showValidationMessage(validationMessage);
+        return false;
+      }
+
+      return {
+        bankName,
+        bankAccountNumber,
+        bankAccountHolder,
+      };
+    },
+  });
+
+  if (!result.isConfirmed || !result.value) {
+    return;
+  }
+
+  const confirmResult = await Swal.fire({
+    icon: "warning",
+    title: "Xác nhận thông tin hoàn tiền?",
+    html: `
+      <div style="text-align:left;line-height:1.6">
+        <p style="margin-bottom:8px">Thông tin tài khoản hoàn tiền <b>chỉ gửi được 1 lần</b>. Sau khi gửi, bạn không thể tự chỉnh sửa trên hệ thống. Vui lòng kiểm tra thật kĩ</p>
+        <p style="margin-bottom:4px"><b>Ngân hàng:</b> ${escapeHtml(result.value.bankName)}</p>
+        <p style="margin-bottom:4px"><b>Số tài khoản:</b> ${escapeHtml(result.value.bankAccountNumber)}</p>
+        <p style="margin-bottom:0"><b>Chủ tài khoản:</b> ${escapeHtml(result.value.bankAccountHolder)}</p>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Chắc chắn gửi",
+    cancelButtonText: "Kiểm tra lại",
+    reverseButtons: true,
+    customClass: {
+      popup: "swal-custom-popup",
+      title: "swal-custom-title",
+      cancelButton: "swal-custom-cancel",
+      confirmButton: "swal-gold-confirm",
+    },
+  });
+
+  if (!confirmResult.isConfirmed) {
+    return;
+  }
+
+  try {
+    store.orderLoading = true;
+    await customerProfileService.submitDeliveryRefundBank(
+      order.orderId,
+      result.value,
+    );
+    await fetchOrdersAndReviews();
+    openedOrderId.value = order.orderId;
+    toast("success", "Đã gửi thông tin tài khoản hoàn tiền.");
+  } catch (error) {
+    showError(error, "Không thể gửi thông tin hoàn tiền lúc này.");
+  } finally {
+    store.orderLoading = false;
+  }
 };
 
 type ReturnProcessStatus =
@@ -2787,6 +3338,37 @@ const toPositiveNumberOrNull = (value: unknown) => {
   const numberValue = Number(value);
 
   return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null;
+};
+
+const getOrderShippingFee = (order: any) => {
+  return pickMoneyValue(
+    order?.shippingFee,
+    order?.shippingfee,
+    order?.shippingFeeAmount,
+    order?.shipFee,
+    order?.deliveryFee,
+    order?.shippingAmount
+  );
+};
+
+const getOrderReturnShippingFee = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  return pickMoneyValue(
+    order?.returnShippingFee,
+    order?.refundShippingFee,
+    order?.shippingFeeRefundAmount,
+    request?.returnShippingFee,
+    request?.refundShippingFee,
+    request?.shippingFeeRefundAmount
+  );
+};
+
+const getOrderReturnProductRefundAmount = (order: any) => {
+  const totalRefund = getOrderReturnRefundAmount(order);
+  const returnShippingFee = getOrderReturnShippingFee(order);
+
+  return Math.max(0, totalRefund - returnShippingFee);
 };
 
 const getOrderReturnRefundAmount = (order: any) => {
@@ -3281,6 +3863,22 @@ const REVIEW_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
   thumbTitle: "Chọn ảnh/video đánh giá",
 };
 
+const DELIVERY_SUCCESS_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
+  title: "Ảnh minh chứng giao hàng thành công",
+  counterLabel: "ảnh minh chứng giao hàng",
+  emptyText: "Không có ảnh minh chứng giao hàng thành công để hiển thị.",
+  imageAlt: "Ảnh minh chứng giao hàng thành công",
+  thumbTitle: "Chọn ảnh minh chứng giao hàng",
+};
+
+const DELIVERY_FAILED_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
+  title: "Ảnh minh chứng giao hàng thất bại",
+  counterLabel: "ảnh minh chứng giao thất bại",
+  emptyText: "Không có ảnh minh chứng giao hàng thất bại để hiển thị.",
+  imageAlt: "Ảnh minh chứng giao hàng thất bại",
+  thumbTitle: "Chọn ảnh minh chứng giao thất bại",
+};
+
 const buildReturnPreviewMainHtml = (
   media: ReturnMediaView,
   options: MediaPreviewOptions,
@@ -3427,6 +4025,51 @@ const openReturnMediaPreview = async (order: any, index: number) => {
     getOrderReturnMedia(order),
     index,
     RETURN_MEDIA_PREVIEW_OPTIONS,
+  );
+};
+
+const getDeliveryMedia = (rawMedia: any): ReturnMediaView[] => {
+  const mediaList = Array.isArray(rawMedia) ? rawMedia : rawMedia ? [rawMedia] : [];
+
+  return mediaList
+    .map((media: any) => {
+      const url = getReturnMediaUrl(media);
+      if (!url) return null;
+      return { url, isVideo: false };
+    })
+    .filter((media): media is ReturnMediaView => media !== null);
+};
+
+const getDeliverySuccessMedia = (order: any): ReturnMediaView[] => {
+  return getDeliveryMedia(
+    order?.deliverySuccessMediaUrls ??
+      order?.deliveryCompletedMediaUrls ??
+      order?.deliveryProofUrls ??
+      [],
+  );
+};
+
+const getDeliveryFailedMedia = (order: any): ReturnMediaView[] => {
+  return getDeliveryMedia(
+    order?.deliveryFailedMediaUrls ??
+      order?.deliveryFailedProofUrls ??
+      [],
+  );
+};
+
+const openDeliverySuccessMediaPreview = async (order: any, index: number) => {
+  await openMediaPreview(
+    getDeliverySuccessMedia(order),
+    index,
+    DELIVERY_SUCCESS_MEDIA_PREVIEW_OPTIONS,
+  );
+};
+
+const openDeliveryFailedMediaPreview = async (order: any, index: number) => {
+  await openMediaPreview(
+    getDeliveryFailedMedia(order),
+    index,
+    DELIVERY_FAILED_MEDIA_PREVIEW_OPTIONS,
   );
 };
 
@@ -3894,6 +4537,50 @@ const getItemImage = (item: any) => {
   border: 1px solid #e2e8f0;
 }
 
+.tracking-delivery-media {
+  margin-top: 10px;
+  margin-bottom: 0;
+  margin-left: 0;
+  padding-top: 10px;
+  border-top: 1px dashed #dbe3ef;
+}
+
+.tracking-delivery-media.is-failed {
+  color: #ef4444;
+}
+
+.tracking-delivery-media-label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.tracking-delivery-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.tracking-delivery-note strong {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.tracking-delivery-proof {
+  margin-top: 10px;
+}
+
+@media (max-width: 640px) {
+  .tracking-delivery-media {
+    margin-left: 0;
+  }
+}
+
 .empty-box {
   text-align: center;
   padding: 60px 20px;
@@ -4123,6 +4810,126 @@ const getItemImage = (item: any) => {
   justify-content: flex-end;
   flex-shrink: 0;
 }
+
+
+.order-delivery-refund-info {
+  width: 100%;
+  min-width: 0;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-left: 4px solid #f97316;
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+
+.order-delivery-refund-info.is-waiting-shop {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  border-left-color: #2563eb;
+}
+
+.order-delivery-refund-info.is-refunded {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  border-left-color: #16a34a;
+}
+
+.delivery-refund-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.delivery-refund-title {
+  color: #9a3412;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.order-delivery-refund-info.is-waiting-shop .delivery-refund-title {
+  color: #1d4ed8;
+}
+
+.order-delivery-refund-info.is-refunded .delivery-refund-title {
+  color: #15803d;
+}
+
+.delivery-refund-desc {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.delivery-refund-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #fed7aa;
+  color: #9a3412;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.order-delivery-refund-info.is-waiting-shop .delivery-refund-badge {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.order-delivery-refund-info.is-refunded .delivery-refund-badge {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.delivery-refund-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 18px;
+}
+
+.delivery-refund-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.delivery-refund-line strong {
+  color: #0f172a;
+  font-weight: 800;
+  word-break: break-word;
+}
+
+.delivery-refund-money strong {
+  color: #dc2626;
+}
+
+.delivery-refund-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.delivery-refund-once-note {
+  margin-top: 12px;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.45;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 9px 10px;
+}
+
 
 .order-summary-row {
   display: grid;
@@ -4575,6 +5382,56 @@ const getItemImage = (item: any) => {
   font-weight: 700;
 }
 
+.delivery-info-box {
+  background: #fffdf8;
+  border: 1px solid #f3e2bd;
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.delivery-info-title {
+  color: #111827;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.delivery-info-card {
+  background: #ffffff;
+  border: 1px solid #edf0f3;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.delivery-info-card + .delivery-info-card {
+  margin-top: 12px;
+}
+
+.delivery-info-card.is-failed {
+  border-color: #fecaca;
+}
+
+.delivery-info-head {
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+
+.delivery-info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.delivery-info-row span {
+  color: #64748b;
+}
+
+.delivery-info-row strong {
+  color: #111827;
+  text-align: right;
+}
+
 .return-media-section {
   margin-top: 12px;
 }
@@ -4835,9 +5692,18 @@ const getItemImage = (item: any) => {
 
   .order-cancel-info,
   .order-return-info,
+  .order-delivery-refund-info,
   .order-total-box {
     width: 100%;
     max-width: 100%;
+  }
+
+  .delivery-refund-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .delivery-refund-top {
+    flex-direction: column;
   }
 
   .item-price-box {
@@ -5343,5 +6209,67 @@ const getItemImage = (item: any) => {
   .return-preview-nav.is-next {
     order: 3;
   }
+}
+
+
+.delivery-refund-swal {
+  width: min(620px, calc(100vw - 28px)) !important;
+}
+
+.delivery-refund-modal {
+  padding: 0 8px 4px;
+}
+
+.delivery-refund-modal-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.delivery-refund-modal-label {
+  display: block;
+  margin: 12px 0 6px;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.delivery-refund-modal-label span {
+  color: #dc2626;
+}
+
+.delivery-refund-modal-control {
+  display: block !important;
+  width: 100% !important;
+  margin: 0 !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 9px !important;
+  box-shadow: none !important;
+  font-size: 14px !important;
+}
+
+select.delivery-refund-modal-control {
+  height: 42px !important;
+  padding: 0 10px !important;
+}
+
+input.delivery-refund-modal-control {
+  height: 42px !important;
+  padding: 0 10px !important;
+}
+
+.delivery-refund-modal-help {
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
 }
 </style>

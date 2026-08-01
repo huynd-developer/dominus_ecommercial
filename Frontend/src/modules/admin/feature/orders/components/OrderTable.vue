@@ -46,11 +46,8 @@
             <a-tag class="payment-tag" :color="getPaymentColor(record.paymentMethod)">
               {{ formatPaymentMethod(record.paymentMethod) }}
             </a-tag>
-            
+
             <template v-if="record.status === 0 && ['VIETQR', 'VNPAY'].includes((record.paymentMethod || '').toUpperCase())">
-              <a-tag v-if="record.isPaymentReported" color="success" class="mt-1 fw-bold">
-                <i class="bi bi-check-circle-fill me-1"></i> Khách đã thanh toán!
-              </a-tag>
             </template>
           </div>
         </template>
@@ -114,6 +111,8 @@ const emit = defineEmits<{
   (e: "viewDetail", id: number): void;
   (e: "changeStatus", order: any, status: number): void;
 }>();
+
+void props;
 
 const columns = [
   { title: "Mã đơn", key: "orderCode", width: 130 },
@@ -203,7 +202,6 @@ function getAvailableActions(order: any) {
     case 1:
       return [
         { status: 2, label: "Giao hàng", type: "primary", danger: false },
-        { status: 4, label: "Hủy", type: "primary", danger: true },
       ];
 
     case 2:

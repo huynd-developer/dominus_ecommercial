@@ -33,6 +33,8 @@
 
       <RevenueChart :items="reportStore.chartData" />
 
+      <QuarterlyRevenueChart :items="reportStore.quarterlyChartData" />
+
       <BestSellingTable :items="reportStore.bestSellingProducts" />
     </template>
   </div>
@@ -41,6 +43,7 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
 import BestSellingTable from "../components/BestSellingTable.vue";
+import QuarterlyRevenueChart from "../components/QuarterlyRevenueChart.vue";
 import ReportFilter from "../components/ReportFilter.vue";
 import RevenueChart from "../components/RevenueChart.vue";
 import SummaryCards from "../components/SummaryCards.vue";

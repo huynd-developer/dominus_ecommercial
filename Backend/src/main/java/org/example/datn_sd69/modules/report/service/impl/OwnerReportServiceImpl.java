@@ -104,35 +104,34 @@ public class OwnerReportServiceImpl implements OwnerReportService {
             String toDate
     ) {
         DateRange range = resolveDateRange(filterType, fromDate, toDate);
+        return buildRevenueChart(range);
+    }
 
-        List<Order> orders = orderRepository.findCompletedOrdersForChart(
-                COMPLETED_STATUS,
-                range.startDateTime(),
-                range.endDateTimeExclusive()
+    @Override
+    public List<RevenueChartResponse> getQuarterlyRevenueChart() {
+        LocalDate today = LocalDate.now(VN_ZONE);
+
+        LocalDate fromDate = today.withDayOfYear(1);
+
+        /*
+         * Một năm luôn có 4 quý.
+         *
+         * toDate dùng để tạo đủ bucket Q1, Q2, Q3, Q4.
+         * endDateTimeExclusive vẫn chỉ tính dữ liệu đến hết hôm nay,
+         * tránh lấy nhầm dữ liệu tương lai nếu có dữ liệu test.
+         */
+        LocalDate toDate = LocalDate.of(today.getYear(), 12, 31);
+
+        DateRange range = new DateRange(
+                ReportFilterType.YEAR,
+                fromDate,
+                toDate,
+                fromDate.atStartOfDay(),
+                today.plusDays(1).atStartOfDay(),
+                ChartGroupType.QUARTER
         );
 
-        LinkedHashMap<String, RevenueBucket> buckets = initChartBuckets(range);
-
-        for (Order order : orders) {
-            if (order == null || order.getCreatedAt() == null) {
-                continue;
-            }
-
-            String label = buildChartLabel(order.getCreatedAt(), range.chartGroupType());
-
-            buckets
-                    .computeIfAbsent(label, key -> new RevenueBucket())
-                    .add(order.getFinalAmount());
-        }
-
-        return buckets.entrySet()
-                .stream()
-                .map(entry -> new RevenueChartResponse(
-                        entry.getKey(),
-                        entry.getValue().revenue(),
-                        entry.getValue().totalOrders()
-                ))
-                .toList();
+        return buildRevenueChart(range);
     }
 
     @Override
@@ -161,6 +160,37 @@ public class OwnerReportServiceImpl implements OwnerReportService {
                         longOrZero(item.getTotalSold()),
                         moneyOrZero(item.getRevenue()),
                         item.getImageUrl()
+                ))
+                .toList();
+    }
+
+    private List<RevenueChartResponse> buildRevenueChart(DateRange range) {
+        List<Order> orders = orderRepository.findCompletedOrdersForChart(
+                COMPLETED_STATUS,
+                range.startDateTime(),
+                range.endDateTimeExclusive()
+        );
+
+        LinkedHashMap<String, RevenueBucket> buckets = initChartBuckets(range);
+
+        for (Order order : orders) {
+            if (order == null || order.getCreatedAt() == null) {
+                continue;
+            }
+
+            String label = buildChartLabel(order.getCreatedAt(), range.chartGroupType());
+
+            buckets
+                    .computeIfAbsent(label, key -> new RevenueBucket())
+                    .add(order.getFinalAmount());
+        }
+
+        return buckets.entrySet()
+                .stream()
+                .map(entry -> new RevenueChartResponse(
+                        entry.getKey(),
+                        entry.getValue().revenue(),
+                        entry.getValue().totalOrders()
                 ))
                 .toList();
     }
@@ -205,6 +235,15 @@ public class OwnerReportServiceImpl implements OwnerReportService {
                 fromDate = today.withDayOfMonth(1);
                 toDate = today;
                 chartGroupType = ChartGroupType.DAY;
+            }
+
+            case QUARTER -> {
+                int currentQuarter = (today.getMonthValue() - 1) / 3 + 1;
+                int firstMonthOfQuarter = (currentQuarter - 1) * 3 + 1;
+
+                fromDate = LocalDate.of(today.getYear(), firstMonthOfQuarter, 1);
+                toDate = today;
+                chartGroupType = ChartGroupType.MONTH;
             }
 
             case YEAR -> {
@@ -263,7 +302,7 @@ public class OwnerReportServiceImpl implements OwnerReportService {
         try {
             return ReportFilterType.valueOf(rawValue.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            throw badRequest("filterType không hợp lệ. Chỉ nhận: DAY, WEEK, MONTH, YEAR, CUSTOM");
+            throw badRequest("filterType không hợp lệ. Chỉ nhận: DAY, WEEK, MONTH, QUARTER, YEAR, CUSTOM");
         }
     }
 
@@ -351,6 +390,18 @@ public class OwnerReportServiceImpl implements OwnerReportService {
             return buckets;
         }
 
+        if (range.chartGroupType() == ChartGroupType.QUARTER) {
+            LocalDate currentQuarter = firstDayOfQuarter(range.fromDate());
+            LocalDate endQuarter = firstDayOfQuarter(range.toDate());
+
+            while (!currentQuarter.isAfter(endQuarter)) {
+                buckets.put(buildQuarterLabel(currentQuarter), new RevenueBucket());
+                currentQuarter = currentQuarter.plusMonths(3);
+            }
+
+            return buckets;
+        }
+
         YearMonth currentMonth = YearMonth.from(range.fromDate());
         YearMonth endMonth = YearMonth.from(range.toDate());
 
@@ -370,7 +421,18 @@ public class OwnerReportServiceImpl implements OwnerReportService {
             case HOUR -> String.format("%02d:00", createdAt.getHour());
             case DAY -> createdAt.toLocalDate().toString();
             case MONTH -> YearMonth.from(createdAt.toLocalDate()).toString();
+            case QUARTER -> buildQuarterLabel(createdAt.toLocalDate());
         };
+    }
+
+    private LocalDate firstDayOfQuarter(LocalDate date) {
+        int firstMonthOfQuarter = ((date.getMonthValue() - 1) / 3) * 3 + 1;
+        return LocalDate.of(date.getYear(), firstMonthOfQuarter, 1);
+    }
+
+    private String buildQuarterLabel(LocalDate date) {
+        int quarter = (date.getMonthValue() - 1) / 3 + 1;
+        return "Q" + quarter + "/" + date.getYear();
     }
 
     private boolean containsWhitespace(String value) {
@@ -400,7 +462,8 @@ public class OwnerReportServiceImpl implements OwnerReportService {
     private enum ChartGroupType {
         HOUR,
         DAY,
-        MONTH
+        MONTH,
+        QUARTER
     }
 
     private record DateRange(

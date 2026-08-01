@@ -97,6 +97,9 @@ export type PosCheckoutPaymentMethod = "CASH" | "VNPAY" | "VIETQR" | "MIXED";
 export type PosTransferProvider = "" | "VNPAY" | "VIETQR";
 type NonEmptyTransferProvider = "VNPAY" | "VIETQR";
 
+const MAX_POS_ITEM_QUANTITY_PER_PRODUCT = 10;
+
+
 export interface PosStoreState {
   allProducts: PosProduct[];
   categories: string[];
@@ -218,6 +221,74 @@ const isValidCustomerName = (name: string): boolean => {
 };
 const formatMoney = (value: number): string => {
   return new Intl.NumberFormat("vi-VN").format(Number(value || 0));
+};
+
+const getMaxBuyQuantity = (product?: PosProduct | null): number => {
+  const stockQuantity = Number(product?.stockQuantity || 0);
+
+  if (!Number.isFinite(stockQuantity) || stockQuantity <= 0) {
+    return 0;
+  }
+
+  return Math.min(Math.trunc(stockQuantity), MAX_POS_ITEM_QUANTITY_PER_PRODUCT);
+};
+
+const getMaxBuyQuantityMessage = (product?: PosProduct | null): string => {
+  const maxQuantity = getMaxBuyQuantity(product);
+
+  if (maxQuantity <= 0) {
+    return "Sản phẩm đã hết hàng.";
+  }
+
+  if (maxQuantity < MAX_POS_ITEM_QUANTITY_PER_PRODUCT) {
+    return `Kho chỉ còn tối đa ${maxQuantity} lọ cho sản phẩm này.`;
+  }
+
+  return `Mỗi sản phẩm chỉ được mua tối đa ${MAX_POS_ITEM_QUANTITY_PER_PRODUCT} lọ trong một đơn hàng.`;
+};
+
+const normalizeCartQuantity = (quantity: unknown, product?: PosProduct | null): number => {
+  const maxQuantity = getMaxBuyQuantity(product);
+  const numberValue = Number(quantity || 0);
+
+  if (!Number.isFinite(numberValue) || numberValue <= 0) {
+    return maxQuantity > 0 ? 1 : 0;
+  }
+
+  const safeQuantity = Math.trunc(numberValue);
+
+  if (maxQuantity <= 0) {
+    return 0;
+  }
+
+  return Math.min(Math.max(safeQuantity, 1), maxQuantity);
+};
+
+const normalizeCartItems = (items: unknown): CartItem[] => {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items
+    .map((item: any) => {
+      const product = item?.product as PosProduct | undefined;
+
+      if (!product || !product.sku) {
+        return null;
+      }
+
+      const quantity = normalizeCartQuantity(item.quantity, product);
+
+      if (quantity <= 0) {
+        return null;
+      }
+
+      return {
+        product,
+        quantity,
+      };
+    })
+    .filter((item): item is CartItem => item !== null);
 };
 
 const getBackendMessage = (error: any, fallback: string): string => {
@@ -1042,7 +1113,7 @@ export const usePosStore = defineStore("posStore", {
       try {
         const draft = JSON.parse(raw);
 
-        this.cart = Array.isArray(draft.cart) ? draft.cart : [];
+        this.cart = normalizeCartItems(draft.cart);
         this.customer = draft.customer || null;
         this.customerSavedKey = draft.customerSavedKey || "";
 
@@ -1317,7 +1388,7 @@ export const usePosStore = defineStore("posStore", {
           productVariantId: item.product.id,
           sku: item.product.sku,
           productName: item.product.name,
-          quantity: item.quantity,
+          quantity: normalizeCartQuantity(item.quantity, item.product),
         })),
       };
 
@@ -1711,12 +1782,15 @@ export const usePosStore = defineStore("posStore", {
       );
 
       if (existingItem) {
-        if (existingItem.quantity >= product.stockQuantity) {
-          this.errorMsg = `Sản phẩm ${product.name} đã đạt giới hạn tồn kho tối đa (${product.stockQuantity})!`;
+        const maxQuantity = getMaxBuyQuantity(product);
+
+        if (existingItem.quantity >= maxQuantity) {
+          this.errorMsg = getMaxBuyQuantityMessage(product);
+          existingItem.quantity = maxQuantity;
           return;
         }
 
-        existingItem.quantity++;
+        existingItem.quantity = normalizeCartQuantity(existingItem.quantity + 1, product);
         this.clearVoucherLocal(true);
         return;
       }
@@ -1796,19 +1870,29 @@ export const usePosStore = defineStore("posStore", {
         return;
       }
 
-      if (qty <= 0) {
+      const cleanQuantity = Math.trunc(Number(qty || 0));
+
+      if (cleanQuantity <= 0) {
         this.removeFromCart(sku);
         return;
       }
 
-      if (qty > item.product.stockQuantity) {
-        this.errorMsg = `Không thể chỉnh sửa. Kho chỉ còn tối đa ${item.product.stockQuantity} sản phẩm!`;
-        item.quantity = item.product.stockQuantity;
+      const maxQuantity = getMaxBuyQuantity(item.product);
+
+      if (maxQuantity <= 0) {
+        this.errorMsg = "Sản phẩm đã hết hàng.";
+        this.removeFromCart(sku);
+        return;
+      }
+
+      if (cleanQuantity > maxQuantity) {
+        this.errorMsg = getMaxBuyQuantityMessage(item.product);
+        item.quantity = maxQuantity;
         this.clearVoucherLocal(true);
         return;
       }
 
-      item.quantity = qty;
+      item.quantity = cleanQuantity;
       this.clearVoucherLocal(true);
     },
 
@@ -2098,6 +2182,23 @@ export const usePosStore = defineStore("posStore", {
         return false;
       }
 
+      const invalidQuantityItem = this.cart.find((item) => {
+        const quantity = Math.trunc(Number(item.quantity || 0));
+        const maxQuantity = getMaxBuyQuantity(item.product);
+
+        return quantity <= 0 || maxQuantity <= 0 || quantity > maxQuantity;
+      });
+
+      if (invalidQuantityItem) {
+        this.errorMsg = getMaxBuyQuantityMessage(invalidQuantityItem.product);
+        invalidQuantityItem.quantity = normalizeCartQuantity(
+          invalidQuantityItem.quantity,
+          invalidQuantityItem.product
+        );
+        this.clearVoucherLocal(true);
+        return false;
+      }
+
       return true;
     },
 
@@ -2172,7 +2273,7 @@ export const usePosStore = defineStore("posStore", {
 
         items: this.cart.map((item) => ({
           sku: item.product.sku,
-          quantity: Number(item.quantity),
+          quantity: normalizeCartQuantity(item.quantity, item.product),
         })),
       };
     },
@@ -2185,7 +2286,7 @@ export const usePosStore = defineStore("posStore", {
         voucherCode: normalizeText(this.voucherCode) || null,
         items: this.cart.map((item) => ({
           sku: item.product.sku,
-          quantity: Number(item.quantity),
+          quantity: normalizeCartQuantity(item.quantity, item.product),
         })),
       };
     },
@@ -2716,15 +2817,17 @@ export const usePosStore = defineStore("posStore", {
       );
 
       if (latestProduct) {
+        const product = {
+          ...latestProduct,
+          stockQuantity: Math.max(
+            Number(latestProduct.stockQuantity || 0),
+            Math.min(itemQuantity, MAX_POS_ITEM_QUANTITY_PER_PRODUCT)
+          ),
+        };
+
         return {
-          product: {
-            ...latestProduct,
-            stockQuantity: Math.max(
-              Number(latestProduct.stockQuantity || 0),
-              itemQuantity
-            ),
-          },
-          quantity: itemQuantity,
+          product,
+          quantity: normalizeCartQuantity(itemQuantity, product),
         };
       }
 
@@ -2736,47 +2839,49 @@ export const usePosStore = defineStore("posStore", {
         .filter(Boolean)
         .join(" - ");
 
+      const product: PosProduct = {
+        id: Number(item.variantId || item.productVariantId || item.id || 0),
+        sku,
+        name: productName,
+        subName: subName || item.variantName || "Biến thể mặc định",
+        price: Number(
+          item.unitPrice ||
+            item.finalPrice ||
+            item.price ||
+            item.salePrice ||
+            item.originalPrice ||
+            0
+        ),
+        stockQuantity: Math.max(
+          Number(
+            item.stockQuantity ||
+              item.availableStock ||
+              item.productStock ||
+              itemQuantity ||
+              1
+          ),
+          Math.min(itemQuantity, MAX_POS_ITEM_QUANTITY_PER_PRODUCT)
+        ),
+        image:
+          item.image ||
+          item.imageUrl ||
+          `https://ui-avatars.com/api/?name=${encodeURIComponent(
+            productName
+          )}&background=random&color=fff&size=200`,
+        category: item.brandName || item.categoryName || "Đơn lưu tạm",
+        manufacturingDate: toDateOnly(item.manufacturingDate),
+        expirationDate: toDateOnly(item.expirationDate),
+        status: item.variantStatus ?? item.status ?? null,
+        expired: Boolean(
+          item.expired ?? isDateBeforeToday(item.expirationDate)
+        ),
+        sellable: item.sellable ?? true,
+        unavailableReason: item.unavailableReason || null,
+      };
+
       return {
-        product: {
-          id: Number(item.variantId || item.productVariantId || item.id || 0),
-          sku,
-          name: productName,
-          subName: subName || item.variantName || "Biến thể mặc định",
-          price: Number(
-            item.unitPrice ||
-              item.finalPrice ||
-              item.price ||
-              item.salePrice ||
-              item.originalPrice ||
-              0
-          ),
-          stockQuantity: Math.max(
-            Number(
-              item.stockQuantity ||
-                item.availableStock ||
-                item.productStock ||
-                itemQuantity ||
-                1
-            ),
-            itemQuantity
-          ),
-          image:
-            item.image ||
-            item.imageUrl ||
-            `https://ui-avatars.com/api/?name=${encodeURIComponent(
-              productName
-            )}&background=random&color=fff&size=200`,
-          category: item.brandName || item.categoryName || "Đơn lưu tạm",
-          manufacturingDate: toDateOnly(item.manufacturingDate),
-          expirationDate: toDateOnly(item.expirationDate),
-          status: item.variantStatus ?? item.status ?? null,
-          expired: Boolean(
-            item.expired ?? isDateBeforeToday(item.expirationDate)
-          ),
-          sellable: item.sellable ?? true,
-          unavailableReason: item.unavailableReason || null,
-        },
-        quantity: itemQuantity,
+        product,
+        quantity: normalizeCartQuantity(itemQuantity, product),
       };
     },
 

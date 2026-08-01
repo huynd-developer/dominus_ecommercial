@@ -1,8 +1,11 @@
 package org.example.datn_sd69.modules.order.service.impl;
 
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.Order;
+import org.example.datn_sd69.entity.OrderDeliveryEvidence;
 import org.example.datn_sd69.entity.OrderItem;
 import org.example.datn_sd69.entity.ProductVariant;
 import org.example.datn_sd69.entity.ReturnRequest;
@@ -12,8 +15,12 @@ import org.example.datn_sd69.modules.order.dto.response.AdminOrderItemResponse;
 import org.example.datn_sd69.modules.order.dto.response.AdminReturnItemResponse;
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderResponse;
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderStatusCountResponse;
+import org.example.datn_sd69.modules.order.dto.request.AdminCancelOrderRequest;
+import org.example.datn_sd69.modules.order.dto.request.MarkDeliveryCompletedRequest;
+import org.example.datn_sd69.modules.order.dto.request.MarkDeliveryFailedRequest;
 import org.example.datn_sd69.modules.order.dto.request.RejectReturnRequest;
 import org.example.datn_sd69.modules.order.service.AdminOrderService;
+import org.example.datn_sd69.repository.OrderDeliveryEvidenceRepository;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
 import org.example.datn_sd69.repository.ReturnRequestItemRepository;
@@ -23,9 +30,15 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.io.IOException;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -36,7 +49,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+
+import org.example.datn_sd69.entity.User;
+import org.example.datn_sd69.repository.UserRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -65,6 +82,40 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private static final int MEDIA_TYPE_IMAGE = 1;
     private static final int MEDIA_TYPE_VIDEO = 2;
 
+    private static final int DELIVERY_EVIDENCE_TYPE_SUCCESS = 1;
+    private static final int DELIVERY_EVIDENCE_TYPE_FAILED = 2;
+
+    private static final Set<String> DELIVERY_FAILED_REASONS = Set.of(
+            "Không liên hệ được khách hàng",
+            "Khách từ chối nhận hàng",
+            "Sai hoặc thiếu địa chỉ giao hàng",
+            "Không có người nhận hàng",
+            "Hàng bị hư hỏng khi giao",
+            "Khách hẹn giao lại nhưng shop không thể tiếp tục giao",
+            "Khác"
+    );
+
+    private static final Set<String> DELIVERY_FAILED_REQUIRES_EVIDENCE_REASONS = Set.of(
+            "Không liên hệ được khách hàng",
+            "Khách từ chối nhận hàng",
+            "Sai hoặc thiếu địa chỉ giao hàng",
+            "Hàng bị hư hỏng khi giao",
+            "Khác"
+    );
+
+    private static final int MAX_DELIVERY_IMAGE_COUNT = 2;
+
+    private static final Set<String> ALLOWED_DELIVERY_IMAGE_EXTENSIONS = Set.of(
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".webp"
+    );
+
+    private static final long MAX_DELIVERY_IMAGE_SIZE = 10L * 1024L * 1024L;
+
+    private static final String DELIVERY_EVIDENCE_CLOUDINARY_FOLDER = "order-delivery-evidence";
+
     private static final Set<Integer> VALID_ORDER_STATUSES = Set.of(
             STATUS_PENDING,
             STATUS_CONFIRMED,
@@ -81,18 +132,40 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             "IN_STORE"
     );
 
+    private static final Set<String> ADMIN_CANCEL_REASONS = Set.of(
+            "Khách yêu cầu hủy đơn",
+            "Không liên hệ được khách hàng",
+            "Thông tin nhận hàng không hợp lệ",
+            "Sản phẩm tạm hết hàng",
+            "Khách đặt trùng đơn",
+            "Đơn hàng có dấu hiệu bất thường",
+            "Sai giá / sai thông tin sản phẩm",
+            "Khác"
+    );
+
     private final OrderRepository orderRepository;
+    private final OrderDeliveryEvidenceRepository orderDeliveryEvidenceRepository;
     private final OrderItemRepository orderItemRepository;
     private final ReturnRequestRepository returnRequestRepository;
     private final ReturnRequestItemRepository returnRequestItemRepository;
     private final ReturnRequestMediaRepository returnRequestMediaRepository;
+    private final UserRepository userRepository;
+    private final Cloudinary cloudinary;
     private final EntityManager entityManager;
+
     private record KeywordDateRange(
             String keyword,
             LocalDateTime fromDateTime,
             LocalDateTime toDateTime
     ) {
     }
+
+    private record AdminActorInfo(
+            String displayName,
+            String email
+    ) {
+    }
+
     @Override
     @Transactional(readOnly = true)
     public Page<AdminOrderResponse> getOrders(
@@ -153,6 +226,151 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     public AdminOrderResponse getOrderDetail(Integer orderId) {
         Order order = findOrderOrThrow(orderId);
         return mapOrderToResponse(order, true);
+    }
+
+    @Override
+    @Transactional
+    public AdminOrderResponse markDeliveryCompleted(
+            Integer orderId,
+            MarkDeliveryCompletedRequest request
+    ) {
+        Order order = findOrderOrThrow(orderId);
+
+        if (safeStatus(order) != STATUS_SHIPPING) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ được xác nhận giao hàng thành công khi đơn đang giao hàng"
+            );
+        }
+
+        List<MultipartFile> files = request == null ? List.of() : request.getFiles();
+        validateDeliveryEvidenceFiles(files, true);
+
+        LocalDateTime now = LocalDateTime.now();
+
+        order.setStatus(STATUS_COMPLETED);
+        order.setCompletedAt(now);
+        order.setDeliveryCompletedByName(getCurrentAdminDisplayName());
+
+        Order savedOrder = orderRepository.save(order);
+
+        saveDeliveryEvidenceFiles(savedOrder, files, DELIVERY_EVIDENCE_TYPE_SUCCESS);
+
+        return mapOrderToResponse(savedOrder, true);
+    }
+
+    @Override
+    @Transactional
+    public AdminOrderResponse markDeliveryFailed(
+            Integer orderId,
+            MarkDeliveryFailedRequest request
+    ) {
+        Order order = findOrderOrThrow(orderId);
+
+        if (safeStatus(order) != STATUS_SHIPPING) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ được xác nhận giao hàng thất bại khi đơn đang giao hàng"
+            );
+        }
+
+        String reason = normalizeDeliveryFailedReason(request);
+        String description = normalizeDeliveryFailedDescription(request);
+
+        if ("Khác".equals(reason) && description == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Vui lòng nhập mô tả chi tiết khi chọn lý do Khác"
+            );
+        }
+
+        List<MultipartFile> files = request == null ? List.of() : request.getFiles();
+        boolean evidenceRequired = DELIVERY_FAILED_REQUIRES_EVIDENCE_REASONS.contains(reason);
+        validateDeliveryEvidenceFiles(files, evidenceRequired);
+
+        LocalDateTime now = LocalDateTime.now();
+
+        order.setStatus(STATUS_DELIVERY_FAILED);
+        order.setDeliveryFailedReason(reason);
+        order.setDeliveryFailedDescription(description);
+        order.setDeliveryFailedAt(now);
+        order.setDeliveryFailedByName(getCurrentAdminDisplayName());
+
+        applyDeliveryFailedRefundInfo(order);
+
+        Order savedOrder = orderRepository.save(order);
+
+        saveDeliveryEvidenceFiles(savedOrder, files, DELIVERY_EVIDENCE_TYPE_FAILED);
+
+        return mapOrderToResponse(savedOrder, true);
+    }
+
+    @Override
+    @Transactional
+    public AdminOrderResponse markDeliveryRefunded(Integer orderId) {
+        Order order = findOrderOrThrow(orderId);
+
+        if (safeStatus(order) != STATUS_DELIVERY_FAILED) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ được xác nhận hoàn tiền cho đơn giao hàng thất bại"
+            );
+        }
+
+        BigDecimal refundAmount = defaultMoney(order.getDeliveryRefundAmount());
+
+        if (refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Đơn hàng này không phát sinh hoàn tiền giao thất bại"
+            );
+        }
+
+        if (!hasDeliveryRefundBankInfo(order)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Khách chưa cung cấp đủ thông tin tài khoản hoàn tiền"
+            );
+        }
+
+        if (order.getDeliveryRefundedAt() != null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Đơn hàng này đã được xác nhận hoàn tiền"
+            );
+        }
+
+        order.setDeliveryRefundedAt(LocalDateTime.now());
+        order.setDeliveryRefundedByName(getCurrentAdminDisplayName());
+
+        Order savedOrder = orderRepository.save(order);
+
+        return mapOrderToResponse(savedOrder, true);
+    }
+
+    @Override
+    @Transactional
+    public AdminOrderResponse cancelOrder(Integer orderId, AdminCancelOrderRequest request) {
+        Order order = findOrderOrThrow(orderId);
+
+        if (safeStatus(order) != STATUS_PENDING) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ được hủy đơn hàng khi đơn còn ở trạng thái chờ xác nhận"
+            );
+        }
+
+        String cancelReason = normalizeAdminCancelReason(request);
+
+        restoreStockWhenAdminCancel(order);
+
+        order.setStatus(STATUS_CANCELLED);
+        order.setCancelReason(cancelReason);
+        order.setCancelledAt(LocalDateTime.now());
+
+        Order savedOrder = orderRepository.save(order);
+
+        return mapOrderToResponse(savedOrder, true);
     }
 
     @Override
@@ -311,6 +529,91 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                 && Integer.valueOf(status).equals(item.getStatus()));
     }
 
+    private String normalizeAdminCancelReason(AdminCancelOrderRequest request) {
+        if (request == null || request.reason() == null || request.reason().trim().isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Vui lòng chọn lý do hủy đơn"
+            );
+        }
+
+        String reason = request.reason()
+                .trim()
+                .replaceAll("[\r\n\t]+", " ")
+                .replaceAll("\\s{2,}", " ");
+
+        if (!ADMIN_CANCEL_REASONS.contains(reason)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Lý do hủy đơn không hợp lệ"
+            );
+        }
+
+        String description = request.description() == null
+                ? null
+                : request.description()
+                .trim()
+                .replaceAll("[\r\n\t]+", " ")
+                .replaceAll("\\s{2,}", " ");
+
+        if (description != null && description.isEmpty()) {
+            description = null;
+        }
+
+        if ("Khác".equals(reason) && description == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Vui lòng nhập mô tả chi tiết khi chọn lý do Khác"
+            );
+        }
+
+        if (description != null && description.length() < 5) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Mô tả hủy đơn phải có ít nhất 5 ký tự"
+            );
+        }
+
+        String fullReason = description == null ? reason : reason + " - " + description;
+
+        if (fullReason.length() > 255) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Lý do hủy đơn không được vượt quá 255 ký tự"
+            );
+        }
+
+        return fullReason;
+    }
+
+    private void restoreStockWhenAdminCancel(Order order) {
+        if (order == null || order.getId() == null) {
+            return;
+        }
+
+        List<OrderItem> orderItems = orderItemRepository.findDetailByOrderId(order.getId());
+
+        if (orderItems == null || orderItems.isEmpty()) {
+            return;
+        }
+
+        for (OrderItem item : orderItems) {
+            if (item == null || item.getProductVariant() == null) {
+                continue;
+            }
+
+            ProductVariant variant = item.getProductVariant();
+            int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+
+            if (quantity <= 0) {
+                continue;
+            }
+
+            int currentStock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
+            variant.setStockQuantity(currentStock + quantity);
+        }
+    }
+
     private String normalizeRejectReason(RejectReturnRequest request) {
         if (request == null || request.reason() == null || request.reason().trim().isEmpty()) {
             throw new ResponseStatusException(
@@ -322,7 +625,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         String reason = request.reason()
                 .trim()
                 .replaceAll("[\r\n\t]+", " ")
-                .replaceAll("\s{2,}", " ");
+                .replaceAll("\\s{2,}", " ");
 
         if (reason.length() < 5) {
             throw new ResponseStatusException(
@@ -339,6 +642,519 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         }
 
         return reason;
+    }
+
+    private String normalizeDeliveryFailedReason(MarkDeliveryFailedRequest request) {
+        String reason = request == null ? null : normalizeOptionalText(request.getReason());
+
+        if (reason == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Vui lòng chọn lý do giao hàng thất bại"
+            );
+        }
+
+        if (!DELIVERY_FAILED_REASONS.contains(reason)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Lý do giao hàng thất bại không hợp lệ"
+            );
+        }
+
+        return reason;
+    }
+
+    private String normalizeDeliveryFailedDescription(MarkDeliveryFailedRequest request) {
+        String description = request == null ? null : normalizeOptionalText(request.getDescription());
+
+        if (description == null) {
+            return null;
+        }
+
+        if (description.length() < 5) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Mô tả giao hàng thất bại phải có ít nhất 5 ký tự"
+            );
+        }
+
+        if (description.length() > 500) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Mô tả giao hàng thất bại không được vượt quá 500 ký tự"
+            );
+        }
+
+        return description;
+    }
+
+    private void validateDeliveryEvidenceFiles(
+            List<MultipartFile> mediaFiles,
+            boolean required
+    ) {
+        List<MultipartFile> files = normalizeMultipartFiles(mediaFiles);
+
+        if (required && files.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Vui lòng tải lên ảnh minh chứng giao hàng"
+            );
+        }
+
+        if (files.size() > MAX_DELIVERY_IMAGE_COUNT) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ được tải tối đa 2 ảnh minh chứng giao hàng"
+            );
+        }
+
+        for (MultipartFile file : files) {
+            validateSingleDeliveryEvidenceImage(file);
+        }
+    }
+
+    private void validateSingleDeliveryEvidenceImage(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            return;
+        }
+
+        String filename = file.getOriginalFilename() == null
+                ? ""
+                : file.getOriginalFilename().trim();
+        String extension = getFileExtension(filename);
+
+        if (extension.isBlank() || !ALLOWED_DELIVERY_IMAGE_EXTENSIONS.contains(extension)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ảnh minh chứng chỉ hỗ trợ JPG, JPEG, PNG hoặc WEBP"
+            );
+        }
+
+        String contentType = file.getContentType() == null
+                ? ""
+                : file.getContentType().trim().toLowerCase(Locale.ROOT);
+
+        if (!contentType.isBlank() && !contentType.startsWith("image/")) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ được tải lên file ảnh minh chứng"
+            );
+        }
+
+        if (file.getSize() > MAX_DELIVERY_IMAGE_SIZE) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Mỗi ảnh minh chứng không được vượt quá 10MB"
+            );
+        }
+    }
+
+    private String getFileExtension(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return "";
+        }
+
+        String cleanFilename = Paths.get(filename).getFileName().toString();
+        int dotIndex = cleanFilename.lastIndexOf('.');
+
+        if (dotIndex < 0 || dotIndex == cleanFilename.length() - 1) {
+            return "";
+        }
+
+        return cleanFilename.substring(dotIndex).toLowerCase(Locale.ROOT);
+    }
+
+    private void saveDeliveryEvidenceFiles(
+            Order order,
+            List<MultipartFile> mediaFiles,
+            Integer evidenceType
+    ) {
+        List<MultipartFile> files = normalizeMultipartFiles(mediaFiles);
+
+        if (files.isEmpty()) {
+            return;
+        }
+
+        List<OrderDeliveryEvidence> evidences = new ArrayList<>();
+
+        for (MultipartFile file : files) {
+            String imageUrl = uploadDeliveryEvidenceFile(file);
+
+            OrderDeliveryEvidence evidence = new OrderDeliveryEvidence();
+            evidence.setOrder(order);
+            evidence.setEvidenceType(evidenceType);
+            evidence.setImageUrl(imageUrl);
+            evidence.setCreatedAt(LocalDateTime.now());
+
+            evidences.add(evidence);
+        }
+
+        orderDeliveryEvidenceRepository.saveAll(evidences);
+    }
+
+    private String uploadDeliveryEvidenceFile(MultipartFile file) {
+        try {
+            Map<?, ?> uploadResult = cloudinary.uploader().upload(
+                    file.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder",
+                            DELIVERY_EVIDENCE_CLOUDINARY_FOLDER,
+                            "resource_type",
+                            "image"
+                    )
+            );
+
+            Object secureUrl = uploadResult.get("secure_url");
+
+            if (secureUrl == null || secureUrl.toString().isBlank()) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Không lấy được đường dẫn ảnh minh chứng sau khi tải lên"
+                );
+            }
+
+            return secureUrl.toString();
+        } catch (IOException exception) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Không thể tải ảnh minh chứng giao hàng"
+            );
+        }
+    }
+
+    private List<MultipartFile> normalizeMultipartFiles(List<MultipartFile> mediaFiles) {
+        if (mediaFiles == null || mediaFiles.isEmpty()) {
+            return List.of();
+        }
+
+        return mediaFiles.stream()
+                .filter(file -> file != null && !file.isEmpty())
+                .toList();
+    }
+
+    private List<String> getDeliveryEvidenceUrls(Order order, Integer evidenceType) {
+        if (order == null || order.getId() == null) {
+            return new ArrayList<>();
+        }
+
+        return orderDeliveryEvidenceRepository
+                .findByOrder_IdAndEvidenceTypeOrderByCreatedAtAsc(order.getId(), evidenceType)
+                .stream()
+                .map(OrderDeliveryEvidence::getImageUrl)
+                .filter(url -> url != null && !url.trim().isEmpty())
+                .toList();
+    }
+
+    private String getCurrentAdminDisplayName() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return "Nhân viên cửa hàng";
+        }
+
+        String email = normalizeOptionalText(authentication.getName());
+
+        if (email == null) {
+            return "Nhân viên cửa hàng";
+        }
+
+        return resolveUserDisplayNameByEmail(email);
+    }
+
+    /**
+     * Lấy tên thật của nhân viên/admin theo email đăng nhập.
+     * Giá trị trả về được lưu vào các cột Delivery...ByName theo dạng:
+     * Dòng 1: Tên người thao tác
+     * Dòng 2: Email đăng nhập
+     */
+    private String resolveUserDisplayNameByEmail(String email) {
+        String cleanEmail = normalizeOptionalText(email);
+
+        if (cleanEmail == null) {
+            return "Nhân viên cửa hàng";
+        }
+
+        return formatAdminActorInfo(findAdminActorInfo(cleanEmail), cleanEmail);
+    }
+
+    private AdminActorInfo findAdminActorInfo(String principalName) {
+        String cleanPrincipalName = normalizeOptionalText(principalName);
+
+        if (cleanPrincipalName == null) {
+            return new AdminActorInfo(null, null);
+        }
+
+        try {
+            User user = userRepository.findByEmailIgnoreCase(cleanPrincipalName).orElse(null);
+
+            if (user != null) {
+                return new AdminActorInfo(
+                        normalizeOptionalText(user.getName()),
+                        normalizeOptionalText(user.getEmail())
+                );
+            }
+        } catch (Exception ignored) {
+            // Không để lỗi lấy entity người dùng làm hỏng luồng xử lý đơn.
+        }
+
+        try {
+            List<?> result = entityManager
+                    .createNativeQuery("SELECT TOP 1 Name, Email FROM dbo.Users WHERE LOWER(Email) = LOWER(:principalName)")
+                    .setParameter("principalName", cleanPrincipalName)
+                    .getResultList();
+
+            if (!result.isEmpty()) {
+                Object row = result.get(0);
+
+                if (row instanceof Object[] values) {
+                    String displayName = values.length > 0 ? normalizeObjectText(values[0]) : null;
+                    String email = values.length > 1 ? normalizeObjectText(values[1]) : null;
+
+                    return new AdminActorInfo(displayName, email);
+                }
+            }
+        } catch (Exception ignored) {
+            // Không để lỗi truy vấn thông tin người dùng làm hỏng luồng xử lý đơn.
+        }
+
+        if (isEmailLike(cleanPrincipalName)) {
+            return new AdminActorInfo(null, cleanPrincipalName);
+        }
+
+        return new AdminActorInfo(cleanPrincipalName, null);
+    }
+
+    private String normalizeObjectText(Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        return normalizeOptionalText(value.toString());
+    }
+
+    /**
+     * Chuẩn hóa lại dữ liệu người xác nhận trước khi trả ra FE.
+     * Nếu dữ liệu cũ trong DB chỉ là email, service sẽ lookup Users để bổ sung tên thật.
+     */
+    private String normalizeActorDisplayName(String value) {
+        String cleanValue = normalizeActorText(value);
+
+        if (cleanValue == null) {
+            return null;
+        }
+
+        String extractedEmail = extractEmail(cleanValue);
+
+        if (cleanValue.contains("\n")) {
+            String[] lines = cleanValue.split("\\R+");
+            String displayName = lines.length > 0 ? normalizeOptionalText(lines[0]) : null;
+            String email = extractedEmail;
+
+            if (email != null) {
+                AdminActorInfo actorInfo = findAdminActorInfo(email);
+                String resolvedName = normalizeOptionalText(actorInfo.displayName());
+
+                if (resolvedName != null
+                        && !resolvedName.equalsIgnoreCase(email)
+                        && (displayName == null || "Nhân viên cửa hàng".equalsIgnoreCase(displayName))) {
+                    displayName = resolvedName;
+                }
+            }
+
+            if (displayName != null && email != null && !displayName.equalsIgnoreCase(email)) {
+                return truncateDeliveryActorInfo(displayName + "\n" + email);
+            }
+
+            if (email != null) {
+                return resolveUserDisplayNameByEmail(email);
+            }
+
+            return truncateDeliveryActorInfo(cleanValue);
+        }
+
+        if (isEmailLike(cleanValue)) {
+            return resolveUserDisplayNameByEmail(cleanValue);
+        }
+
+        if (extractedEmail != null) {
+            AdminActorInfo actorInfo = findAdminActorInfo(extractedEmail);
+            String resolvedName = normalizeOptionalText(actorInfo.displayName());
+
+            if (resolvedName != null && !resolvedName.equalsIgnoreCase(extractedEmail)) {
+                return truncateDeliveryActorInfo(resolvedName + "\n" + extractedEmail);
+            }
+        }
+
+        return truncateDeliveryActorInfo(cleanValue);
+    }
+
+    private String formatAdminActorInfo(AdminActorInfo actorInfo, String fallbackValue) {
+        String fallback = normalizeOptionalText(fallbackValue);
+        String displayName = actorInfo == null ? null : normalizeOptionalText(actorInfo.displayName());
+        String email = actorInfo == null ? null : normalizeOptionalText(actorInfo.email());
+
+        if (displayName != null && email != null && !displayName.equalsIgnoreCase(email)) {
+            return truncateDeliveryActorInfo(displayName + "\n" + email);
+        }
+
+        if (displayName != null) {
+            return truncateDeliveryActorInfo(displayName);
+        }
+
+        if (email != null) {
+            return truncateDeliveryActorInfo("Nhân viên cửa hàng\n" + email);
+        }
+
+        if (fallback != null) {
+            return truncateDeliveryActorInfo(fallback);
+        }
+
+        return "Nhân viên cửa hàng";
+    }
+
+    private String truncateDeliveryActorInfo(String value) {
+        String cleanValue = normalizeActorText(value);
+
+        if (cleanValue == null) {
+            return "Nhân viên cửa hàng";
+        }
+
+        if (cleanValue.length() <= 255) {
+            return cleanValue;
+        }
+
+        return cleanValue.substring(0, 255).trim();
+    }
+
+    private String normalizeActorText(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String cleanValue = value
+                .trim()
+                .replaceAll("\\r\\n|\\r", "\n")
+                .replaceAll("\\t+", " ");
+
+        String[] lines = cleanValue.split("\\n+");
+        List<String> cleanLines = new ArrayList<>();
+
+        for (String line : lines) {
+            String cleanLine = normalizeOptionalText(line);
+
+            if (cleanLine != null) {
+                cleanLines.add(cleanLine);
+            }
+        }
+
+        if (cleanLines.isEmpty()) {
+            return null;
+        }
+
+        return String.join("\n", cleanLines);
+    }
+
+    private String extractEmail(String value) {
+        String cleanValue = normalizeOptionalText(value);
+
+        if (cleanValue == null) {
+            return null;
+        }
+
+        String[] parts = cleanValue.split("\\s+");
+
+        for (String part : parts) {
+            String cleanPart = part
+                    .trim()
+                    .replaceAll("^[<({\\[]+", "")
+                    .replaceAll("[>)}\\],.;:]+$", "");
+
+            if (isEmailLike(cleanPart)) {
+                return cleanPart;
+            }
+        }
+
+        return null;
+    }
+
+    private boolean isEmailLike(String value) {
+        String cleanValue = normalizeOptionalText(value);
+
+        return cleanValue != null
+                && cleanValue.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
+    }
+
+    private void applyDeliveryFailedRefundInfo(Order order) {
+        if (order == null) {
+            return;
+        }
+
+        if (isPrepaidPaymentMethod(order.getPaymentMethod())) {
+            BigDecimal refundAmount = defaultMoney(order.getFinalAmount());
+
+            if (refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Số tiền cần hoàn không hợp lệ"
+                );
+            }
+
+            order.setDeliveryRefundAmount(refundAmount);
+            order.setDeliveryRefundedAt(null);
+            order.setDeliveryRefundedByName(null);
+            return;
+        }
+
+        order.setDeliveryRefundAmount(null);
+        order.setDeliveryRefundBankName(null);
+        order.setDeliveryRefundBankAccountNumber(null);
+        order.setDeliveryRefundBankAccountHolder(null);
+        order.setDeliveryRefundedAt(null);
+        order.setDeliveryRefundedByName(null);
+    }
+
+    private boolean isPrepaidPaymentMethod(String paymentMethod) {
+        String method = normalizeOptionalText(paymentMethod);
+
+        if (method == null) {
+            return false;
+        }
+
+        String upperMethod = method.toUpperCase(Locale.ROOT);
+
+        if (upperMethod.contains("COD")) {
+            return false;
+        }
+
+        return upperMethod.contains("VNPAY")
+                || upperMethod.contains("VIETQR")
+                || upperMethod.contains("QR")
+                || upperMethod.contains("BANK")
+                || upperMethod.contains("TRANSFER")
+                || upperMethod.contains("MOMO");
+    }
+
+    private boolean hasDeliveryRefundBankInfo(Order order) {
+        if (order == null) {
+            return false;
+        }
+
+        return normalizeOptionalText(order.getDeliveryRefundBankName()) != null
+                && normalizeOptionalText(order.getDeliveryRefundBankAccountNumber()) != null
+                && normalizeOptionalText(order.getDeliveryRefundBankAccountHolder()) != null;
+    }
+
+    private boolean isDeliveryRefundRequired(Order order) {
+        return order != null
+                && defaultMoney(order.getDeliveryRefundAmount()).compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    private boolean canMarkDeliveryRefunded(Order order) {
+        return order != null
+                && safeStatus(order) == STATUS_DELIVERY_FAILED
+                && isDeliveryRefundRequired(order)
+                && hasDeliveryRefundBankInfo(order)
+                && order.getDeliveryRefundedAt() == null;
     }
 
     private AdminOrderResponse mapOrderToResponse(Order order, boolean includeItems) {
@@ -375,13 +1191,31 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         response.setTotalAmount(defaultMoney(order.getTotalAmount()));
         response.setDiscountAmount(defaultMoney(order.getDiscountAmount()));
         response.setFinalAmount(defaultMoney(order.getFinalAmount()));
+        response.setShippingFee(defaultMoney(order.getShippingFee()));
 
         response.setPaymentMethod(order.getPaymentMethod());
         response.setStatus(order.getStatus());
         response.setStatusText(getStatusText(order.getStatus()));
         response.setCreatedAt(order.getCreatedAt());
         response.setCompletedAt(order.getCompletedAt());
-        response.setCancelReason(order.getCancelReason());
+        response.setDeliveryCompletedByName(normalizeActorDisplayName(order.getDeliveryCompletedByName()));
+        response.setDeliveryFailedReason(normalizeOptionalText(order.getDeliveryFailedReason()));
+        response.setDeliveryFailedDescription(normalizeOptionalText(order.getDeliveryFailedDescription()));
+        response.setDeliveryFailedAt(order.getDeliveryFailedAt());
+        response.setDeliveryFailedByName(normalizeActorDisplayName(order.getDeliveryFailedByName()));
+        response.setDeliveryRefundAmount(order.getDeliveryRefundAmount());
+        response.setDeliveryRefundBankName(normalizeOptionalText(order.getDeliveryRefundBankName()));
+        response.setDeliveryRefundBankAccountNumber(normalizeOptionalText(order.getDeliveryRefundBankAccountNumber()));
+        response.setDeliveryRefundBankAccountHolder(normalizeOptionalText(order.getDeliveryRefundBankAccountHolder()));
+        response.setDeliveryRefundedAt(order.getDeliveryRefundedAt());
+        response.setDeliveryRefundedByName(normalizeActorDisplayName(order.getDeliveryRefundedByName()));
+        response.setDeliveryRefundRequired(isDeliveryRefundRequired(order));
+        response.setDeliveryRefundBankInfoProvided(hasDeliveryRefundBankInfo(order));
+        response.setDeliveryRefundCompleted(order.getDeliveryRefundedAt() != null);
+        response.setCanMarkDeliveryRefunded(canMarkDeliveryRefunded(order));
+        response.setDeliverySuccessMediaUrls(getDeliveryEvidenceUrls(order, DELIVERY_EVIDENCE_TYPE_SUCCESS));
+        response.setDeliveryFailedMediaUrls(getDeliveryEvidenceUrls(order, DELIVERY_EVIDENCE_TYPE_FAILED));
+        response.setCancelReason(normalizeOptionalText(order.getCancelReason()));
         response.setCancelledAt(order.getCancelledAt());
 
         // BỔ SUNG TRƯỜNG NÀY ĐỂ TRẢ VỀ CHO VUE
@@ -412,13 +1246,20 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     }
 
     private int compareOrdersForAdminList(Order first, Order second) {
-        /*
-         * Tab Tất cả đơn phải giữ thứ tự thời gian của đơn hàng, không được
-         * đẩy riêng đơn yêu cầu hoàn hàng lên đầu. Đơn hoàn hàng chỉ nên được
-         * ưu tiên khi FE đang lọc đúng tab/trạng thái hoàn hàng.
-         */
-        LocalDateTime firstTime = getOrderSortTime(first);
-        LocalDateTime secondTime = getOrderSortTime(second);
+        boolean firstReturnRequested = safeStatus(first) == STATUS_RETURN_REQUESTED;
+        boolean secondReturnRequested = safeStatus(second) == STATUS_RETURN_REQUESTED;
+
+        if (firstReturnRequested != secondReturnRequested) {
+            return firstReturnRequested ? -1 : 1;
+        }
+
+        LocalDateTime firstTime = firstReturnRequested
+                ? getLatestReturnRequestedAt(first)
+                : getOrderSortTime(first);
+
+        LocalDateTime secondTime = secondReturnRequested
+                ? getLatestReturnRequestedAt(second)
+                : getOrderSortTime(second);
 
         int timeCompare = Comparator
                 .nullsLast(LocalDateTime::compareTo)
@@ -439,11 +1280,11 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             return null;
         }
 
-        if (order.getCreatedAt() != null) {
-            return order.getCreatedAt();
+        if (order.getCompletedAt() != null) {
+            return order.getCompletedAt();
         }
 
-        return order.getCompletedAt();
+        return order.getCreatedAt();
     }
 
     private LocalDateTime getLatestReturnRequestedAt(Order order) {
@@ -489,14 +1330,19 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         response.setReturnDescription(returnRequest.getDescription());
         response.setReturnRequestedAt(returnRequest.getCreatedAt());
         response.setRefundMethod(formatRefundMethod(returnRequest.getRefundMethod()));
-        response.setReturnRefundAmount(defaultMoney(returnRequest.getRefundAmount()));
-        response.setRefundAmount(defaultMoney(returnRequest.getRefundAmount()));
-        response.setBankName(returnRequest.getBankName());
-        response.setBankAccountNumber(returnRequest.getBankAccountNumber());
-        response.setBankAccountHolder(returnRequest.getBankAccountHolder());
 
         List<ReturnRequestItem> returnItems =
                 returnRequestItemRepository.findByReturnRequest_IdWithOrderItemDetail(returnRequest.getId());
+
+        BigDecimal returnShippingFee = resolveReturnShippingFee(order, returnRequest);
+        BigDecimal returnRefundAmount = resolveReturnRefundAmount(returnRequest, returnItems, returnShippingFee);
+
+        response.setReturnRefundAmount(returnRefundAmount);
+        response.setRefundAmount(returnRefundAmount);
+        response.setReturnShippingFee(returnShippingFee);
+        response.setBankName(returnRequest.getBankName());
+        response.setBankAccountNumber(returnRequest.getBankAccountNumber());
+        response.setBankAccountHolder(returnRequest.getBankAccountHolder());
 
         String processStatus = resolveReturnProcessStatus(returnItems);
         response.setReturnProcessStatus(processStatus);
@@ -557,6 +1403,120 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         return status == STATUS_RETURN_REQUESTED
                 || status == STATUS_RETURN_COMPLETED
                 || returnRequest != null;
+    }
+
+    private BigDecimal resolveReturnShippingFee(Order order, ReturnRequest returnRequest) {
+        if (order == null || returnRequest == null) {
+            return BigDecimal.ZERO;
+        }
+
+        List<OrderItem> orderItems = orderItemRepository.findByOrderId(order.getId());
+        List<ReturnRequestItem> returnItems = returnRequestItemRepository.findByReturnRequest_IdWithOrderItemDetail(returnRequest.getId());
+
+        if (!isFullOrderReturn(orderItems, returnItems)) {
+            return BigDecimal.ZERO;
+        }
+
+        if (!isShopFaultReturnReason(returnRequest.getReturnType(), returnRequest.getReason())) {
+            return BigDecimal.ZERO;
+        }
+
+        return defaultMoney(order.getShippingFee());
+    }
+
+    private boolean isFullOrderReturn(List<OrderItem> orderItems, List<ReturnRequestItem> returnItems) {
+        if (orderItems == null || orderItems.isEmpty() || returnItems == null || returnItems.isEmpty()) {
+            return false;
+        }
+
+        for (OrderItem orderItem : orderItems) {
+            if (orderItem == null || orderItem.getId() == null) {
+                continue;
+            }
+
+            Integer orderedQuantity = orderItem.getQuantity();
+            if (orderedQuantity == null || orderedQuantity <= 0) {
+                continue;
+            }
+
+            Integer returnQuantity = returnItems.stream()
+                    .filter(item -> item != null
+                            && item.getOrderItem() != null
+                            && orderItem.getId().equals(item.getOrderItem().getId()))
+                    .map(ReturnRequestItem::getReturnQuantity)
+                    .findFirst()
+                    .orElse(null);
+
+            if (returnQuantity == null || !returnQuantity.equals(orderedQuantity)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private boolean isShopFaultReturnReason(Integer returnType, String reason) {
+        String cleanReason = reason == null ? "" : reason.trim();
+
+        if (cleanReason.isEmpty()) {
+            return false;
+        }
+
+        if (Integer.valueOf(RETURN_TYPE_RECEIVED_WITH_PROBLEM_VALUE).equals(returnType)) {
+            return cleanReason.equals("Thiếu hàng")
+                    || cleanReason.equals("Người bán gửi sai hàng")
+                    || cleanReason.startsWith("Hàng bể vỡ")
+                    || cleanReason.equals("Hàng lỗi, không hoạt động")
+                    || cleanReason.equals("Hàng hết hạn sử dụng")
+                    || cleanReason.equals("Khác với mô tả")
+                    || cleanReason.equals("Hàng đã qua sử dụng")
+                    || cleanReason.equals("Hàng giả, nhái");
+        }
+
+        if (Integer.valueOf(RETURN_TYPE_NOT_RECEIVED_OR_MISSING_VALUE).equals(returnType)) {
+            return cleanReason.equals("Chưa nhận được hàng")
+                    || cleanReason.equals("Thiếu hàng")
+                    || cleanReason.equals("Thùng hàng rỗng");
+        }
+
+        return false;
+    }
+
+    private BigDecimal resolveReturnRefundAmount(
+            ReturnRequest returnRequest,
+            List<ReturnRequestItem> returnItems,
+            BigDecimal returnShippingFee
+    ) {
+        if (returnRequest == null) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal storedRefundAmount = defaultMoney(returnRequest.getRefundAmount());
+        BigDecimal shippingFee = defaultMoney(returnShippingFee);
+
+        if (shippingFee.compareTo(BigDecimal.ZERO) <= 0) {
+            return storedRefundAmount;
+        }
+
+        BigDecimal itemRefundTotal = returnItems == null
+                ? BigDecimal.ZERO
+                : returnItems.stream()
+                .filter(item -> item != null)
+                .map(ReturnRequestItem::getRefundAmount)
+                .map(this::defaultMoney)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal expectedTotalWithShipping = itemRefundTotal.add(shippingFee);
+
+        if (storedRefundAmount.compareTo(expectedTotalWithShipping) >= 0) {
+            return storedRefundAmount;
+        }
+
+        if (storedRefundAmount.compareTo(itemRefundTotal) <= 0) {
+            return storedRefundAmount.add(shippingFee);
+        }
+
+        return storedRefundAmount;
     }
 
     private String formatReturnType(Integer returnType) {
@@ -855,13 +1815,13 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         try {
             return entityManager.createQuery(
                             """
-                            SELECT img.imageUrl
-                            FROM ProductImage img
-                            WHERE img.product.id = :productId
-                              AND img.imageUrl IS NOT NULL
-                              AND img.imageUrl <> ''
-                            ORDER BY img.id ASC
-                            """,
+                                    SELECT img.imageUrl
+                                    FROM ProductImage img
+                                    WHERE img.product.id = :productId
+                                      AND img.imageUrl IS NOT NULL
+                                      AND img.imageUrl <> ''
+                                    ORDER BY img.id ASC
+                                    """,
                             String.class
                     )
                     .setParameter("productId", variant.getProduct().getId())
@@ -883,6 +1843,19 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         }
 
         String cleanValue = imageUrl.trim();
+
+        return cleanValue.isEmpty() ? null : cleanValue;
+    }
+
+    private String normalizeOptionalText(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String cleanValue = value
+                .trim()
+                .replaceAll("[\r\n\t]+", " ")
+                .replaceAll("\\s{2,}", " ");
 
         return cleanValue.isEmpty() ? null : cleanValue;
     }
@@ -1115,6 +2088,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         return value + "ml";
     }
+
     @Override
     @Transactional(readOnly = true)
     public AdminOrderStatusCountResponse getStatusCounts(

@@ -1,4 +1,10 @@
-export type ReportFilterType = "DAY" | "WEEK" | "MONTH" | "YEAR" | "CUSTOM";
+export type ReportFilterType =
+  | "DAY"
+  | "WEEK"
+  | "MONTH"
+  | "QUARTER"
+  | "YEAR"
+  | "CUSTOM";
 
 export interface ReportFilterParams {
   filterType: ReportFilterType;

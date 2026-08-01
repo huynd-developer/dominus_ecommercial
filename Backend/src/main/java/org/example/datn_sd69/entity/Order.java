@@ -88,6 +88,46 @@ public class Order extends BaseEntity {
     @Column(name = "CompletedAt")
     private LocalDateTime completedAt;
 
+    @Nationalized
+    @Column(name = "DeliveryCompletedByName", length = 255)
+    private String deliveryCompletedByName;
+
+    @Nationalized
+    @Column(name = "DeliveryFailedReason", length = 255)
+    private String deliveryFailedReason;
+
+    @Nationalized
+    @Column(name = "DeliveryFailedDescription", length = 500)
+    private String deliveryFailedDescription;
+
+    @Column(name = "DeliveryFailedAt")
+    private LocalDateTime deliveryFailedAt;
+
+    @Nationalized
+    @Column(name = "DeliveryFailedByName", length = 255)
+    private String deliveryFailedByName;
+
+    @Column(name = "DeliveryRefundAmount")
+    private BigDecimal deliveryRefundAmount;
+
+    @Nationalized
+    @Column(name = "DeliveryRefundBankName", length = 255)
+    private String deliveryRefundBankName;
+
+    @Column(name = "DeliveryRefundBankAccountNumber", length = 50)
+    private String deliveryRefundBankAccountNumber;
+
+    @Nationalized
+    @Column(name = "DeliveryRefundBankAccountHolder", length = 255)
+    private String deliveryRefundBankAccountHolder;
+
+    @Column(name = "DeliveryRefundedAt")
+    private LocalDateTime deliveryRefundedAt;
+
+    @Nationalized
+    @Column(name = "DeliveryRefundedByName", length = 255)
+    private String deliveryRefundedByName;
+
     @Column(name = "IsPaymentReported", nullable = false)
     private Boolean isPaymentReported = false;
 

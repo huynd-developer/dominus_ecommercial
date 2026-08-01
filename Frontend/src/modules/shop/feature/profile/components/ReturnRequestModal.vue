@@ -540,6 +540,11 @@
                   <strong>-{{ formatMoney(selectedVoucherDiscount) }}</strong>
                 </div>
 
+                <div v-if="returnShippingFee > 0" class="refund-line shipping">
+                  <span>Phí vận chuyển được hoàn</span>
+                  <strong>+{{ formatMoney(returnShippingFee) }}</strong>
+                </div>
+
                 <div class="refund-line receive">
                   <span>Số tiền hoàn nhận được</span>
                   <strong>{{ formatMoney(refundAmount) }}</strong>
@@ -945,7 +950,7 @@ const selectedReturnSubtotal = computed(() => {
   );
 });
 
-const refundAmount = computed(() => {
+const selectedProductRefundAmount = computed(() => {
   if (!props.order?.items?.length) {
     return 0;
   }
@@ -957,9 +962,45 @@ const refundAmount = computed(() => {
   );
 });
 
+const orderShippingFee = computed(() => {
+  return getFirstPositiveMoneyByKeys(props.order || {}, [
+    "shippingFee",
+    "shippingfee",
+    "shippingFeeAmount",
+    "shipFee",
+    "deliveryFee",
+    "shippingAmount",
+  ]);
+});
+
+const isFullOrderReturn = computed(() => {
+  if (!props.order?.items?.length) {
+    return false;
+  }
+
+  return props.order.items.every((item) => {
+    return (
+      isReturnItemSelected(item) &&
+      getReturnItemQuantity(item) === getOrderItemQuantity(item)
+    );
+  });
+});
+
+const shouldRefundShippingFee = computed(() => {
+  return isFullOrderReturn.value && Boolean(selectedReason.value);
+});
+
+const returnShippingFee = computed(() => {
+  return shouldRefundShippingFee.value ? orderShippingFee.value : 0;
+});
+
+const refundAmount = computed(() => {
+  return roundMoneyAmount(selectedProductRefundAmount.value + returnShippingFee.value);
+});
+
 const selectedVoucherDiscount = computed(() => {
   return roundMoneyAmount(
-    Math.max(0, selectedReturnSubtotal.value - refundAmount.value)
+    Math.max(0, selectedReturnSubtotal.value - selectedProductRefundAmount.value)
   );
 });
 
@@ -2058,9 +2099,12 @@ function handleImageError(event: Event) {
   font-size: 14px;
   font-weight: 800;
   line-height: 1.35;
+
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+
   overflow: hidden;
 }
 

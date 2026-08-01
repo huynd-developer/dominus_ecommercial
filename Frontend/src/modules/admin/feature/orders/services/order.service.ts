@@ -1,7 +1,10 @@
 import api from "@/common/api";
 import type {
+  AdminCancelOrderRequest,
   AdminOrderResponse,
   AdminOrderStatusCountResponse,
+  MarkDeliveryCompletedRequest,
+  MarkDeliveryFailedRequest,
   OrderSearchParams,
   OrderStatusCountParams,
   PageResponse,
@@ -10,6 +13,36 @@ import type {
 } from "../types/order.type";
 
 const ORDER_ADMIN_API = "/admin/orders";
+
+function buildDeliveryCompletedFormData(data: MarkDeliveryCompletedRequest) {
+  const formData = new FormData();
+
+  (data.files || []).forEach((file) => {
+    if (file) {
+      formData.append("files", file);
+    }
+  });
+
+  return formData;
+}
+
+function buildDeliveryFailedFormData(data: MarkDeliveryFailedRequest) {
+  const formData = new FormData();
+
+  formData.append("reason", data.reason || "");
+
+  if (data.description) {
+    formData.append("description", data.description);
+  }
+
+  (data.files || []).forEach((file) => {
+    if (file) {
+      formData.append("files", file);
+    }
+  });
+
+  return formData;
+}
 
 export const orderService = {
   async getOrders(params: OrderSearchParams) {
@@ -69,6 +102,69 @@ export const orderService = {
       {
         status,
       }
+    );
+
+    return response.data;
+  },
+
+  /**
+   * Admin hủy đơn khi đơn còn ở trạng thái Chờ xác nhận.
+   * BE sẽ lưu lý do hủy và thời gian hủy để admin/khách xem lại.
+   */
+  async cancelOrder(orderId: number, data: AdminCancelOrderRequest) {
+    const response = await api.patch<AdminOrderResponse>(
+      `${ORDER_ADMIN_API}/${orderId}/cancel`,
+      data
+    );
+
+    return response.data;
+  },
+
+  /**
+   * Xác nhận giao hàng thành công.
+   * Bắt buộc gửi ảnh minh chứng.
+   */
+  async markDeliveryCompleted(
+    orderId: number,
+    data: MarkDeliveryCompletedRequest
+  ) {
+    const response = await api.patch<AdminOrderResponse>(
+      `${ORDER_ADMIN_API}/${orderId}/delivery-completed`,
+      buildDeliveryCompletedFormData(data),
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+
+    return response.data;
+  },
+
+  /**
+   * Xác nhận giao hàng thất bại.
+   * Bắt buộc có lý do, mô tả nếu chọn Khác, ảnh nếu lý do nhạy cảm.
+   */
+  async markDeliveryFailed(orderId: number, data: MarkDeliveryFailedRequest) {
+    const response = await api.patch<AdminOrderResponse>(
+      `${ORDER_ADMIN_API}/${orderId}/delivery-failed`,
+      buildDeliveryFailedFormData(data),
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+
+    return response.data;
+  },
+
+  /**
+   * Admin xác nhận đã hoàn tiền thực tế cho đơn giao hàng thất bại.
+   */
+  async markDeliveryRefunded(orderId: number) {
+    const response = await api.patch<AdminOrderResponse>(
+      `${ORDER_ADMIN_API}/${orderId}/delivery-refunded`
     );
 
     return response.data;

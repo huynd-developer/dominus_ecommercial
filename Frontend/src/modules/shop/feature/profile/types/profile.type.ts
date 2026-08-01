@@ -67,24 +67,16 @@ export interface CustomerOrderItemResponse {
 
   quantity: number;
 
-  /**
-   * Giá gốc tại thời điểm đặt hàng.
-   */
+  /** Giá gốc tại thời điểm đặt hàng. */
   originalPrice: number;
 
-  /**
-   * Số tiền giảm trên 1 sản phẩm tại thời điểm đặt hàng.
-   */
+  /** Số tiền giảm trên 1 sản phẩm tại thời điểm đặt hàng. */
   discountAmount: number;
 
-  /**
-   * Giá cuối cùng trên 1 sản phẩm tại thời điểm đặt hàng.
-   */
+  /** Giá cuối cùng trên 1 sản phẩm tại thời điểm đặt hàng. */
   finalPrice: number;
 
-  /**
-   * Thành tiền dòng = finalPrice * quantity.
-   */
+  /** Thành tiền dòng = finalPrice * quantity. */
   lineTotal: number;
 
   note: string | null;
@@ -147,6 +139,12 @@ export interface CustomerOrderResponse {
   discountAmount: number;
   finalAmount: number;
 
+  /** Phí vận chuyển của đơn hàng. */
+  shippingFee?: number | null;
+
+  /** Phí vận chuyển được tính vào tiền hoàn, nếu có. */
+  returnShippingFee?: number | null;
+
   paymentMethod: string | null;
 
   /**
@@ -167,6 +165,34 @@ export interface CustomerOrderResponse {
   createdAt: string;
   completedAt?: string | null;
   updatedAt?: string | null;
+
+  /** Người xác nhận giao hàng thành công trong hệ thống. */
+  deliveryCompletedByName?: string | null;
+
+  /** Thông tin giao hàng thất bại để khách xem được lý do. */
+  deliveryFailedReason?: string | null;
+  deliveryFailedDescription?: string | null;
+  deliveryFailedAt?: string | null;
+  deliveryFailedByName?: string | null;
+
+  /**
+   * Thông tin hoàn tiền riêng cho đơn giao hàng thất bại đã thanh toán trước.
+   * Không dùng DeliveryRefundStatus, FE tự suy ra bằng amount/bank/refundedAt.
+   */
+  deliveryRefundAmount?: number | null;
+  deliveryRefundBankName?: string | null;
+  deliveryRefundBankAccountNumber?: string | null;
+  deliveryRefundBankAccountHolder?: string | null;
+  deliveryRefundedAt?: string | null;
+  deliveryRefundedByName?: string | null;
+  deliveryRefundRequired?: boolean | null;
+  deliveryRefundBankInfoProvided?: boolean | null;
+  deliveryRefundCompleted?: boolean | null;
+  canSubmitDeliveryRefundBank?: boolean | null;
+
+  /** Ảnh minh chứng giao hàng. */
+  deliverySuccessMediaUrls?: string[] | null;
+  deliveryFailedMediaUrls?: string[] | null;
 
   /**
    * BE có thể trả sẵn, FE vẫn tự fallback theo completedAt + 15 ngày nếu thiếu.
@@ -213,6 +239,17 @@ export interface CustomerOrderResponse {
   refundedAt?: string | null;
 
   items: CustomerOrderItemResponse[];
+}
+
+export interface SubmitDeliveryRefundBankRequest {
+  /** Chọn trong danh sách ngân hàng hỗ trợ. */
+  bankName: string;
+
+  /** FE cho nhập số/khoảng trắng, BE lưu sau khi bỏ khoảng trắng. */
+  bankAccountNumber: string;
+
+  /** Tên chủ tài khoản, không chứa số/ký tự lạ. */
+  bankAccountHolder: string;
 }
 
 export interface CreateReviewRequest {

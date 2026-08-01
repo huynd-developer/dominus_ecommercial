@@ -42,6 +42,12 @@ export const ownerReportService = {
     });
   },
 
+  getQuarterlyRevenueChart() {
+    return api.get<RevenueChartResponse[]>(
+      "/owner/reports/quarterly-revenue-chart"
+    );
+  },
+
   getBestSellingProducts(params: ReportFilterParams) {
     return api.get<BestSellingProductResponse[]>(
       "/owner/reports/best-selling-products",
