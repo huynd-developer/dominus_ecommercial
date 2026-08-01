@@ -112,14 +112,22 @@ public class OwnerReportServiceImpl implements OwnerReportService {
         LocalDate today = LocalDate.now(VN_ZONE);
 
         LocalDate fromDate = today.withDayOfYear(1);
-        LocalDate toDate = today;
+
+        /*
+         * Một năm luôn có 4 quý.
+         *
+         * toDate dùng để tạo đủ bucket Q1, Q2, Q3, Q4.
+         * endDateTimeExclusive vẫn chỉ tính dữ liệu đến hết hôm nay,
+         * tránh lấy nhầm dữ liệu tương lai nếu có dữ liệu test.
+         */
+        LocalDate toDate = LocalDate.of(today.getYear(), 12, 31);
 
         DateRange range = new DateRange(
                 ReportFilterType.YEAR,
                 fromDate,
                 toDate,
                 fromDate.atStartOfDay(),
-                toDate.plusDays(1).atStartOfDay(),
+                today.plusDays(1).atStartOfDay(),
                 ChartGroupType.QUARTER
         );
 
