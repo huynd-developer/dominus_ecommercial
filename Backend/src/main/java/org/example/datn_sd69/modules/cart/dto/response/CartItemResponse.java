@@ -25,6 +25,8 @@ public class CartItemResponse {
 
     private String imageUrl;
 
+    private Integer productId;
+
     /**
      * Giá thực tế dùng để tính tiền.
      * Nếu đang có Flash Sale: price = salePrice.

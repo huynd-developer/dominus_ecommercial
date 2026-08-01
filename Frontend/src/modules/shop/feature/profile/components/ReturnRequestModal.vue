@@ -263,7 +263,6 @@
                   class="evidence-example-btn"
                   @click="showEvidenceExample"
                 >
-                  Xem ví dụ
                 </button>
               </label>
 
@@ -539,6 +538,11 @@
                 >
                   <span>Giảm giá/voucher phân bổ</span>
                   <strong>-{{ formatMoney(selectedVoucherDiscount) }}</strong>
+                </div>
+
+                <div v-if="returnShippingFee > 0" class="refund-line shipping">
+                  <span>Phí vận chuyển được hoàn</span>
+                  <strong>+{{ formatMoney(returnShippingFee) }}</strong>
                 </div>
 
                 <div class="refund-line receive">
@@ -946,7 +950,7 @@ const selectedReturnSubtotal = computed(() => {
   );
 });
 
-const refundAmount = computed(() => {
+const selectedProductRefundAmount = computed(() => {
   if (!props.order?.items?.length) {
     return 0;
   }
@@ -958,9 +962,45 @@ const refundAmount = computed(() => {
   );
 });
 
+const orderShippingFee = computed(() => {
+  return getFirstPositiveMoneyByKeys(props.order || {}, [
+    "shippingFee",
+    "shippingfee",
+    "shippingFeeAmount",
+    "shipFee",
+    "deliveryFee",
+    "shippingAmount",
+  ]);
+});
+
+const isFullOrderReturn = computed(() => {
+  if (!props.order?.items?.length) {
+    return false;
+  }
+
+  return props.order.items.every((item) => {
+    return (
+      isReturnItemSelected(item) &&
+      getReturnItemQuantity(item) === getOrderItemQuantity(item)
+    );
+  });
+});
+
+const shouldRefundShippingFee = computed(() => {
+  return isFullOrderReturn.value && Boolean(selectedReason.value);
+});
+
+const returnShippingFee = computed(() => {
+  return shouldRefundShippingFee.value ? orderShippingFee.value : 0;
+});
+
+const refundAmount = computed(() => {
+  return roundMoneyAmount(selectedProductRefundAmount.value + returnShippingFee.value);
+});
+
 const selectedVoucherDiscount = computed(() => {
   return roundMoneyAmount(
-    Math.max(0, selectedReturnSubtotal.value - refundAmount.value)
+    Math.max(0, selectedReturnSubtotal.value - selectedProductRefundAmount.value)
   );
 });
 

@@ -15,7 +15,8 @@
             />
           </div>
 
-          <RouterLink to="/products" class="view-all-link">
+          <!-- ĐÃ SỬA: Thêm query param flashSale=true để dẫn đến danh sách sản phẩm Flash Sale -->
+          <RouterLink :to="{ path: '/products', query: { flashSale: 'true' } }" class="view-all-link">
             Xem tất cả <i class="bi bi-chevron-right ms-1"></i>
           </RouterLink>
         </div>
@@ -386,40 +387,51 @@ const getVariantImageList = (variant: any) => {
 const resolveProductImages = (raw: any) => {
   const images: string[] = [];
 
-  appendImage(images, raw?.mainImage);
-  appendImage(images, raw?.mainImageUrl);
-  appendImage(images, raw?.MainImageUrl);
-  appendImage(images, raw?.thumbnailUrl);
-  appendImage(images, raw?.ThumbnailUrl);
-  appendImage(images, raw?.imageUrl);
-  appendImage(images, raw?.ImageUrl);
-  appendImage(images, raw?.image);
-  appendImage(images, raw?.Image);
+  const addUnique = (url: unknown) => {
+    const imageUrl = getImageUrlFromObject(url);
+    if (imageUrl && !images.includes(imageUrl)) {
+      images.push(imageUrl);
+    }
+  };
 
-  appendImageList(images, raw?.images);
-  appendImageList(images, raw?.Images);
-  appendImageList(images, raw?.galleryImages);
-  appendImageList(images, raw?.GalleryImages);
-  appendImageList(images, raw?.imageList);
-  appendImageList(images, raw?.ImageList);
-  appendImageList(images, raw?.productImages);
-  appendImageList(images, raw?.ProductImages);
-  appendImageList(images, raw?.productImageList);
-  appendImageList(images, raw?.ProductImageList);
+  const imageArrays = [
+    raw?.images,
+    raw?.Images,
+    raw?.productImages,
+    raw?.ProductImages,
+    raw?.galleryImages,
+    raw?.imageList,
+  ];
 
-  const variants =
-    raw?.variants ||
-    raw?.productVariants ||
-    raw?.productVariantList ||
-    [];
+  // 1. Ưu tiên tuyệt đối tìm ảnh có đánh dấu isPrimary đưa lên đầu tiên
+  for (const arr of imageArrays) {
+    if (Array.isArray(arr)) {
+      const primaryObj = arr.find((img: any) => 
+        Boolean(img?.isPrimary || img?.is_primary || img?.primary)
+      );
+      if (primaryObj) {
+        addUnique(primaryObj?.imageUrl || primaryObj?.url || primaryObj);
+      }
+    }
+  }
 
+  // 2. Tiếp theo đến ảnh chính đơn lẻ ngoài cùng
+  addUnique(raw?.mainImage);
+  addUnique(raw?.mainImageUrl);
+  addUnique(raw?.imageUrl);
+  addUnique(raw?.image);
+  addUnique(raw?.thumbnailUrl);
+
+  // 3. Đưa toàn bộ các ảnh còn lại vào mảng
+  imageArrays.forEach((arr) => {
+    appendImageList(images, arr);
+  });
+
+  // Quét vét biến thể nếu có
+  const variants = raw?.variants || raw?.productVariants || [];
   if (Array.isArray(variants)) {
     variants.forEach((variant: any) => {
-      getVariantImageList(variant).forEach((imageUrl) => {
-        if (imageUrl && !images.includes(imageUrl)) {
-          images.push(imageUrl);
-        }
-      });
+      getVariantImageList(variant).forEach((imageUrl) => addUnique(imageUrl));
     });
   }
 
@@ -430,12 +442,6 @@ const resolveProductImage = (raw: any) => {
   return resolveProductImages(raw)[0] || "";
 };
 
-/* ===== Giá hiển thị (SỬA) =====
-   Trước đây ưu tiên đọc "p.price" (một giá đại diện do backend trả,
-   thường là giá dung tích lớn nhất) khiến giá ở trang chủ (vd 3.500.000 đ)
-   lệch với giá ở trang danh sách /products và ô tìm kiếm (vd 380.000 đ,
-   giá dung tích nhỏ nhất). Giờ ưu tiên giá THẤP NHẤT trong variants,
-   đồng bộ với logic ProductGrid.vue và SearchBar. */
 const resolveMinVariantPrice = (rawVariants: any[]): number => {
   const variantPrices = rawVariants
     .map((v: any) => toNumber(v?.salePrice ?? v?.price, 0))
@@ -443,7 +449,6 @@ const resolveMinVariantPrice = (rawVariants: any[]): number => {
 
   return variantPrices.length > 0 ? Math.min(...variantPrices) : 0;
 };
-/* ===== Hết phần sửa giá ===== */
 
 const mapNormalProduct = (p: any): ProductCardItem => {
   const rawVariants =
@@ -521,7 +526,6 @@ const mapNormalProduct = (p: any): ProductCardItem => {
     originalPrice: basePrice,
     discountPercent,
 
-    // Mặc định 5 sao khi API danh sách không trả về rating
     rating: toNumber(p.rating, 5),
     reviewCount: toNumber(p.reviewCount ?? p.reviews, 0),
 
@@ -584,7 +588,6 @@ const mapFlashSaleProduct = (item: FlashSaleProductResponse): ProductCardItem =>
     originalPrice,
     discountPercent: toNumber(item.discountPercent, 0),
 
-    // Mặc định 5 sao vì API Flash Sale không trả về rating
     rating: 5,
     reviewCount: 0,
 
@@ -622,13 +625,98 @@ const fetchFlashSaleProducts = async () => {
       {
         params: {
           page: 0,
-          size: 4,
+          size: 20,
         },
       }
     );
 
     const rows = resolvePageContent<FlashSaleProductResponse>(res.data);
-    flashSaleProducts.value = rows.map(mapFlashSaleProduct);
+
+    const productMap = new Map<number, FlashSaleProductResponse[]>();
+    rows.forEach((item) => {
+      const pId = toNumber(item.productId ?? item.productVariantId, 0);
+      if (!productMap.has(pId)) {
+        productMap.set(pId, []);
+      }
+      productMap.get(pId)!.push(item);
+    });
+
+    const groupedProducts: ProductCardItem[] = [];
+
+    productMap.forEach((variants, productId) => {
+      if (!variants || variants.length === 0) return;
+      const firstItem = variants[0];
+      
+      const productImages = resolveProductImages(firstItem);
+      const productImage = productImages[0] || resolveProductImage(firstItem);
+
+      const salePrices = variants.map(v => toNumber(v.salePrice, 0)).filter(p => p > 0);
+      const minSalePrice = salePrices.length > 0 ? Math.min(...salePrices) : toNumber(firstItem?.salePrice, 0);
+
+      const originalPrices = variants.map(v => toNumber(v.originalPrice, 0)).filter(p => p > 0);
+      const minOriginalPrice = originalPrices.length > 0 ? Math.min(...originalPrices) : toNumber(firstItem?.originalPrice, 0);
+
+      const maxDiscount = Math.max(...variants.map(v => toNumber(v.discountPercent, 0)));
+
+      const mappedVariants = variants.map(v => {
+        const vId = toNumber(v.productVariantId, 0);
+        const vSalePrice = toNumber(v.salePrice, 0);
+        const vOriginalPrice = toNumber(v.originalPrice, 0);
+        const vStock = toNumber(v.stockQuantity, 0);
+
+        return {
+          id: vId,
+          productVariantId: vId,
+          variantId: vId,
+          price: vOriginalPrice,
+          originalPrice: vOriginalPrice,
+          salePrice: vSalePrice,
+          stockQuantity: vStock,
+          status: 1,
+          capacity: v.capacity,
+          bottleType: v.bottleType,
+          imageUrl: productImage,
+          image: productImage,
+          images: productImages,
+        };
+      });
+
+      groupedProducts.push({
+        id: productId,
+        productId: productId,
+        productVariantId: mappedVariants[0]?.productVariantId,
+        variantId: mappedVariants[0]?.productVariantId,
+
+        name: firstItem?.productName || "Sản phẩm Flash Sale",
+        brand: firstItem?.promotionName || "Flash Sale",
+        color: "#0a192f",
+
+        imageUrl: productImage,
+        image: productImage,
+        mainImage: productImage,
+        images: productImages,
+        productImages: productImages.map((imageUrl, index) => ({
+          id: index + 1,
+          imageUrl,
+          url: imageUrl,
+        })),
+
+        salePrice: minSalePrice,
+        originalPrice: minOriginalPrice,
+        discountPercent: maxDiscount,
+
+        rating: 5,
+        reviewCount: 0,
+
+        stockQuantity: mappedVariants.reduce((sum, v) => sum + (v.stockQuantity || 0), 0),
+        isFlashSale: true,
+        endDate: firstItem?.endDate,
+
+        variants: mappedVariants,
+      });
+    });
+
+    flashSaleProducts.value = groupedProducts;
   } catch (error) {
     console.error("Lỗi tải Flash Sale:", error);
     flashSaleProducts.value = [];

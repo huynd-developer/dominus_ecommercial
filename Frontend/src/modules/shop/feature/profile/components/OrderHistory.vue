@@ -71,8 +71,16 @@
 
         <div
           class="tab-item"
-          :class="{ active: currentTab === 6 }"
-          @click="currentTab = 6"
+          :class="{ active: currentTab === 5 }"
+          @click="currentTab = 5"
+        >
+          Giao thất bại
+        </div>
+
+        <div
+          class="tab-item"
+          :class="{ active: currentTab === 'RETURN' }"
+          @click="currentTab = 'RETURN'"
         >
           Hoàn hàng
         </div>
@@ -110,8 +118,8 @@
               </div>
 
               <div class="order-header-right">
-                <span :class="['badge', getStatusClass(order.status)]">
-                  {{ order.statusText || getStatusText(order.status) }}
+                <span :class="['badge', getOrderHeaderStatusClass(order)]">
+                  {{ getOrderHeaderStatusText(order) }}
                 </span>
 
                 <div class="fw-bold mt-1 order-header-total">
@@ -169,7 +177,7 @@
                   </div>
                 </div>
 
-                <!-- BẮT ĐẦU KHỐI THEO DÕI ĐƠN HÀNG (FAKE TRACKING) -->
+                <!-- BẮT ĐẦU KHỐI THEO DÕI ĐƠN HÀNG -->
                 <div class="tracking-container mt-2 mb-4">
                   <h6 class="fw-bold mb-3">
                     <i class="bi bi-truck me-2"></i>Theo dõi kiện hàng
@@ -204,6 +212,87 @@
                       <div class="timeline-content">
                         <div class="t-title">{{ track.title }}</div>
                         <div class="t-desc">{{ track.desc }}</div>
+
+                        <div
+                          v-if="
+                            track.title === 'Đã giao' &&
+                            Number(order.status) === 3 &&
+                            getDeliverySuccessMedia(order).length > 0
+                          "
+                          class="tracking-delivery-media"
+                        >
+                          <div class="return-media-list">
+                            <button
+                              v-for="(media, mediaIndex) in getDeliverySuccessMedia(order)"
+                              :key="`delivery-success-${media.url}-${mediaIndex}`"
+                              type="button"
+                              class="return-media-button"
+                              @click.stop="openDeliverySuccessMediaPreview(order, mediaIndex)"
+                            >
+                              <img
+                                :src="media.url"
+                                class="return-media-thumb"
+                                alt="Minh chứng giao hàng thành công"
+                                @error="handleImageError"
+                              />
+
+                              <span class="return-media-overlay">
+                                <i class="bi bi-zoom-in"></i>
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div
+                          v-if="
+                            track.title === 'Giao hàng thất bại' &&
+                            Number(order.status) === 5 &&
+                            (
+                              order.deliveryFailedDescription ||
+                              getDeliveryFailedMedia(order).length > 0
+                            )
+                          "
+                          class="tracking-delivery-media is-failed"
+                        >
+                          <div
+                            v-if="order.deliveryFailedDescription"
+                            class="tracking-delivery-note"
+                          >
+                            <span>Mô tả:</span>
+                            <strong>{{ order.deliveryFailedDescription }}</strong>
+                          </div>
+
+                          <div
+                            v-if="getDeliveryFailedMedia(order).length > 0"
+                            class="tracking-delivery-proof"
+                          >
+                            <div class="tracking-delivery-media-label text-danger">
+                              <i class="bi bi-x-circle me-1"></i>
+                              Ảnh minh chứng giao thất bại:
+                            </div>
+
+                            <div class="return-media-list">
+                              <button
+                                v-for="(media, mediaIndex) in getDeliveryFailedMedia(order)"
+                                :key="`delivery-failed-${media.url}-${mediaIndex}`"
+                                type="button"
+                                class="return-media-button"
+                                @click.stop="openDeliveryFailedMediaPreview(order, mediaIndex)"
+                              >
+                                <img
+                                  :src="media.url"
+                                  class="return-media-thumb"
+                                  alt="Minh chứng giao hàng thất bại"
+                                  @error="handleImageError"
+                                />
+
+                                <span class="return-media-overlay">
+                                  <i class="bi bi-zoom-in"></i>
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -318,21 +407,37 @@
                             {{
                               formatDate(
                                 getMyReviewByOrderItemId(item.orderItemId)
-                                  ?.createdAt
+                                  ?.createdAt,
                               )
                             }}
                           </div>
 
                           <div
-                            v-if="getReviewApprovalText(getMyReviewByOrderItemId(item.orderItemId))"
+                            v-if="
+                              getReviewApprovalText(
+                                getMyReviewByOrderItemId(item.orderItemId)
+                              )
+                            "
                             class="review-approval-status mt-1"
-                            :class="getReviewApprovalClass(getMyReviewByOrderItemId(item.orderItemId))"
+                            :class="
+                              getReviewApprovalClass(
+                                getMyReviewByOrderItemId(item.orderItemId)
+                              )
+                            "
                           >
-                            {{ getReviewApprovalText(getMyReviewByOrderItemId(item.orderItemId)) }}
+                            {{
+                              getReviewApprovalText(
+                                getMyReviewByOrderItemId(item.orderItemId)
+                              )
+                            }}
                           </div>
 
                           <button
-                            v-if="canEditExistingReview(getMyReviewByOrderItemId(item.orderItemId))"
+                            v-if="
+                              canEditExistingReview(
+                                getMyReviewByOrderItemId(item.orderItemId)
+                              )
+                            "
                             type="button"
                             class="btn btn-sm btn-outline-dark review-edit-btn mt-2"
                             :disabled="submittingReview"
@@ -343,7 +448,10 @@
                           </button>
 
                           <div
-                            v-if="getReviewMediaByOrderItemId(item.orderItemId).length > 0"
+                            v-if="
+                              getReviewMediaByOrderItemId(item.orderItemId)
+                                .length > 0
+                            "
                             class="review-media-section"
                           >
                             <div class="review-media-label">
@@ -352,12 +460,25 @@
 
                             <div class="review-media-list">
                               <button
-                                v-for="(media, mediaIndex) in getReviewMediaByOrderItemId(item.orderItemId)"
+                                v-for="(
+                                  media, mediaIndex
+                                ) in getReviewMediaByOrderItemId(
+                                  item.orderItemId
+                                )"
                                 :key="`${media.url}-${mediaIndex}`"
                                 type="button"
                                 class="review-media-button"
-                                :title="media.isVideo ? 'Xem video đánh giá' : 'Xem ảnh đánh giá'"
-                                @click.stop="openReviewMediaPreview(item.orderItemId, mediaIndex)"
+                                :title="
+                                  media.isVideo
+                                    ? 'Xem video đánh giá'
+                                    : 'Xem ảnh đánh giá'
+                                "
+                                @click.stop="
+                                  openReviewMediaPreview(
+                                    item.orderItemId,
+                                    mediaIndex
+                                  )
+                                "
                               >
                                 <video
                                   v-if="media.isVideo"
@@ -379,7 +500,11 @@
                                 <span class="review-media-overlay">
                                   <i
                                     class="bi"
-                                    :class="media.isVideo ? 'bi-play-circle' : 'bi-zoom-in'"
+                                    :class="
+                                      media.isVideo
+                                        ? 'bi-play-circle'
+                                        : 'bi-zoom-in'
+                                    "
                                   ></i>
                                 </span>
                               </button>
@@ -484,49 +609,148 @@
                       v-if="getOrderCancelledAt(order)"
                       class="cancel-info-time"
                     >
-                      Thời gian hủy: {{ formatDate(getOrderCancelledAt(order)) }}
+                      Thời gian hủy:
+                      {{ formatDate(getOrderCancelledAt(order)) }}
                     </div>
                   </div>
 
                   <div
                     v-else-if="isReturnInfoVisible(order)"
                     class="order-return-info"
+                    :class="getReturnProcessClass(order)"
                   >
-                    <div class="return-info-title">
-                      <i class="bi bi-arrow-counterclockwise me-1"></i>
-                      Thông tin hoàn hàng:
+                    <div class="return-info-top">
+                      <div>
+                        <div class="return-info-title">
+                          <i class="bi bi-arrow-counterclockwise me-1"></i>
+                          Thông tin hoàn hàng / hoàn tiền
+                        </div>
+
+                        <div class="return-request-meta">
+                          <span>
+                            ID yêu cầu:
+                            <strong>{{ getReturnRequestCode(order) }}</strong>
+                          </span>
+
+                          <span v-if="getOrderReturnRequestedAt(order)">
+                            Yêu cầu vào:
+                            <strong>{{
+                              formatDate(getOrderReturnRequestedAt(order))
+                            }}</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      <span
+                        class="return-process-badge"
+                        :class="getReturnProcessBadgeClass(order)"
+                      >
+                        {{ getReturnProcessText(order) }}
+                      </span>
                     </div>
 
-                    <div class="return-info-line">
-                      <span>Lý do:</span>
-                      <strong>{{ getOrderReturnReason(order) }}</strong>
+                    <div class="return-process-timeline">
+                      <div
+                        v-for="step in getReturnProcessTimeline(order)"
+                        :key="step.key"
+                        class="return-process-step"
+                        :class="{
+                          'is-done': step.done,
+                          'is-active': step.active,
+                          'is-rejected': step.rejected,
+                        }"
+                      >
+                        <div class="return-step-marker">
+                          <i class="bi" :class="step.icon"></i>
+                        </div>
+
+                        <div class="return-step-content">
+                          <div class="return-step-title">{{ step.title }}</div>
+                          <div v-if="step.desc" class="return-step-desc">
+                            {{ step.desc }}
+                          </div>
+                          <div v-if="step.time" class="return-step-time">
+                            {{ formatDate(step.time) }}
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     <div
-                      v-if="getOrderReturnDescription(order)"
-                      class="return-info-description"
+                      v-if="getReturnProcessAlert(order)"
+                      class="return-process-alert"
+                      :class="getReturnProcessAlert(order)?.className"
                     >
-                      {{ getOrderReturnDescription(order) }}
+                      <i
+                        class="bi"
+                        :class="getReturnProcessAlert(order)?.icon"
+                      ></i>
+                      <div>
+                        <strong>{{
+                          getReturnProcessAlert(order)?.title
+                        }}</strong>
+                        <p>{{ getReturnProcessAlert(order)?.desc }}</p>
+                      </div>
                     </div>
 
-                    <div
-                      v-if="getOrderReturnRefundAmount(order) > 0"
-                      class="return-info-line return-refund-line"
-                    >
-                      <span>Hoàn tiền dự kiến:</span>
-                      <strong>{{ formatMoney(getOrderReturnRefundAmount(order)) }}</strong>
+                    <div class="return-info-grid">
+                      <div class="return-info-line">
+                        <span>Lý do hoàn:</span>
+                        <strong>{{ getOrderReturnReason(order) }}</strong>
+                      </div>
+
+                      <div
+                        v-if="getOrderReturnDescription(order)"
+                        class="return-info-description"
+                      >
+                        {{ getOrderReturnDescription(order) }}
+                      </div>
+
+                      <div
+                        v-if="getOrderReturnRejectReason(order)"
+                        class="return-info-line return-reject-line"
+                      >
+                        <span>Lý do từ chối:</span>
+                        <strong>{{ getOrderReturnRejectReason(order) }}</strong>
+                      </div>
+
+                      <div
+                        v-if="getOrderReturnRefundAmount(order) > 0"
+                        class="return-info-line return-refund-line"
+                      >
+                        <span>{{ getReturnRefundLabel(order) }}:</span>
+                        <strong>{{
+                          formatMoney(getOrderReturnRefundAmount(order))
+                        }}</strong>
+                      </div>
+
+                      <div
+                        v-if="getOrderRefundMethodText(order)"
+                        class="return-info-line"
+                      >
+                        <span>Hoàn tiền vào:</span>
+                        <strong>{{ getOrderRefundMethodText(order) }}</strong>
+                      </div>
                     </div>
 
                     <div class="return-selected-section">
-                      <div class="return-media-label">Sản phẩm yêu cầu hoàn:</div>
+                      <div class="return-media-label">
+                        Sản phẩm yêu cầu hoàn:
+                      </div>
 
                       <div
                         v-if="getOrderReturnSelectedItems(order).length > 0"
                         class="return-selected-list"
                       >
                         <button
-                          v-for="returnItem in getOrderReturnSelectedItems(order)"
-                          :key="`return-item-${returnItem.orderItemId || returnItem.productVariantId || returnItem.productId}`"
+                          v-for="returnItem in getOrderReturnSelectedItems(
+                            order
+                          )"
+                          :key="`return-item-${
+                            returnItem.orderItemId ||
+                            returnItem.productVariantId ||
+                            returnItem.productId
+                          }`"
                           type="button"
                           class="return-selected-item"
                           @click.stop="goToProductDetail(returnItem)"
@@ -534,13 +758,24 @@
                           <img
                             :src="returnItem.image || FALLBACK_IMAGE"
                             class="return-selected-img"
-                            :alt="returnItem.productName || 'Sản phẩm hoàn hàng'"
+                            :alt="
+                              returnItem.productName || 'Sản phẩm hoàn hàng'
+                            "
                             @error="handleImageError"
                           />
 
                           <div class="return-selected-content">
-                            <div class="return-selected-name">
-                              {{ returnItem.productName || "Sản phẩm" }}
+                            <div class="return-selected-name-row">
+                              <div class="return-selected-name">
+                                {{ returnItem.productName || "Sản phẩm" }}
+                              </div>
+
+                              <span
+                                class="return-selected-status"
+                                :class="getReturnItemStatusClass(returnItem)"
+                              >
+                                {{ getReturnItemStatusText(returnItem) }}
+                              </span>
                             </div>
 
                             <div class="return-selected-meta">
@@ -557,22 +792,43 @@
 
                             <div class="return-selected-bottom">
                               <span>
-                                SL hoàn:
-                                <strong>{{ returnItem.returnQuantity || 0 }}</strong>
+                                SL mua:
+                                <strong>{{
+                                  returnItem.orderedQuantity || 0
+                                }}</strong>
                               </span>
 
-                              <span v-if="Number(returnItem.itemAmount || 0) > 0">
-                                Tiền hàng:
-                                <strong>{{ formatMoney(returnItem.itemAmount) }}</strong>
+                              <span>
+                                SL hoàn:
+                                <strong>{{
+                                  returnItem.returnQuantity || 0
+                                }}</strong>
                               </span>
 
                               <span
-                                v-if="Number(returnItem.voucherAllocatedAmount || 0) > 0"
+                                v-if="Number(returnItem.itemAmount || 0) > 0"
+                              >
+                                Tiền hàng:
+                                <strong>{{
+                                  formatMoney(returnItem.itemAmount)
+                                }}</strong>
+                              </span>
+
+                              <span
+                                v-if="
+                                  Number(
+                                    returnItem.voucherAllocatedAmount || 0
+                                  ) > 0
+                                "
                                 class="return-selected-discount"
                               >
                                 Voucher phân bổ:
                                 <strong>
-                                  -{{ formatMoney(returnItem.voucherAllocatedAmount) }}
+                                  -{{
+                                    formatMoney(
+                                      returnItem.voucherAllocatedAmount
+                                    )
+                                  }}
                                 </strong>
                               </span>
 
@@ -581,8 +837,18 @@
                                 class="return-selected-refund"
                               >
                                 Hoàn:
-                                <strong>{{ formatMoney(returnItem.refundAmount) }}</strong>
+                                <strong>{{
+                                  formatMoney(returnItem.refundAmount)
+                                }}</strong>
                               </span>
+                            </div>
+
+                            <div
+                              v-if="getReturnItemRejectReason(returnItem)"
+                              class="return-item-reject-note"
+                            >
+                              Lý do từ chối:
+                              {{ getReturnItemRejectReason(returnItem) }}
                             </div>
                           </div>
                         </button>
@@ -597,7 +863,9 @@
                       v-if="getOrderReturnMedia(order).length > 0"
                       class="return-media-section"
                     >
-                      <div class="return-media-label">Ảnh/video bằng chứng:</div>
+                      <div class="return-media-label">
+                        Ảnh/video bằng chứng:
+                      </div>
 
                       <div class="return-media-list">
                         <button
@@ -625,7 +893,9 @@
                           <span class="return-media-overlay">
                             <i
                               class="bi"
-                              :class="media.isVideo ? 'bi-play-circle' : 'bi-zoom-in'"
+                              :class="
+                                media.isVideo ? 'bi-play-circle' : 'bi-zoom-in'
+                              "
                             ></i>
                           </span>
                         </button>
@@ -639,11 +909,16 @@
                       <strong>{{ formatMoney(order.totalAmount) }}</strong>
                     </div>
 
-                    <div>
+                    <div v-if="order.discountAmount > 0">
                       <span>Giảm giá:</span>
                       <strong class="text-danger">
                         -{{ formatMoney(order.discountAmount) }}
                       </strong>
+                    </div>
+
+                    <div v-if="getOrderShippingFee(order) > 0">
+                      <span>Phí vận chuyển:</span>
+                      <strong>{{ formatMoney(getOrderShippingFee(order)) }}</strong>
                     </div>
 
                     <div>
@@ -657,15 +932,63 @@
 
                 <!-- KHỐI CÁC NÚT THAO TÁC -->
                 <div class="text-end mt-3 d-flex justify-content-end gap-2">
-                  <button
-                    v-if="order.status === 0 && order.paymentMethod === 'VNPAY'"
-                    class="btn btn-sm text-white"
-                    style="background-color: #10b981; border-color: #10b981"
-                    :disabled="store.orderLoading"
-                    @click="repayVnpayOrder(order)"
+                  <!-- 1. THANH TOÁN VNPAY & VIETQR -->
+                  <!-- Do đã đổi sang luồng Hủy/Back là tự động trả đồ lại giỏ hàng,
+                       Nên ở đây các nút "Thanh toán lại" cũng ko cần thiết nữa vì làm gì có đơn rác mà thanh toán lại.
+                       Tớ vẫn giữ logic gốc ở đây cho đồng bộ form giao diện -->
+                  <template
+                    v-if="
+                      order.status === 0 &&
+                      (order.paymentMethod || '')
+                        .toUpperCase()
+                        .includes('VNPAY')
+                    "
                   >
-                    <i class="bi bi-credit-card me-1"></i> Thanh toán VNPay ngay
-                  </button>
+                    <div
+                      v-if="isOrderPendingVerification(order)"
+                      class="d-flex align-items-center me-auto text-success fw-bold"
+                      style="font-size: 14px"
+                    >
+                      <i class="bi bi-check-circle-fill me-1"></i> Đang chờ shop
+                      đối soát...
+                    </div>
+                    <template v-else>
+                      <div
+                        class="d-flex align-items-center me-3 text-warning fw-bold"
+                        style="font-size: 14px"
+                      >
+                        <i class="bi bi-clock-history me-1"></i> Đang chờ xác
+                        nhận thanh toán
+                      </div>
+                    </template>
+                  </template>
+
+                  <template
+                    v-if="
+                      order.status === 0 &&
+                      (order.paymentMethod || '')
+                        .toUpperCase()
+                        .includes('VIETQR')
+                    "
+                  >
+                    <div
+                      v-if="isOrderPendingVerification(order)"
+                      class="d-flex align-items-center me-auto text-success fw-bold"
+                      style="font-size: 14px"
+                    >
+                      <i class="bi bi-check-circle-fill me-1"></i> Đang chờ shop
+                      đối soát...
+                    </div>
+                    <template v-else>
+                      <div
+                        class="d-flex align-items-center me-3 text-warning fw-bold"
+                        style="font-size: 14px"
+                      >
+                        <i class="bi bi-clock-history me-1"></i> Đang chờ khách
+                        chuyển khoản
+                      </div>
+                    </template>
+                  </template>
 
                   <button
                     v-if="order.canCancel"
@@ -676,7 +999,6 @@
                     Hủy đơn
                   </button>
 
-                  <!-- NÚT MUA LẠI -->
                   <button
                     v-if="order.status === 4 || order.status === 3"
                     class="btn btn-primary btn-sm px-3 text-white"
@@ -697,7 +1019,7 @@
                   </button>
 
                   <span
-                    v-else-if="isCompletedOrder(order) && getReturnDeadlineText(order)"
+                    v-else-if="shouldShowReturnDeadlineText(order)"
                     class="text-muted small align-self-center"
                   >
                     {{ getReturnDeadlineText(order) }}
@@ -705,7 +1027,7 @@
 
                   <!-- NÚT HỦY YÊU CẦU HOÀN HÀNG -->
                   <button
-                    v-if="order.status === 6"
+                    v-if="canCancelReturnRequest(order)"
                     type="button"
                     class="btn btn-outline-secondary btn-sm"
                     :disabled="store.orderLoading"
@@ -718,7 +1040,8 @@
                     v-if="
                       !order.canCancel &&
                       order.status !== 3 &&
-                      order.status !== 4
+                      order.status !== 4 &&
+                      order.status !== 0
                     "
                     class="text-muted small align-self-center"
                   >
@@ -769,7 +1092,7 @@ import type {
 const store = useCustomerProfileStore();
 const router = useRouter();
 
-const currentTab = ref<number | "ALL">("ALL");
+const currentTab = ref<number | "ALL" | "RETURN">("ALL");
 
 const RETURN_REQUEST_DEADLINE_DAYS = 15;
 const REVIEW_EDIT_DEADLINE_DAYS = 30;
@@ -788,9 +1111,32 @@ const selectedReturnOrder = ref<CustomerOrderResponse | null>(null);
 const submittingReturn = ref(false);
 
 const reviewableMap = reactive<Record<number, ReviewableOrderItemResponse[]>>(
-  {}
+  {},
 );
 const reviewLoadingByOrder = reactive<Record<number, boolean>>({});
+
+const paidOrdersMap = ref<Record<string, boolean>>({});
+
+const initPaidOrders = () => {
+  try {
+    const saved = localStorage.getItem("dominus_paid_orders");
+    if (saved) {
+      paidOrdersMap.value = JSON.parse(saved);
+    }
+  } catch (e) {}
+};
+
+const isOrderPendingVerification = (order: any) => {
+  if (!order) return false;
+  const isPaidLocally = paidOrdersMap.value[String(order.orderId)] === true;
+  const rawStatus = (order as any).isPaymentReported;
+  const isPaidApi =
+    rawStatus === true ||
+    rawStatus === 1 ||
+    rawStatus === "1" ||
+    String(rawStatus).toLowerCase() === "true";
+  return isPaidLocally || isPaidApi;
+};
 
 const generateOrderCode = (id: number | string | null | undefined) => {
   if (!id) return "N/A";
@@ -917,7 +1263,20 @@ const canRequestReturn = (order: any) => {
 
   const deadlineTime = getReturnDeadlineTime(order);
 
-  return deadlineTime > 0 && Date.now() <= deadlineTime;
+  if (!(deadlineTime > 0 && Date.now() <= deadlineTime)) {
+    return false;
+  }
+
+  if (!hasOrderReturnData(order)) {
+    return true;
+  }
+
+  /**
+   * Logic Shopee-like:
+   * - Khách tự hủy yêu cầu khi shop chưa xử lý thì được gửi lại nếu còn hạn.
+   * - Shop đã từ chối / đã chấp nhận / đã hoàn tiền thì không cho gửi lại.
+   */
+  return getOrderReturnProcessStatus(order) === "CUSTOMER_CANCELLED";
 };
 
 const getReturnDeadlineText = (order: any) => {
@@ -940,15 +1299,37 @@ const getReturnDeadlineText = (order: any) => {
   return `Còn ${daysLeft} ngày để yêu cầu hoàn hàng`;
 };
 
-const filteredOrders = computed(() => {
-  const orders =
-    currentTab.value === "ALL"
-      ? store.orders
-      : store.orders.filter(
-          (order: CustomerOrderResponse) => order.status === currentTab.value
-        );
+const isReturnTabOrder = (order: any) => {
+  const status = Number(order?.status);
 
-  return sortOrdersByLatestAction(orders as CustomerOrderResponse[]);
+  if (status === 6 || status === 7) {
+    return true;
+  }
+
+  /**
+   * Đơn đã hoàn thành bình thường không được nằm trong tab Hoàn hàng.
+   * Trường hợp duy nhất status = 3 vẫn nằm tab Hoàn hàng là khi shop/admin
+   * đã từ chối yêu cầu hoàn và đơn được đưa về trạng thái Hoàn thành.
+   */
+  return status === 3 && getOrderReturnProcessStatus(order) === "REJECTED";
+};
+
+const filteredOrders = computed(() => {
+  let orders: CustomerOrderResponse[];
+
+  if (currentTab.value === "ALL") {
+    orders = store.orders as CustomerOrderResponse[];
+  } else if (currentTab.value === "RETURN") {
+    orders = (store.orders as CustomerOrderResponse[]).filter((order) =>
+      isReturnTabOrder(order)
+    );
+  } else {
+    orders = (store.orders as CustomerOrderResponse[]).filter(
+      (order) => Number(order.status) === currentTab.value
+    );
+  }
+
+  return sortOrdersByLatestAction(orders);
 });
 
 const completedOrders = computed(() => {
@@ -958,12 +1339,12 @@ const completedOrders = computed(() => {
 });
 
 onMounted(() => {
+  initPaidOrders();
   fetchOrdersAndReviews();
 });
 
 const toggleOrder = async (orderId: number) => {
   openedOrderId.value = openedOrderId.value === orderId ? null : orderId;
-
   if (openedOrderId.value === orderId) {
     const order = store.orders.find((o) => o.orderId === orderId);
     if (order && order.status === 3 && !reviewableMap[orderId]) {
@@ -972,9 +1353,7 @@ const toggleOrder = async (orderId: number) => {
   }
 };
 
-const isOrderOpen = (orderId: number) => {
-  return openedOrderId.value === orderId;
-};
+const isOrderOpen = (orderId: number) => openedOrderId.value === orderId;
 
 const beforeEnter = (el: Element) => {
   const element = el as HTMLElement;
@@ -986,7 +1365,6 @@ const beforeEnter = (el: Element) => {
 const enter = (el: Element) => {
   const element = el as HTMLElement;
   const height = element.scrollHeight;
-
   element.style.transition = "height 0.32s ease, opacity 0.24s ease";
   requestAnimationFrame(() => {
     element.style.height = `${height}px`;
@@ -1010,7 +1388,6 @@ const beforeLeave = (el: Element) => {
 
 const leave = (el: Element) => {
   const element = el as HTMLElement;
-
   element.style.transition = "height 0.28s ease, opacity 0.2s ease";
   requestAnimationFrame(() => {
     element.style.height = "0";
@@ -1031,12 +1408,26 @@ const fetchOrdersAndReviews = async () => {
     await store.fetchOrders();
     await fetchMyReviews();
 
+    // Tự động tải lại trạng thái reviewable cho các đơn hàng hoàn thành (status === 3)
+    // hoặc đơn hàng đang được mở rộng xem chi tiết
+    const reviewPromises: Promise<any>[] = [];
+    store.orders.forEach((order) => {
+      if (order.status === 3) {
+        reviewPromises.push(loadReviewableItems(order.orderId, false));
+      }
+    });
+    if (reviewPromises.length > 0) {
+      await Promise.all(reviewPromises);
+    }
+
     if (
       openedOrderId.value &&
       !store.orders.some((order) => order.orderId === openedOrderId.value)
     ) {
       openedOrderId.value = null;
     }
+
+    toast("success", "Đã làm mới lịch sử đơn hàng");
   } catch (error) {
     showError(error, "Không tải được lịch sử đơn hàng");
   }
@@ -1050,13 +1441,9 @@ const fetchMyReviews = async () => {
 const loadReviewableItems = async (orderId: number, showToast: boolean) => {
   try {
     reviewLoadingByOrder[orderId] = true;
-
     const res = await customerProfileService.getReviewableItemsByOrder(orderId);
     reviewableMap[orderId] = res.data || [];
-
-    if (showToast) {
-      toast("success", "Đã cập nhật trạng thái đánh giá");
-    }
+    if (showToast) toast("success", "Đã cập nhật trạng thái đánh giá");
   } catch (error) {
     showError(error, "Không tải được trạng thái đánh giá");
   } finally {
@@ -1070,10 +1457,7 @@ const getMyReviewByOrderItemId = (orderItemId: number) => {
 
 const getReviewApprovalStatus = (review: any) => {
   const rawStatus =
-    review?.approvalStatus ??
-    review?.status ??
-    review?.reviewStatus ??
-    null;
+    review?.approvalStatus ?? review?.status ?? review?.reviewStatus ?? null;
 
   if (rawStatus === null || rawStatus === undefined || rawStatus === "") {
     return null;
@@ -1215,7 +1599,10 @@ const isReviewed = (orderId: number, orderItemId: number) => {
   return getReviewState(orderId, orderItemId)?.reviewed === true;
 };
 
-const buildReviewItemFromOrderItem = (order: any, item: any): ReviewableOrderItemResponse => {
+const buildReviewItemFromOrderItem = (
+  order: any,
+  item: any
+): ReviewableOrderItemResponse => {
   return {
     orderItemId: Number(item?.orderItemId || item?.id || 0),
     orderId: Number(order?.orderId || order?.id || 0),
@@ -1236,12 +1623,10 @@ const buildReviewItemFromOrderItem = (order: any, item: any): ReviewableOrderIte
 
 const openReview = async (orderId: number, orderItemId: number) => {
   let state = getReviewState(orderId, orderItemId);
-
   if (!state) {
     await loadReviewableItems(orderId, false);
     state = getReviewState(orderId, orderItemId);
   }
-
   if (!state) {
     await Swal.fire({
       icon: "error",
@@ -1251,7 +1636,6 @@ const openReview = async (orderId: number, orderItemId: number) => {
     });
     return;
   }
-
   if (!state.canReview) {
     await Swal.fire({
       icon: "info",
@@ -1269,7 +1653,9 @@ const openReview = async (orderId: number, orderItemId: number) => {
 };
 
 const openEditReview = async (order: CustomerOrderResponse, item: any) => {
-  const review = getMyReviewByOrderItemId(Number(item?.orderItemId || item?.id || 0));
+  const review = getMyReviewByOrderItemId(
+    Number(item?.orderItemId || item?.id || 0)
+  );
 
   if (!review) {
     await Swal.fire({
@@ -1285,7 +1671,8 @@ const openEditReview = async (order: CustomerOrderResponse, item: any) => {
     await Swal.fire({
       icon: "info",
       title: "Không thể sửa đánh giá",
-      text: getReviewEditHint(review) || "Đánh giá này không còn được chỉnh sửa.",
+      text:
+        getReviewEditHint(review) || "Đánh giá này không còn được chỉnh sửa.",
       confirmButtonColor: "#bd9a5f",
     });
     return;
@@ -1309,14 +1696,15 @@ const submitReview = async (payload: {
     return;
   }
 
-  const isEditMode = reviewModalMode.value === "edit" && selectedEditingReview.value;
+  const isEditMode =
+    reviewModalMode.value === "edit" && selectedEditingReview.value;
   const orderId = selectedReviewItem.value.orderId;
   const orderItemId = selectedReviewItem.value.orderItemId;
-  const hasReviewMedia = payload.files?.some((file) => file && file.size > 0) === true;
+  const hasReviewMedia =
+    payload.files?.some((file) => file && file.size > 0) === true;
 
   try {
     submittingReview.value = true;
-
     const formData = new FormData();
 
     if (!isEditMode) {
@@ -1324,18 +1712,16 @@ const submitReview = async (payload: {
     }
 
     formData.append("rating", String(payload.rating));
-
-    if (payload.comment) {
-      formData.append("comment", payload.comment);
-    }
-
+    if (payload.comment) formData.append("comment", payload.comment);
     if (payload.files && payload.files.length > 0) {
-      payload.files.forEach((file) => {
-        formData.append("mediaFiles", file);
-      });
+      payload.files.forEach((file) => formData.append("mediaFiles", file));
     }
 
-    if (isEditMode && payload.deletedMediaIds && payload.deletedMediaIds.length > 0) {
+    if (
+      isEditMode &&
+      payload.deletedMediaIds &&
+      payload.deletedMediaIds.length > 0
+    ) {
       payload.deletedMediaIds.forEach((mediaId) => {
         formData.append("deletedMediaIds", String(mediaId));
       });
@@ -1362,14 +1748,17 @@ const submitReview = async (payload: {
           ? "Cập nhật đánh giá thành công. Ảnh/video đang chờ duyệt."
           : "Cập nhật đánh giá thành công"
         : hasReviewMedia
-          ? "Gửi đánh giá thành công. Ảnh/video đang chờ duyệt."
-          : "Gửi đánh giá thành công"
+        ? "Gửi đánh giá thành công. Ảnh/video đang chờ duyệt."
+        : "Gửi đánh giá thành công"
     );
 
     await fetchMyReviews();
     await loadReviewableItems(orderId, false);
   } catch (error) {
-    showError(error, isEditMode ? "Không cập nhật được đánh giá" : "Không gửi được đánh giá");
+    showError(
+      error,
+      isEditMode ? "Không cập nhật được đánh giá" : "Không gửi được đánh giá"
+    );
   } finally {
     submittingReview.value = false;
   }
@@ -1397,28 +1786,22 @@ const handleReorder = async (order: any) => {
   if (result.isConfirmed) {
     try {
       store.orderLoading = true;
-
       const addPromises = order.items.map((item: any) => {
         const variantId =
           item.productVariantId || item.variantId || item.productId;
-
         return api.post("/v1/customer/cart/add", {
           productVariantId: Number(variantId),
           quantity: Number(item.quantity || 1),
         });
       });
-
       await Promise.all(addPromises);
-
       window.dispatchEvent(new Event("cart-updated"));
-
       toast("success", "Đã thêm sản phẩm vào giỏ hàng!");
-
       router.push("/cart");
     } catch (error) {
       showError(
         error,
-        "Không thể thêm sản phẩm vào giỏ hàng lúc này. Vui lòng thử lại."
+        "Không thể thêm sản phẩm vào giỏ hàng lúc này. Vui lòng thử lại.",
       );
     } finally {
       store.orderLoading = false;
@@ -1435,9 +1818,7 @@ const getProductIdFromItem = (item: any) => {
     item?.productVariant?.product?.id ??
     item?.productVariant?.product?.productId ??
     null;
-
   const productId = Number(rawId);
-
   return Number.isFinite(productId) && productId > 0 ? productId : null;
 };
 
@@ -1448,9 +1829,7 @@ const getProductVariantIdFromItem = (item: any) => {
     item?.productVariant?.id ??
     item?.productVariant?.variantId ??
     null;
-
   const variantId = Number(rawId);
-
   return Number.isFinite(variantId) && variantId > 0 ? variantId : null;
 };
 
@@ -1458,7 +1837,6 @@ const getProductDetailRoute = () => {
   return router.getRoutes().find((route) => {
     const routeName = String(route.name || "").toLowerCase();
     const routePath = String(route.path || "").toLowerCase();
-
     return (
       (routeName.includes("product") && routeName.includes("detail")) ||
       routePath.includes("/product/:") ||
@@ -1471,11 +1849,7 @@ const getProductDetailRoute = () => {
 const buildProductDetailPathFromRoute = (routePath: string, item: any) => {
   const productId = getProductIdFromItem(item);
   const variantId = getProductVariantIdFromItem(item);
-
-  if (!productId) {
-    return "";
-  }
-
+  if (!productId) return "";
   return routePath
     .replace(/:productId\??/g, String(productId))
     .replace(/:id\??/g, String(productId))
@@ -1484,113 +1858,118 @@ const buildProductDetailPathFromRoute = (routePath: string, item: any) => {
 
 const goToProductDetail = async (item: any) => {
   const productId = getProductIdFromItem(item);
-
   if (!productId) {
     toast("warning", "Không tìm thấy sản phẩm để xem chi tiết");
     return;
   }
-
   const variantId = getProductVariantIdFromItem(item);
   const productDetailRoute = getProductDetailRoute();
   const query = variantId ? { variantId: String(variantId) } : undefined;
-
   try {
     if (productDetailRoute?.name) {
       const params: Record<string, string> = {};
       const paramNames = Array.from(
-        String(productDetailRoute.path || "").matchAll(/:([A-Za-z0-9_]+)/g)
+        String(productDetailRoute.path || "").matchAll(/:([A-Za-z0-9_]+)/g),
       )
         .map((match) => match[1])
         .filter((paramName): paramName is string => Boolean(paramName));
-
       paramNames.forEach((paramName) => {
         if (paramName.toLowerCase().includes("variant")) {
           params[paramName] = String(variantId || productId);
           return;
         }
-
         params[paramName] = String(productId);
       });
-
-      await router.push({
-        name: productDetailRoute.name,
-        params,
-        query,
-      });
-
+      await router.push({ name: productDetailRoute.name, params, query });
       return;
     }
-
     if (productDetailRoute?.path) {
       const productPath = buildProductDetailPathFromRoute(
         productDetailRoute.path,
-        item
+        item,
       );
-
       if (productPath) {
         await router.push({ path: productPath, query });
         return;
       }
     }
-
     await router.push({ path: `/product/${productId}`, query });
   } catch (error) {
     showError(error, "Không thể mở chi tiết sản phẩm lúc này.");
   }
 };
 
+const getOrderCancelReason = (order: any) => {
+  const reason =
+    order?.cancelReason ??
+    order?.cancellationReason ??
+    order?.cancelNote ??
+    order?.cancelDescription ??
+    order?.reason ??
+    null;
+  const cleanReason = String(reason || "").trim();
+  if (
+    !cleanReason ||
+    cleanReason.toLowerCase() === "null" ||
+    cleanReason === "Đơn hàng của bạn đã bị hủy"
+  ) {
+    return "Đơn hàng của bạn đã bị hủy";
+  }
+  return cleanReason;
+};
+
 const getTrackingHistory = (order: any) => {
   const history = [];
   const baseDate = new Date(order.createdAt).getTime();
-
   history.push({
     time: new Date(baseDate),
     title: "Đơn hàng đã đặt",
     desc: "Đơn hàng đang chờ shop xác nhận.",
     active: order.status === 0,
   });
-
-  if (order.status >= 1 && order.status !== 4) {
+  if (order.status >= 1 && order.status !== 4)
     history.push({
       time: new Date(baseDate + 2 * 60 * 60 * 1000),
       title: "Đang chuẩn bị hàng",
       desc: "Người bán đang chuẩn bị kiện hàng của bạn.",
       active: order.status === 1,
     });
-  }
-
-  if (order.status >= 2 && order.status !== 4) {
+  if (order.status >= 2 && order.status !== 4)
     history.push({
       time: new Date(baseDate + 14 * 60 * 60 * 1000),
       title: "Đã giao cho ĐVVC",
       desc: "Kiện hàng đã rời trung tâm phân loại và đang trên đường giao.",
       active: order.status === 2,
     });
-  }
-
-  if (order.status === 3) {
+  if (order.status === 3)
     history.push({
       time: order.completedAt
         ? new Date(order.completedAt)
         : new Date(baseDate + 48 * 60 * 60 * 1000),
       title: "Đã giao",
-      desc: `Kiện hàng của bạn đã được giao. Người nhận: ${
-        order.customerName || "Bạn"
-      }`,
+      desc: `Kiện hàng của bạn đã được giao. Người nhận: ${order.customerName || "Bạn"}`,
       active: true,
     });
-  }
-
-  if (order.status === 4) {
+  if (order.status === 4)
     history.push({
-      time: new Date(baseDate + 30 * 60 * 1000),
+      time: getOrderCancelledAt(order)
+        ? new Date(getOrderCancelledAt(order))
+        : new Date(baseDate + 15 * 60 * 1000),
       title: "Đã hủy",
-      desc: "Đơn hàng đã được hủy bỏ.",
+      desc: "Đơn hàng của bạn đã bị hủy.",
       active: true,
       isCancel: true,
     });
-  }
-
+  if (order.status === 5)
+    history.push({
+      time: order.deliveryFailedAt
+        ? new Date(order.deliveryFailedAt)
+        : new Date(baseDate + 48 * 60 * 60 * 1000),
+      title: "Giao hàng thất bại",
+      desc: order.deliveryFailedReason || "Đơn hàng giao không thành công.",
+      active: true,
+      isCancel: true,
+    });
   return history.reverse();
 };
 
@@ -1614,19 +1993,13 @@ const getCapacityText = (item: any) => {
     item?.volume ??
     item?.volumeValue ??
     null;
-
   if (raw !== null && raw !== undefined && String(raw).trim() !== "") {
     const text = String(raw).trim();
     return text.toLowerCase().includes("ml") ? text : `${text}ml`;
   }
-
   const sku = String(item?.sku || "");
   const match = sku.match(/-(\d+(?:\.\d+)?)-/);
-
-  if (match?.[1]) {
-    return `${match[1]}ml`;
-  }
-
+  if (match?.[1]) return `${match[1]}ml`;
   return "Đang cập nhật";
 };
 
@@ -1637,85 +2010,52 @@ const getBottleTypeText = (item: any) => {
     item?.bottleName ??
     item?.variantBottleType ??
     null;
-
-  if (raw !== null && raw !== undefined && String(raw).trim() !== "") {
+  if (raw !== null && raw !== undefined && String(raw).trim() !== "")
     return String(raw).trim();
-  }
-
   const sku = String(item?.sku || "").toUpperCase();
-
-  if (sku.includes("FULL")) {
-    return "Chai gốc Fullbox";
-  }
-
-  if (sku.includes("CHIET")) {
-    return "Chai chiết";
-  }
-
+  if (sku.includes("FULL")) return "Chai gốc Fullbox";
+  if (sku.includes("CHIET")) return "Chai chiết";
   return "Đang cập nhật";
 };
 
-const getManufacturingDate = (item: any) => {
-  return (
-    item?.manufacturingDate ??
-    item?.mfgDate ??
-    item?.manufactureDate ??
-    item?.productionDate ??
-    null
-  );
-};
-
-const getExpirationDate = (item: any) => {
-  return (
-    item?.expirationDate ??
-    item?.expiryDate ??
-    item?.expiredDate ??
-    item?.expDate ??
-    null
-  );
-};
-
-const formatMoney = (value: number | null | undefined) => {
-  return Number(value || 0).toLocaleString("vi-VN", {
+const getManufacturingDate = (item: any) =>
+  item?.manufacturingDate ??
+  item?.mfgDate ??
+  item?.manufactureDate ??
+  item?.productionDate ??
+  null;
+const getExpirationDate = (item: any) =>
+  item?.expirationDate ??
+  item?.expiryDate ??
+  item?.expiredDate ??
+  item?.expDate ??
+  null;
+const formatMoney = (value: number | null | undefined) =>
+  Number(value || 0).toLocaleString("vi-VN", {
     style: "currency",
     currency: "VND",
   });
-};
-
 const toMoneyNumber = (value: unknown) => {
-  if (value === null || value === undefined || value === "") {
-    return 0;
-  }
-
   const numberValue = Number(value);
-
   return Number.isFinite(numberValue) ? numberValue : 0;
 };
-
 const pickMoneyValue = (...values: unknown[]) => {
   for (const value of values) {
     const numberValue = toMoneyNumber(value);
-
-    if (numberValue > 0) {
-      return numberValue;
-    }
+    if (numberValue > 0) return numberValue;
   }
-
   return 0;
 };
-
-const getItemUnitDiscount = (item: any) => {
-  return pickMoneyValue(
+const getItemUnitDiscount = (item: any) =>
+  pickMoneyValue(
     item?.discountAmount,
     item?.unitDiscountAmount,
     item?.unitDiscount,
     item?.flashSaleDiscount,
-    item?.itemDiscount
+    item?.itemDiscount,
   );
-};
-
-const getItemFinalUnitPrice = (item: any) => {
-  return pickMoneyValue(
+const getItemFinalUnitPrice = (item: any) =>
+  pickMoneyValue(
     item?.finalPrice,
     item?.unitFinalPrice,
     item?.priceAfterDiscount,
@@ -1724,10 +2064,8 @@ const getItemFinalUnitPrice = (item: any) => {
     item?.sellingPrice,
     item?.unitPrice,
     item?.price,
-    item?.originalPrice
+    item?.originalPrice,
   );
-};
-
 const getItemOriginalUnitPrice = (item: any) => {
   const originalPrice = pickMoneyValue(
     item?.originalPrice,
@@ -1737,111 +2075,62 @@ const getItemOriginalUnitPrice = (item: any) => {
     item?.priceBeforeDiscount,
     item?.regularPrice,
     item?.unitPrice,
-    item?.price
+    item?.price,
   );
-
   const finalPrice = getItemFinalUnitPrice(item);
   const discountAmount = getItemUnitDiscount(item);
-
-  if (originalPrice > finalPrice) {
-    return originalPrice;
-  }
-
-  if (finalPrice > 0 && discountAmount > 0) {
-    return finalPrice + discountAmount;
-  }
-
+  if (originalPrice > finalPrice) return originalPrice;
+  if (finalPrice > 0 && discountAmount > 0) return finalPrice + discountAmount;
   return originalPrice || finalPrice;
 };
-
-const hasItemPrice = (item: any) => {
-  return getItemFinalUnitPrice(item) > 0 || getItemOriginalUnitPrice(item) > 0;
-};
-
-const hasItemSale = (item: any) => {
-  return getItemOriginalUnitPrice(item) > getItemFinalUnitPrice(item);
-};
-
+const hasItemPrice = (item: any) =>
+  getItemFinalUnitPrice(item) > 0 || getItemOriginalUnitPrice(item) > 0;
+const hasItemSale = (item: any) =>
+  getItemOriginalUnitPrice(item) > getItemFinalUnitPrice(item);
 const getItemLineTotal = (item: any) => {
   const lineTotal = pickMoneyValue(
     item?.lineTotal,
     item?.totalPrice,
     item?.itemTotal,
-    item?.subtotal
+    item?.subtotal,
   );
-
-  if (lineTotal > 0) {
-    return lineTotal;
-  }
-
+  if (lineTotal > 0) return lineTotal;
   return getItemFinalUnitPrice(item) * Number(item?.quantity || 0);
 };
 
 const formatDate = (value: string | null | undefined) => {
   if (!value) return "-";
-
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-
-  return date.toLocaleString("vi-VN", {
-    hour12: false,
-  });
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("vi-VN", { hour12: false });
 };
 
 const formatDateOnly = (value: string | null | undefined) => {
   if (!value) return "Đang cập nhật";
-
   const dateOnly = String(value).substring(0, 10);
   const date = new Date(`${dateOnly}T00:00:00`);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Đang cập nhật";
-  }
-
+  if (Number.isNaN(date.getTime())) return "Đang cập nhật";
   return date.toLocaleDateString("vi-VN");
 };
 
 const formatPaymentMethod = (value: string | null | undefined) => {
   if (!value) return "-";
-
   const normalized = String(value).toUpperCase();
-
   if (normalized === "COD") return "Thanh toán khi nhận hàng";
   if (normalized === "VNPAY") return "VNPay";
   if (normalized === "CASH") return "Tiền mặt";
   if (normalized === "BANK_TRANSFER") return "Chuyển khoản";
   if (normalized === "TRANSFER") return "Chuyển khoản";
   if (normalized === "MIXED") return "Tiền mặt + chuyển khoản";
-
   return value;
 };
 
 const formatOrderType = (value: string | null | undefined) => {
   if (!value) return "-";
-
   const normalized = String(value).toUpperCase();
-
   if (normalized === "ONLINE") return "Đơn online";
   if (normalized === "POS") return "Đơn tại quầy";
-
   return value;
-};
-
-const getOrderCancelReason = (order: any) => {
-  const reason =
-    order?.cancelReason ??
-    order?.cancellationReason ??
-    order?.cancelNote ??
-    order?.cancelDescription ??
-    order?.reason ??
-    null;
-
-  const cleanReason = String(reason || "").trim();
-
-  return cleanReason || "Chưa có lý do hủy";
 };
 
 const getOrderCancelledAt = (order: any) => {
@@ -1864,13 +2153,121 @@ const getOrderReturnRequest = (order: any) => {
   );
 };
 
+const hasTextValue = (value: unknown) => {
+  return String(value ?? "").trim().length > 0;
+};
+
+const hasArrayData = (value: unknown) => {
+  return Array.isArray(value) && value.length > 0;
+};
+
+const hasPositiveMoneyValue = (...values: unknown[]) => {
+  return values.some((value) => toMoneyNumber(value) > 0);
+};
+
+const hasRealReturnRequestObject = (request: any) => {
+  if (!request) {
+    return false;
+  }
+
+  return Boolean(
+    hasTextValue(request?.id) ||
+      hasTextValue(request?.returnRequestId) ||
+      hasTextValue(request?.code) ||
+      hasTextValue(request?.returnCode) ||
+      hasTextValue(request?.requestCode) ||
+      hasTextValue(request?.reason) ||
+      hasTextValue(request?.returnReason) ||
+      hasTextValue(request?.returnRequestReason) ||
+      hasTextValue(request?.description) ||
+      hasTextValue(request?.returnDescription) ||
+      hasTextValue(request?.createdAt) ||
+      hasTextValue(request?.returnRequestedAt) ||
+      hasTextValue(request?.requestedAt) ||
+      hasTextValue(request?.rejectReason) ||
+      hasTextValue(request?.rejectedReason) ||
+      hasTextValue(request?.returnRejectReason) ||
+      hasPositiveMoneyValue(
+        request?.refundAmount,
+        request?.returnRefundAmount,
+        request?.estimatedRefundAmount
+      ) ||
+      hasArrayData(request?.items) ||
+      hasArrayData(request?.returnItems) ||
+      hasArrayData(request?.returnRequestItems) ||
+      hasArrayData(request?.returnedItems) ||
+      hasArrayData(request?.refundItems) ||
+      hasArrayData(request?.mediaFiles) ||
+      hasArrayData(request?.returnMediaUrls) ||
+      hasArrayData(request?.returnMediaFiles) ||
+      hasArrayData(request?.returnMedias) ||
+      hasArrayData(request?.returnImages) ||
+      normalizeReturnStatusValue(
+        request?.processStatus ??
+          request?.status ??
+          request?.returnStatus ??
+          request?.refundStatus ??
+          null
+      ) !== null
+  );
+};
+
+const hasOrderReturnData = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  const directReturnStatus = normalizeReturnStatusValue(
+    order?.returnProcessStatus ??
+      order?.returnStatus ??
+      order?.refundStatus ??
+      order?.returnRequestStatus ??
+      null
+  );
+
+  return Boolean(
+    Number(order?.status) === 6 ||
+      Number(order?.status) === 7 ||
+      hasRealReturnRequestObject(request) ||
+      hasTextValue(order?.returnReason) ||
+      hasTextValue(order?.returnDescription) ||
+      hasTextValue(order?.returnRequestedAt) ||
+      hasTextValue(order?.returnRejectReason) ||
+      hasTextValue(order?.rejectReason) ||
+      hasTextValue(order?.rejectedReason) ||
+      hasArrayData(order?.returnItems) ||
+      hasArrayData(order?.returnRequestItems) ||
+      hasArrayData(order?.returnedItems) ||
+      hasArrayData(order?.refundItems) ||
+      hasArrayData(order?.returnMediaUrls) ||
+      hasArrayData(order?.returnImages) ||
+      hasArrayData(order?.returnVideos) ||
+      hasArrayData(order?.returnMediaFiles) ||
+      hasArrayData(order?.returnMedias) ||
+      hasPositiveMoneyValue(
+        order?.returnRefundAmount,
+        order?.estimatedRefundAmount,
+        order?.returnEstimatedRefundAmount
+      ) ||
+      directReturnStatus !== null
+  );
+};
+
 const isReturnInfoVisible = (order: any) => {
-  return Number(order?.status) === 6 || Number(order?.status) === 7;
+  if (!hasOrderReturnData(order)) {
+    return false;
+  }
+
+  const processStatus = getOrderReturnProcessStatus(order);
+
+  /**
+   * Chỉ hiển thị box hoàn hàng khi có trạng thái hoàn thật sự.
+   * CUSTOMER_CANCELLED: khách đã tự rút yêu cầu, cho quay lại luồng Hoàn thành.
+   * UNKNOWN: không coi là yêu cầu hoàn để tránh đơn Hoàn thành thường bị lẫn vào.
+   */
+  return processStatus !== "CUSTOMER_CANCELLED" && processStatus !== "UNKNOWN";
 };
 
 const getOrderReturnReason = (order: any) => {
   const request = getOrderReturnRequest(order);
-
   const reason =
     order?.returnReason ??
     order?.returnRequestReason ??
@@ -1881,15 +2278,11 @@ const getOrderReturnReason = (order: any) => {
     request?.returnRequestReason ??
     request?.refundReason ??
     null;
-
-  const cleanReason = String(reason || "").trim();
-
-  return cleanReason || "Chưa có lý do hoàn hàng";
+  return String(reason || "").trim() || "Chưa có lý do hoàn hàng";
 };
 
 const getOrderReturnDescription = (order: any) => {
   const request = getOrderReturnRequest(order);
-
   const description =
     order?.returnDescription ??
     order?.returnRequestDescription ??
@@ -1902,8 +2295,566 @@ const getOrderReturnDescription = (order: any) => {
     request?.refundDescription ??
     request?.note ??
     null;
-
   return String(description || "").trim();
+};
+
+const getOrderReturnRequestedAt = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  return (
+    order?.returnRequestedAt ??
+    order?.returnRequestCreatedAt ??
+    order?.returnCreatedAt ??
+    request?.createdAt ??
+    request?.returnRequestedAt ??
+    request?.requestedAt ??
+    null
+  );
+};
+
+const getReturnRequestCode = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  const rawCode =
+    order?.returnRequestCode ??
+    order?.returnCode ??
+    order?.refundRequestCode ??
+    request?.code ??
+    request?.returnCode ??
+    request?.requestCode ??
+    request?.id ??
+    request?.returnRequestId ??
+    null;
+
+  const cleanCode = String(rawCode || "").trim();
+
+  if (cleanCode) {
+    return cleanCode;
+  }
+
+  return `HT-${String(order?.orderId || order?.id || "").padStart(6, "0")}`;
+};
+
+const normalizeReturnStatusValue = (
+  value: unknown
+): ReturnProcessStatus | null => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const normalized = String(value)
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (
+    ["0", "PENDING", "WAITING", "WAITING_APPROVAL", "CHO XU LY"].includes(
+      normalized
+    )
+  ) {
+    return "PENDING";
+  }
+
+  if (
+    ["1", "ACCEPTED", "APPROVED", "CONFIRMED", "DA CHAP NHAN"].includes(
+      normalized
+    )
+  ) {
+    return "ACCEPTED";
+  }
+
+  if (
+    ["2", "REJECTED", "DENIED", "REFUSED", "TU CHOI", "DA TU CHOI"].includes(
+      normalized
+    )
+  ) {
+    return "REJECTED";
+  }
+
+  if (
+    [
+      "3",
+      "REFUNDED",
+      "COMPLETED",
+      "DONE",
+      "RETURN_COMPLETED",
+      "DA HOAN TIEN",
+    ].includes(normalized)
+  ) {
+    return "REFUNDED";
+  }
+
+  if (
+    [
+      "4",
+      "CUSTOMER_CANCELLED",
+      "CUSTOMER_CANCELED",
+      "CANCELLED_BY_CUSTOMER",
+      "CANCELED_BY_CUSTOMER",
+      "CUSTOMER_CANCEL",
+      "CUSTOMER_CANCELED_RETURN",
+      "CUSTOMER_CANCELLED_RETURN",
+      "KHACH HUY",
+      "KHACH DA HUY",
+      "KHACH HUY YEU CAU",
+      "KHACH DA HUY YEU CAU",
+    ].includes(normalized)
+  ) {
+    return "CUSTOMER_CANCELLED";
+  }
+
+  if (
+    ["PARTIAL", "PARTIALLY_ACCEPTED", "PARTIALLY_REFUNDED"].includes(normalized)
+  ) {
+    return "PARTIAL";
+  }
+
+  return null;
+};
+
+const shouldShowReturnDeadlineText = (order: any) => {
+  if (!isCompletedOrder(order)) {
+    return false;
+  }
+
+  /**
+   * Đã từng có yêu cầu hoàn thật:
+   * - PENDING: đang chờ shop xử lý
+   * - ACCEPTED: đã chấp nhận
+   * - REJECTED: đã từ chối
+   * - REFUNDED: đã hoàn tiền
+   * - PARTIAL: đang xử lý một phần
+   *
+   * Các case này không hiện "Còn X ngày để yêu cầu hoàn hàng"
+   * vì sẽ gây hiểu nhầm là khách còn được gửi lại.
+   */
+  const returnStatus = getOrderReturnProcessStatus(order);
+
+  if (
+    returnStatus === "PENDING" ||
+    returnStatus === "ACCEPTED" ||
+    returnStatus === "REJECTED" ||
+    returnStatus === "REFUNDED" ||
+    returnStatus === "PARTIAL"
+  ) {
+    return false;
+  }
+
+  return Boolean(getReturnDeadlineText(order));
+};
+
+const getReturnItemRawStatus = (item: any) => {
+  return (
+    item?.status ??
+    item?.returnStatus ??
+    item?.returnItemStatus ??
+    item?.processStatus ??
+    item?.refundStatus ??
+    item?.orderItem?.returnStatus ??
+    item?.orderItem?.status ??
+    null
+  );
+};
+
+const getOrderReturnProcessStatus = (order: any): ReturnProcessStatus => {
+  const request = getOrderReturnRequest(order);
+
+  const directStatus = normalizeReturnStatusValue(
+    order?.returnProcessStatus ??
+      order?.returnStatus ??
+      order?.refundStatus ??
+      order?.returnRequestStatus ??
+      request?.processStatus ??
+      request?.status ??
+      request?.returnStatus ??
+      request?.refundStatus ??
+      null
+  );
+
+  if (directStatus) {
+    return directStatus;
+  }
+
+  const itemStatuses = getRawReturnItemsPayload(order)
+    .map((item: any) =>
+      normalizeReturnStatusValue(getReturnItemRawStatus(item))
+    )
+    .filter((status): status is ReturnProcessStatus => Boolean(status));
+
+  if (itemStatuses.length > 0) {
+    if (itemStatuses.every((status) => status === "REFUNDED")) {
+      return "REFUNDED";
+    }
+
+    if (itemStatuses.every((status) => status === "REJECTED")) {
+      return "REJECTED";
+    }
+
+    if (itemStatuses.every((status) => status === "ACCEPTED")) {
+      return "ACCEPTED";
+    }
+
+    if (itemStatuses.every((status) => status === "PENDING")) {
+      return "PENDING";
+    }
+
+    if (itemStatuses.every((status) => status === "CUSTOMER_CANCELLED")) {
+      return "CUSTOMER_CANCELLED";
+    }
+
+    return "PARTIAL";
+  }
+
+  if (Number(order?.status) === 7) {
+    return "REFUNDED";
+  }
+
+  if (Number(order?.status) === 6) {
+    return "PENDING";
+  }
+
+  return "UNKNOWN";
+};
+
+const getReturnProcessText = (order: any) => {
+  const directText = String(
+    order?.returnProcessStatusText ??
+      order?.returnStatusText ??
+      order?.refundStatusText ??
+      getOrderReturnRequest(order)?.statusText ??
+      ""
+  ).trim();
+
+  if (directText) {
+    return directText;
+  }
+
+  switch (getOrderReturnProcessStatus(order)) {
+    case "PENDING":
+      return "Chờ shop xử lý";
+    case "ACCEPTED":
+      return "Đã chấp nhận / Chờ hoàn tiền";
+    case "REJECTED":
+      return "Đã từ chối hoàn hàng";
+    case "REFUNDED":
+      return "Đã xử lý hoàn tiền";
+    case "PARTIAL":
+      return "Đang xử lý một phần";
+    case "CUSTOMER_CANCELLED":
+      return "Khách đã hủy yêu cầu";
+    default:
+      return "Đang cập nhật";
+  }
+};
+
+const getReturnProcessClass = (order: any) => {
+  const status = getOrderReturnProcessStatus(order);
+
+  return {
+    "is-return-pending": status === "PENDING",
+    "is-return-accepted": status === "ACCEPTED",
+    "is-return-rejected": status === "REJECTED",
+    "is-return-refunded": status === "REFUNDED",
+    "is-return-partial": status === "PARTIAL",
+    "is-return-cancelled": status === "CUSTOMER_CANCELLED",
+  };
+};
+
+const getReturnProcessBadgeClass = (order: any) => {
+  const status = getOrderReturnProcessStatus(order);
+
+  return {
+    "is-pending": status === "PENDING",
+    "is-accepted": status === "ACCEPTED",
+    "is-rejected": status === "REJECTED",
+    "is-refunded": status === "REFUNDED",
+    "is-partial": status === "PARTIAL",
+    "is-cancelled": status === "CUSTOMER_CANCELLED",
+  };
+};
+
+const getOrderReturnRejectReason = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  const directReason =
+    order?.returnRejectReason ??
+    order?.rejectReason ??
+    order?.rejectedReason ??
+    order?.returnRejectedReason ??
+    request?.rejectReason ??
+    request?.rejectedReason ??
+    request?.returnRejectReason ??
+    null;
+
+  const cleanDirectReason = String(directReason || "").trim();
+
+  if (cleanDirectReason) {
+    return cleanDirectReason;
+  }
+
+  const itemReason = getRawReturnItemsPayload(order)
+    .map((item: any) => getReturnItemRejectReason(item))
+    .find((reason) => reason.length > 0);
+
+  return itemReason || "";
+};
+
+const getReturnProcessedAt = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  return (
+    order?.returnProcessedAt ??
+    order?.returnReviewedAt ??
+    order?.returnAcceptedAt ??
+    order?.returnRejectedAt ??
+    order?.returnRefundedAt ??
+    order?.refundedAt ??
+    order?.updatedAt ??
+    request?.processedAt ??
+    request?.reviewedAt ??
+    request?.acceptedAt ??
+    request?.rejectedAt ??
+    request?.refundedAt ??
+    request?.updatedAt ??
+    null
+  );
+};
+
+const getReturnProcessTimeline = (order: any): ReturnProcessTimelineStep[] => {
+  const status = getOrderReturnProcessStatus(order);
+  const requestedAt = getOrderReturnRequestedAt(order);
+  const processedAt = getReturnProcessedAt(order);
+  const rejectReason = getOrderReturnRejectReason(order);
+
+  const requestedStep: ReturnProcessTimelineStep = {
+    key: "requested",
+    title: "Gửi yêu cầu",
+    desc: getOrderReturnReason(order),
+    time: requestedAt,
+    icon: "bi-send-check",
+    done: true,
+    active: status === "PENDING",
+  };
+
+  if (status === "REJECTED") {
+    return [
+      requestedStep,
+      {
+        key: "rejected",
+        title: "Đã từ chối",
+        desc: rejectReason || "Yêu cầu hoàn hàng không được chấp nhận.",
+        time: processedAt,
+        icon: "bi-x-circle",
+        done: true,
+        active: true,
+        rejected: true,
+      },
+    ];
+  }
+
+  if (status === "CUSTOMER_CANCELLED") {
+    return [
+      requestedStep,
+      {
+        key: "customer-cancelled",
+        title: "Đã hủy yêu cầu",
+        desc: "Bạn đã rút lại yêu cầu hoàn hàng trước khi shop xử lý.",
+        time: processedAt,
+        icon: "bi-arrow-counterclockwise",
+        done: true,
+        active: true,
+      },
+    ];
+  }
+
+  const acceptedDone =
+    status === "ACCEPTED" || status === "REFUNDED" || status === "PARTIAL";
+  const refundedDone = status === "REFUNDED";
+
+  return [
+    requestedStep,
+    {
+      key: "accepted",
+      title: "Được chấp nhận",
+      desc: acceptedDone
+        ? "Shop đã chấp nhận yêu cầu hoàn hàng."
+        : "Shop đang kiểm tra yêu cầu và bằng chứng của bạn.",
+      time: acceptedDone ? processedAt : null,
+      icon: "bi-check-circle",
+      done: acceptedDone,
+      active: status === "ACCEPTED" || status === "PARTIAL",
+    },
+    {
+      key: "refunded",
+      title: "Đã xử lý hoàn tiền",
+      desc: refundedDone
+        ? "Khoản hoàn tiền đã được shop xác nhận xử lý."
+        : "Sau khi shop hoàn tiền thực tế, trạng thái sẽ được cập nhật tại đây.",
+      time: refundedDone ? processedAt : null,
+      icon: "bi-cash-coin",
+      done: refundedDone,
+      active: status === "REFUNDED",
+    },
+  ];
+};
+
+const getReturnProcessAlert = (order: any): ReturnProcessAlert | null => {
+  const status = getOrderReturnProcessStatus(order);
+  const refundAmount = getOrderReturnRefundAmount(order);
+  const refundMethod = getOrderRefundMethodText(order) || "phương thức đã chọn";
+
+  if (status === "REJECTED") {
+    const reason = getOrderReturnRejectReason(order);
+
+    return {
+      title: "Yêu cầu hoàn hàng bị từ chối",
+      desc: reason
+        ? `Lý do: ${reason}`
+        : "Shop đã từ chối yêu cầu hoàn hàng. Vui lòng xem chi tiết sản phẩm bên dưới.",
+      icon: "bi-x-circle",
+      className: "is-rejected",
+    };
+  }
+
+  if (status === "REFUNDED") {
+    return {
+      title: "Đã xử lý hoàn tiền",
+      desc:
+        refundAmount > 0
+          ? `Shop đã xác nhận hoàn ${formatMoney(
+              refundAmount
+            )} qua ${refundMethod}.`
+          : "Shop đã xác nhận xử lý hoàn tiền cho yêu cầu này.",
+      icon: "bi-check-circle",
+      className: "is-refunded",
+    };
+  }
+
+  if (status === "ACCEPTED") {
+    return {
+      title: "Yêu cầu đã được chấp nhận",
+      desc:
+        refundAmount > 0
+          ? `Shop sẽ hoàn ${formatMoney(
+              refundAmount
+            )} qua ${refundMethod}. Chỉ khi shop xác nhận đã hoàn tiền, trạng thái mới chuyển sang hoàn tất.`
+          : "Shop đã chấp nhận yêu cầu và đang xử lý bước hoàn tiền.",
+      icon: "bi-clock-history",
+      className: "is-accepted",
+    };
+  }
+
+  if (status === "PENDING") {
+    return {
+      title: "Đang chờ shop xử lý",
+      desc: "Yêu cầu hoàn hàng đã được gửi. Shop sẽ kiểm tra lý do, sản phẩm hoàn và ảnh/video bằng chứng trước khi chấp nhận hoặc từ chối.",
+      icon: "bi-hourglass-split",
+      className: "is-pending",
+    };
+  }
+
+  if (status === "CUSTOMER_CANCELLED") {
+    return {
+      title: "Bạn đã hủy yêu cầu hoàn hàng",
+      desc: "Yêu cầu cũ đã được rút lại. Nếu đơn còn trong hạn 15 ngày, bạn có thể gửi yêu cầu hoàn hàng mới.",
+      icon: "bi-arrow-counterclockwise",
+      className: "is-cancelled",
+    };
+  }
+
+  return null;
+};
+
+const getReturnRefundLabel = (order: any) => {
+  switch (getOrderReturnProcessStatus(order)) {
+    case "REFUNDED":
+      return "Số tiền đã hoàn";
+    case "ACCEPTED":
+      return "Số tiền sẽ hoàn";
+    case "REJECTED":
+      return "Số tiền yêu cầu hoàn";
+    case "CUSTOMER_CANCELLED":
+      return "Số tiền yêu cầu hoàn";
+    default:
+      return "Tổng tiền hoàn";
+  }
+};
+
+const getOrderRefundMethodText = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  const rawMethod = String(
+    order?.refundMethod ??
+      order?.returnRefundMethod ??
+      request?.refundMethod ??
+      request?.returnRefundMethod ??
+      ""
+  )
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (!rawMethod) {
+    return "";
+  }
+
+  if (
+    rawMethod === "1" ||
+    rawMethod === "BANK_TRANSFER" ||
+    rawMethod.includes("BANK") ||
+    rawMethod.includes("TRANSFER") ||
+    rawMethod.includes("CHUYEN KHOAN") ||
+    rawMethod.includes("NGAN HANG")
+  ) {
+    return "Tài khoản ngân hàng";
+  }
+
+  if (
+    rawMethod === "2" ||
+    rawMethod === "STORE" ||
+    rawMethod.includes("CUA HANG") ||
+    rawMethod.includes("TAI QUAY")
+  ) {
+    return "Hoàn tại cửa hàng";
+  }
+
+  return String(order?.refundMethod ?? request?.refundMethod ?? "");
+};
+
+const canCancelReturnRequest = (order: any) => {
+  return (
+    Number(order?.status) === 6 &&
+    getOrderReturnProcessStatus(order) === "PENDING"
+  );
+};
+
+type ReturnProcessStatus =
+  | "PENDING"
+  | "ACCEPTED"
+  | "REJECTED"
+  | "REFUNDED"
+  | "PARTIAL"
+  | "CUSTOMER_CANCELLED"
+  | "UNKNOWN";
+
+type ReturnProcessTimelineStep = {
+  key: string;
+  title: string;
+  desc: string;
+  time: string | null;
+  icon: string;
+  done: boolean;
+  active: boolean;
+  rejected?: boolean;
+};
+
+type ReturnProcessAlert = {
+  title: string;
+  desc: string;
+  icon: string;
+  className: string;
 };
 
 type ReturnSelectedItemView = {
@@ -1924,12 +2875,46 @@ type ReturnSelectedItemView = {
   itemAmount: number;
   voucherAllocatedAmount: number;
   refundAmount: number;
+  status: number | string | null;
+  statusText?: string | null;
+  rejectReason?: string | null;
 };
 
 const toPositiveNumberOrNull = (value: unknown) => {
   const numberValue = Number(value);
 
   return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null;
+};
+
+const getOrderShippingFee = (order: any) => {
+  return pickMoneyValue(
+    order?.shippingFee,
+    order?.shippingfee,
+    order?.shippingFeeAmount,
+    order?.shipFee,
+    order?.deliveryFee,
+    order?.shippingAmount
+  );
+};
+
+const getOrderReturnShippingFee = (order: any) => {
+  const request = getOrderReturnRequest(order);
+
+  return pickMoneyValue(
+    order?.returnShippingFee,
+    order?.refundShippingFee,
+    order?.shippingFeeRefundAmount,
+    request?.returnShippingFee,
+    request?.refundShippingFee,
+    request?.shippingFeeRefundAmount
+  );
+};
+
+const getOrderReturnProductRefundAmount = (order: any) => {
+  const totalRefund = getOrderReturnRefundAmount(order);
+  const returnShippingFee = getOrderReturnShippingFee(order);
+
+  return Math.max(0, totalRefund - returnShippingFee);
 };
 
 const getOrderReturnRefundAmount = (order: any) => {
@@ -2005,6 +2990,75 @@ const getReturnPayloadVariantId = (payload: any) => {
   );
 };
 
+const getReturnPayloadStatus = (payload: any) => {
+  return getReturnItemRawStatus(payload);
+};
+
+const getReturnPayloadStatusText = (payload: any) => {
+  const text =
+    payload?.statusText ??
+    payload?.returnStatusText ??
+    payload?.returnItemStatusText ??
+    payload?.processStatusText ??
+    payload?.orderItem?.returnStatusText ??
+    null;
+
+  return String(text || "").trim() || null;
+};
+
+const getReturnItemRejectReason = (item: any) => {
+  const reason =
+    item?.rejectReason ??
+    item?.rejectedReason ??
+    item?.returnRejectReason ??
+    item?.returnRejectedReason ??
+    item?.orderItem?.rejectReason ??
+    item?.orderItem?.rejectedReason ??
+    null;
+
+  return String(reason || "").trim();
+};
+
+const getReturnItemStatusText = (item: any) => {
+  const directText = String(item?.statusText || "").trim();
+
+  if (directText) {
+    return directText;
+  }
+
+  const status = normalizeReturnStatusValue(item?.status);
+
+  switch (status) {
+    case "PENDING":
+      return "Chờ xử lý";
+    case "ACCEPTED":
+      return "Đã chấp nhận";
+    case "REJECTED":
+      return "Từ chối";
+    case "REFUNDED":
+      return "Đã hoàn tiền";
+    case "PARTIAL":
+      return "Xử lý một phần";
+    case "CUSTOMER_CANCELLED":
+      return "Khách đã hủy yêu cầu";
+    default:
+      return "Đang cập nhật";
+  }
+};
+
+const getReturnItemStatusClass = (item: any) => {
+  const status = normalizeReturnStatusValue(item?.status);
+
+  return {
+    "is-pending": status === "PENDING" || status === null,
+    "is-accepted": status === "ACCEPTED",
+    "is-rejected": status === "REJECTED",
+    "is-refunded": status === "REFUNDED",
+    "is-partial": status === "PARTIAL",
+    "is-cancelled": status === "CUSTOMER_CANCELLED",
+  };
+};
+
 const findBaseOrderItemForReturn = (order: any, payload: any) => {
   const orderItems = Array.isArray(order?.items) ? order.items : [];
 
@@ -2014,7 +3068,10 @@ const findBaseOrderItemForReturn = (order: any, payload: any) => {
 
   return (
     orderItems.find((item: any) => {
-      if (orderItemId && Number(item?.orderItemId ?? item?.id) === orderItemId) {
+      if (
+        orderItemId &&
+        Number(item?.orderItemId ?? item?.id) === orderItemId
+      ) {
         return true;
       }
 
@@ -2101,7 +3158,8 @@ const getOrderReturnSelectedItems = (order: any): ReturnSelectedItemView[] => {
         getReturnPayloadProductId(payload) ?? getProductIdFromItem(baseItem);
 
       const productVariantId =
-        getReturnPayloadVariantId(payload) ?? getProductVariantIdFromItem(baseItem);
+        getReturnPayloadVariantId(payload) ??
+        getProductVariantIdFromItem(baseItem);
 
       const orderedQuantity =
         toPositiveNumberOrNull(
@@ -2134,8 +3192,8 @@ const getOrderReturnSelectedItems = (order: any): ReturnSelectedItemView[] => {
         rawItemAmount > 0
           ? rawItemAmount
           : unitFinalPrice > 0 && returnQuantity > 0
-            ? unitFinalPrice * returnQuantity
-            : 0;
+          ? unitFinalPrice * returnQuantity
+          : 0;
       const voucherAllocatedAmount = pickMoneyValue(
         payload?.voucherAllocatedAmount,
         payload?.allocatedVoucherAmount,
@@ -2164,13 +3222,8 @@ const getOrderReturnSelectedItems = (order: any): ReturnSelectedItemView[] => {
           payload?.orderItem?.brandName ??
           baseItem?.brandName ??
           null,
-        sku:
-          payload?.sku ??
-          payload?.orderItem?.sku ??
-          baseItem?.sku ??
-          null,
-        image:
-          getItemImage(mergedItem) || FALLBACK_IMAGE,
+        sku: payload?.sku ?? payload?.orderItem?.sku ?? baseItem?.sku ?? null,
+        image: getItemImage(mergedItem) || FALLBACK_IMAGE,
         capacity:
           payload?.capacity ??
           payload?.capacityName ??
@@ -2197,6 +3250,9 @@ const getOrderReturnSelectedItems = (order: any): ReturnSelectedItemView[] => {
           payload?.orderItem?.bottleTypeName ??
           baseItem?.bottleTypeName ??
           null,
+        status: getReturnPayloadStatus(payload),
+        statusText: getReturnPayloadStatusText(payload),
+        rejectReason: getReturnItemRejectReason(payload),
         orderedQuantity,
         returnQuantity,
         unitFinalPrice,
@@ -2205,7 +3261,9 @@ const getOrderReturnSelectedItems = (order: any): ReturnSelectedItemView[] => {
         refundAmount,
       };
     })
-    .filter((item) => item.orderItemId || item.productVariantId || item.productId);
+    .filter(
+      (item) => item.orderItemId || item.productVariantId || item.productId
+    );
 };
 
 type ReturnMediaView = {
@@ -2217,36 +3275,22 @@ const getLocalBackendBaseUrl = () => {
   const isLocalhost =
     window.location.hostname === "localhost" ||
     window.location.hostname === "127.0.0.1";
-
-  if (isLocalhost) {
+  if (isLocalhost)
     return `${window.location.protocol}//${window.location.hostname}:8080`;
-  }
-
   return window.location.origin;
 };
 
 const getApiAssetBaseUrl = () => {
   const configuredBaseUrl = String(api.defaults.baseURL || "").trim();
-
-  /**
-   * Khi axios baseURL là "/api", nếu ghép ảnh theo window.origin
-   * thì ảnh sẽ thành localhost:5173/uploads/... và Vite không phục vụ file đó.
-   * File hoàn hàng đang được BE lưu ở /uploads/return-requests nên ở môi trường dev
-   * phải trỏ thẳng sang backend localhost:8080.
-   */
-  if (!configuredBaseUrl || configuredBaseUrl.startsWith("/")) {
+  if (!configuredBaseUrl || configuredBaseUrl.startsWith("/"))
     return getLocalBackendBaseUrl();
-  }
-
   try {
     const parsedUrl = new URL(configuredBaseUrl, window.location.origin);
-
     parsedUrl.pathname = parsedUrl.pathname
       .replace(/\/api\/?$/, "")
       .replace(/\/$/, "");
     parsedUrl.search = "";
     parsedUrl.hash = "";
-
     return parsedUrl.toString().replace(/\/$/, "");
   } catch {
     return getLocalBackendBaseUrl();
@@ -2255,32 +3299,18 @@ const getApiAssetBaseUrl = () => {
 
 const normalizeReturnMediaUrl = (url: string) => {
   let cleanUrl = String(url || "").trim();
-
-  if (!cleanUrl) {
-    return "";
-  }
-
+  if (!cleanUrl) return "";
   if (
     cleanUrl.startsWith("http://") ||
     cleanUrl.startsWith("https://") ||
     cleanUrl.startsWith("data:") ||
     cleanUrl.startsWith("blob:")
-  ) {
+  )
     return cleanUrl;
-  }
-
   cleanUrl = cleanUrl.replace(/^\/?api\//, "/");
-
   const assetBaseUrl = getApiAssetBaseUrl();
-
-  if (cleanUrl.startsWith("/")) {
-    return `${assetBaseUrl}${cleanUrl}`;
-  }
-
-  if (cleanUrl.startsWith("uploads/")) {
-    return `${assetBaseUrl}/${cleanUrl}`;
-  }
-
+  if (cleanUrl.startsWith("/")) return `${assetBaseUrl}${cleanUrl}`;
+  if (cleanUrl.startsWith("uploads/")) return `${assetBaseUrl}/${cleanUrl}`;
   return cleanUrl;
 };
 
@@ -2288,14 +3318,13 @@ const getReturnMediaUrl = (media: any) => {
   const rawUrl =
     typeof media === "string"
       ? media
-      : media?.mediaUrl ??
+      : (media?.mediaUrl ??
         media?.url ??
         media?.imageUrl ??
         media?.fileUrl ??
         media?.src ??
         media?.path ??
-        "";
-
+        "");
   return normalizeReturnMediaUrl(String(rawUrl || ""));
 };
 
@@ -2305,9 +3334,8 @@ const isReturnMediaVideo = (media: any, url: string) => {
       media?.type ??
       media?.contentType ??
       media?.mimeType ??
-      url
+      url,
   ).toLowerCase();
-
   return (
     rawType.includes("video") ||
     rawType.includes("/video/upload/") ||
@@ -2321,7 +3349,6 @@ const isReturnMediaVideo = (media: any, url: string) => {
 
 const getOrderReturnMedia = (order: any): ReturnMediaView[] => {
   const request = getOrderReturnRequest(order);
-
   const rawMedia =
     order?.returnMediaUrls ??
     order?.returnMediaFiles ??
@@ -2342,33 +3369,23 @@ const getOrderReturnMedia = (order: any): ReturnMediaView[] => {
     request?.files ??
     request?.images ??
     [];
-
   const mediaList = Array.isArray(rawMedia) ? rawMedia : [rawMedia];
-
   return mediaList
     .map((media: any) => {
       const url = getReturnMediaUrl(media);
-
-      if (!url) {
-        return null;
-      }
-
-      return {
-        url,
-        isVideo: isReturnMediaVideo(media, url),
-      };
+      if (!url) return null;
+      return { url, isVideo: isReturnMediaVideo(media, url) };
     })
     .filter((media): media is ReturnMediaView => media !== null);
 };
 
-const escapeHtml = (value: unknown) => {
-  return String(value ?? "")
+const escapeHtml = (value: unknown) =>
+  String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-};
 
 type MediaPreviewOptions = {
   title: string;
@@ -2377,7 +3394,6 @@ type MediaPreviewOptions = {
   imageAlt: string;
   thumbTitle: string;
 };
-
 const RETURN_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
   title: "Ảnh/video bằng chứng hoàn hàng",
   counterLabel: "bằng chứng hoàn hàng",
@@ -2385,7 +3401,6 @@ const RETURN_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
   imageAlt: "Ảnh bằng chứng hoàn hàng",
   thumbTitle: "Chọn ảnh/video bằng chứng",
 };
-
 const REVIEW_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
   title: "Ảnh/video đánh giá sản phẩm",
   counterLabel: "đánh giá sản phẩm",
@@ -2394,47 +3409,46 @@ const REVIEW_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
   thumbTitle: "Chọn ảnh/video đánh giá",
 };
 
+const DELIVERY_SUCCESS_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
+  title: "Ảnh minh chứng giao hàng thành công",
+  counterLabel: "ảnh minh chứng giao hàng",
+  emptyText: "Không có ảnh minh chứng giao hàng thành công để hiển thị.",
+  imageAlt: "Ảnh minh chứng giao hàng thành công",
+  thumbTitle: "Chọn ảnh minh chứng giao hàng",
+};
+
+const DELIVERY_FAILED_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
+  title: "Ảnh minh chứng giao hàng thất bại",
+  counterLabel: "ảnh minh chứng giao thất bại",
+  emptyText: "Không có ảnh minh chứng giao hàng thất bại để hiển thị.",
+  imageAlt: "Ảnh minh chứng giao hàng thất bại",
+  thumbTitle: "Chọn ảnh minh chứng giao thất bại",
+};
+
 const buildReturnPreviewMainHtml = (
   media: ReturnMediaView,
-  options: MediaPreviewOptions
+  options: MediaPreviewOptions,
 ) => {
   const safeUrl = escapeHtml(media.url);
   const safeAlt = escapeHtml(options.imageAlt);
-
   if (media.isVideo) {
-    return `
-      <video
-        src="${safeUrl}"
-        class="return-preview-video"
-        controls
-        autoplay
-        playsinline
-      ></video>
-    `;
+    return `<video src="${safeUrl}" class="return-preview-video" controls autoplay playsinline></video>`;
   }
-
-  return `
-    <img
-      src="${safeUrl}"
-      class="return-preview-image"
-      alt="${safeAlt}"
-    />
-  `;
+  return `<img src="${safeUrl}" class="return-preview-image" alt="${safeAlt}" />`;
 };
 
 const buildReturnPreviewThumbHtml = (
   media: ReturnMediaView,
   index: number,
   activeIndex: number,
-  options: MediaPreviewOptions
+  options: MediaPreviewOptions,
 ) => {
   const safeUrl = escapeHtml(media.url);
   const activeClass = index === activeIndex ? " active" : "";
   const mediaLabel = media.isVideo ? "Video" : "Ảnh";
   const safeAriaLabel = escapeHtml(
-    `Xem ${mediaLabel.toLowerCase()} ${options.counterLabel} ${index + 1}`
+    `Xem ${mediaLabel.toLowerCase()} ${options.counterLabel} ${index + 1}`,
   );
-
   const thumb = media.isVideo
     ? `
       <video
@@ -2449,7 +3463,9 @@ const buildReturnPreviewThumbHtml = (
       <img
         src="${safeUrl}"
         class="return-preview-thumb-image"
-        alt="${escapeHtml(`${mediaLabel} ${options.counterLabel} ${index + 1}`)}"
+        alt="${escapeHtml(
+          `${mediaLabel} ${options.counterLabel} ${index + 1}`
+        )}"
       />
     `;
 
@@ -2464,7 +3480,11 @@ const buildReturnPreviewThumbHtml = (
       <span class="return-preview-thumb-badge">
         ${mediaLabel} ${index + 1}
       </span>
-      ${media.isVideo ? `<span class="return-preview-thumb-play"><i class="bi bi-play-fill"></i></span>` : ""}
+      ${
+        media.isVideo
+          ? `<span class="return-preview-thumb-play"><i class="bi bi-play-fill"></i></span>`
+          : ""
+      }
     </button>
   `;
 };
@@ -2472,148 +3492,47 @@ const buildReturnPreviewThumbHtml = (
 const buildReturnPreviewHtml = (
   mediaList: ReturnMediaView[],
   activeIndex: number,
-  options: MediaPreviewOptions
+  options: MediaPreviewOptions,
 ) => {
-  if (mediaList.length === 0) {
-    return `
-      <div class="return-preview-modal">
-        <div class="return-preview-empty">
-          ${escapeHtml(options.emptyText)}
-        </div>
-      </div>
-    `;
-  }
-
+  if (mediaList.length === 0)
+    return `<div class="return-preview-modal"><div class="return-preview-empty">${escapeHtml(options.emptyText)}</div></div>`;
   const safeActiveIndex = Math.min(
     Math.max(Number.isFinite(activeIndex) ? activeIndex : 0, 0),
-    mediaList.length - 1
+    mediaList.length - 1,
   );
-
   const activeMedia = mediaList[safeActiveIndex];
-
-  if (!activeMedia) {
-    return `
-      <div class="return-preview-modal">
-        <div class="return-preview-empty">
-          ${escapeHtml(options.emptyText)}
-        </div>
-      </div>
-    `;
-  }
-
+  if (!activeMedia)
+    return `<div class="return-preview-modal"><div class="return-preview-empty">${escapeHtml(options.emptyText)}</div></div>`;
   const hasMultipleMedia = mediaList.length > 1;
   const activeMediaLabel = activeMedia.isVideo ? "Video" : "Ảnh";
-
-  return `
-    <div class="return-preview-modal">
-      <div class="return-preview-counter">
-        ${activeMediaLabel} ${escapeHtml(options.counterLabel)}
-        <strong>${safeActiveIndex + 1}/${mediaList.length}</strong>
-      </div>
-
-      <div class="return-preview-stage">
-        ${
-          hasMultipleMedia
-            ? `
-              <button
-                type="button"
-                class="return-preview-nav is-prev"
-                data-preview-direction="-1"
-                aria-label="Xem ảnh/video trước"
-              >
-                <i class="bi bi-chevron-left"></i>
-              </button>
-            `
-            : ""
-        }
-
-        <div class="return-preview-main">
-          ${buildReturnPreviewMainHtml(activeMedia, options)}
-        </div>
-
-        ${
-          hasMultipleMedia
-            ? `
-              <button
-                type="button"
-                class="return-preview-nav is-next"
-                data-preview-direction="1"
-                aria-label="Xem ảnh/video tiếp theo"
-              >
-                <i class="bi bi-chevron-right"></i>
-              </button>
-            `
-            : ""
-        }
-      </div>
-
-      ${
-        hasMultipleMedia
-          ? `
-            <div class="return-preview-thumb-title">
-              ${escapeHtml(options.thumbTitle)}
-            </div>
-            <div class="return-preview-thumb-list">
-              ${mediaList
-                .map((media, index) =>
-                  buildReturnPreviewThumbHtml(
-                    media,
-                    index,
-                    safeActiveIndex,
-                    options
-                  )
-                )
-                .join("")}
-            </div>
-          `
-          : ""
-      }
-    </div>
-  `;
+  return `<div class="return-preview-modal"><div class="return-preview-counter">${activeMediaLabel} ${escapeHtml(options.counterLabel)}<strong>${safeActiveIndex + 1}/${mediaList.length}</strong></div><div class="return-preview-stage">${hasMultipleMedia ? `<button type="button" class="return-preview-nav is-prev" data-preview-direction="-1" aria-label="Xem ảnh/video trước"><i class="bi bi-chevron-left"></i></button>` : ""}<div class="return-preview-main">${buildReturnPreviewMainHtml(activeMedia, options)}</div>${hasMultipleMedia ? `<button type="button" class="return-preview-nav is-next" data-preview-direction="1" aria-label="Xem ảnh/video tiếp theo"><i class="bi bi-chevron-right"></i></button>` : ""}</div>${hasMultipleMedia ? `<div class="return-preview-thumb-title">${escapeHtml(options.thumbTitle)}</div><div class="return-preview-thumb-list">${mediaList.map((media, index) => buildReturnPreviewThumbHtml(media, index, safeActiveIndex, options)).join("")}</div>` : ""}</div>`;
 };
 
 const openMediaPreview = async (
   mediaList: ReturnMediaView[],
   index: number,
-  options: MediaPreviewOptions
+  options: MediaPreviewOptions,
 ) => {
-  if (mediaList.length === 0) {
-    return;
-  }
-
+  if (mediaList.length === 0) return;
   let activeIndex = Number.isInteger(index) ? index : 0;
-
-  if (activeIndex < 0 || activeIndex >= mediaList.length) {
-    activeIndex = 0;
-  }
-
+  if (activeIndex < 0 || activeIndex >= mediaList.length) activeIndex = 0;
   const renderPreview = () => {
     const htmlContainer = Swal.getHtmlContainer();
-
-    if (!htmlContainer) {
-      return;
-    }
-
+    if (!htmlContainer) return;
     htmlContainer.innerHTML = buildReturnPreviewHtml(
       mediaList,
       activeIndex,
-      options
+      options,
     );
     bindPreviewEvents();
   };
-
   const goToPreview = (nextIndex: number) => {
     activeIndex = (nextIndex + mediaList.length) % mediaList.length;
     renderPreview();
   };
-
   const bindPreviewEvents = () => {
     const htmlContainer = Swal.getHtmlContainer();
-
-    if (!htmlContainer) {
-      return;
-    }
-
+    if (!htmlContainer) return;
     htmlContainer
       .querySelectorAll<HTMLButtonElement>("[data-preview-direction]")
       .forEach((button) => {
@@ -2622,7 +3541,6 @@ const openMediaPreview = async (
           goToPreview(activeIndex + direction);
         });
       });
-
     htmlContainer
       .querySelectorAll<HTMLButtonElement>("[data-preview-index]")
       .forEach((button) => {
@@ -2632,7 +3550,6 @@ const openMediaPreview = async (
         });
       });
   };
-
   await Swal.fire({
     title: options.title,
     html: buildReturnPreviewHtml(mediaList, activeIndex, options),
@@ -2653,17 +3570,60 @@ const openReturnMediaPreview = async (order: any, index: number) => {
   await openMediaPreview(
     getOrderReturnMedia(order),
     index,
-    RETURN_MEDIA_PREVIEW_OPTIONS
+    RETURN_MEDIA_PREVIEW_OPTIONS,
   );
 };
 
-const getReviewMediaByOrderItemId = (orderItemId: number): ReturnMediaView[] => {
+const getDeliveryMedia = (rawMedia: any): ReturnMediaView[] => {
+  const mediaList = Array.isArray(rawMedia) ? rawMedia : rawMedia ? [rawMedia] : [];
+
+  return mediaList
+    .map((media: any) => {
+      const url = getReturnMediaUrl(media);
+      if (!url) return null;
+      return { url, isVideo: false };
+    })
+    .filter((media): media is ReturnMediaView => media !== null);
+};
+
+const getDeliverySuccessMedia = (order: any): ReturnMediaView[] => {
+  return getDeliveryMedia(
+    order?.deliverySuccessMediaUrls ??
+      order?.deliveryCompletedMediaUrls ??
+      order?.deliveryProofUrls ??
+      [],
+  );
+};
+
+const getDeliveryFailedMedia = (order: any): ReturnMediaView[] => {
+  return getDeliveryMedia(
+    order?.deliveryFailedMediaUrls ??
+      order?.deliveryFailedProofUrls ??
+      [],
+  );
+};
+
+const openDeliverySuccessMediaPreview = async (order: any, index: number) => {
+  await openMediaPreview(
+    getDeliverySuccessMedia(order),
+    index,
+    DELIVERY_SUCCESS_MEDIA_PREVIEW_OPTIONS,
+  );
+};
+
+const openDeliveryFailedMediaPreview = async (order: any, index: number) => {
+  await openMediaPreview(
+    getDeliveryFailedMedia(order),
+    index,
+    DELIVERY_FAILED_MEDIA_PREVIEW_OPTIONS,
+  );
+};
+
+const getReviewMediaByOrderItemId = (
+  orderItemId: number
+): ReturnMediaView[] => {
   const review = getMyReviewByOrderItemId(orderItemId) as any;
-
-  if (!review) {
-    return [];
-  }
-
+  if (!review) return [];
   const rawMedia =
     review?.mediaFiles ??
     review?.mediaUrls ??
@@ -2672,21 +3632,12 @@ const getReviewMediaByOrderItemId = (orderItemId: number): ReturnMediaView[] => 
     review?.images ??
     review?.files ??
     [];
-
   const mediaList = Array.isArray(rawMedia) ? rawMedia : [rawMedia];
-
   return mediaList
     .map((media: any) => {
       const url = getReturnMediaUrl(media);
-
-      if (!url) {
-        return null;
-      }
-
-      return {
-        url,
-        isVideo: isReturnMediaVideo(media, url),
-      };
+      if (!url) return null;
+      return { url, isVideo: isReturnMediaVideo(media, url) };
     })
     .filter((media): media is ReturnMediaView => media !== null);
 };
@@ -2695,7 +3646,7 @@ const openReviewMediaPreview = async (orderItemId: number, index: number) => {
   await openMediaPreview(
     getReviewMediaByOrderItemId(orderItemId),
     index,
-    REVIEW_MEDIA_PREVIEW_OPTIONS
+    REVIEW_MEDIA_PREVIEW_OPTIONS,
   );
 };
 
@@ -2745,13 +3696,45 @@ const getStatusClass = (status: number) => {
   }
 };
 
-const getErrorMessage = (error: any, fallback: string) => {
-  const data = error?.response?.data;
+const shouldDisplayReturnStatusInHeader = (order: any) => {
+  const orderStatus = Number(order?.status);
+  const returnStatus = getOrderReturnProcessStatus(order);
 
-  if (typeof data === "string") {
-    return data;
+  return orderStatus === 6 || orderStatus === 7 || returnStatus === "REJECTED";
+};
+
+const getOrderHeaderStatusText = (order: any) => {
+  if (shouldDisplayReturnStatusInHeader(order)) {
+    return getReturnProcessText(order);
   }
 
+  return order?.statusText || getStatusText(Number(order?.status));
+};
+
+const getOrderHeaderStatusClass = (order: any) => {
+  if (!shouldDisplayReturnStatusInHeader(order)) {
+    return getStatusClass(Number(order?.status));
+  }
+
+  switch (getOrderReturnProcessStatus(order)) {
+    case "PENDING":
+      return "bg-secondary";
+    case "ACCEPTED":
+      return "bg-info text-dark";
+    case "REJECTED":
+      return "bg-danger";
+    case "REFUNDED":
+      return "bg-success";
+    case "PARTIAL":
+      return "bg-warning text-dark";
+    default:
+      return getStatusClass(Number(order?.status));
+  }
+};
+
+const getErrorMessage = (error: any, fallback: string) => {
+  const data = error?.response?.data;
+  if (typeof data === "string") return data;
   return data?.message || error?.message || fallback;
 };
 
@@ -2766,7 +3749,7 @@ const showError = (error: any, fallback: string) => {
 
 const toast = (
   icon: "success" | "error" | "warning" | "info",
-  title: string
+  title: string,
 ) => {
   Swal.fire({
     toast: true,
@@ -2792,7 +3775,6 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
     "Tìm thấy sản phẩm phù hợp hơn",
     "Khác",
   ];
-
   const { value: reason, isConfirmed } = await Swal.fire<string>({
     title: "Hủy đơn hàng?",
     html: `
@@ -2815,7 +3797,7 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
                   <span class="cancel-radio-dot"></span>
                   <span class="cancel-reason-text">${item}</span>
                 </label>
-              `,
+              `
             )
             .join("")}
         </div>
@@ -2829,14 +3811,12 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
     width: 680,
     preConfirm: () => {
       const checkedReason = Swal.getPopup()?.querySelector<HTMLInputElement>(
-        'input[name="cancelReason"]:checked',
+        'input[name="cancelReason"]:checked'
       );
-
       if (!checkedReason?.value) {
         Swal.showValidationMessage("Vui lòng chọn một lý do để tiếp tục!");
         return false;
       }
-
       return checkedReason.value;
     },
     customClass: {
@@ -2863,16 +3843,14 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
   }
 };
 
-
 const getDefaultReturnEmail = () => {
   try {
     const currentUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
-
     return String(
       currentUser.email ||
         currentUser.Email ||
         localStorage.getItem("email") ||
-        ""
+        "",
     ).trim();
   } catch {
     return String(localStorage.getItem("email") || "").trim();
@@ -2881,7 +3859,11 @@ const getDefaultReturnEmail = () => {
 
 const requestReturn = (order: CustomerOrderResponse) => {
   if (!canRequestReturn(order)) {
-    toast("warning", getReturnDeadlineText(order) || "Đơn hàng không còn đủ điều kiện hoàn hàng");
+    toast(
+      "warning",
+      getReturnDeadlineText(order) ||
+        "Đơn hàng không còn đủ điều kiện hoàn hàng"
+    );
     return;
   }
 
@@ -2893,14 +3875,11 @@ const submitReturnRequest = async (payload: ReturnRequestSubmitPayload) => {
   try {
     submittingReturn.value = true;
     store.orderLoading = true;
-
     await customerProfileService.requestReturnOrder(payload.orderId, payload);
-
     returnModalVisible.value = false;
     selectedReturnOrder.value = null;
-
     await fetchOrdersAndReviews();
-    currentTab.value = 6;
+    currentTab.value = "RETURN";
 
     toast("success", "Đã gửi yêu cầu hoàn hàng thành công!");
   } catch (error) {
@@ -2914,23 +3893,7 @@ const submitReturnRequest = async (payload: ReturnRequestSubmitPayload) => {
 const cancelReturnRequest = async (order: CustomerOrderResponse) => {
   const result = await Swal.fire({
     title: "Rút lại yêu cầu?",
-    html: `
-      <div class="return-cancel-modal">
-        <div class="return-cancel-alert">
-          <div class="return-cancel-icon">
-            <i class="bi bi-arrow-counterclockwise"></i>
-          </div>
-
-          <div class="return-cancel-content">
-            <div class="return-cancel-title">Xác nhận rút lại yêu cầu hoàn hàng</div>
-            <div class="return-cancel-desc">
-              Đơn hàng sẽ trở về trạng thái <strong>Hoàn thành</strong>.
-              Sau khi rút lại, bạn cần gửi yêu cầu mới nếu muốn hoàn hàng/đổi trả tiếp.
-            </div>
-          </div>
-        </div>
-      </div>
-    `,
+    html: `<div class="return-cancel-modal"><div class="return-cancel-alert"><div class="return-cancel-icon"><i class="bi bi-arrow-counterclockwise"></i></div><div class="return-cancel-content"><div class="return-cancel-title">Xác nhận rút lại yêu cầu hoàn hàng</div><div class="return-cancel-desc">Đơn hàng sẽ trở về trạng thái <strong>Hoàn thành</strong>. Sau khi rút lại, bạn cần gửi yêu cầu mới nếu muốn hoàn hàng/đổi trả tiếp.</div></div></div></div>`,
     showCancelButton: true,
     confirmButtonText: "Đồng ý rút lại",
     cancelButtonText: "Quay lại",
@@ -2958,38 +3921,11 @@ const cancelReturnRequest = async (order: CustomerOrderResponse) => {
   }
 };
 
-const repayVnpayOrder = async (order: CustomerOrderResponse) => {
-  try {
-    store.orderLoading = true;
-    const res = await api.get(`/v1/orders/${order.orderId}/vnpay-url`);
-
-    if (res.data?.paymentUrl) {
-      toast("success", "Đang chuyển hướng đến VNPay...");
-      window.location.href = res.data.paymentUrl;
-    } else {
-      showError(null, "Không lấy được đường dẫn thanh toán từ hệ thống.");
-    }
-  } catch (error) {
-    showError(
-      error,
-      "Không thể tạo lại phiên thanh toán lúc này. Vui lòng thử lại sau."
-    );
-  } finally {
-    store.orderLoading = false;
-  }
-};
-
 const FALLBACK_IMAGE =
   "data:image/svg+xml;utf8," +
-  encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300">
-      <rect width="100%" height="100%" fill="#f3f4f6"/>
-      <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
-        fill="#9ca3af" font-family="Arial" font-size="20">
-        Không có ảnh
-      </text>
-    </svg>
-  `);
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#9ca3af" font-family="Arial" font-size="20">Không có ảnh</text></svg>`,
+  );
 
 const handleImageError = (event: Event) => {
   const target = event.target as HTMLImageElement;
@@ -2999,23 +3935,20 @@ const handleImageError = (event: Event) => {
 const getItemImage = (item: any) => {
   if (!item) return FALLBACK_IMAGE;
   let url = item.image || item.imageUrl || item.thumbnailUrl || item.mainImage;
-
   if (!url && item.productVariant) {
     url = item.productVariant.imageUrl || item.productVariant.image;
     if (!url && item.productVariant.product) {
       url =
         item.productVariant.product.mainImage ||
         item.productVariant.product.imageUrl;
-      if (!url && item.productVariant.product.productImages?.length > 0) {
+      if (!url && item.productVariant.product.productImages?.length > 0)
         url = item.productVariant.product.productImages[0].imageUrl;
-      }
     }
   }
   if (!url && item.product) {
     url = item.product.mainImage || item.product.imageUrl;
-    if (!url && item.product.productImages?.length > 0) {
+    if (!url && item.product.productImages?.length > 0)
       url = item.product.productImages[0].imageUrl;
-    }
   }
   return url ? url : FALLBACK_IMAGE;
 };
@@ -3150,6 +4083,50 @@ const getItemImage = (item: any) => {
   border: 1px solid #e2e8f0;
 }
 
+.tracking-delivery-media {
+  margin-top: 10px;
+  margin-bottom: 0;
+  margin-left: 0;
+  padding-top: 10px;
+  border-top: 1px dashed #dbe3ef;
+}
+
+.tracking-delivery-media.is-failed {
+  color: #ef4444;
+}
+
+.tracking-delivery-media-label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.tracking-delivery-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.tracking-delivery-note strong {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.tracking-delivery-proof {
+  margin-top: 10px;
+}
+
+@media (max-width: 640px) {
+  .tracking-delivery-media {
+    margin-left: 0;
+  }
+}
+
 .empty-box {
   text-align: center;
   padding: 60px 20px;
@@ -3169,7 +4146,9 @@ const getItemImage = (item: any) => {
   border-radius: 14px;
   overflow: hidden;
   background: #ffffff;
-  transition: border-color 0.25s ease, box-shadow 0.25s ease,
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
     transform 0.25s ease;
 }
 
@@ -3186,7 +4165,9 @@ const getItemImage = (item: any) => {
   padding: 16px 20px;
   text-align: left;
   cursor: pointer;
-  transition: background 0.25s ease, color 0.25s ease;
+  transition:
+    background 0.25s ease,
+    color 0.25s ease;
 }
 
 .order-card.opened .order-header-button {
@@ -3283,7 +4264,9 @@ const getItemImage = (item: any) => {
   flex: 1;
   cursor: pointer;
   border-radius: 12px;
-  transition: background-color 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .product-block:focus-visible {
@@ -3451,6 +4434,225 @@ const getItemImage = (item: any) => {
   color: #9a6a1f;
 }
 
+.return-info-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.return-request-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.return-request-meta strong {
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.return-process-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.return-process-badge.is-pending {
+  color: #92400e;
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+
+.return-process-badge.is-accepted,
+.return-process-badge.is-partial {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-color: #bfdbfe;
+}
+
+.return-process-badge.is-rejected {
+  color: #b91c1c;
+  background: #fee2e2;
+  border-color: #fecaca;
+}
+
+.return-process-badge.is-refunded {
+  color: #047857;
+  background: #d1fae5;
+  border-color: #a7f3d0;
+}
+.return-process-badge.is-cancelled {
+  color: #475569;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.return-process-timeline {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.return-process-step {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #f3e2bd;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.64);
+  color: #64748b;
+}
+
+.return-process-step.is-done {
+  border-color: #d9c392;
+  color: #334155;
+}
+
+.return-process-step.is-active {
+  background: #ffffff;
+  border-color: #bd9a5f;
+  box-shadow: 0 8px 16px rgba(189, 154, 95, 0.12);
+}
+
+.return-process-step.is-rejected {
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.return-step-marker {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #f1f5f9;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.return-process-step.is-done .return-step-marker,
+.return-process-step.is-active .return-step-marker {
+  background: #bd9a5f;
+  color: #ffffff;
+}
+
+.return-process-step.is-rejected .return-step-marker {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.return-step-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.return-step-title {
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.return-step-desc {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.return-step-time {
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.return-process-alert {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  border: 1px solid transparent;
+}
+
+.return-process-alert i {
+  font-size: 18px;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+.return-process-alert strong {
+  display: block;
+  color: #0f172a;
+  font-weight: 800;
+  margin-bottom: 2px;
+}
+
+.return-process-alert p {
+  margin: 0;
+  color: #475569;
+}
+
+.return-process-alert.is-pending {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.return-process-alert.is-accepted {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.return-process-alert.is-rejected {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.return-process-alert.is-refunded {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #047857;
+}
+.return-process-alert.is-cancelled {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.return-info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.return-reject-line strong {
+  color: #dc2626;
+}
+
 .return-selected-section {
   margin-top: 12px;
 }
@@ -3471,9 +4673,7 @@ const getItemImage = (item: any) => {
   background: #ffffff;
   text-align: left;
   cursor: pointer;
-  transition:
-    border-color 0.18s ease,
-    box-shadow 0.18s ease,
+  transition: border-color 0.18s ease, box-shadow 0.18s ease,
     transform 0.18s ease;
 }
 
@@ -3506,6 +4706,72 @@ const getItemImage = (item: any) => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.return-selected-name-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.return-selected-name-row .return-selected-name {
+  flex: 1;
+}
+
+.return-selected-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.return-selected-status.is-pending {
+  color: #92400e;
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+
+.return-selected-status.is-accepted,
+.return-selected-status.is-partial {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-color: #bfdbfe;
+}
+
+.return-selected-status.is-rejected {
+  color: #b91c1c;
+  background: #fee2e2;
+  border-color: #fecaca;
+}
+
+.return-selected-status.is-refunded {
+  color: #047857;
+  background: #d1fae5;
+  border-color: #a7f3d0;
+}
+.return-selected-status.is-cancelled {
+  color: #475569;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.return-item-reject-note {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .return-selected-meta,
@@ -3542,6 +4808,56 @@ const getItemImage = (item: any) => {
   font-weight: 700;
 }
 
+.delivery-info-box {
+  background: #fffdf8;
+  border: 1px solid #f3e2bd;
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.delivery-info-title {
+  color: #111827;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.delivery-info-card {
+  background: #ffffff;
+  border: 1px solid #edf0f3;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.delivery-info-card + .delivery-info-card {
+  margin-top: 12px;
+}
+
+.delivery-info-card.is-failed {
+  border-color: #fecaca;
+}
+
+.delivery-info-head {
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+
+.delivery-info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.delivery-info-row span {
+  color: #64748b;
+}
+
+.delivery-info-row strong {
+  color: #111827;
+  text-align: right;
+}
+
 .return-media-section {
   margin-top: 12px;
 }
@@ -3569,7 +4885,8 @@ const getItemImage = (item: any) => {
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  transition: transform 0.18s ease, box-shadow 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .return-media-button:hover {
@@ -3729,9 +5046,7 @@ const getItemImage = (item: any) => {
   border-radius: 10px;
   background: #ffffff;
   cursor: zoom-in;
-  transition:
-    border-color 0.18s ease,
-    box-shadow 0.18s ease,
+  transition: border-color 0.18s ease, box-shadow 0.18s ease,
     transform 0.18s ease;
 }
 
@@ -3829,7 +5144,8 @@ const getItemImage = (item: any) => {
   padding: 0 0 24px 0 !important;
   overflow: hidden !important;
   border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
     0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
 }
 
@@ -3919,9 +5235,7 @@ const getItemImage = (item: any) => {
   background: #ffffff;
   color: #334155;
   cursor: pointer;
-  transition:
-    border-color 0.18s ease,
-    background-color 0.18s ease,
+  transition: border-color 0.18s ease, background-color 0.18s ease,
     box-shadow 0.18s ease;
 }
 
@@ -4165,11 +5479,8 @@ const getItemImage = (item: any) => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition:
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease,
-    transform 0.18s ease;
+  transition: background-color 0.18s ease, border-color 0.18s ease,
+    color 0.18s ease, transform 0.18s ease;
 }
 
 .return-preview-nav:hover {
@@ -4206,9 +5517,7 @@ const getItemImage = (item: any) => {
   border-radius: 10px;
   background: #ffffff;
   cursor: pointer;
-  transition:
-    border-color 0.18s ease,
-    box-shadow 0.18s ease,
+  transition: border-color 0.18s ease, box-shadow 0.18s ease,
     transform 0.18s ease;
 }
 
@@ -4271,6 +5580,21 @@ const getItemImage = (item: any) => {
   background-color: #9a6a1f !important;
 }
 
+@media (max-width: 991.98px) {
+  .return-info-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .return-process-badge {
+    align-self: flex-start;
+  }
+
+  .return-process-timeline {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 640px) {
   .return-media-preview-popup .swal2-html-container {
     margin: 0 14px !important;
@@ -4303,6 +5627,4 @@ const getItemImage = (item: any) => {
     order: 3;
   }
 }
-
 </style>
-

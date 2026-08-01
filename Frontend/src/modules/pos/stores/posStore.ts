@@ -52,6 +52,9 @@ export interface PosHeldOrder {
   canCheckout?: boolean;
   canTransfer?: boolean;
   canCancel?: boolean;
+  itemCount?: number;
+  totalQuantity?: number;
+  items?: any[];
 }
 
 export interface PosVoucher {
@@ -612,6 +615,112 @@ const isRealHeldOrder = (order?: Partial<PosHeldOrder> | null): boolean => {
   return getOrderPaymentMethod(order) === "HOLD";
 };
 
+const getHeldOrderRawItems = (raw: any): any[] => {
+  const candidates = [
+    raw?.items,
+    raw?.orderItems,
+    raw?.orderItemResponses,
+    raw?.orderItemResponseList,
+    raw?.details,
+    raw?.orderDetails,
+    raw?.data?.items,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
+  return [];
+};
+
+const getOrderItemQuantity = (item: any): number => {
+  const quantity = numberValue(
+    item?.quantity,
+    item?.qty,
+    item?.orderQuantity,
+    item?.selectedQuantity,
+    item?.cartQuantity,
+    1
+  );
+
+  return quantity > 0 ? quantity : 1;
+};
+
+const getHeldOrderItemCount = (raw: any): number => {
+  const rawCount = numberValue(
+    raw?.itemCount,
+    raw?.totalItemCount,
+    raw?.lineItemCount,
+    raw?.productCount,
+    raw?.variantCount
+  );
+
+  if (rawCount > 0) {
+    return rawCount;
+  }
+
+  return getHeldOrderRawItems(raw).length;
+};
+
+const getHeldOrderTotalQuantity = (raw: any): number => {
+  const rawTotalQuantity = numberValue(
+    raw?.totalQuantity,
+    raw?.totalItemQuantity,
+    raw?.totalProductQuantity,
+    raw?.productQuantity,
+    raw?.itemQuantity
+  );
+
+  if (rawTotalQuantity > 0) {
+    return rawTotalQuantity;
+  }
+
+  return getHeldOrderRawItems(raw).reduce((total, item) => {
+    return total + getOrderItemQuantity(item);
+  }, 0);
+};
+
+const mapHeldOrderFromBackend = (raw: any): PosHeldOrder => {
+  const items = getHeldOrderRawItems(raw);
+  const status = String(raw?.status || raw?.orderStatus || "").trim();
+  const paymentMethod = String(
+    raw?.paymentMethod ||
+      raw?.payment_method ||
+      raw?.method ||
+      (status.toUpperCase().includes("HELD") ? "HOLD" : "HOLD")
+  )
+    .trim()
+    .toUpperCase();
+
+  return {
+    ...raw,
+    orderId: Number(raw?.orderId || raw?.id || 0),
+    status: status || raw?.status || "HELD",
+    paymentMethod,
+    totalAmount: numberValue(raw?.totalAmount, raw?.total, raw?.subTotal),
+    discountAmount: numberValue(raw?.discountAmount, raw?.discount),
+    finalAmount: numberValue(raw?.finalAmount, raw?.payableAmount, raw?.totalPay),
+    createdAt: raw?.createdAt || raw?.createdDate || raw?.created_at || "",
+    cashierId: raw?.cashierId ?? raw?.employeeId,
+    cashierName: raw?.cashierName || raw?.employeeName || raw?.staffName || "",
+    customerId: raw?.customerId,
+    customerName: raw?.customerName || raw?.name || "",
+    customerPhone: raw?.customerPhone || raw?.phone || "",
+    customerEmail: raw?.customerEmail || raw?.email || "",
+    ownOrder: raw?.ownOrder ?? raw?.isOwnOrder,
+    isOwnOrder: raw?.isOwnOrder ?? raw?.ownOrder,
+    canOpen: raw?.canOpen,
+    canCheckout: raw?.canCheckout,
+    canTransfer: raw?.canTransfer,
+    canCancel: raw?.canCancel,
+    itemCount: getHeldOrderItemCount(raw),
+    totalQuantity: getHeldOrderTotalQuantity(raw),
+    items,
+  };
+};
+
 const getTransferProviderFromPaymentMethod = (
   paymentMethod?: string | null
 ): NonEmptyTransferProvider => {
@@ -920,10 +1029,6 @@ export const usePosStore = defineStore("posStore", {
     },
 
     restorePendingCheckoutDraft() {
-      /*
-       * Draft dùng cho đơn đang chờ thanh toán online.
-       * Không để đơn pending payment bị hiểu nhầm là đơn lưu tạm HOLD.
-       */
       if (this.activeHeldOrderId) {
         return false;
       }
@@ -955,12 +1060,6 @@ export const usePosStore = defineStore("posStore", {
 
         this.lastOrderId = draft.lastOrderId || null;
 
-        /*
-         * Chỉ khôi phục pending id khi draft có pending id thật sự.
-         * Không dùng lastOrderId làm pending id vì lastOrderId có thể là
-         * hóa đơn đã hoàn tất/đã hủy/đã rời trạng thái chờ thanh toán.
-         * Nếu dùng lastOrderId, lần thanh toán lại sẽ gọi nhầm retry-payment.
-         */
         this.activePendingPaymentOrderId =
           draft.activePendingPaymentOrderId || draft.pendingVietQrOrderId || null;
 
@@ -977,12 +1076,6 @@ export const usePosStore = defineStore("posStore", {
         this.activeHeldOrderCashierName = this.activePendingPaymentOrderId
           ? ""
           : draft.activeHeldOrderCashierName || "";
-
-        /*
-         * Không đưa đơn VNPay/VietQR pending vào heldOrders.
-         * Nếu chưa bấm Lưu tạm thì không được hiển thị ở khu đơn lưu tạm phía trên.
-         * Draft vẫn khôi phục giỏ/khách/tiền đã nhận ở form thanh toán bên phải.
-         */
 
         this.errorMsg =
           "Đã khôi phục hóa đơn đang chờ thanh toán. Nếu khách chưa thanh toán, có thể chọn lại phương thức hoặc thanh toán lại.";
@@ -1048,11 +1141,6 @@ export const usePosStore = defineStore("posStore", {
     },
 
     async fetchPosFilters() {
-      /*
-       * Bộ lọc lấy từ API danh mục thật.
-       * Nếu API trả format khác nhau thì vẫn parse được.
-       * Nếu lỗi thì im lặng fallback sang dữ liệu lấy từ /admin/pos/products.
-       */
       const [brandRes, capacityRes, bottleTypeRes] = await Promise.allSettled([
         fetchFirstAvailable(["/brands", "/admin/brands"]),
         fetchFirstAvailable(["/capacities", "/admin/capacities"]),
@@ -1077,11 +1165,6 @@ export const usePosStore = defineStore("posStore", {
       if (bottleTypeRes.status === "fulfilled") {
         this.bottleTypeOptions = mapFilterOptions(bottleTypeRes.value.data);
       }
-
-      /*
-       * Không set errorMsg ở đây.
-       * Vì nếu filter API fail hoặc parse ra rỗng, ProductGrid vẫn fallback từ sản phẩm.
-       */
     },
 
     async fetchProducts() {
@@ -1099,17 +1182,27 @@ export const usePosStore = defineStore("posStore", {
           mapPosProductFromBackend(item, item, item.imageUrl)
         );
 
-        this.allProducts = flatProducts;
+        const activeProducts = flatProducts.filter((p) => {
+          const productStatus = p.status;
+          return productStatus == null || Number(productStatus) === 1;
+        });
 
-        /*
-         * Nếu đã tải brand từ API thật thì giữ nguyên danh sách brand API.
-         * Nếu API filter lỗi/chưa có thì fallback như logic cũ: build brand từ sản phẩm POS.
-         */
+        // 2. Khử trùng lặp dựa trên Tên sản phẩm kết hợp Tên biến thể (subName) để gom các dòng trùng y hệt nhau
+        const uniqueMap = new Map<string, PosProduct>();
+        for (const prod of activeProducts) {
+          const compositeKey = `${prod.name.trim().toLowerCase()}|${(prod.subName || "").trim().toLowerCase()}`;
+          if (!uniqueMap.has(compositeKey)) {
+            uniqueMap.set(compositeKey, prod);
+          }
+        }
+
+        this.allProducts = Array.from(uniqueMap.values());
+
         if (this.brandOptions.length === 0) {
           this.categories = [
             "Tất cả",
             ...new Set(
-              flatProducts
+              this.allProducts
                 .map((p) => p.category)
                 .filter((category) => !!category)
             ),
@@ -1140,9 +1233,9 @@ export const usePosStore = defineStore("posStore", {
          * Đơn VNPay/VietQR đang pending nhưng chưa bấm Lưu tạm chỉ được
          * khôi phục ở form thanh toán bên phải, không đưa vào heldOrders.
          */
-        this.heldOrders = rawOrders.filter((order: PosHeldOrder) =>
-          isRealHeldOrder(order)
-        );
+        this.heldOrders = rawOrders
+          .map(mapHeldOrderFromBackend)
+          .filter((order: PosHeldOrder) => isRealHeldOrder(order));
       } catch (error: any) {
         this.errorMsg = getBackendMessage(
           error,
@@ -1185,6 +1278,10 @@ export const usePosStore = defineStore("posStore", {
         (held) => Number(held.orderId) === numericOrderId
       );
 
+      const currentTotalQuantity = this.cart.reduce((total, item) => {
+        return total + Number(item.quantity || 0);
+      }, 0);
+
       const nextOrder: PosHeldOrder = {
         orderId: numericOrderId,
         status: isPendingOnlinePaymentOrder({
@@ -1212,6 +1309,16 @@ export const usePosStore = defineStore("posStore", {
         canCheckout: true,
         canTransfer: isRealHeldOrder({ paymentMethod: normalizedPaymentMethod }),
         canCancel: isRealHeldOrder({ paymentMethod: normalizedPaymentMethod }),
+        itemCount: this.cart.length || existingOrder?.itemCount || 0,
+        totalQuantity:
+          currentTotalQuantity || existingOrder?.totalQuantity || 0,
+        items: this.cart.map((item) => ({
+          variantId: item.product.id,
+          productVariantId: item.product.id,
+          sku: item.product.sku,
+          productName: item.product.name,
+          quantity: item.quantity,
+        })),
       };
 
       const existed = Boolean(existingOrder);
@@ -1238,12 +1345,6 @@ export const usePosStore = defineStore("posStore", {
         orderId || this.activePendingPaymentOrderId || this.pendingVietQrOrderId;
 
       if (!targetOrderId) {
-        /*
-         * Chưa có hóa đơn online pending thật sự thì không được lấy lastOrderId
-         * để retry. Trường hợp này giữ nguyên luồng hiện tại:
-         * - nếu đang mở đơn lưu tạm HOLD thì checkout qua held-orders/{id}/checkout
-         * - nếu là đơn mới thì checkout qua /checkout
-         */
         this.errorMsg =
           "Chưa có yêu cầu thanh toán online đang chờ. Hãy chọn VNPay/VietQR rồi bấm thanh toán.";
         return false;
@@ -1261,11 +1362,6 @@ export const usePosStore = defineStore("posStore", {
       const normalizedProvider: PosTransferProvider =
         currentProvider === "VNPAY" ? "VNPAY" : "VIETQR";
 
-      /*
-       * Đơn đã nhận tiền mặt một phần không được hủy pending payment để sửa
-       * sản phẩm/voucher. Giữ activePendingPaymentOrderId để gọi retry-payment
-       * khi nhân viên chọn lại VNPay/VietQR.
-       */
       this.activePendingPaymentOrderId = targetOrderId;
       this.activePendingPaymentTransferProvider = normalizedProvider;
       this.activeHeldOrderId = null;
@@ -1278,10 +1374,6 @@ export const usePosStore = defineStore("posStore", {
       this.pendingVietQrAmount = 0;
       this.transferProvider = normalizedProvider;
 
-      /*
-       * Không upsert vào heldOrders vì đơn này chưa chắc là đơn lưu tạm.
-       * Header phía trên chỉ dành cho đơn đã bấm Lưu tạm.
-       */
       this.savePendingCheckoutDraft();
 
       this.errorMsg =
@@ -1302,10 +1394,6 @@ export const usePosStore = defineStore("posStore", {
         return false;
       }
 
-      /*
-       * Nếu mới ghi nhận tiền mặt local nhưng chưa tạo hóa đơn pending ở BE,
-       * chỉ cần dọn form POS. Nhân viên đã xác nhận hoàn tiền ở CartSideBar.
-       */
       if (!targetOrderId) {
         this.resetLocalOrderOnly();
         this.errorMsg = "Đã hủy đơn chưa tạo thanh toán online.";
@@ -1380,12 +1468,6 @@ export const usePosStore = defineStore("posStore", {
       this.errorMsg = "";
 
       try {
-        /*
-         * Khi chỉ mới tạo QR/VNPay mà khách chưa thanh toán,
-         * muốn sửa sản phẩm/voucher thì phải hủy payment intent ở backend
-         * và đưa đơn về HOLD. Không được chỉ clear state FE,
-         * vì backend đã tạo đơn pending payment và có thể đã giữ/trừ kho.
-         */
         const { data } = await api.patch(
           `/admin/pos/orders/${targetOrderId}/cancel-pending-payment`
         );
@@ -1481,7 +1563,7 @@ export const usePosStore = defineStore("posStore", {
       } catch (error: any) {
         this.errorMsg = getBackendMessage(
           error,
-          "Không thể quay lại chỉnh sửa đơn đang chờ thanh toán. Backend cần hỗ trợ hủy payment intent và đưa đơn về đơn lưu tạm HOLD."
+          "Không thể quay lại chỉnh sửa đơn đang chờ thanh toán."
         );
 
         return false;
@@ -1500,11 +1582,6 @@ export const usePosStore = defineStore("posStore", {
         order.paymentMethod
       );
 
-      /*
-       * Đơn này đã qua bước tạo VietQR/VNPay nên không còn là đơn HOLD.
-       * Vì vậy không gọi /held-orders/{id}, chỉ set trạng thái để lần thanh toán
-       * tiếp theo đi qua /orders/{id}/retry-payment.
-       */
       this.activeHeldOrderId = null;
       this.activeHeldOrderCashierName = "";
       this.activeHeldOrderOwnOrder =
@@ -2213,12 +2290,6 @@ export const usePosStore = defineStore("posStore", {
       let cashGiven = Number(extra?.cashGiven || 0);
       let transferAmount = Number(extra?.transferAmount || 0);
 
-      /*
-       * Nếu đơn đã nhận tiền mặt một phần rồi người dùng trả thêm tiền mặt,
-       * một số UI cũ chỉ truyền số tiền đưa thêm. Backend lại cần tổng tiền mặt
-       * đã nhận cho lần checkout, nên cộng lại tại store để không gọi API với
-       * số tiền thiếu rồi bị 400.
-       */
       if (
         selectedPaymentMethod === "CASH" &&
         this.cashPaid > 0 &&
@@ -2228,12 +2299,6 @@ export const usePosStore = defineStore("posStore", {
         cashGiven = this.cashPaid + cashGiven;
       }
 
-      /*
-       * BE hiện tại:
-       * - /checkout: tạo hóa đơn POS mới
-       * - /held-orders/{id}/checkout: chỉ thanh toán đơn lưu tạm HOLD
-       * - /orders/{id}/retry-payment: thanh toán lại hóa đơn PENDING_PAYMENT
-       */
       if (selectedPaymentMethod === "VNPAY") {
         transferProvider = "VNPAY";
 
@@ -2317,10 +2382,6 @@ export const usePosStore = defineStore("posStore", {
 
           data = response.data;
         } else if (this.activeHeldOrderId) {
-          /*
-           * Chỉ gọi endpoint đơn lưu tạm khi order hiện tại thật sự là HOLD.
-           * Nếu đã tạo QR/VNPay rồi thì phải đi nhánh retryPaymentOrderId ở trên.
-           */
           if (this.cashPaid <= 0) {
             await api.patch(
               `/admin/pos/held-orders/${this.activeHeldOrderId}`,
@@ -2377,10 +2438,6 @@ export const usePosStore = defineStore("posStore", {
             this.activeHeldOrderId = null;
             this.activeHeldOrderCashierName = "";
 
-            /*
-             * Không đưa hóa đơn VNPay pending vào heldOrders.
-             * Nếu nhân viên chưa bấm Lưu tạm thì back về POS chỉ khôi phục ở form bên phải.
-             */
             this.savePendingCheckoutDraft();
             await this.fetchHeldOrders();
 
@@ -2414,10 +2471,6 @@ export const usePosStore = defineStore("posStore", {
             this.activeHeldOrderId = null;
             this.activeHeldOrderCashierName = "";
 
-            /*
-             * VietQR không redirect nên vẫn lưu draft để giữ form thanh toán.
-             * Không đưa pending vào heldOrders nếu chưa bấm Lưu tạm.
-             */
             this.savePendingCheckoutDraft();
             await this.fetchHeldOrders();
 
@@ -2444,10 +2497,6 @@ export const usePosStore = defineStore("posStore", {
           "Thanh toán thất bại. Vui lòng kiểm tra lại!"
         );
 
-        /*
-         * Pending id cũ/stale: không retry lại mã hóa đơn đã không còn chờ thanh toán.
-         * Chỉ xóa trạng thái pending local, không xóa giỏ/khách/tiền mặt.
-         */
         if (retryPaymentOrderId && isPendingPaymentNotFoundMessage(message)) {
           this.removeProcessingOrderCard(retryPaymentOrderId);
           this.activePendingPaymentOrderId = null;
@@ -2464,11 +2513,6 @@ export const usePosStore = defineStore("posStore", {
           return false;
         }
 
-        /*
-         * Nếu backend báo tiền mặt còn thiếu, giữ đúng nghiệp vụ POS:
-         * không coi là lỗi phá luồng, chỉ ghi nhận tiền mặt đang có và yêu cầu
-         * chọn VNPay/VietQR cho phần còn lại.
-         */
         if (
           selectedPaymentMethod === "CASH" &&
           cashGiven > 0 &&
@@ -2588,11 +2632,6 @@ export const usePosStore = defineStore("posStore", {
       this.errorMsg = "";
 
       try {
-        /*
-         * Nếu khách đã có đơn lưu tạm cùng SĐT thì không POST /hold nữa.
-         * POST /hold sẽ bị backend chặn duplicate.
-         * Logic đúng: mở đơn #cũ, merge sản phẩm đang chọn, rồi PATCH cập nhật.
-         */
         if (!this.activeHeldOrderId) {
           const existingHeldOrder = this.findLocalHeldOrderByCustomerPhone(
             this.customer?.phone
@@ -2646,10 +2685,6 @@ export const usePosStore = defineStore("posStore", {
             : "Lưu tạm thất bại. Vui lòng kiểm tra lại."
         );
 
-        /*
-         * Phòng trường hợp FE chưa fetch kịp danh sách đơn lưu tạm,
-         * backend vẫn báo trùng đơn #xxx thì tự refresh lại danh sách.
-         */
         const duplicateHeldOrderId = String(message).match(/#(\d+)/)?.[1];
 
         if (!this.activeHeldOrderId && duplicateHeldOrderId) {
@@ -2675,39 +2710,62 @@ export const usePosStore = defineStore("posStore", {
 
     mapOrderItemToCartItem(item: any): CartItem {
       const sku = String(item.sku || item.productSku || "");
+      const itemQuantity = getOrderItemQuantity(item);
       const latestProduct = this.allProducts.find(
         (product) => product.sku.toLowerCase() === sku.toLowerCase()
       );
 
       if (latestProduct) {
         return {
-          product: { ...latestProduct },
-          quantity: Number(item.quantity || 1),
+          product: {
+            ...latestProduct,
+            stockQuantity: Math.max(
+              Number(latestProduct.stockQuantity || 0),
+              itemQuantity
+            ),
+          },
+          quantity: itemQuantity,
         };
       }
 
       const productName = String(item.productName || item.name || "Sản phẩm");
-      const subName = [item.capacityLabel, item.bottleTypeName]
+      const subName = [
+        item.capacityLabel || item.capacity || item.capacityName,
+        item.bottleTypeName || item.bottleType || item.bottleTypeLabel,
+      ]
         .filter(Boolean)
         .join(" - ");
 
       return {
         product: {
-          id: Number(item.variantId || item.productVariantId || 0),
+          id: Number(item.variantId || item.productVariantId || item.id || 0),
           sku,
           name: productName,
           subName: subName || item.variantName || "Biến thể mặc định",
-          price: Number(item.unitPrice || item.price || 0),
-          stockQuantity: Number(
-            item.stockQuantity ||
-              item.availableStock ||
-              item.productStock ||
-              item.quantity ||
-              1
+          price: Number(
+            item.unitPrice ||
+              item.finalPrice ||
+              item.price ||
+              item.salePrice ||
+              item.originalPrice ||
+              0
           ),
-          image: `https://ui-avatars.com/api/?name=${encodeURIComponent(
-            productName
-          )}&background=random&color=fff&size=200`,
+          stockQuantity: Math.max(
+            Number(
+              item.stockQuantity ||
+                item.availableStock ||
+                item.productStock ||
+                itemQuantity ||
+                1
+            ),
+            itemQuantity
+          ),
+          image:
+            item.image ||
+            item.imageUrl ||
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(
+              productName
+            )}&background=random&color=fff&size=200`,
           category: item.brandName || item.categoryName || "Đơn lưu tạm",
           manufacturingDate: toDateOnly(item.manufacturingDate),
           expirationDate: toDateOnly(item.expirationDate),
@@ -2718,7 +2776,7 @@ export const usePosStore = defineStore("posStore", {
           sellable: item.sellable ?? true,
           unavailableReason: item.unavailableReason || null,
         },
-        quantity: Number(item.quantity || 1),
+        quantity: itemQuantity,
       };
     },
 
@@ -2732,11 +2790,6 @@ export const usePosStore = defineStore("posStore", {
         (held) => Number(held.orderId) === Number(orderId)
       );
 
-      /*
-       * Card pending online vẫn nằm ở "Đơn hàng đang xử lý".
-       * Nếu click lại thì không được gọi /held-orders/{id},
-       * vì endpoint đó chỉ dành cho đơn HOLD.
-       */
       if (localOrder && isPendingOnlinePaymentOrder(localOrder)) {
         return this.openPendingPaymentOrderFromList(localOrder);
       }
@@ -2753,11 +2806,6 @@ export const usePosStore = defineStore("posStore", {
       try {
         const { data } = await api.get(`/admin/pos/held-orders/${orderId}`);
 
-        /*
-         * Mở đơn lưu tạm phải là trạng thái chỉnh sửa sạch:
-         * - Được thêm/sửa/xóa sản phẩm và voucher
-         * - Không bị khóa bởi trạng thái thanh toán/VNPay/VietQR cũ
-         */
         this.clearPendingCheckoutDraft();
         this.cashPaid = 0;
         this.paymentMethod = "CASH";
@@ -2771,17 +2819,12 @@ export const usePosStore = defineStore("posStore", {
         this.activePendingPaymentTransferProvider = "";
         this.errorMsg = "";
 
-        const items = Array.isArray(data.items) ? data.items : [];
+        const items = getHeldOrderRawItems(data);
 
-        const heldCart = items.map((item: any) =>
-          this.mapOrderItemToCartItem(item)
-        );
+        const heldCart = items
+          .map((item: any) => this.mapOrderItemToCartItem(item))
+          .filter((item: CartItem) => item.product.id > 0 && item.quantity > 0);
 
-        /*
-         * Mở đơn lưu tạm chỉ load đúng sản phẩm đang có trong đơn đó.
-         * Không tự gộp giỏ hiện tại vào đơn lưu tạm, tránh nhân viên bấm nhầm
-         * làm sản phẩm mới chui vào đơn lưu tạm cũ.
-         */
         this.cart = heldCart;
 
         this.customer = {
@@ -2839,7 +2882,11 @@ export const usePosStore = defineStore("posStore", {
           await this.fetchAvailableVouchers();
         }
 
-        this.errorMsg = `Đã mở đơn lưu tạm #${this.activeHeldOrderId}. Có thể thêm/sửa sản phẩm và voucher, khách hàng được giữ nguyên.`;
+        const openedTotalQuantity = this.cart.reduce((total, item) => {
+          return total + Number(item.quantity || 0);
+        }, 0);
+
+        this.errorMsg = `Đã mở đơn lưu tạm #${this.activeHeldOrderId} với ${openedTotalQuantity} sản phẩm. Có thể thêm/sửa sản phẩm và voucher, khách hàng được giữ nguyên.`;
 
         return {
           success: true,
@@ -2884,10 +2931,6 @@ export const usePosStore = defineStore("posStore", {
           }
         );
 
-        /*
-         * Xóa tạm khỏi danh sách ngay để UI biến mất nhanh,
-         * sau đó fetch lại từ backend.
-         */
         this.heldOrders = this.heldOrders.filter(
           (held) => Number(held.orderId) !== Number(orderId)
         );
@@ -2933,7 +2976,7 @@ export const usePosStore = defineStore("posStore", {
       this.isLoading = true;
       this.errorMsg = "";
 
-      try {
+      queryResponseClear: try {
         const { data } = await api.patch(
           `/admin/pos/held-orders/${orderId}/cancel`
         );

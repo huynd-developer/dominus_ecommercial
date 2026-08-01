@@ -10,6 +10,7 @@ import java.util.Arrays;
 import org.example.datn_sd69.entity.Brand;
 import org.example.datn_sd69.entity.Customer;
 import org.example.datn_sd69.entity.Order;
+import org.example.datn_sd69.entity.OrderDeliveryEvidence;
 import org.example.datn_sd69.entity.OrderItem;
 import org.example.datn_sd69.entity.Product;
 import org.example.datn_sd69.entity.ProductVariant;
@@ -22,6 +23,7 @@ import org.example.datn_sd69.modules.customerOrder.dto.CustomerOrderResponse;
 import org.example.datn_sd69.modules.customerOrder.dto.CustomerReturnItemResponse;
 import org.example.datn_sd69.modules.customerOrder.service.CustomerOrderService;
 import org.example.datn_sd69.repository.CustomerRepository;
+import org.example.datn_sd69.repository.OrderDeliveryEvidenceRepository;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
 import org.example.datn_sd69.repository.ProductVariantRepository;
@@ -74,6 +76,9 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
     private static final int MEDIA_TYPE_IMAGE = 1;
     private static final int MEDIA_TYPE_VIDEO = 2;
+
+    private static final int DELIVERY_EVIDENCE_TYPE_SUCCESS = 1;
+    private static final int DELIVERY_EVIDENCE_TYPE_FAILED = 2;
 
     private static final int MAX_RETURN_IMAGE_COUNT = 6;
     private static final int MAX_RETURN_VIDEO_COUNT = 1;
@@ -183,6 +188,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
     private final OrderRepository orderRepository;
+    private final OrderDeliveryEvidenceRepository orderDeliveryEvidenceRepository;
     private final OrderItemRepository orderItemRepository;
     private final ProductVariantRepository productVariantRepository;
     private final ReturnRequestRepository returnRequestRepository;
@@ -288,9 +294,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
         validateReturnRequestDeadline(order, LocalDateTime.now());
 
-        if (returnRequestItemRepository.existsByReturnRequest_Order_IdAndStatus(order.getId(), RETURN_ITEM_STATUS_PENDING)) {
-            throw badRequest("Đơn hàng đang có sản phẩm chờ xử lý hoàn hàng.");
-        }
+        validatePreviousReturnRequestBeforeCreate(order);
 
         Integer cleanReturnType = normalizeReturnType(returnType);
         String cleanReason = normalizeRequired(reason, "Lý do hoàn hàng");
@@ -371,6 +375,15 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             returnRequestItem.setStatus(RETURN_ITEM_STATUS_PENDING);
             returnRequestItems.add(returnRequestItem);
         }
+
+        BigDecimal returnShippingFee = calculateReturnShippingFee(
+                order,
+                orderItems,
+                returnItemPayloads,
+                cleanReturnType,
+                cleanReason
+        );
+        totalRefundAmount = totalRefundAmount.add(returnShippingFee).setScale(2, RoundingMode.HALF_UP);
 
         BigDecimal orderFinalAmount = moneyOrZero(order.getFinalAmount());
         if (totalRefundAmount.compareTo(orderFinalAmount) > 0) {
@@ -455,6 +468,60 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         orderRepository.save(order);
     }
 
+    private void validatePreviousReturnRequestBeforeCreate(Order order) {
+        if (order == null || order.getId() == null) {
+            return;
+        }
+
+        ReturnRequest latestReturnRequest = returnRequestRepository
+                .findTopByOrder_IdOrderByCreatedAtDesc(order.getId())
+                .orElse(null);
+
+        if (latestReturnRequest == null || latestReturnRequest.getId() == null) {
+            return;
+        }
+
+        List<ReturnRequestItem> latestReturnItems = returnRequestItemRepository
+                .findByReturnRequest_Id(latestReturnRequest.getId());
+
+        if (latestReturnItems == null || latestReturnItems.isEmpty()) {
+            return;
+        }
+
+        boolean allCustomerCancelled = latestReturnItems.stream()
+                .allMatch(item -> item != null
+                        && Integer.valueOf(RETURN_ITEM_STATUS_CUSTOMER_CANCELLED).equals(item.getStatus()));
+
+        if (allCustomerCancelled) {
+            return;
+        }
+
+        if (hasAnyReturnItemStatus(latestReturnItems, RETURN_ITEM_STATUS_PENDING)
+                || latestReturnItems.stream().anyMatch(item -> item == null || item.getStatus() == null)) {
+            throw badRequest("Đơn hàng đang có sản phẩm chờ xử lý hoàn hàng.");
+        }
+
+        if (hasAnyReturnItemStatus(latestReturnItems, RETURN_ITEM_STATUS_ACCEPTED)) {
+            throw badRequest("Yêu cầu hoàn hàng đã được chấp nhận, không thể gửi lại.");
+        }
+
+        if (hasAnyReturnItemStatus(latestReturnItems, RETURN_ITEM_STATUS_REJECTED)) {
+            throw badRequest("Yêu cầu hoàn hàng đã bị từ chối, không thể gửi lại. Vui lòng liên hệ hỗ trợ nếu cần khiếu nại.");
+        }
+
+        if (hasAnyReturnItemStatus(latestReturnItems, RETURN_ITEM_STATUS_COMPLETED)) {
+            throw badRequest("Đơn hàng đã được xử lý hoàn tiền, không thể gửi lại yêu cầu hoàn hàng.");
+        }
+
+        throw badRequest("Yêu cầu hoàn hàng trước đó đã được xử lý, không thể gửi lại.");
+    }
+
+    private boolean hasAnyReturnItemStatus(List<ReturnRequestItem> returnItems, Integer status) {
+        return returnItems != null
+                && returnItems.stream()
+                .anyMatch(item -> item != null && Integer.valueOf(status).equals(item.getStatus()));
+    }
+
     private String normalizeCancelReason(CancelOrderRequest request) {
         if (request == null || request.getCancelReason() == null || request.getCancelReason().isBlank()) {
             throw badRequest("Vui lòng chọn lý do hủy đơn");
@@ -506,7 +573,21 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
         ReturnRequest returnRequest = findLatestReturnRequestForCustomerView(order);
         List<String> returnMediaUrls = getReturnMediaUrls(returnRequest);
-        List<CustomerReturnItemResponse> returnItems = getReturnItemsForCustomerView(returnRequest);
+        List<ReturnRequestItem> rawReturnItems = getReturnRequestItemsForCustomerView(returnRequest);
+        List<CustomerReturnItemResponse> returnItems = rawReturnItems.stream()
+                .map(this::mapToCustomerReturnItemResponse)
+                .toList();
+
+        BigDecimal returnShippingFee = returnRequest == null
+                ? BigDecimal.ZERO
+                : calculateReturnShippingFeeForExistingRequest(order, rawReturnItems, returnRequest);
+
+        String returnProcessStatus = returnRequest == null
+                ? null
+                : resolveReturnProcessStatus(order, rawReturnItems);
+
+        List<String> deliverySuccessMediaUrls = getDeliveryEvidenceUrls(order, DELIVERY_EVIDENCE_TYPE_SUCCESS);
+        List<String> deliveryFailedMediaUrls = getDeliveryEvidenceUrls(order, DELIVERY_EVIDENCE_TYPE_FAILED);
 
         return new CustomerOrderResponse(
                 order.getId(),
@@ -517,6 +598,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 moneyOrZero(order.getTotalAmount()),
                 moneyOrZero(order.getDiscountAmount()),
                 moneyOrZero(order.getFinalAmount()),
+                getOrderShippingFee(order),
+                returnShippingFee,
                 order.getPaymentMethod(),
                 order.getStatus(),
                 getStatusText(order.getStatus()),
@@ -524,31 +607,81 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 order.getCreatedAt(),
                 order.getCancelReason(),
                 order.getCancelledAt(),
+                normalizeOptional(order.getDeliveryCompletedByName()),
+                normalizeOptional(order.getDeliveryFailedReason()),
+                normalizeOptional(order.getDeliveryFailedDescription()),
+                order.getDeliveryFailedAt(),
+                normalizeOptional(order.getDeliveryFailedByName()),
+                deliverySuccessMediaUrls,
+                deliveryFailedMediaUrls,
                 returnRequest != null ? returnRequest.getReason() : null,
                 returnRequest != null ? returnRequest.getDescription() : null,
                 returnRequest != null ? returnRequest.getCreatedAt() : null,
-                returnRequest != null ? moneyOrZero(returnRequest.getRefundAmount()) : null,
+                returnRequest != null ? resolveReturnRefundAmount(returnRequest, rawReturnItems, returnShippingFee) : null,
                 returnMediaUrls,
                 returnItems,
+                returnProcessStatus,
+                getReturnProcessStatusText(returnProcessStatus),
+                resolveReturnRejectReason(rawReturnItems),
+                returnRequest != null ? formatRefundMethod(returnRequest.getRefundMethod()) : null,
+                returnRequest != null ? returnRequest.getBankName() : null,
+                returnRequest != null ? returnRequest.getBankAccountNumber() : null,
+                returnRequest != null ? returnRequest.getBankAccountHolder() : null,
+                null,
+                null,
+                null,
+                null,
                 itemResponses
         );
     }
 
+    private List<String> getDeliveryEvidenceUrls(Order order, Integer evidenceType) {
+        if (order == null || order.getId() == null) {
+            return List.of();
+        }
+
+        return orderDeliveryEvidenceRepository
+                .findByOrder_IdAndEvidenceTypeOrderByCreatedAtAsc(order.getId(), evidenceType)
+                .stream()
+                .map(OrderDeliveryEvidence::getImageUrl)
+                .filter(url -> url != null && !url.trim().isEmpty())
+                .toList();
+    }
+
     private ReturnRequest findLatestReturnRequestForCustomerView(Order order) {
-        if (order == null || order.getId() == null || order.getStatus() == null) {
+        if (order == null || order.getId() == null) {
             return null;
         }
 
-        boolean shouldShowReturnInfo = Integer.valueOf(STATUS_RETURN_REQUESTED).equals(order.getStatus())
-                || Integer.valueOf(STATUS_RETURN_COMPLETED).equals(order.getStatus());
-
-        if (!shouldShowReturnInfo) {
-            return null;
-        }
-
-        return returnRequestRepository
+        ReturnRequest returnRequest = returnRequestRepository
                 .findTopByOrder_IdOrderByCreatedAtDesc(order.getId())
                 .orElse(null);
+
+        if (returnRequest == null) {
+            return null;
+        }
+
+        Integer orderStatus = order.getStatus();
+
+        if (Integer.valueOf(STATUS_RETURN_REQUESTED).equals(orderStatus)
+                || Integer.valueOf(STATUS_RETURN_COMPLETED).equals(orderStatus)) {
+            return returnRequest;
+        }
+
+        /*
+         * Khi admin từ chối hoàn hàng, AdminOrderServiceImpl đưa đơn về trạng thái
+         * Hoàn thành để đơn không còn nằm trong luồng hoàn tiền. Tuy nhiên khách vẫn
+         * cần xem được lịch sử yêu cầu hoàn và lý do từ chối giống các sàn TMĐT.
+         * Vì vậy không chỉ dựa vào Orders.Status, mà còn kiểm tra ReturnRequestItem
+         * mới nhất có còn trạng thái hiển thị hay không.
+         */
+        List<ReturnRequestItem> returnItems = getReturnRequestItemsForCustomerView(returnRequest);
+
+        boolean hasRejectedItem = returnItems.stream()
+                .anyMatch(item -> item != null
+                        && Integer.valueOf(RETURN_ITEM_STATUS_REJECTED).equals(item.getStatus()));
+
+        return hasRejectedItem ? returnRequest : null;
     }
 
     private List<String> getReturnMediaUrls(ReturnRequest returnRequest) {
@@ -564,7 +697,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 .toList();
     }
 
-    private List<CustomerReturnItemResponse> getReturnItemsForCustomerView(ReturnRequest returnRequest) {
+    private List<ReturnRequestItem> getReturnRequestItemsForCustomerView(ReturnRequest returnRequest) {
         if (returnRequest == null || returnRequest.getId() == null) {
             return List.of();
         }
@@ -573,6 +706,12 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 .stream()
                 .filter(returnItem -> returnItem != null
                         && !Integer.valueOf(RETURN_ITEM_STATUS_CUSTOMER_CANCELLED).equals(returnItem.getStatus()))
+                .toList();
+    }
+
+    private List<CustomerReturnItemResponse> getReturnItemsForCustomerView(ReturnRequest returnRequest) {
+        return getReturnRequestItemsForCustomerView(returnRequest)
+                .stream()
                 .map(this::mapToCustomerReturnItemResponse)
                 .toList();
     }
@@ -608,6 +747,10 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         }
         voucherAllocatedAmount = voucherAllocatedAmount.setScale(2, RoundingMode.HALF_UP);
 
+        Integer returnItemStatus = returnItem.getStatus() == null
+                ? RETURN_ITEM_STATUS_PENDING
+                : returnItem.getStatus();
+
         return new CustomerReturnItemResponse(
                 orderItem != null ? orderItem.getId() : null,
                 product != null ? product.getId() : null,
@@ -623,8 +766,104 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 unitFinalPrice.setScale(2, RoundingMode.HALF_UP),
                 itemAmount,
                 voucherAllocatedAmount,
-                refundAmount
+                refundAmount,
+                returnItemStatus,
+                getReturnItemStatusText(returnItemStatus),
+                normalizeOptionalCollapsed(returnItem.getRejectReason())
         );
+    }
+
+    private String resolveReturnProcessStatus(Order order, List<ReturnRequestItem> returnItems) {
+        if (returnItems != null && !returnItems.isEmpty()) {
+            if (areAllReturnItemsStatus(returnItems, RETURN_ITEM_STATUS_PENDING)) {
+                return "PENDING";
+            }
+
+            if (areAllReturnItemsStatus(returnItems, RETURN_ITEM_STATUS_ACCEPTED)) {
+                return "ACCEPTED";
+            }
+
+            if (areAllReturnItemsStatus(returnItems, RETURN_ITEM_STATUS_REJECTED)) {
+                return "REJECTED";
+            }
+
+            if (areAllReturnItemsStatus(returnItems, RETURN_ITEM_STATUS_COMPLETED)) {
+                return "REFUNDED";
+            }
+
+            return "PARTIAL";
+        }
+
+        if (order != null && Integer.valueOf(STATUS_RETURN_COMPLETED).equals(order.getStatus())) {
+            return "REFUNDED";
+        }
+
+        if (order != null && Integer.valueOf(STATUS_RETURN_REQUESTED).equals(order.getStatus())) {
+            return "PENDING";
+        }
+
+        return null;
+    }
+
+    private boolean areAllReturnItemsStatus(List<ReturnRequestItem> returnItems, Integer status) {
+        return returnItems != null
+                && !returnItems.isEmpty()
+                && returnItems.stream().allMatch(item -> item != null && Integer.valueOf(status).equals(item.getStatus()));
+    }
+
+    private String getReturnProcessStatusText(String processStatus) {
+        if (processStatus == null) {
+            return null;
+        }
+
+        return switch (processStatus) {
+            case "PENDING" -> "Chờ shop xử lý";
+            case "ACCEPTED" -> "Đã chấp nhận / Chờ hoàn tiền";
+            case "REJECTED" -> "Đã từ chối hoàn hàng";
+            case "REFUNDED" -> "Đã xử lý hoàn tiền";
+            case "PARTIAL" -> "Đang xử lý một phần";
+            default -> null;
+        };
+    }
+
+    private String resolveReturnRejectReason(List<ReturnRequestItem> returnItems) {
+        if (returnItems == null || returnItems.isEmpty()) {
+            return null;
+        }
+
+        return returnItems.stream()
+                .map(ReturnRequestItem::getRejectReason)
+                .map(this::normalizeOptionalCollapsed)
+                .filter(reason -> reason != null && !reason.isEmpty())
+                .findFirst()
+                .orElse(null);
+    }
+
+    private String getReturnItemStatusText(Integer status) {
+        if (status == null) {
+            return "Chờ xử lý";
+        }
+
+        return switch (status) {
+            case RETURN_ITEM_STATUS_PENDING -> "Chờ xử lý";
+            case RETURN_ITEM_STATUS_ACCEPTED -> "Đã chấp nhận";
+            case RETURN_ITEM_STATUS_REJECTED -> "Từ chối hoàn hàng";
+            case RETURN_ITEM_STATUS_COMPLETED -> "Đã hoàn tiền";
+            case RETURN_ITEM_STATUS_CUSTOMER_CANCELLED -> "Khách đã hủy yêu cầu";
+            default -> "Không xác định";
+        };
+    }
+
+    private String formatRefundMethod(Integer refundMethod) {
+        if (refundMethod == null) {
+            return null;
+        }
+
+        return switch (refundMethod) {
+            case REFUND_METHOD_BANK_TRANSFER_VALUE -> REFUND_METHOD_BANK_TRANSFER;
+            case REFUND_METHOD_STORE_VALUE -> REFUND_METHOD_STORE;
+            default -> "UNKNOWN";
+        };
     }
 
     private CustomerOrderItemResponse mapToOrderItemResponse(OrderItem item) {
@@ -976,6 +1215,189 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         } catch (Exception e) {
             throw badRequest("Danh sách sản phẩm cần hoàn không hợp lệ.");
         }
+    }
+
+    private BigDecimal getOrderShippingFee(Order order) {
+        if (order == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return moneyOrZero(order.getShippingFee()).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal calculateReturnShippingFee(
+            Order order,
+            List<OrderItem> orderItems,
+            List<ReturnItemPayload> returnItemPayloads,
+            Integer returnType,
+            String reason
+    ) {
+        if (!isFullOrderReturnPayloads(orderItems, returnItemPayloads)) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        if (!isShopFaultReturnReason(returnType, reason)) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return getOrderShippingFee(order);
+    }
+
+    private BigDecimal calculateReturnShippingFeeForExistingRequest(
+            Order order,
+            List<ReturnRequestItem> returnItems,
+            ReturnRequest returnRequest
+    ) {
+        if (returnRequest == null || returnItems == null || returnItems.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        List<OrderItem> orderItems = orderItemRepository.findByOrderId(order.getId());
+
+        if (!isFullOrderReturnRequestItems(orderItems, returnItems)) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        if (!isShopFaultReturnReason(returnRequest.getReturnType(), returnRequest.getReason())) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return getOrderShippingFee(order);
+    }
+
+    private BigDecimal resolveReturnRefundAmount(
+            ReturnRequest returnRequest,
+            List<ReturnRequestItem> returnItems,
+            BigDecimal returnShippingFee
+    ) {
+        if (returnRequest == null) {
+            return null;
+        }
+
+        BigDecimal storedRefundAmount = moneyOrZero(returnRequest.getRefundAmount())
+                .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal shippingFee = moneyOrZero(returnShippingFee)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        if (shippingFee.compareTo(BigDecimal.ZERO) <= 0) {
+            return storedRefundAmount;
+        }
+
+        BigDecimal itemRefundTotal = sumReturnItemRefundAmount(returnItems);
+        BigDecimal expectedTotalWithShipping = itemRefundTotal.add(shippingFee)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        if (storedRefundAmount.compareTo(expectedTotalWithShipping) >= 0) {
+            return storedRefundAmount;
+        }
+
+        if (storedRefundAmount.compareTo(itemRefundTotal) <= 0) {
+            return storedRefundAmount.add(shippingFee).setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return storedRefundAmount;
+    }
+
+    private BigDecimal sumReturnItemRefundAmount(List<ReturnRequestItem> returnItems) {
+        if (returnItems == null || returnItems.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return returnItems.stream()
+                .filter(item -> item != null)
+                .map(ReturnRequestItem::getRefundAmount)
+                .map(this::moneyOrZero)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private boolean isFullOrderReturnPayloads(
+            List<OrderItem> orderItems,
+            List<ReturnItemPayload> returnItemPayloads
+    ) {
+        if (orderItems == null || orderItems.isEmpty()
+                || returnItemPayloads == null || returnItemPayloads.isEmpty()) {
+            return false;
+        }
+
+        Map<Integer, Integer> returnQuantityByOrderItemId = new HashMap<>();
+        for (ReturnItemPayload payload : returnItemPayloads) {
+            if (payload != null && payload.orderItemId() != null) {
+                returnQuantityByOrderItemId.put(payload.orderItemId(), payload.quantity());
+            }
+        }
+
+        return isFullOrderReturnByQuantityMap(orderItems, returnQuantityByOrderItemId);
+    }
+
+    private boolean isFullOrderReturnByQuantityMap(
+            List<OrderItem> orderItems,
+            Map<Integer, Integer> returnQuantityByOrderItemId
+    ) {
+        if (orderItems == null || orderItems.isEmpty()
+                || returnQuantityByOrderItemId == null || returnQuantityByOrderItemId.isEmpty()) {
+            return false;
+        }
+
+        for (OrderItem item : orderItems) {
+            if (item == null || item.getId() == null) {
+                continue;
+            }
+
+            Integer orderedQuantity = item.getQuantity();
+            if (orderedQuantity == null || orderedQuantity <= 0) {
+                continue;
+            }
+
+            Integer returnQuantity = returnQuantityByOrderItemId.get(item.getId());
+            if (returnQuantity == null || !returnQuantity.equals(orderedQuantity)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private boolean isFullOrderReturnRequestItems(
+            List<OrderItem> orderItems,
+            List<ReturnRequestItem> returnItems
+    ) {
+        if (orderItems == null || orderItems.isEmpty()
+                || returnItems == null || returnItems.isEmpty()) {
+            return false;
+        }
+
+        Map<Integer, Integer> returnQuantityByOrderItemId = new HashMap<>();
+        for (ReturnRequestItem returnItem : returnItems) {
+            if (returnItem != null
+                    && returnItem.getOrderItem() != null
+                    && returnItem.getOrderItem().getId() != null) {
+                returnQuantityByOrderItemId.put(
+                        returnItem.getOrderItem().getId(),
+                        returnItem.getReturnQuantity()
+                );
+            }
+        }
+
+        return isFullOrderReturnByQuantityMap(orderItems, returnQuantityByOrderItemId);
+    }
+
+    private boolean isShopFaultReturnReason(Integer returnType, String reason) {
+        String cleanReason = normalizeOptionalCollapsed(reason);
+
+        if (cleanReason == null || cleanReason.isEmpty()) {
+            return false;
+        }
+
+        if (Integer.valueOf(RETURN_TYPE_RECEIVED_WITH_PROBLEM_VALUE).equals(returnType)) {
+            return RECEIVED_PROBLEM_REASONS.contains(cleanReason);
+        }
+
+        if (Integer.valueOf(RETURN_TYPE_NOT_RECEIVED_OR_MISSING_VALUE).equals(returnType)) {
+            return NOT_RECEIVED_OR_MISSING_REASONS.contains(cleanReason);
+        }
+
+        return false;
     }
 
     private BigDecimal calculateItemRefundAmount(

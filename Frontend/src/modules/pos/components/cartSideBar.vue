@@ -18,7 +18,7 @@
             <h6 class="mb-0 text-light fw-bold text-truncate">Thanh toán</h6>
 
             <span class="text-muted-custom font-xs">
-              {{ posStore.cart.length }} sản phẩm đã chọn
+              {{ cartSelectedQuantityText }}
             </span>
           </div>
         </div>
@@ -966,6 +966,27 @@ const heldOrderCannotCheckout = computed(() => {
 
 const availableVoucherList = computed(() => {
   return posStore.availableVouchers || [];
+});
+
+const cartSelectedQuantity = computed(() => {
+  return posStore.cart.reduce((total, item) => {
+    return total + Number(item.quantity || 0);
+  }, 0);
+});
+
+const cartSelectedQuantityText = computed(() => {
+  const lineCount = posStore.cart.length;
+  const totalQuantity = cartSelectedQuantity.value;
+
+  if (lineCount === 0) {
+    return "0 sản phẩm đã chọn";
+  }
+
+  if (lineCount === totalQuantity) {
+    return `${totalQuantity} sản phẩm đã chọn`;
+  }
+
+  return `${lineCount} dòng • SL ${totalQuantity}`;
 });
 
 const latestCompletedInvoice = computed(() => {

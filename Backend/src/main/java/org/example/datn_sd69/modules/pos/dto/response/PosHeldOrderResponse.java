@@ -20,6 +20,18 @@ public class PosHeldOrderResponse {
 
     private LocalDateTime createdAt;
 
+    /**
+     * Số dòng sản phẩm trong phiếu treo.
+     * Ví dụ: Creed Aventus 10ml và Creed Aventus 50ml = 2 dòng.
+     */
+    private Integer itemCount;
+
+    /**
+     * Tổng số lượng sản phẩm trong phiếu treo.
+     * Ví dụ: 2 dòng, mỗi dòng số lượng 1 => totalQuantity = 2.
+     */
+    private Integer totalQuantity;
+
     private Integer cashierId;
     private String cashierName;
 

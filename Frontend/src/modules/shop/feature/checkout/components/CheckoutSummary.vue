@@ -230,11 +230,11 @@
 
         <button
           v-else
-          v-for="voucher in filteredVouchers"
+          v-for="(voucher, index) in filteredVouchers"
           :key="getVoucherCode(voucher)"
           type="button"
           class="voucher-option"
-          :class="{ disabled: !canUseVoucherLocally(voucher) }"
+          :class="{ disabled: !canUseVoucherLocally(voucher), 'voucher-best': index === 0 && canUseVoucherLocally(voucher) }"
           @mousedown.prevent="selectVoucher(voucher)"
         >
           <div class="voucher-option-left">
@@ -257,7 +257,7 @@
 
           <div class="voucher-option-right">
             <span v-if="canUseVoucherLocally(voucher)" class="voucher-use">
-              Chọn
+              {{ index === 0 ? "Tốt nhất" : "Chọn" }}
             </span>
 
             <span v-else class="voucher-disabled-text">
@@ -275,6 +275,7 @@
       </p>
     </div>
 
+    <!-- KHUNG TỔNG KẾT & HIỂN THỊ PHÍ VẬN CHUYỂN -->
     <div class="summary-preview">
       <div class="summary-line">
         <span>Tạm tính</span>
@@ -284,6 +285,14 @@
       <div class="summary-line">
         <span>Giảm giá</span>
         <span class="discount-value">-{{ formatCurrency(discountAmount) }}</span>
+      </div>
+
+      <div class="summary-line">
+        <span>
+          Phí vận chuyển
+          <span v-if="isCalculatingShip" class="spinner-border spinner-border-sm text-muted ms-1" style="width: 10px; height: 10px;"></span>
+        </span>
+        <span>{{ formatCurrency(shippingFee) }}</span>
       </div>
 
       <div class="summary-line total-line">
@@ -323,6 +332,8 @@ const props = withDefaults(
     totalItems: number;
     totalAmount: number;
     discountAmount: number;
+    shippingFee?: number;
+    isCalculatingShip?: boolean;
     finalTotal: number;
     isSubmitting: boolean;
     updatingItemKey?: string | number | null;
@@ -331,6 +342,8 @@ const props = withDefaults(
   {
     updatingItemKey: null,
     selectedVoucherCode: "",
+    shippingFee: 30000,
+    isCalculatingShip: false,
   }
 );
 
@@ -342,7 +355,6 @@ const emit = defineEmits<{
   (e: "cancel-voucher"): void;
 }>();
 
-// ĐÃ SỬA: Chuyển sang "Không có ảnh" tiếng Việt
 const FALLBACK_IMAGE =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(`
@@ -367,20 +379,47 @@ const vouchersLoaded = ref(false);
 
 let closeDropdownTimer: ReturnType<typeof setTimeout> | null = null;
 
+// =====================================
+// TÍNH TOÁN SỐ TIỀN GIẢM THỰC TẾ CHO VOUCHER
+// =====================================
+const getActualDiscountAmount = (voucher: any) => {
+  if (!canUseVoucherLocally(voucher)) return 0;
+  
+  const type = getVoucherDiscountType(voucher);
+  const value = getVoucherDiscountValue(voucher);
+  
+  if (type === "PERCENT" || type === "PERCENTAGE") {
+    const calculated = (props.totalAmount * value) / 100;
+    const maxDiscount = getMaxDiscount(voucher);
+    return maxDiscount > 0 ? Math.min(calculated, maxDiscount) : calculated;
+  }
+  
+  return value; // Khấu trừ trực tiếp số tiền
+};
+
+// =====================================
+// SẮP XẾP LẠI MÃ NGON LÊN ĐẦU
+// =====================================
 const filteredVouchers = computed(() => {
   const keyword = voucherCode.value.trim().toLowerCase();
 
-  return availableVouchers.value
+  const vouchers = availableVouchers.value
     .filter((voucher) => {
       const code = getVoucherCode(voucher).toLowerCase();
-
-      if (!keyword) {
-        return true;
-      }
-
+      if (!keyword) return true;
       return code.includes(keyword);
-    })
-    .slice(0, 10);
+    });
+
+  return vouchers.sort((a, b) => {
+    const aUsable = canUseVoucherLocally(a) ? 1 : 0;
+    const bUsable = canUseVoucherLocally(b) ? 1 : 0;
+    
+    // Ưu tiên mã đủ điều kiện lên trước
+    if (aUsable !== bUsable) return bUsable - aUsable;
+    
+    // Nếu cùng đủ điều kiện thì so sánh số tiền giảm thực tế
+    return getActualDiscountAmount(b) - getActualDiscountAmount(a);
+  }).slice(0, 10);
 });
 
 const getItemKey = (item: any) => {
@@ -393,7 +432,6 @@ const getItemKey = (item: any) => {
   );
 };
 
-// ĐÃ SỬA: Hàm lấy link ảnh đào sâu chống xịt
 const getItemImage = (item: any) => {
   if (!item) return FALLBACK_IMAGE;
   let url = item?.image || item?.imageUrl || item?.thumbnailUrl || item?.mainImage;
@@ -704,23 +742,26 @@ const getErrorMessage = (error: any, fallback: string) => {
   return error?.message || fallback;
 };
 
-watch(
-  () => props.selectedVoucherCode,
-  (value) => {
-    const code = String(value || "").trim();
-
-    if (code && !voucherCode.value) {
-      voucherCode.value = code;
-      isVoucherApplied.value = Number(props.discountAmount || 0) > 0;
-    }
-  },
-  { immediate: true }
-);
+// =====================================
+// AUTO CHỌN VOUCHER TỐT NHẤT LÚC LOAD TRANG
+// =====================================
+const autoApplyBestVoucher = async () => {
+  if (isVoucherApplied.value) return; 
+  const bestVoucher = filteredVouchers.value.find(v => canUseVoucherLocally(v));
+  
+  if (bestVoucher) {
+    voucherCode.value = getVoucherCode(bestVoucher);
+    await handleApplyVoucher();
+  }
+};
 
 watch(
   () => props.totalAmount,
   (newValue, oldValue) => {
+    // THÊM ĐIỀU KIỆN CHẶN: Nếu đang submit thanh toán hoặc tiền về 0 thì KHÔNG ĐƯỢC tự động hủy voucher
     if (
+      !props.isSubmitting &&
+      Number(newValue || 0) > 0 &&
       oldValue !== undefined &&
       Number(newValue || 0) !== Number(oldValue || 0) &&
       isVoucherApplied.value
@@ -742,13 +783,19 @@ watch(
   }
 );
 
-onMounted(() => {
-  fetchAvailableVouchers();
+onMounted(async () => {
+  await fetchAvailableVouchers();
 
   const savedVoucher = localStorage.getItem("applied_voucher");
 
-  if (savedVoucher && !voucherCode.value) {
+  // Nếu khách đã áp dụng 1 mã từ bước giỏ hàng -> Ưu tiên dùng luôn mã đó
+  if (savedVoucher && props.totalAmount > 0) {
     voucherCode.value = savedVoucher;
+    await handleApplyVoucher();
+  } 
+  // Nếu chưa có mã nào thì tự động tìm mã giảm nhiều tiền nhất và ốp vào
+  else if (props.totalAmount > 0 && props.cartItems.length > 0) {
+    await autoApplyBestVoucher(); 
   }
 });
 </script>
@@ -1133,6 +1180,11 @@ onMounted(() => {
   gap: 10px;
   text-align: left;
   cursor: pointer;
+}
+
+.voucher-best {
+  background: #fffbef !important;
+  border-left: 3px solid #b78d52;
 }
 
 .voucher-option:last-child {

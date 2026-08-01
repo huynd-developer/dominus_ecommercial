@@ -88,6 +88,25 @@ public class Order extends BaseEntity {
     @Column(name = "CompletedAt")
     private LocalDateTime completedAt;
 
+    @Nationalized
+    @Column(name = "DeliveryCompletedByName", length = 255)
+    private String deliveryCompletedByName;
+
+    @Nationalized
+    @Column(name = "DeliveryFailedReason", length = 255)
+    private String deliveryFailedReason;
+
+    @Nationalized
+    @Column(name = "DeliveryFailedDescription", length = 500)
+    private String deliveryFailedDescription;
+
+    @Column(name = "DeliveryFailedAt")
+    private LocalDateTime deliveryFailedAt;
+
+    @Nationalized
+    @Column(name = "DeliveryFailedByName", length = 255)
+    private String deliveryFailedByName;
+
     @Column(name = "IsPaymentReported", nullable = false)
     private Boolean isPaymentReported = false;
 
@@ -97,4 +116,7 @@ public class Order extends BaseEntity {
 
     @Column(name = "CancelledAt")
     private LocalDateTime cancelledAt;
+
+    @Column(name = "Shippingfee")
+    private BigDecimal shippingFee = BigDecimal.valueOf(30000);
 }

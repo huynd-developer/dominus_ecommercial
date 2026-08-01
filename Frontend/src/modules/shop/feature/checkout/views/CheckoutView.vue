@@ -9,13 +9,16 @@
       </div>
 
       <template v-else>
-        <CheckoutForm :form="orderForm" />
+        <!-- Thêm key để ép form load lại dữ liệu ngay khi m back về -->
+        <CheckoutForm :key="formKey" :form="orderForm" />
 
         <CheckoutSummary
           :cartItems="cartItems"
           :totalItems="totalItems"
           :totalAmount="totalAmount"
           :discountAmount="discountAmount"
+          :shippingFee="shippingFee"
+          :isCalculatingShip="isCalculatingShip"
           :finalTotal="finalTotal"
           :isSubmitting="isSubmitting"
           :updatingItemKey="updatingItemKey"
@@ -32,53 +35,128 @@
     <ShopFooter />
 
     <Teleport to="body">
-      <!-- BƯỚC 1: POPUP MÃ QR (Chỉ hiện khi chọn VietQR) -->
+      <!-- BƯỚC 1: POPUP THANH TOÁN CHUNG (VIETQR VÀ VNPAY) -->
       <Transition name="fade-modal">
-        <div v-if="showQrModal" class="premium-modal-overlay" @click.self="handleCancelQR">
-          <div class="qr-payment-box bg-white p-4 rounded-4 shadow-lg text-center d-flex flex-column align-items-center mx-3 position-relative" style="max-width: 400px; animation: slideUp 0.3s ease-out;">
-            <!-- Nút đóng (X) góc trên bên phải -->
-            <button 
-              type="button" 
-              class="btn-close position-absolute top-0 end-0 m-3" 
-              aria-label="Close" 
-              @click="handleCancelQR"
+        <div
+          v-if="showPaymentModal"
+          class="premium-modal-overlay"
+          @click.self="handleCancelPayment"
+        >
+          <div
+            class="payment-box bg-white p-4 rounded-4 shadow-lg text-center d-flex flex-column align-items-center mx-3 position-relative"
+            style="max-width: 420px; animation: slideUp 0.3s ease-out"
+          >
+            <button
+              type="button"
+              class="btn-close position-absolute top-0 end-0 m-3"
+              aria-label="Close"
+              @click="handleCancelPayment"
             ></button>
 
-            <div class="mb-2 text-primary mt-2">
-              <i class="bi bi-qr-code-scan" style="font-size: 2.5rem; color: #10b981;"></i>
-            </div>
-            <h4 class="mb-2 fw-bold" style="color: #06132b;">Thanh toán đơn hàng</h4>
-            <p class="text-muted small mb-3">Vui lòng mở ứng dụng ngân hàng và quét mã QR bên dưới để hoàn tất.</p>
-            
-            <img :src="qrCodeUrl" alt="Mã VietQR" class="img-fluid rounded mb-3" style="border: 2px dashed #bd9a5f; padding: 8px;" />
-            
-            <div class="alert alert-warning py-2 px-3 mb-3 w-100 text-start" style="font-size: 0.85rem;">
-              <i class="bi bi-info-circle me-1"></i> Vui lòng không đóng cửa sổ này cho đến khi thanh toán xong!
+            <div class="mb-2 mt-2">
+              <i
+                v-if="currentPaymentMethod === 'VIETQR'"
+                class="bi bi-qr-code-scan text-primary"
+                style="font-size: 2.5rem"
+              ></i>
+              <i
+                v-else-if="currentPaymentMethod === 'VNPAY'"
+                class="bi bi-credit-card-2-front text-info"
+                style="font-size: 2.5rem"
+              ></i>
             </div>
 
-            <!-- NÚT HỦY THANH TOÁN VÀ XÁC NHẬN -->
-            <div class="d-flex gap-2 w-100 mt-2">
-              <button 
-                @click="handleCancelQR" 
-                class="btn btn-outline-secondary w-50 py-3 fw-bold rounded-3" 
-                style="font-size: 1rem;"
+            <h4 class="mb-2 fw-bold" style="color: #06132b">
+              Thanh toán đơn hàng
+            </h4>
+
+            <div
+              class="timer-box d-flex align-items-center justify-content-center gap-2 mb-2 p-2 rounded-3"
+              style="
+                background-color: #fef2f2;
+                color: #dc2626;
+                border: 1px solid #fecaca;
+                width: 100%;
+              "
+            >
+              <i class="bi bi-clock-history fs-5"></i>
+              <span class="fs-5 fw-bold">{{ formattedCountdown }}</span>
+            </div>
+
+            <template v-if="currentPaymentMethod === 'VIETQR'">
+              <p class="text-muted small mb-3">
+                Vui lòng mở ứng dụng ngân hàng và quét mã QR bên dưới để hoàn
+                tất.
+              </p>
+              <img
+                :src="qrCodeUrl"
+                alt="Mã VietQR"
+                class="img-fluid rounded mb-3"
+                style="border: 2px dashed #bd9a5f; padding: 8px"
+              />
+              <div
+                class="alert alert-warning py-2 px-3 mb-3 w-100 text-start"
+                style="font-size: 0.85rem"
+              >
+                <i class="bi bi-info-circle me-1"></i> Vui lòng không đóng cửa
+                sổ này cho đến khi thanh toán xong!
+              </div>
+            </template>
+
+            <template v-if="currentPaymentMethod === 'VNPAY'">
+              <p class="text-muted small mb-3">
+                Bạn đã chọn thanh toán an toàn qua cổng VNPay. Vui lòng bấm nút
+                bên dưới để chuyển hướng đến trang thanh toán.
+              </p>
+              <div
+                class="alert alert-info py-2 px-3 mb-3 w-100 text-start"
+                style="font-size: 0.85rem"
+              >
+                <i class="bi bi-shield-check me-1"></i> Giao dịch được bảo mật
+                tuyệt đối bởi hệ thống ngân hàng.
+              </div>
+            </template>
+
+            <div class="d-flex gap-2 w-100 mt-2 flex-wrap">
+              <button
+                @click="handleCancelPayment"
+                class="btn btn-outline-danger flex-grow-1 py-3 fw-bold rounded-3"
+                style="font-size: 0.9rem"
               >
                 Hủy thanh toán
               </button>
 
-              <button 
-                @click="confirmQrPayment" 
-                class="btn btn-success w-50 py-3 fw-bold rounded-3" 
-                style="background-color: #10b981; border: none; font-size: 1rem;"
+              <button
+                v-if="currentPaymentMethod === 'VIETQR'"
+                @click="confirmQrPayment"
+                class="btn btn-success flex-grow-1 py-3 fw-bold rounded-3"
+                style="
+                  background-color: #10b981;
+                  border: none;
+                  font-size: 0.9rem;
+                "
               >
                 Đã chuyển khoản <i class="bi bi-check-circle ms-1"></i>
+              </button>
+
+              <button
+                v-if="currentPaymentMethod === 'VNPAY'"
+                @click="goToVnpayGateway"
+                class="btn btn-primary flex-grow-1 py-3 fw-bold rounded-3"
+                style="
+                  background-color: #0284c7;
+                  border: none;
+                  font-size: 0.9rem;
+                "
+              >
+                Thanh toán ngay <i class="bi bi-box-arrow-up-right ms-1"></i>
               </button>
             </div>
           </div>
         </div>
       </Transition>
 
-      <!-- BƯỚC 2: BẢNG HÓA ĐƠN GỐC (Hiện ra sau khi COD hoặc sau khi xác nhận QR) -->
+      <!-- BƯỚC 2: MÀN HÌNH HOÀN TẤT THÀNH CÔNG -->
       <Transition name="fade-modal">
         <div v-if="showSuccessModal" class="premium-modal-overlay">
           <OrderResultCard
@@ -100,7 +178,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import api from "@/common/api";
@@ -117,123 +195,127 @@ interface ResultDetail {
   money?: boolean;
 }
 
-interface CheckoutSubmitData {
-  customerName: string;
-  customerPhone: string;
-  shippingAddress: string;
-  note: string | null;
-  paymentMethod: string;
-  voucherCode: string | null;
-}
-
 const router = useRouter();
 
 const cartItems = ref<any[]>([]);
+const cartSnapshot = ref<any[]>([]);
 const isSubmitting = ref(false);
 const isPageLoading = ref(true);
 const updatingItemKey = ref<string | number | null>(null);
 
-// Tách riêng 2 trạng thái quản lý Modal
-const showQrModal = ref(false);
-const showSuccessModal = ref(false);
-const qrCodeUrl = ref("");
+const formKey = ref(0);
 
-// BIẾN LƯU ID ĐƠN HÀNG VỪA TẠO (DÙNG ĐỂ TỰ ĐỘNG HỦY NẾU KHÁCH KHÔNG QUÉT MÃ)
+const showPaymentModal = ref(false);
+const showSuccessModal = ref(false);
+const currentPaymentMethod = ref("");
+const qrCodeUrl = ref("");
+const vnpayUrl = ref("");
 const createdOrderId = ref<number | null>(null);
+
+// Cố định phí vận chuyển chuẩn 30.000đ cho mọi đơn hàng
+const shippingFee = ref(30000);
+const isCalculatingShip = ref(false);
+
+const paymentCountdown = ref(900);
+let paymentTimer: ReturnType<typeof setInterval> | null = null;
+
+const formattedCountdown = computed(() => {
+  const m = Math.floor(paymentCountdown.value / 60)
+    .toString()
+    .padStart(2, "0");
+  const s = (paymentCountdown.value % 60).toString().padStart(2, "0");
+  return `${m}:${s}`;
+});
+
+const startPaymentTimer = () => {
+  paymentCountdown.value = 900;
+  if (paymentTimer) clearInterval(paymentTimer);
+  paymentTimer = setInterval(() => {
+    paymentCountdown.value--;
+    if (paymentCountdown.value <= 0) {
+      if (paymentTimer) clearInterval(paymentTimer);
+      handleTimeoutPayment();
+    }
+  }, 1000);
+};
+
+const stopPaymentTimer = () => {
+  if (paymentTimer) clearInterval(paymentTimer);
+};
 
 const successStatusText = ref("");
 const successMessage = ref(
-  "Cảm ơn bạn đã mua sắm tại Dominus. Đơn hàng của bạn đang chờ cửa hàng xác nhận."
+  "Cảm ơn bạn đã mua sắm tại Dominus. Đơn hàng của bạn đang chờ cửa hàng xác nhận.",
 );
-
 const successDetails = ref<ResultDetail[]>([]);
-
 const discountAmount = ref(0);
 const appliedVoucherCode = ref("");
 
+// ĐÃ DỌN DẸP SẠCH SẼ CÁC TRƯỜNG LIÊN QUAN ĐẾN VAT
 const orderForm = ref({
   customerName: "",
   customerPhone: "",
   shippingAddress: "",
   note: "",
   paymentMethod: "COD",
-
   provinceName: "",
   wardName: "",
   specificAddress: "",
-
   profileLoaded: false,
   profileAddress: "",
-
-  requireVat: false,
-  vatTaxCode: "",
-  vatEmail: "",
-  vatCompanyName: "",
-  vatCompanyAddress: "",
 });
 
-const getCartItemKey = (item: any) => {
-  return (
-    item?.cartItemId ||
-    item?.id ||
-    item?.productVariantId ||
-    item?.variantId ||
-    item?.sku
-  );
-};
+// TỰ ĐỘNG LƯU DRAFT FORM VÀO SESSION STORAGE KHI CÓ THAY ĐỔI
+watch(
+  () => orderForm.value,
+  (newVal) => {
+    sessionStorage.setItem("dominus_checkout_draft", JSON.stringify(newVal));
+  },
+  { deep: true }
+);
 
-const getProductVariantId = (item: any) => {
-  return Number(
+const getCartItemKey = (item: any) =>
+  item?.cartItemId ||
+  item?.id ||
+  item?.productVariantId ||
+  item?.variantId ||
+  item?.sku;
+const getProductVariantId = (item: any) =>
+  Number(
     item?.productVariantId ||
       item?.variantId ||
       item?.productVariant?.id ||
       item?.id ||
-      0
+      0,
   );
-};
-
-const getCartItemId = (item: any) => {
-  return Number(item?.cartItemId || item?.id || 0);
-};
-
-const getStock = (item: any) => {
-  return Number(
-    item?.stockQuantity ??
-      item?.stock ??
-      item?.availableQuantity ??
-      item?.maxQuantity ??
-      0
-  );
-};
-
-const getItemPrice = (item: any) => {
-  return Number(
+const getCartItemId = (item: any) => Number(item?.cartItemId || item?.id || 0);
+const getItemPrice = (item: any) =>
+  Number(
     item?.price ??
       item?.salePrice ??
       item?.finalPrice ??
       item?.originalPrice ??
-      0
+      0,
   );
-};
 
-const totalAmount = computed(() => {
-  return cartItems.value.reduce((sum, item) => {
-    return sum + getItemPrice(item) * Number(item.quantity || 0);
-  }, 0);
-});
-
-const finalTotal = computed(() => {
-  return Math.max(
+const totalAmount = computed(() =>
+  cartItems.value.reduce(
+    (sum, item) => sum + getItemPrice(item) * Number(item.quantity || 0),
     0,
-    Number(totalAmount.value || 0) - Number(discountAmount.value || 0)
-  );
-});
+  ),
+);
 
-const totalItems = computed(() => {
-  return cartItems.value.reduce((sum, item) => {
-    return sum + Number(item.quantity || 0);
-  }, 0);
-});
+// Tổng thanh toán chính xác = Tạm tính - Giảm giá + Phí ship cố định (30k)
+const finalTotal = computed(() =>
+  Math.max(
+    0,
+    Number(totalAmount.value || 0) - Number(discountAmount.value || 0) + Number(shippingFee.value || 0),
+  ),
+);
+
+const totalItems = computed(() =>
+  cartItems.value.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+);
 
 const updateCartQuantityApi = async (item: any, quantity: number) => {
   await api.put("/v1/customer/cart/update", {
@@ -243,35 +325,19 @@ const updateCartQuantityApi = async (item: any, quantity: number) => {
   });
 };
 
-const collapseSpacesForProfile = (value: string) => {
-  return String(value || "")
+const collapseSpacesForProfile = (value: string) =>
+  String(value || "")
     .trim()
     .replace(/\s{2,}/g, " ");
-};
-
-const extractObjectData = (data: any) => {
-  return data?.data || data?.result || data || {};
-};
+const extractObjectData = (data: any) =>
+  data?.data || data?.result || data || {};
 
 const getErrorMessage = (error: any, fallback: string) => {
   const data = error?.response?.data;
-
-  if (typeof data === "string") {
-    return data;
-  }
-
-  if (data?.message) {
-    return data.message;
-  }
-
-  if (data?.errors && typeof data.errors === "object") {
-    const firstError = Object.values(data.errors)[0];
-
-    if (firstError) {
-      return String(firstError);
-    }
-  }
-
+  if (typeof data === "string") return data;
+  if (data?.message) return data.message;
+  if (data?.errors && typeof data.errors === "object")
+    return String(Object.values(data.errors)[0]);
   return error?.message || fallback;
 };
 
@@ -295,24 +361,17 @@ const showError = async (title: string, text: string) => {
   });
 };
 
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-  }).format(Number(value || 0));
-};
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(
+    Number(value || 0),
+  );
 
 const formatPaymentMethod = (value: string | null | undefined) => {
   const normalized = String(value || "").toUpperCase();
-
   if (normalized === "COD") return "Thanh toán khi nhận hàng";
   if (normalized === "VNPAY") return "VNPay";
   if (normalized === "VIETQR") return "Chuyển khoản VietQR";
   if (normalized === "CASH") return "Tiền mặt";
-  if (normalized === "BANK_TRANSFER") return "Chuyển khoản";
-  if (normalized === "TRANSFER") return "Chuyển khoản";
-  if (normalized === "MIXED") return "Tiền mặt + chuyển khoản";
-
   return value || "-";
 };
 
@@ -328,31 +387,20 @@ const getStatusText = (status: number) => {
       return "Hoàn thành";
     case 4:
       return "Đã hủy";
-    case 5:
-      return "Giao hàng thất bại";
-    case 6:
-      return "Yêu cầu hoàn hàng / đổi trả";
-    case 7:
-      return "Hoàn hàng / đổi trả hoàn tất";
     default:
       return "Không xác định";
   }
 };
 
 const handleApplyVoucher = (discount: number, code: string) => {
-  const safeDiscount = Math.min(
+  discountAmount.value = Math.min(
     Math.max(Number(discount || 0), 0),
-    Number(totalAmount.value || 0)
+    Number(totalAmount.value || 0),
   );
-
-  discountAmount.value = safeDiscount;
+  
   appliedVoucherCode.value = code || "";
-
-  if (code) {
-    localStorage.setItem("applied_voucher", code);
-  } else {
-    localStorage.removeItem("applied_voucher");
-  }
+  if (code) localStorage.setItem("applied_voucher", code);
+  else localStorage.removeItem("applied_voucher");
 };
 
 const handleCancelVoucher = () => {
@@ -365,82 +413,60 @@ const loadCustomerProfile = async () => {
   try {
     const res = await api.get("/customer/profile");
     const profile = extractObjectData(res.data);
-
     const name = collapseSpacesForProfile(
-      profile.name || profile.fullName || profile.customerName || ""
+      profile.name || profile.fullName || profile.customerName || "",
     );
-
     const phone = String(profile.phone || profile.customerPhone || "").trim();
-
     const address = collapseSpacesForProfile(
-      profile.address || profile.shippingAddress || ""
+      profile.address || profile.shippingAddress || "",
     );
 
     orderForm.value.profileLoaded = true;
-    orderForm.value.customerName = name;
-    orderForm.value.customerPhone = phone;
+
+    if (!orderForm.value.customerName) orderForm.value.customerName = name;
+    if (!orderForm.value.customerPhone) orderForm.value.customerPhone = phone;
+
     orderForm.value.profileAddress = address;
 
-    if (address) {
+    if (address && !orderForm.value.shippingAddress) {
       orderForm.value.shippingAddress = address;
-      orderForm.value.provinceName = "";
-      orderForm.value.wardName = "";
-      orderForm.value.specificAddress = "";
     }
   } catch (error: any) {
-    console.error("Lỗi tải thông tin tài khoản:", error);
-
     await showError(
       "Vui lòng đăng nhập",
       getErrorMessage(
         error,
-        "Bạn cần đăng nhập tài khoản khách hàng để thanh toán."
-      )
+        "Bạn cần đăng nhập tài khoản khách hàng để thanh toán.",
+      ),
     );
-
-    router.replace({
-      name: "Login",
-      query: {
-        redirect: "/checkout",
-      },
-    });
-
+    router.replace({ name: "Login", query: { redirect: "/checkout" } });
     return false;
   }
-
   return true;
 };
 
-const validateCheckoutForm = async (): Promise<CheckoutSubmitData | null> => {
-  const rawCustomerName = String(orderForm.value.customerName || "");
-  const rawCustomerPhone = String(orderForm.value.customerPhone || "");
-  const rawShippingAddress = String(orderForm.value.shippingAddress || "");
-  const rawNote = String(orderForm.value.note || "");
-  const rawSpecificAddress = String(orderForm.value.specificAddress || "");
-
-  const customerName = rawCustomerName.trim();
-  const customerPhone = rawCustomerPhone.trim();
-  const shippingAddress = rawShippingAddress.trim();
-  const note = rawNote.trim();
-  const specificAddress = rawSpecificAddress.trim();
-
+const validateCheckoutForm = async (): Promise<any | null> => {
+  const customerName = String(orderForm.value.customerName || "").trim();
+  const customerPhone = String(orderForm.value.customerPhone || "").trim();
+  const shippingAddress = String(orderForm.value.shippingAddress || "").trim();
+  const note = String(orderForm.value.note || "").trim();
+  const specificAddress = String(orderForm.value.specificAddress || "").trim();
   const paymentMethod = String(
-    orderForm.value.paymentMethod || ""
+    orderForm.value.paymentMethod || "",
   ).toUpperCase();
-
   const provinceName = String(orderForm.value.provinceName || "").trim();
   const wardName = String(orderForm.value.wardName || "").trim();
-
   const profileAddressStr = String(orderForm.value.profileAddress || "");
+
   let isSavedAddress = false;
-  
   if (shippingAddress) {
     try {
-      if (profileAddressStr.startsWith('[')) {
-        const arr = JSON.parse(profileAddressStr);
-        isSavedAddress = arr.some((a: any) => a.fullAddress === shippingAddress || a.fullAddress === rawShippingAddress);
+      if (profileAddressStr.startsWith("[")) {
+        isSavedAddress = JSON.parse(profileAddressStr).some(
+          (a: any) => a.fullAddress === shippingAddress,
+        );
       } else {
-        isSavedAddress = profileAddressStr === shippingAddress || profileAddressStr === rawShippingAddress;
+        isSavedAddress = profileAddressStr === shippingAddress;
       }
     } catch (e) {
       isSavedAddress = profileAddressStr.includes(shippingAddress);
@@ -448,46 +474,25 @@ const validateCheckoutForm = async (): Promise<CheckoutSubmitData | null> => {
   }
 
   const isEditingStructuredAddress =
-    !isSavedAddress && (Boolean(provinceName) || Boolean(wardName) || Boolean(specificAddress));
+    !isSavedAddress &&
+    (Boolean(provinceName) || Boolean(wardName) || Boolean(specificAddress));
 
   if (cartItems.value.length === 0) {
     await showWarning(
       "Giỏ hàng trống",
-      "Vui lòng thêm sản phẩm vào giỏ hàng trước khi đặt hàng."
+      "Vui lòng thêm sản phẩm vào giỏ hàng trước khi đặt hàng.",
     );
-
     router.push("/products");
     return null;
   }
 
-  if (rawCustomerName !== customerName) {
+  if (
+    customerName.length < 2 ||
+    !/^(?!.*\s{2,})[\p{L}]+(?:\s[\p{L}]+)*$/u.test(customerName)
+  ) {
     await showWarning(
       "Tên người nhận không hợp lệ",
-      "Tên người nhận không được có khoảng trắng ở đầu hoặc cuối."
-    );
-    return null;
-  }
-
-  if (customerName.length < 2 || customerName.length > 100) {
-    await showWarning(
-      "Tên người nhận không hợp lệ",
-      "Tên người nhận phải từ 2 đến 100 ký tự."
-    );
-    return null;
-  }
-
-  if (!/^(?!.*\s{2,})[\p{L}]+(?:\s[\p{L}]+)*$/u.test(customerName)) {
-    await showWarning(
-      "Tên người nhận không hợp lệ",
-      "Tên người nhận chỉ được chứa chữ, không có số/ký tự đặc biệt và không có khoảng trắng thừa."
-    );
-    return null;
-  }
-
-  if (rawCustomerPhone !== customerPhone) {
-    await showWarning(
-      "Số điện thoại không hợp lệ",
-      "Số điện thoại không được có khoảng trắng ở đầu hoặc cuối."
+      "Tên người nhận phải từ 2 đến 100 ký tự và không chứa số/ký tự đặc biệt.",
     );
     return null;
   }
@@ -495,94 +500,32 @@ const validateCheckoutForm = async (): Promise<CheckoutSubmitData | null> => {
   if (!/^0\d{9}$/.test(customerPhone)) {
     await showWarning(
       "Số điện thoại không hợp lệ",
-      "Số điện thoại phải gồm đúng 10 chữ số, bắt đầu bằng 0 và không chứa chữ/ký tự đặc biệt."
+      "Số điện thoại phải gồm đúng 10 chữ số, bắt đầu bằng 0.",
     );
     return null;
   }
 
   if (isEditingStructuredAddress) {
-    if (!provinceName) {
+    if (!provinceName || !wardName) {
       await showWarning(
         "Thiếu tỉnh/thành phố",
-        "Vui lòng chọn tỉnh/thành phố nhận hàng."
+        "Vui lòng chọn đầy đủ tỉnh/thành phố và phường/xã.",
       );
       return null;
     }
-
-    if (!wardName) {
-      await showWarning(
-        "Thiếu phường/xã",
-        "Vui lòng chọn phường/xã/đặc khu nhận hàng."
-      );
-      return null;
-    }
-
-    if (rawSpecificAddress !== specificAddress) {
-      await showWarning(
-        "Địa chỉ cụ thể không hợp lệ",
-        "Địa chỉ cụ thể không được có khoảng trắng ở đầu hoặc cuối."
-      );
-      return null;
-    }
-
     if (specificAddress.length < 3 || specificAddress.length > 255) {
       await showWarning(
         "Địa chỉ cụ thể không hợp lệ",
-        "Vui lòng nhập số nhà, ngõ, đường hoặc tòa nhà từ 3 đến 255 ký tự."
-      );
-      return null;
-    }
-
-    if (!/^(?!.*\s{2,})[\p{L}\d][\p{L}\d\s,./#()\-]*[\p{L}\d)]$/u.test(specificAddress)) {
-      await showWarning(
-        "Địa chỉ cụ thể không hợp lệ",
-        "Địa chỉ cụ thể chỉ được chứa chữ, số, khoảng trắng và các ký tự , . / # ( ) -, không có ký tự đặc biệt."
+        "Vui lòng nhập địa chỉ cụ thể từ 3 đến 255 ký tự.",
       );
       return null;
     }
   }
 
-  if (rawShippingAddress !== shippingAddress) {
+  if (shippingAddress.length < 5) {
     await showWarning(
       "Địa chỉ không hợp lệ",
-      "Địa chỉ không được có khoảng trắng ở đầu hoặc cuối."
-    );
-    return null;
-  }
-
-  if (shippingAddress.length < 5 || shippingAddress.length > 500) {
-    await showWarning(
-      "Địa chỉ không hợp lệ",
-      "Vui lòng chọn hoặc nhập địa chỉ giao hàng từ 5 đến 500 ký tự."
-    );
-    return null;
-  }
-
-  if (!/^(?!.*\s{2,})[\p{L}\d][\p{L}\d\s,./#()\-]*[\p{L}\d)]$/u.test(shippingAddress)) {
-    await showWarning(
-      "Địa chỉ không hợp lệ",
-      "Địa chỉ chỉ được chứa chữ, số, khoảng trắng và các ký tự , . / # ( ) -, không có khoảng trắng thừa hoặc ký tự đặc biệt."
-    );
-    return null;
-  }
-
-  if (rawNote && rawNote !== note) {
-    await showWarning(
-      "Ghi chú không hợp lệ",
-      "Ghi chú không được có khoảng trắng ở đầu hoặc cuối."
-    );
-    return null;
-  }
-
-  if (note && note.length > 255) {
-    await showWarning("Ghi chú quá dài", "Ghi chú tối đa 255 ký tự.");
-    return null;
-  }
-
-  if (note && !/^[\p{L}\d\s,./#()\-:;!?]*$/u.test(note)) {
-    await showWarning(
-      "Ghi chú không hợp lệ",
-      "Ghi chú chỉ được chứa chữ, số, khoảng trắng và các ký tự , . / # ( ) - : ; ! ?"
+      "Vui lòng chọn hoặc nhập địa chỉ giao hàng hợp lệ.",
     );
     return null;
   }
@@ -590,19 +533,10 @@ const validateCheckoutForm = async (): Promise<CheckoutSubmitData | null> => {
   if (!["COD", "VNPAY", "VIETQR"].includes(paymentMethod)) {
     await showWarning(
       "Phương thức thanh toán không hợp lệ",
-      "Chỉ hỗ trợ thanh toán được cấu hình sẵn."
+      "Chỉ hỗ trợ thanh toán được cấu hình sẵn.",
     );
     return null;
   }
-
-  orderForm.value.customerName = customerName;
-  orderForm.value.customerPhone = customerPhone;
-  orderForm.value.shippingAddress = shippingAddress;
-  orderForm.value.note = note;
-  orderForm.value.paymentMethod = paymentMethod;
-  orderForm.value.provinceName = provinceName;
-  orderForm.value.wardName = wardName;
-  orderForm.value.specificAddress = specificAddress;
 
   return {
     customerName,
@@ -610,115 +544,50 @@ const validateCheckoutForm = async (): Promise<CheckoutSubmitData | null> => {
     shippingAddress,
     note: note || null,
     paymentMethod,
+    shippingFee: shippingFee.value,
     voucherCode: appliedVoucherCode.value || null,
+    isNewAddress: isEditingStructuredAddress,
   };
 };
 
 const loadCartSummary = async () => {
   try {
     const res = await api.get("/v1/customer/cart/my-cart");
-
     cartItems.value = Array.isArray(res.data) ? res.data : [];
-
-    if (cartItems.value.length === 0) {
-      handleCancelVoucher();
-
-      await Swal.fire({
-        icon: "info",
-        title: "Đơn hàng đã được tạo",
-        text: "Giỏ hàng hiện đang trống. Nếu bạn vừa chọn thanh toán qua VNPay hoặc VietQR nhưng chưa hoàn tất, vui lòng kiểm tra tại Lịch sử đơn hàng.",
-        confirmButtonText: "Đến Lịch sử đơn hàng",
-        confirmButtonColor: "#bd9a5f",
-      });
-
-      router.replace({ path: "/customer/profile", query: { tab: "orders" } });
-    }
   } catch (error: any) {
-    console.error("Lỗi tải giỏ hàng:", error);
-
-    await showError(
-      "Không tải được giỏ hàng",
-      getErrorMessage(error, "Vui lòng đăng nhập lại hoặc thử lại sau.")
-    );
-
-    router.replace("/cart");
+    console.error(error);
   }
 };
 
 const loadSavedVoucher = async () => {
   const savedCode = localStorage.getItem("applied_voucher");
-
-  if (!savedCode || totalAmount.value <= 0) {
-    discountAmount.value = 0;
-    appliedVoucherCode.value = "";
-    return;
-  }
+  if (!savedCode || totalAmount.value <= 0) return;
 
   try {
     const res = await api.get("/v1/customer/vouchers/apply", {
-      params: {
-        code: savedCode,
-        orderTotal: totalAmount.value,
-      },
+      params: { code: savedCode, orderTotal: totalAmount.value },
     });
-
     const discount = Number(
-      res.data?.discountAmount ?? res.data?.discount ?? res.data?.amount ?? 0
+      res.data?.discountAmount ?? res.data?.discount ?? res.data?.amount ?? 0,
     );
-
     discountAmount.value = Math.min(
       Math.max(discount, 0),
-      Number(totalAmount.value || 0)
+      Number(totalAmount.value || 0),
     );
     appliedVoucherCode.value = savedCode;
   } catch (error) {
-    console.warn("Voucher không còn hợp lệ cho đơn hàng này:", error);
     handleCancelVoucher();
   }
 };
 
 const handleUpdateQuantity = async (item: any, quantity: number) => {
-  if (isSubmitting.value || updatingItemKey.value) {
-    return;
-  }
-
-  if (quantity < 1) {
-    await showWarning(
-      "Số lượng không hợp lệ",
-      "Số lượng sản phẩm phải lớn hơn hoặc bằng 1."
-    );
-    return;
-  }
-
-  const stock = getStock(item);
-
-  if (stock > 0 && quantity > stock) {
-    await showWarning(
-      "Vượt quá tồn kho",
-      `Sản phẩm này chỉ còn ${stock} sản phẩm.`
-    );
-    return;
-  }
-
+  if (isSubmitting.value || updatingItemKey.value || quantity < 1) return;
   try {
     updatingItemKey.value = getCartItemKey(item);
-
     await updateCartQuantityApi(item, quantity);
-
     window.dispatchEvent(new Event("cart-updated"));
-
     await loadCartSummary();
-
-    if (appliedVoucherCode.value || localStorage.getItem("applied_voucher")) {
-      await loadSavedVoucher();
-    }
-  } catch (error: any) {
-    console.error("Lỗi cập nhật số lượng:", error);
-
-    await showError(
-      "Không thể cập nhật số lượng",
-      getErrorMessage(error, "Vui lòng thử lại sau.")
-    );
+    if (appliedVoucherCode.value) await loadSavedVoucher();
   } finally {
     updatingItemKey.value = null;
   }
@@ -726,171 +595,378 @@ const handleUpdateQuantity = async (item: any, quantity: number) => {
 
 const handlePlaceOrder = async () => {
   const submitData = await validateCheckoutForm();
-
-  if (!submitData) return;
-  if (isSubmitting.value) return;
-
+  if (!submitData || isSubmitting.value) return;
   isSubmitting.value = true;
 
   try {
-    const res = await api.post("/v1/orders/checkout", submitData);
+    cartSnapshot.value = JSON.parse(JSON.stringify(cartItems.value));
 
-    // BẮT ĐƯỢC ID ĐƠN HÀNG VỪA TẠO
-    createdOrderId.value = res.data?.orderId || null;
-
-    localStorage.removeItem("applied_voucher");
-
-    // LUỒNG 1: NẾU LÀ VNPAY -> CHUYỂN HƯỚNG SANG TRANG THANH TOÁN VNPay
-    if (submitData.paymentMethod === "VNPAY") {
-      const vnpayUrl = res.data?.paymentUrl || res.data?.vnpUrl || res.data?.url; 
-      
-      if (vnpayUrl) {
-        window.location.href = vnpayUrl; 
-        return; 
-      } else {
-        await showError("Lỗi VNPay", "Không lấy được đường dẫn thanh toán VNPay từ hệ thống.");
-        isSubmitting.value = false;
-        return;
+    if (submitData.isNewAddress) {
+      try {
+        let currentAddresses = [];
+        const profileStr = orderForm.value.profileAddress;
+        if (profileStr.startsWith("[")) {
+          currentAddresses = JSON.parse(profileStr);
+        } else if (profileStr) {
+          currentAddresses = [
+            {
+              id: Date.now() - 1000,
+              fullAddress: profileStr,
+              customerName: orderForm.value.customerName,
+              customerPhone: orderForm.value.customerPhone,
+              isDefault: false,
+            },
+          ];
+        }
+        currentAddresses.forEach((a: any) => (a.isDefault = false));
+        currentAddresses.unshift({
+          id: Date.now(),
+          fullAddress: submitData.shippingAddress,
+          customerName: submitData.customerName,
+          customerPhone: submitData.customerPhone,
+          isDefault: true,
+        });
+        await api.put("/customer/profile", {
+          address: JSON.stringify(currentAddresses.slice(0, 10)),
+          name: submitData.customerName,
+          phone: submitData.customerPhone,
+        });
+      } catch (e) {
+        console.error(e);
       }
     }
 
-    // LUỒNG CHUNG CHO VIETQR & COD: Chuẩn bị Data cho bảng Thành công
-    const responseStatus = Number(res.data?.status ?? 0);
-    const responseStatusText = getStatusText(responseStatus);
-    const finalDiscount = Number(res.data?.discountAmount ?? discountAmount.value);
+    const orderPayload = { 
+      ...submitData,
+      shippingFee: shippingFee.value, // Đảm bảo có phí ship
+      voucherCode: appliedVoucherCode.value || null // Đảm bảo có mã giảm giá
+    };
+    delete orderPayload.isNewAddress;
 
-    successStatusText.value = responseStatusText;
-    successMessage.value = res.data?.message || "Cảm ơn bạn đã mua sắm tại Dominus. Đơn hàng của bạn đang chờ cửa hàng xác nhận.";
-    
-    // Dùng Spread Operator (...) để giải quyết triệt để lỗi TypeScript
+    const res = await api.post("/v1/orders/checkout", orderPayload);
+    createdOrderId.value = res.data?.orderId || null;
+
+    const finalDiscount = Number(
+      res.data?.discountAmount ?? discountAmount.value,
+    );
+    successStatusText.value = getStatusText(Number(res.data?.status ?? 0));
+    successMessage.value =
+      res.data?.message || "Cảm ơn bạn đã mua sắm tại Dominus.";
+
     successDetails.value = [
-      { label: "Mã đơn hàng", value: res.data?.orderId ? `#${res.data.orderId}` : "-" },
-      { label: "Trạng thái", value: responseStatusText },
-      { label: "Phương thức", value: formatPaymentMethod(res.data?.paymentMethod || submitData.paymentMethod) },
-      
-      ...(finalDiscount > 0 ? [{ label: "Mã giảm giá", value: res.data?.voucherCode || submitData.voucherCode || "Không có" }] : []),
-      
-      { label: "Tạm tính", value: formatCurrency(Number(res.data?.totalAmount ?? totalAmount.value)), money: true },
-      
-      ...(finalDiscount > 0 ? [{ label: "Giảm giá", value: `-${formatCurrency(finalDiscount)}`, money: true }] : []),
-      
-      { label: "Tổng thanh toán", value: formatCurrency(Number(res.data?.finalAmount ?? finalTotal.value)), money: true },
+      {
+        label: "Mã đơn hàng",
+        value: res.data?.orderId ? `#${res.data.orderId}` : "-",
+      },
+      { label: "Trạng thái", value: successStatusText.value },
+      {
+        label: "Phương thức",
+        value: formatPaymentMethod(
+          res.data?.paymentMethod || orderPayload.paymentMethod,
+        ),
+      },
+      ...(finalDiscount > 0
+        ? [
+            {
+              label: "Mã giảm giá",
+              value:
+                res.data?.voucherCode || orderPayload.voucherCode || "Không có",
+            },
+          ]
+        : []),
+      {
+        label: "Tạm tính",
+        value: formatCurrency(
+          Number(res.data?.totalAmount ?? totalAmount.value),
+        ),
+        money: true,
+      },
+      ...(finalDiscount > 0
+        ? [
+            {
+              label: "Giảm giá",
+              value: `-${formatCurrency(finalDiscount)}`,
+              money: true,
+            },
+          ]
+        : []),
+      {
+        label: "Phí vận chuyển",
+        value: formatCurrency(Number(shippingFee.value)),
+        money: true,
+      },
+      {
+        label: "Tổng thanh toán",
+        value: formatCurrency(
+          Number(res.data?.finalAmount ?? finalTotal.value),
+        ),
+        money: true,
+      },
     ];
 
-    discountAmount.value = 0;
-    appliedVoucherCode.value = "";
-    window.dispatchEvent(new Event("cart-updated"));
+    if (
+      orderPayload.paymentMethod === "VIETQR" ||
+      orderPayload.paymentMethod === "VNPAY"
+    ) {
+      currentPaymentMethod.value = orderPayload.paymentMethod;
 
-    // LUỒNG 2: NẾU LÀ VIETQR -> HIỆN POPUP QR
-    if (submitData.paymentMethod === "VIETQR") {
-      const orderId = res.data?.orderId || Math.floor(Math.random() * 100000);
-      const amount = res.data?.finalAmount ?? finalTotal.value;
-      
-      qrCodeUrl.value = res.data?.qrUrl || `https://img.vietqr.io/image/970422-0123456789-compact2.png?amount=${amount}&addInfo=Thanh toan don ${orderId}&accountName=SHOP DOMINUS`;
-      
+      if (orderPayload.paymentMethod === "VIETQR") {
+        const orderId = res.data?.orderId || Math.floor(Math.random() * 100000);
+        const amount = finalTotal.value; // Ép lấy tổng tiền chuẩn ở frontend (đã bao gồm phí ship)
+        qrCodeUrl.value =
+          res.data?.qrUrl ||
+          `https://img.vietqr.io/image/TCB-3714082007-compact2.png?amount=${amount}&addInfo=DH${orderId}&accountName=NGUYEN%20DINH%20HUY`;
+      } else {
+        const url = res.data?.paymentUrl || res.data?.vnpUrl || res.data?.url;
+        if (!url) throw new Error("Không lấy được link thanh toán VNPay");
+        vnpayUrl.value = url;
+      }
+
       cartItems.value = [];
       window.dispatchEvent(new Event("cart-updated"));
-      
-      showQrModal.value = true;
 
-      // THÊM ĐOẠN NÀY: Đẩy 1 trạng thái ảo vào history để bắt sự kiện người dùng bấm Back
-      window.history.pushState({ qrOpen: true }, "", window.location.href);
-      window.addEventListener("popstate", handleBrowserBackDuringQR);
-    }
-    // LUỒNG 3: NẾU LÀ COD -> HIỆN BILL THÀNH CÔNG
-    else {
+      showPaymentModal.value = true;
+      startPaymentTimer();
+
+      window.history.pushState({ paymentOpen: true }, "", window.location.href);
+      window.addEventListener("popstate", handleBrowserBackDuringPayment);
+    } else {
+      discountAmount.value = 0;
+      appliedVoucherCode.value = "";
+      localStorage.removeItem("applied_voucher");
+      sessionStorage.removeItem("dominus_checkout_draft"); // Xóa draft khi thành công
+
       showSuccessModal.value = true;
+      window.dispatchEvent(new Event("cart-updated"));
     }
-
   } catch (error: any) {
-    console.error("Lỗi đặt hàng:", error);
-    await showError("Không thể đặt hàng", getErrorMessage(error, "Có lỗi xảy ra khi đặt hàng. Vui lòng thử lại."));
+    await showError(
+      "Lỗi đặt hàng",
+      getErrorMessage(error, "Có lỗi xảy ra khi đặt hàng."),
+    );
   } finally {
     isSubmitting.value = false;
   }
 };
 
-// Hàm xử lý khi khách bấm nút Back trên trình duyệt lúc đang hiện mã QR
-const handleBrowserBackDuringQR = async (event: PopStateEvent) => {
-  if (showQrModal.value) {
-    showQrModal.value = false;
-    window.removeEventListener("popstate", handleBrowserBackDuringQR);
-
-    // Bật popup thông báo hệt như VNPay
-    await Swal.fire({
-      icon: 'info',
-      title: 'Đơn hàng đã được tạo',
-      text: 'Giỏ hàng hiện đang trống. Nếu bạn vừa chọn thanh toán qua VNPay hoặc VietQR nhưng chưa hoàn tất, vui lòng kiểm tra tại Lịch sử đơn hàng.',
-      confirmButtonText: 'Đến Lịch sử đơn hàng',
-      confirmButtonColor: '#bd9a5f',
-      allowOutsideClick: false,
-    });
-
-    goToOrders();
-  }
-};
-
-const handleCancelQR = async () => {
-  if (!showQrModal.value) return;
-  showQrModal.value = false;
-  window.removeEventListener("popstate", handleBrowserBackDuringQR);
-
-  await Swal.fire({
-    icon: 'info',
-    title: 'Đơn hàng đã được tạo',
-    text: 'Giỏ hàng hiện đang trống. Nếu bạn vừa chọn thanh toán qua VNPay hoặc VietQR nhưng chưa hoàn tất, vui lòng kiểm tra tại Lịch sử đơn hàng.',
-    confirmButtonText: 'Đến Lịch sử đơn hàng',
-    confirmButtonColor: '#bd9a5f',
-    allowOutsideClick: false,
-  });
-
-  goToOrders();
-};
-
-const confirmQrPayment = () => {
-  showQrModal.value = false;
-  window.removeEventListener("popstate", handleBrowserBackDuringQR);
-  
-  setTimeout(() => {
-    showSuccessModal.value = true;
-  }, 200);
-};
-
-const goToCart = () => {
-  router.push("/cart");
-};
-
-const goToHome = () => {
-  showSuccessModal.value = false;
-  router.push("/");
-};
-
-const goToOrders = () => {
-  showSuccessModal.value = false;
-  router.push({
-    path: "/customer/profile",
-    query: {
-      tab: "orders",
-    },
-  });
-};
-
-const loadInitialData = async () => {
+const cancelAndRestoreCart = async () => {
+  stopPaymentTimer();
   try {
     isPageLoading.value = true;
-    const profileOk = await loadCustomerProfile();
-    if (!profileOk) return;
+
+    if (createdOrderId.value) {
+      await api
+        .patch(`/customer/orders/${createdOrderId.value}/cancel`, {
+          cancelReason: "Khác",
+        })
+        .catch(() => {});
+    }
+
+    if (cartSnapshot.value && cartSnapshot.value.length > 0) {
+      const addPromises = cartSnapshot.value.map((item: any) => {
+        const variantId = item.productVariantId || item.variantId || item.id;
+        return api.post("/v1/customer/cart/add", {
+          productVariantId: Number(variantId),
+          quantity: Number(item.quantity || 1),
+        });
+      });
+      await Promise.all(addPromises);
+    }
+
+    // THÊM DÒNG NÀY: Nạp lại Profile để móc cái địa chỉ mới nhất (nếu m vừa thêm)
+    await loadCustomerProfile();
 
     await loadCartSummary();
+    window.dispatchEvent(new Event("cart-updated"));
+
+    // SỬA DÒNG NÀY: Luôn gọi thẳng hàm này để nó tự lôi voucher từ localStorage ra áp dụng lại
     await loadSavedVoucher();
+    
+    // Ép render lại form sau khi hủy thanh toán
+    formKey.value++;
+
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "info",
+      title: "Chưa thanh toán",
+      text: "Bạn vừa rời khỏi quá trình thanh toán, vui lòng kiểm tra lại đơn hàng.",
+      showConfirmButton: false,
+      timer: 3500,
+    });
+  } catch (error) {
+    console.error(error);
   } finally {
     isPageLoading.value = false;
   }
 };
 
+const handleCancelPayment = async () => {
+  if (!showPaymentModal.value) return;
+  showPaymentModal.value = false;
+  window.removeEventListener("popstate", handleBrowserBackDuringPayment);
+  await cancelAndRestoreCart();
+};
 
-onMounted(() => {
-  loadInitialData();
+const handleTimeoutPayment = async () => {
+  if (!showPaymentModal.value) return;
+  showPaymentModal.value = false;
+  window.removeEventListener("popstate", handleBrowserBackDuringPayment);
+  await cancelAndRestoreCart();
+};
+
+const handleBrowserBackDuringPayment = async () => {
+  if (showPaymentModal.value) {
+    showPaymentModal.value = false;
+    window.removeEventListener("popstate", handleBrowserBackDuringPayment);
+    await cancelAndRestoreCart();
+  }
+};
+
+const goToVnpayGateway = () => {
+  stopPaymentTimer();
+  sessionStorage.setItem(
+    "pending_vnpay_cart",
+    JSON.stringify(cartSnapshot.value),
+  );
+  sessionStorage.setItem("pending_vnpay_order", String(createdOrderId.value));
+  sessionStorage.setItem("pending_vnpay_form", JSON.stringify(orderForm.value));
+  if (appliedVoucherCode.value) {
+    sessionStorage.setItem("pending_vnpay_voucher", appliedVoucherCode.value);
+  }
+
+  window.location.href = vnpayUrl.value;
+};
+
+const confirmQrPayment = async () => {
+  stopPaymentTimer();
+  showPaymentModal.value = false;
+  window.removeEventListener("popstate", handleBrowserBackDuringPayment);
+
+  discountAmount.value = 0;
+  appliedVoucherCode.value = "";
+  localStorage.removeItem("applied_voucher");
+  sessionStorage.removeItem("dominus_checkout_draft"); // Xóa draft khi thành công
+
+  if (createdOrderId.value) {
+    try {
+      const saved = localStorage.getItem("dominus_paid_orders");
+      const map = saved ? JSON.parse(saved) : {};
+      map[String(createdOrderId.value)] = true;
+      localStorage.setItem("dominus_paid_orders", JSON.stringify(map));
+      api
+        .post(`/v1/orders/${createdOrderId.value}/report-payment`)
+        .catch(() => {});
+    } catch (e) {}
+  }
+
+  setTimeout(() => {
+    showSuccessModal.value = true;
+  }, 200);
+};
+
+const goToCart = () => router.push("/cart");
+const goToHome = () => {
+  showSuccessModal.value = false;
+  router.push("/");
+};
+const goToOrders = () => {
+  showSuccessModal.value = false;
+  router.push({ path: "/customer/profile", query: { tab: "orders" } });
+};
+
+const checkAndRestoreVnpayBackup = async () => {
+  const pendingOrder = sessionStorage.getItem("pending_vnpay_order");
+  const pendingCart = sessionStorage.getItem("pending_vnpay_cart");
+
+  if (pendingOrder && pendingCart) {
+    isPageLoading.value = true;
+    showPaymentModal.value = false;
+
+    sessionStorage.removeItem("pending_vnpay_order");
+    sessionStorage.removeItem("pending_vnpay_cart");
+
+    const pendingForm = sessionStorage.getItem("pending_vnpay_form");
+    if (pendingForm) {
+      Object.assign(orderForm.value, JSON.parse(pendingForm));
+      sessionStorage.removeItem("pending_vnpay_form");
+      formKey.value++;
+    }
+
+    const pendingVoucher = sessionStorage.getItem("pending_vnpay_voucher");
+    if (pendingVoucher) {
+      localStorage.setItem("applied_voucher", pendingVoucher);
+      appliedVoucherCode.value = pendingVoucher;
+      sessionStorage.removeItem("pending_vnpay_voucher");
+    }
+
+    try {
+      const items = JSON.parse(pendingCart);
+      cartItems.value = items;
+
+      await api
+        .patch(
+          `/customer/orders/${createdOrderId.value || pendingOrder}/cancel`,
+          {
+            cancelReason: "Khác",
+          },
+        )
+        .catch(() => {});
+
+      if (items && items.length > 0) {
+        const addPromises = items.map((item: any) => {
+          const variantId = item.productVariantId || item.variantId || item.id;
+          return api.post("/v1/customer/cart/add", {
+            productVariantId: Number(variantId),
+            quantity: Number(item.quantity || 1),
+          });
+        });
+        await Promise.all(addPromises);
+      }
+
+      window.dispatchEvent(new Event("cart-updated"));
+      await loadCartSummary();
+      if (appliedVoucherCode.value) {
+        await loadSavedVoucher();
+      }
+    } catch (e) {
+    } finally {
+      isPageLoading.value = false;
+    }
+  }
+};
+
+onMounted(async () => {
+  try {
+    isPageLoading.value = true;
+    
+    // Phục hồi draft form ngay khi mở trang
+    const draft = sessionStorage.getItem("dominus_checkout_draft");
+    if (draft) {
+      try {
+        Object.assign(orderForm.value, JSON.parse(draft));
+      } catch (e) {}
+    }
+
+    await checkAndRestoreVnpayBackup();
+    if (await loadCustomerProfile()) {
+      await loadCartSummary();
+      await loadSavedVoucher();
+      formKey.value++; // Ép render lại form với dữ liệu mới
+    }
+  } finally {
+    isPageLoading.value = false;
+  }
+});
+
+window.addEventListener("pageshow", async (event) => {
+  if (event.persisted || sessionStorage.getItem("pending_vnpay_order")) {
+    await checkAndRestoreVnpayBackup();
+  }
+});
+
+onUnmounted(() => {
+  stopPaymentTimer();
 });
 </script>
 
@@ -929,7 +1005,7 @@ onMounted(() => {
 .premium-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75); 
+  background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(5px);
   display: flex;
   align-items: center;
@@ -939,8 +1015,14 @@ onMounted(() => {
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(30px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .fade-modal-enter-active,

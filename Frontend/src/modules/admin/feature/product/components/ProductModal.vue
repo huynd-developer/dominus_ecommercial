@@ -151,7 +151,7 @@
                     >
                       <option :value="1">Nam</option>
                       <option :value="2">Nữ</option>
-                      <option :value="3">Unisex</option>
+                      <option :value="0">Unisex</option>
                     </select>
                   </div>
 
@@ -400,13 +400,16 @@
                   <input
                     type="file"
                     multiple
-                    accept="image/*"
+                    accept="image/jpeg, image/png, image/webp, image/gif, image/jpg"
                     hidden
                     @change="handleImages"
                   />
                   <i class="bi bi-cloud-arrow-up"></i>
                   <h6>Kéo ảnh vào đây</h6>
-                  <p>hoặc nhấn để chọn ảnh</p>
+                  <p>
+                    hoặc nhấn để chọn ảnh (chỉ chấp nhận file ảnh JPG, PNG,
+                    WEBP...)
+                  </p>
                 </label>
 
                 <transition-group
@@ -550,7 +553,7 @@ const formData = ref<any>({
   brandId: 0,
   categoryId: 0,
   concentrationId: 0,
-  gender: 3,
+  gender: 0,
   isNiche: false,
   status: 1,
   fragranceFamilyIds: [],
@@ -564,7 +567,7 @@ const resetForm = () => {
     brandId: 0,
     categoryId: 0,
     concentrationId: 0,
-    gender: 3,
+    gender: 0,
     isNiche: false,
     status: 1,
     fragranceFamilyIds: [],
@@ -598,9 +601,11 @@ const onPriceInput = (index: any, event: Event) => {
   const input = event.target as HTMLInputElement;
   const rawValue = input.value.replace(/\D/g, "");
   const numericValue = rawValue ? Number(rawValue) : 0;
-  
+
   formData.value.variants[index].price = numericValue;
-  input.value = rawValue ? new Intl.NumberFormat("en-US").format(numericValue) : "";
+  input.value = rawValue
+    ? new Intl.NumberFormat("en-US").format(numericValue)
+    : "";
 };
 
 const formatDateForInput = (dateString?: string) => {
@@ -615,7 +620,7 @@ const fillForm = (product: Product) => {
     brandId: product.brandId,
     categoryId: product.categoryId,
     concentrationId: product.concentrationId,
-    gender: product.gender ?? 3,
+    gender: product.gender ?? 0,
     isNiche: product.isNiche ?? false,
     status: product.status ?? 1,
     fragranceFamilyIds: product.fragranceFamilies?.map((item) => item.id) ?? [],
@@ -668,16 +673,43 @@ const removeVariant = (index: any) => {
 };
 
 const handleImages = (event: Event) => {
-  const files = (event.target as HTMLInputElement).files;
-  if (!files) return;
+  const input = event.target as HTMLInputElement;
+  const files = input.files;
+  if (!files || files.length === 0) return;
+
+  const validTypes = [
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+  ];
+  let hasInvalidFile = false;
 
   Array.from(files).forEach((file) => {
-    imageList.value.push({
-      file,
-      preview: URL.createObjectURL(file),
-      isPrimary: imageList.value.length === 0,
-    });
+    // Kiểm tra xem file gửi lên có thuộc định dạng ảnh hợp lệ không
+    if (validTypes.includes(file.type.toLowerCase())) {
+      imageList.value.push({
+        file,
+        preview: URL.createObjectURL(file),
+        isPrimary: imageList.value.length === 0,
+      });
+    } else {
+      hasInvalidFile = true;
+    }
   });
+
+  // Reset value của input để lần sau người dùng bấm chọn lại đúng file đó vẫn nhận sự kiện @change
+  input.value = "";
+
+  // Báo lỗi nếu người dùng cố tình chọn file định dạng khác
+  if (hasInvalidFile) {
+    Swal.fire(
+      "Định dạng không hỗ trợ",
+      "Một số file không đúng định dạng hình ảnh (JPG, PNG, WEBP...) đã bị bỏ qua!",
+      "warning",
+    );
+  }
 };
 
 const setPrimaryImage = (index: number) => {
@@ -709,7 +741,11 @@ const validateForm = () => {
     return false;
   }
   if (formData.value.name.length > 255) {
-    Swal.fire("Lỗi dữ liệu", "Tên sản phẩm không được vượt quá 255 ký tự.", "warning");
+    Swal.fire(
+      "Lỗi dữ liệu",
+      "Tên sản phẩm không được vượt quá 255 ký tự.",
+      "warning",
+    );
     return false;
   }
   if (formData.value.brandId === 0) {
@@ -726,66 +762,102 @@ const validateForm = () => {
   }
 
   if (formData.value.fragranceFamilyIds.length === 0) {
-    Swal.fire("Thiếu dữ liệu", "Vui lòng chọn ít nhất 1 Nhóm hương.", "warning");
+    Swal.fire(
+      "Thiếu dữ liệu",
+      "Vui lòng chọn ít nhất 1 Nhóm hương.",
+      "warning",
+    );
     return false;
   }
 
   if (formData.value.variants.length === 0) {
-    Swal.fire("Thiếu dữ liệu", "Phải có ít nhất 1 biến thể sản phẩm.", "warning");
+    Swal.fire(
+      "Thiếu dữ liệu",
+      "Phải có ít nhất 1 biến thể sản phẩm.",
+      "warning",
+    );
     return false;
   }
 
   const variantSet = new Set();
   for (let i = 0; i < formData.value.variants.length; i++) {
     const variant = formData.value.variants[i];
-    
+
     if (variant.capacityId === 0) {
-      Swal.fire("Thiếu dữ liệu", `Biến thể dòng ${i + 1}: Vui lòng chọn Dung tích.`, "warning");
+      Swal.fire(
+        "Thiếu dữ liệu",
+        `Biến thể dòng ${i + 1}: Vui lòng chọn Dung tích.`,
+        "warning",
+      );
       return false;
     }
     if (variant.bottleTypeId === 0) {
-      Swal.fire("Thiếu dữ liệu", `Biến thể dòng ${i + 1}: Vui lòng chọn Loại chai.`, "warning");
+      Swal.fire(
+        "Thiếu dữ liệu",
+        `Biến thể dòng ${i + 1}: Vui lòng chọn Loại chai.`,
+        "warning",
+      );
       return false;
     }
 
     const variantKey = `${variant.capacityId}-${variant.bottleTypeId}`;
     if (variantSet.has(variantKey)) {
       Swal.fire(
-        "Trùng lặp biến thể", 
-        `Biến thể dòng ${i + 1} (Dung tích + Loại chai) đã tồn tại. Vui lòng gộp số lượng hoặc chọn loại khác.`, 
-        "warning"
+        "Trùng lặp biến thể",
+        `Biến thể dòng ${i + 1} (Dung tích + Loại chai) đã tồn tại. Vui lòng gộp số lượng hoặc chọn loại khác.`,
+        "warning",
       );
       return false;
     }
     variantSet.add(variantKey);
 
     if (variant.price <= 0 || isNaN(variant.price)) {
-      Swal.fire("Lỗi dữ liệu", `Biến thể dòng ${i + 1}: Giá bán phải lớn hơn 0.`, "warning");
+      Swal.fire(
+        "Lỗi dữ liệu",
+        `Biến thể dòng ${i + 1}: Giá bán phải lớn hơn 0.`,
+        "warning",
+      );
       return false;
     }
-    if (variant.stockQuantity < 0 || String(variant.stockQuantity) === "" || isNaN(variant.stockQuantity)) {
-      Swal.fire("Lỗi dữ liệu", `Biến thể dòng ${i + 1}: Tồn kho không được để trống và không được nhỏ hơn 0.`, "warning");
+    if (
+      variant.stockQuantity < 0 ||
+      String(variant.stockQuantity) === "" ||
+      isNaN(variant.stockQuantity)
+    ) {
+      Swal.fire(
+        "Lỗi dữ liệu",
+        `Biến thể dòng ${i + 1}: Tồn kho không được để trống và không được nhỏ hơn 0.`,
+        "warning",
+      );
       return false;
     }
     if (!variant.manufacturingDate || !variant.expirationDate) {
-      Swal.fire("Thiếu dữ liệu", `Biến thể dòng ${i + 1}: Vui lòng nhập đầy đủ NSX và HSD.`, "warning");
+      Swal.fire(
+        "Thiếu dữ liệu",
+        `Biến thể dòng ${i + 1}: Vui lòng nhập đầy đủ NSX và HSD.`,
+        "warning",
+      );
       return false;
     }
-    
+
     const nsx = new Date(variant.manufacturingDate);
     const hsd = new Date(variant.expirationDate);
     if (nsx >= hsd) {
       Swal.fire(
-        "Lỗi ngày tháng", 
-        `Biến thể dòng ${i + 1}: Ngày sản xuất bắt buộc phải diễn ra TRƯỚC Hạn sử dụng.`, 
-        "warning"
+        "Lỗi ngày tháng",
+        `Biến thể dòng ${i + 1}: Ngày sản xuất bắt buộc phải diễn ra TRƯỚC Hạn sử dụng.`,
+        "warning",
       );
       return false;
     }
   }
 
   if (imageList.value.length === 0) {
-    Swal.fire("Thiếu ảnh", "Vui lòng upload ít nhất 1 ảnh cho sản phẩm.", "warning");
+    Swal.fire(
+      "Thiếu ảnh",
+      "Vui lòng upload ít nhất 1 ảnh cho sản phẩm.",
+      "warning",
+    );
     return false;
   }
 
@@ -796,25 +868,56 @@ const saveData = async () => {
   if (!validateForm()) return;
 
   try {
-    appStore.startLoading();
-
     const payload = {
-      ...formData.value,
-      variants: formData.value.variants.map((v: any) => ({
-        id: v.id,
+      name: formData.value.name.trim(),
+      description: formData.value.description
+        ? formData.value.description.trim()
+        : "",
+      brandId: Number(formData.value.brandId),
+      categoryId: Number(formData.value.categoryId),
+      concentrationId: Number(formData.value.concentrationId),
+      gender: Number(formData.value.gender ?? 3),
+      isNiche: Boolean(formData.value.isNiche),
+      status: Number(formData.value.status ?? 1),
+      variants: (formData.value.variants || []).map((v: any) => ({
+        id: v.id ? Number(v.id) : undefined,
         capacityId: Number(v.capacityId),
         bottleTypeId: Number(v.bottleTypeId),
         price: Number(v.price),
         stockQuantity: Number(v.stockQuantity),
-        manufacturingDate: v.manufacturingDate,
-        expirationDate: v.expirationDate,
-        status: Number(v.status),
-        sku: v.sku 
+        manufacturingDate: v.manufacturingDate
+          ? String(v.manufacturingDate).substring(0, 10)
+          : "",
+        expirationDate: v.expirationDate
+          ? String(v.expirationDate).substring(0, 10)
+          : "",
+        status: Number(v.status ?? 1),
+        sku: v.sku ? String(v.sku).trim() : undefined,
       })),
-      fragranceFamilyIds: [...new Set(formData.value.fragranceFamilyIds.map(Number))]
-    } as any; // ĐÃ SỬA: Ép kiểu any ở đây để an toàn đẩy đi
+      fragranceFamilyIds: [
+        ...new Set((formData.value.fragranceFamilyIds || []).map(Number)),
+      ],
+    } as any;
 
     if (isEdit.value && props.productSelected) {
+      // 1. NẾU LÀ SỬA SẢN PHẨM -> HIỂN THỊ POPUP XÁC NHẬN
+      const confirmResult = await Swal.fire({
+        title: "Xác nhận cập nhật?",
+        text: "Bạn có chắc chắn muốn lưu các thay đổi cho sản phẩm này không?",
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonColor: "#2563eb",
+        cancelButtonColor: "#ef4444",
+        confirmButtonText: "Đồng ý",
+        cancelButtonText: "Hủy bỏ",
+      });
+
+      // Nếu người dùng bấm Hủy -> Dừng lại, không chạy code bên dưới
+      if (!confirmResult.isConfirmed) return;
+
+      // Người dùng đã Đồng ý -> Bắt đầu loading và gọi API
+      appStore.startLoading();
+      
       await productService.updateProduct(props.productSelected.id, payload);
 
       for (const imageId of deletedImageIds.value) {
@@ -826,30 +929,39 @@ const saveData = async () => {
         await productService.uploadImage(props.productSelected.id, image.file);
       }
 
-      const primaryImage = imageList.value.find(img => img.isPrimary);
+      const primaryImage = imageList.value.find((img) => img.isPrimary);
       if (primaryImage?.id) {
-        await productService.setPrimaryImage(props.productSelected.id, primaryImage.id);
-      } else if(primaryImage?.file) {
-        const updatedImages = await productService.getImagesByProduct(props.productSelected.id);
-        if(updatedImages && updatedImages.length > 0) {
-          await productService.setPrimaryImage(props.productSelected.id, updatedImages[updatedImages.length - 1].id);
+        await productService.setPrimaryImage(
+          props.productSelected.id,
+          primaryImage.id,
+        );
+      } else if (primaryImage?.file) {
+        const updatedImages = await productService.getImagesByProduct(
+          props.productSelected.id,
+        );
+        if (updatedImages && updatedImages.length > 0) {
+          await productService.setPrimaryImage(
+            props.productSelected.id,
+            updatedImages[updatedImages.length - 1].id,
+          );
         }
       }
 
       emit("refresh");
       emit("close");
-      
+
       Swal.fire({
         toast: true,
-        position: 'top-end',
-        icon: 'success',
-        title: 'Cập nhật sản phẩm thành công',
+        position: "top-end",
+        icon: "success",
+        title: "Cập nhật sản phẩm thành công",
         showConfirmButton: false,
         timer: 2000,
-        timerProgressBar: true
+        timerProgressBar: true,
       });
-      
     } else {
+      // 2. NẾU LÀ THÊM MỚI SẢN PHẨM -> CHẠY LUÔN KHÔNG CẦN CONFIRM
+      appStore.startLoading();
       const created = await productService.createProduct(payload);
 
       for (const image of imageList.value) {
@@ -857,11 +969,16 @@ const saveData = async () => {
         await productService.uploadImage(created.id, image.file);
       }
 
-      const uploadedImages = await productService.getImagesByProduct(created.id);
-      const primaryIndex = imageList.value.findIndex(img => img.isPrimary);
+      const uploadedImages = await productService.getImagesByProduct(
+        created.id,
+      );
+      const primaryIndex = imageList.value.findIndex((img) => img.isPrimary);
 
       if (primaryIndex >= 0 && uploadedImages?.[primaryIndex]?.id) {
-        await productService.setPrimaryImage(created.id, uploadedImages[primaryIndex].id);
+        await productService.setPrimaryImage(
+          created.id,
+          uploadedImages[primaryIndex].id,
+        );
       }
 
       emit("refresh");
@@ -869,23 +986,23 @@ const saveData = async () => {
 
       Swal.fire({
         toast: true,
-        position: 'top-end',
-        icon: 'success',
-        title: 'Thêm sản phẩm thành công',
+        position: "top-end",
+        icon: "success",
+        title: "Thêm sản phẩm thành công",
         showConfirmButton: false,
         timer: 2000,
-        timerProgressBar: true
+        timerProgressBar: true,
       });
     }
-
   } catch (e: any) {
     console.error(e);
     Swal.fire({
       icon: "error",
       title: "Lỗi",
-      text: e?.response?.data?.message ?? "Không thể lưu sản phẩm"
+      text: e?.response?.data?.message ?? "Không thể lưu sản phẩm",
     });
   } finally {
+    // Đảm bảo phải tắt loading dù API chạy thành công hay thất bại
     appStore.stopLoading();
   }
 };

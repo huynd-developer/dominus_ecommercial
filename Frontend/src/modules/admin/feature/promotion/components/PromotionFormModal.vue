@@ -1,121 +1,106 @@
 <template>
-  <div v-if="show">
-    <div class="modal d-block" tabindex="-1">
-      <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-          <div class="modal-header">
-            <div>
-              <h5 class="modal-title fw-bold mb-1">
-                {{
-                  isReadonly
-                    ? "Xem chiến dịch Flash Sale"
-                    : promotion
-                      ? "Cập nhật chiến dịch"
-                      : "Tạo chiến dịch Flash Sale"
-                }}
-              </h5>
+  <Teleport to="body">
+    <div v-if="show" class="custom-modal-overlay" @click.self="close">
+      <div class="custom-modal-content custom-modal-xl">
+        <div class="modal-header">
+          <div>
+            <h4 class="fw-bold mb-0">
+              {{
+                isReadonly
+                  ? "Xem chiến dịch Flash Sale"
+                  : promotion
+                    ? "Cập nhật chiến dịch"
+                    : "Tạo chiến dịch Flash Sale"
+              }}
+            </h4>
+            <small class="text-muted mt-1 d-block">
+              <template v-if="isReadonly">
+                Chiến dịch đã kết thúc nên chỉ được xem, không được chỉnh sửa.
+              </template>
+              <template v-else>
+                Chọn biến thể sản phẩm và cấu hình phần trăm giảm giá.
+              </template>
+            </small>
+          </div>
+          <button type="button" class="btn-close" @click="close"></button>
+        </div>
 
-              <small class="text-muted">
-                <template v-if="isReadonly">
-                  Chiến dịch đã kết thúc nên chỉ được xem, không được chỉnh sửa.
-                </template>
-                <template v-else>
-                  Chọn biến thể sản phẩm và cấu hình phần trăm giảm giá.
-                </template>
-              </small>
-            </div>
-
-            <button type="button" class="btn-close" @click="close"></button>
+        <div class="modal-body p-4">
+          <div v-if="isReadonly" class="alert alert-secondary py-2 mb-4">
+            Chiến dịch này đã kết thúc. Theo nghiệp vụ thực tế, không sửa lại
+            thời gian, sản phẩm hoặc phần trăm giảm giá để tránh sai lịch sử
+            khuyến mãi và báo cáo.
           </div>
 
-          <div class="modal-body">
-            <div v-if="isReadonly" class="alert alert-secondary py-2">
-              Chiến dịch này đã kết thúc. Theo nghiệp vụ thực tế, không sửa lại
-              thời gian, sản phẩm hoặc phần trăm giảm giá để tránh sai lịch sử
-              khuyến mãi và báo cáo.
+          <div class="row g-4 mb-4">
+            <div class="col-md-6">
+              <label class="form-label fw-bold">
+                Tên chiến dịch <span class="text-danger">*</span>
+              </label>
+              <input
+                v-model.trim="form.name"
+                type="text"
+                maxlength="255"
+                class="form-control form-control-lg"
+                placeholder="VD: Flash Sale Cuối Tuần"
+                :disabled="isReadonly"
+              />
+              <small class="text-muted mt-1 d-block">Từ 3 đến 255 ký tự.</small>
             </div>
 
-            <div class="row g-3 mb-3">
-              <div class="col-md-6">
-                <label class="form-label fw-semibold">
-                  Tên chiến dịch <span class="text-danger">*</span>
-                </label>
-
-                <input
-                  v-model.trim="form.name"
-                  type="text"
-                  maxlength="255"
-                  class="form-control"
-                  placeholder="VD: Flash Sale Cuối Tuần"
-                  :disabled="isReadonly"
-                />
-
-                <small class="text-muted">
-                  Từ 3 đến 255 ký tự.
-                </small>
-              </div>
-
-              <div class="col-md-3">
-                <label class="form-label fw-semibold">
-                  Bắt đầu <span class="text-danger">*</span>
-                </label>
-
-                <input
-                  v-model="form.startDate"
-                  type="datetime-local"
-                  class="form-control"
-                  :disabled="isReadonly"
-                />
-              </div>
-
-              <div class="col-md-3">
-                <label class="form-label fw-semibold">
-                  Kết thúc <span class="text-danger">*</span>
-                </label>
-
-                <input
-                  v-model="form.endDate"
-                  type="datetime-local"
-                  class="form-control"
-                  :disabled="isReadonly"
-                />
-              </div>
+            <div class="col-md-3">
+              <label class="form-label fw-bold">
+                Bắt đầu <span class="text-danger">*</span>
+              </label>
+              <input
+                v-model="form.startDate"
+                type="datetime-local"
+                class="form-control form-control-lg"
+                :disabled="isReadonly"
+              />
             </div>
 
-            <ProductVariantPicker
-              v-model="selectedVariants"
-              :start-date="form.startDate"
-              :end-date="form.endDate"
-              :ignore-promotion-id="promotion?.id ?? null"
-              :readonly="isReadonly"
-            />
+            <div class="col-md-3">
+              <label class="form-label fw-bold">
+                Kết thúc <span class="text-danger">*</span>
+              </label>
+              <input
+                v-model="form.endDate"
+                type="datetime-local"
+                class="form-control form-control-lg"
+                :disabled="isReadonly"
+              />
+            </div>
           </div>
 
-          <div class="modal-footer">
-            <button type="button" class="btn btn-outline-secondary" @click="close">
-              {{ isReadonly ? "Đóng" : "Hủy" }}
-            </button>
+          <ProductVariantPicker
+            v-model="selectedVariants"
+            :start-date="form.startDate"
+            :end-date="form.endDate"
+            :ignore-promotion-id="promotion?.id ?? null"
+            :readonly="isReadonly"
+          />
+        </div>
 
-            <button
-              v-if="!isReadonly"
-              type="button"
-              class="btn btn-dark"
-              :disabled="store.saving"
-              @click="submit"
-            >
-              <span
-                v-if="store.saving"
-                class="spinner-border spinner-border-sm me-1"
-              ></span>
-              {{ promotion ? "Lưu thay đổi" : "Tạo chiến dịch" }}
-            </button>
-          </div>
+        <div class="modal-footer mt-2 pt-4 border-top p-4">
+          <button type="button" class="btn btn-light btn-lg px-4" @click="close">
+            {{ isReadonly ? "Đóng" : "Hủy" }}
+          </button>
+
+          <button
+            v-if="!isReadonly"
+            type="button"
+            class="btn btn-dark btn-lg px-5"
+            :disabled="store.saving"
+            @click="submit"
+          >
+            <span v-if="store.saving" class="spinner-border spinner-border-sm me-2"></span>
+            {{ promotion ? "Lưu thay đổi" : "Tạo chiến dịch" }}
+          </button>
         </div>
       </div>
     </div>
-
-    <div class="modal-backdrop fade show"></div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -209,7 +194,6 @@ const validateBeforeSubmit = async () => {
       text: "Chiến dịch đã kết thúc nên không được chỉnh sửa.",
       confirmButtonColor: "#bd9a5f",
     });
-
     return false;
   }
 
@@ -222,7 +206,6 @@ const validateBeforeSubmit = async () => {
       text: "Tên chiến dịch phải từ 3 ký tự trở lên.",
       confirmButtonColor: "#bd9a5f",
     });
-
     return false;
   }
 
@@ -233,7 +216,6 @@ const validateBeforeSubmit = async () => {
       text: "Tên chiến dịch không được vượt quá 255 ký tự.",
       confirmButtonColor: "#bd9a5f",
     });
-
     return false;
   }
 
@@ -244,7 +226,6 @@ const validateBeforeSubmit = async () => {
       text: "Vui lòng chọn thời gian bắt đầu và kết thúc.",
       confirmButtonColor: "#bd9a5f",
     });
-
     return false;
   }
 
@@ -255,7 +236,6 @@ const validateBeforeSubmit = async () => {
       text: "Ngày kết thúc phải lớn hơn ngày bắt đầu.",
       confirmButtonColor: "#bd9a5f",
     });
-
     return false;
   }
 
@@ -266,7 +246,6 @@ const validateBeforeSubmit = async () => {
       text: "Ngày kết thúc phải lớn hơn thời gian hiện tại.",
       confirmButtonColor: "#bd9a5f",
     });
-
     return false;
   }
 
@@ -277,7 +256,6 @@ const validateBeforeSubmit = async () => {
       text: "Vui lòng chọn ít nhất 1 biến thể sản phẩm.",
       confirmButtonColor: "#bd9a5f",
     });
-
     return false;
   }
 
@@ -288,7 +266,6 @@ const validateBeforeSubmit = async () => {
       text: "Một chiến dịch chỉ nên áp dụng tối đa 100 biến thể.",
       confirmButtonColor: "#bd9a5f",
     });
-
     return false;
   }
 
@@ -303,7 +280,6 @@ const validateBeforeSubmit = async () => {
       text: "Một biến thể chỉ được chọn một lần trong cùng chiến dịch.",
       confirmButtonColor: "#bd9a5f",
     });
-
     return false;
   }
 
@@ -322,7 +298,6 @@ const validateBeforeSubmit = async () => {
       text: "Mỗi biến thể phải có % giảm lớn hơn 0 và nhỏ hơn hoặc bằng 99.99.",
       confirmButtonColor: "#bd9a5f",
     });
-
     return false;
   }
 
@@ -339,7 +314,6 @@ const validateBeforeSubmit = async () => {
         "Vui lòng bỏ các biến thể không đủ điều kiện khuyến mãi.",
       confirmButtonColor: "#bd9a5f",
     });
-
     return false;
   }
 
@@ -361,9 +335,7 @@ const buildPayload = (): PromotionRequest => {
 const submit = async () => {
   try {
     const valid = await validateBeforeSubmit();
-
     if (!valid) return;
-
     const payload = buildPayload();
 
     if (props.promotion) {
@@ -371,10 +343,57 @@ const submit = async () => {
     } else {
       await store.createPromotion(payload);
     }
-
     emit("saved");
   } catch (error) {
     console.error("Promotion submit failed:", error);
   }
 };
 </script>
+
+<style scoped>
+.custom-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1050;
+  backdrop-filter: blur(4px);
+}
+
+.custom-modal-content {
+  background-color: white;
+  width: 90%;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.custom-modal-xl {
+  max-width: 1000px;
+}
+
+.modal-header {
+  padding: 24px;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-body {
+  overflow-y: auto;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+</style>

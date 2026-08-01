@@ -62,10 +62,151 @@
                       :status-text="order.statusText"
                     />
                   </p>
-                  <p class="mb-0">
+                  <p class="mb-1">
                     <strong>Ngày tạo:</strong>
                     {{ formatDate(order.createdAt) }}
                   </p>
+
+                  <div v-if="isCancelledOrder(order)" class="cancel-reason-box mt-3">
+                    <div class="cancel-reason-title">
+                      <i class="bi bi-x-circle me-1"></i>
+                      Lý do hủy đơn
+                    </div>
+
+                    <div class="cancel-reason-text">
+                      {{ getOrderCancelReason(order) }}
+                    </div>
+
+                    <div
+                      v-if="getOrderCancelledAt(order)"
+                      class="cancel-reason-time"
+                    >
+                      Hủy lúc: {{ formatDate(getOrderCancelledAt(order)) }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="hasDeliveryInfo(order)" class="delivery-section border rounded p-3 mb-3">
+              <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+                <div>
+                  <h6 class="fw-bold mb-1">Thông tin giao hàng</h6>
+                  <small class="text-muted">
+                    Kết quả giao hàng và minh chứng do cửa hàng tự vận chuyển cập nhật.
+                  </small>
+                </div>
+              </div>
+
+              <div class="row g-3">
+                <div v-if="hasDeliveryCompletedInfo(order)" class="col-md-6">
+                  <div class="delivery-info-card h-100">
+                    <div class="delivery-info-title text-success">
+                      <i class="bi bi-check-circle me-1"></i>
+                      Giao hàng thành công
+                    </div>
+
+                    <div class="delivery-info-row">
+                      <span>Thời gian:</span>
+                      <strong>{{ formatDate(order.completedAt) }}</strong>
+                    </div>
+
+                    <div class="delivery-info-row">
+                      <span>Người xác nhận:</span>
+                      <strong>{{ order.deliveryCompletedByName || "-" }}</strong>
+                    </div>
+
+                    <div
+                      v-if="getDeliverySuccessMediaList(order).length > 0"
+                      class="mt-2"
+                    >
+                      <div class="delivery-media-label">Minh chứng giao hàng:</div>
+                      <div class="return-media-list">
+                        <button
+                          v-for="(mediaUrl, index) in getDeliverySuccessMediaList(order)"
+                          :key="`delivery-success-${mediaUrl}-${index}`"
+                          type="button"
+                          class="return-media-item"
+                          @click="openMedia(mediaUrl)"
+                        >
+                          <video
+                            v-if="isVideoUrl(mediaUrl)"
+                            :src="normalizeImageUrl(mediaUrl)"
+                            muted
+                            playsinline
+                            preload="metadata"
+                          ></video>
+
+                          <img
+                            v-else
+                            :src="normalizeImageUrl(mediaUrl)"
+                            alt="Minh chứng giao hàng thành công"
+                            @error="handleImageError"
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="hasDeliveryFailedInfo(order)" class="col-md-6">
+                  <div class="delivery-info-card h-100">
+                    <div class="delivery-info-title text-danger">
+                      <i class="bi bi-x-circle me-1"></i>
+                      Giao hàng thất bại
+                    </div>
+
+                    <div class="delivery-info-row">
+                      <span>Lý do:</span>
+                      <strong>{{ order.deliveryFailedReason || "-" }}</strong>
+                    </div>
+
+                    <div class="delivery-info-row">
+                      <span>Mô tả:</span>
+                      <strong>{{ order.deliveryFailedDescription || "-" }}</strong>
+                    </div>
+
+                    <div class="delivery-info-row">
+                      <span>Thời gian:</span>
+                      <strong>{{ formatDate(order.deliveryFailedAt) }}</strong>
+                    </div>
+
+                    <div class="delivery-info-row">
+                      <span>Người xác nhận:</span>
+                      <strong>{{ order.deliveryFailedByName || "-" }}</strong>
+                    </div>
+
+                    <div
+                      v-if="getDeliveryFailedMediaList(order).length > 0"
+                      class="mt-2"
+                    >
+                      <div class="delivery-media-label">Minh chứng giao thất bại:</div>
+                      <div class="return-media-list">
+                        <button
+                          v-for="(mediaUrl, index) in getDeliveryFailedMediaList(order)"
+                          :key="`delivery-failed-${mediaUrl}-${index}`"
+                          type="button"
+                          class="return-media-item"
+                          @click="openMedia(mediaUrl)"
+                        >
+                          <video
+                            v-if="isVideoUrl(mediaUrl)"
+                            :src="normalizeImageUrl(mediaUrl)"
+                            muted
+                            playsinline
+                            preload="metadata"
+                          ></video>
+
+                          <img
+                            v-else
+                            :src="normalizeImageUrl(mediaUrl)"
+                            alt="Minh chứng giao hàng thất bại"
+                            @error="handleImageError"
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -79,7 +220,7 @@
                     <th>Dung tích</th>
                     <th>Loại chai</th>
                     <th class="text-end">SL</th>
-                    <th class="text-end">Giá cuối</th>
+                    <th class="text-end">Giá</th>
                     <th class="text-end">Thành tiền</th>
                   </tr>
                 </thead>
@@ -118,7 +259,19 @@
                     <td>{{ item.capacity || "-" }}</td>
                     <td>{{ item.bottleType || "-" }}</td>
                     <td class="text-end">{{ item.quantity }}</td>
-                    <td class="text-end">{{ formatMoney(item.finalPrice) }}</td>
+                    <td class="text-end">
+                      <div class="price-stack">
+                        <span
+                          v-if="hasOrderItemDiscount(item)"
+                          class="old-price"
+                        >
+                          {{ formatMoney(getOrderItemOriginalPrice(item)) }}
+                        </span>
+                        <span class="final-price">
+                          {{ formatMoney(getOrderItemFinalPrice(item)) }}
+                        </span>
+                      </div>
+                    </td>
                     <td class="text-end fw-semibold">
                       {{ formatMoney(item.lineTotal) }}
                     </td>
@@ -127,12 +280,258 @@
               </table>
             </div>
 
+            <div v-if="hasReturnInfo(order)" class="return-section mt-3">
+              <div
+                class="return-header d-flex align-items-center justify-content-between gap-2 mb-3"
+              >
+                <div>
+                  <h6 class="fw-bold mb-1">Thông tin hoàn hàng / hoàn tiền</h6>
+                  <small class="text-muted">
+                    Sản phẩm khách yêu cầu hoàn và thông tin nhận hoàn tiền.
+                  </small>
+                </div>
+
+                <span class="return-badge" :class="getReturnProcessBadgeClass(order)">
+                  {{ getReturnProcessStatusText(order) }}
+                </span>
+              </div>
+
+              <div class="row g-3 mb-3">
+                <div :class="shouldShowBankRefundInfo(order) ? 'col-md-7' : 'col-12'">
+                  <div class="return-info-card h-100">
+                    <div class="return-info-row">
+                      <span>Lý do hoàn:</span>
+                      <strong>{{ order.returnReason || "-" }}</strong>
+                    </div>
+
+                    <div class="return-info-row">
+                      <span>Mô tả:</span>
+                      <strong>{{ order.returnDescription || "-" }}</strong>
+                    </div>
+
+                    <div class="return-info-row">
+                      <span>Email liên hệ:</span>
+                      <strong>{{ order.returnEmail || "-" }}</strong>
+                    </div>
+
+                    <div class="return-info-row">
+                      <span>Ngày yêu cầu:</span>
+                      <strong>{{ formatDate(order.returnRequestedAt) }}</strong>
+                    </div>
+
+                    <div class="return-info-row">
+                      <span>Trạng thái xử lý:</span>
+                      <strong>{{ getReturnProcessStatusText(order) }}</strong>
+                    </div>
+
+                    <div class="return-info-row">
+                      <span>Phương án hoàn tiền:</span>
+                      <strong>{{
+                        formatRefundMethod(order.refundMethod)
+                      }}</strong>
+                    </div>
+
+                    <div
+                      v-if="getReturnProductRefundAmount(order) > 0"
+                      class="return-info-row"
+                    >
+                      <span>Tiền hàng hoàn:</span>
+                      <strong>{{ formatMoney(getReturnProductRefundAmount(order)) }}</strong>
+                    </div>
+
+                    <div
+                      v-if="getReturnShippingFee(order) > 0"
+                      class="return-info-row"
+                    >
+                      <span>Phí vận chuyển hoàn:</span>
+                      <strong>{{ formatMoney(getReturnShippingFee(order)) }}</strong>
+                    </div>
+
+                    <div class="return-info-row return-money-row">
+                      <span>Số tiền cần hoàn:</span>
+                      <strong>{{
+                        formatMoney(getReturnRefundAmount(order))
+                      }}</strong>
+                    </div>
+
+                    <div
+                      v-if="getOrderReturnRejectReason(order)"
+                      class="return-reject-reason mt-2"
+                    >
+                      <strong>Lý do từ chối:</strong>
+                      {{ getOrderReturnRejectReason(order) }}
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="shouldShowBankRefundInfo(order)" class="col-md-5">
+                  <div class="return-info-card h-100">
+                    <h6 class="fw-bold mb-2">Thông tin tài khoản nhận tiền</h6>
+
+                    <div class="return-info-row">
+                      <span>Ngân hàng:</span>
+                      <strong>{{ order.bankName || "-" }}</strong>
+                    </div>
+
+                    <div class="return-info-row">
+                      <span>Số tài khoản:</span>
+                      <strong>{{ order.bankAccountNumber || "-" }}</strong>
+                    </div>
+
+                    <div class="return-info-row">
+                      <span>Chủ tài khoản:</span>
+                      <strong>{{ order.bankAccountHolder || "-" }}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                v-if="getReturnMediaList(order).length > 0"
+                class="return-media-list mb-3"
+              >
+                <button
+                  v-for="(mediaUrl, index) in getReturnMediaList(order)"
+                  :key="`${mediaUrl}-${index}`"
+                  type="button"
+                  class="return-media-item"
+                  @click="openMedia(mediaUrl)"
+                >
+                  <video
+                    v-if="isVideoUrl(mediaUrl)"
+                    :src="normalizeImageUrl(mediaUrl)"
+                    muted
+                    playsinline
+                    preload="metadata"
+                  ></video>
+
+                  <img
+                    v-else
+                    :src="normalizeImageUrl(mediaUrl)"
+                    alt="Bằng chứng hoàn hàng"
+                    @error="handleImageError"
+                  />
+                </button>
+              </div>
+
+              <div class="table-responsive border rounded">
+                <table class="table align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Sản phẩm hoàn</th>
+                      <th>SKU</th>
+                      <th>Dung tích</th>
+                      <th>Loại chai</th>
+                      <th class="text-end">SL mua</th>
+                      <th class="text-end">SL hoàn</th>
+                      <th class="text-end">Giá</th>
+                      <th class="text-end">Tiền hoàn</th>
+                      <th>Trạng thái</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    <tr
+                      v-if="
+                        !order.returnItems || order.returnItems.length === 0
+                      "
+                    >
+                      <td colspan="9" class="text-center text-muted py-4">
+                        Chưa có dữ liệu sản phẩm hoàn.
+                      </td>
+                    </tr>
+
+                    <tr
+                      v-for="(item, index) in order.returnItems"
+                      :key="`return-item-${
+                        item.returnRequestItemId ?? item.orderItemId ?? index
+                      }`"
+                    >
+                      <td>
+                        <div class="d-flex align-items-center gap-2">
+                          <div class="order-product-image-box">
+                            <img
+                              :src="getReturnItemImageUrl(item)"
+                              :alt="item.productName || 'return product'"
+                              class="order-product-image"
+                              @error="handleImageError"
+                            />
+                          </div>
+
+                          <div>
+                            <div class="fw-semibold">
+                              {{ item.productName || "Sản phẩm" }}
+                            </div>
+                            <small v-if="item.brandName" class="text-muted">
+                              {{ item.brandName }}
+                            </small>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td>{{ item.sku || "-" }}</td>
+                      <td>{{ item.capacity || "-" }}</td>
+                      <td>{{ item.bottleType || "-" }}</td>
+                      <td class="text-end">
+                        {{ item.orderedQuantity ?? "-" }}
+                      </td>
+                      <td class="text-end fw-semibold">
+                        {{ item.returnQuantity ?? 0 }}
+                      </td>
+                      <td class="text-end">
+                        <div class="price-stack">
+                          <span
+                            v-if="hasReturnItemDiscount(item)"
+                            class="old-price"
+                          >
+                            {{ formatMoney(getReturnItemOriginalPrice(item)) }}
+                          </span>
+                          <span class="final-price">
+                            {{ formatMoney(getReturnItemFinalPrice(item)) }}
+                          </span>
+                        </div>
+                      </td>
+                      <td class="text-end fw-semibold text-danger">
+                        {{ formatMoney(item.refundAmount) }}
+                      </td>
+                      <td>
+                        <span
+                          class="return-item-status"
+                          :class="getReturnItemStatusClass(item.status)"
+                        >
+                          {{
+                            item.statusText ||
+                            formatReturnItemStatus(item.status)
+                          }}
+                        </span>
+
+                        <div
+                          v-if="getReturnItemRejectReason(item)"
+                          class="return-item-reject-reason mt-1"
+                        >
+                          Lý do: {{ getReturnItemRejectReason(item) }}
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             <div class="row justify-content-end mt-3">
               <div class="col-md-4">
                 <div class="border rounded p-3">
                   <div class="d-flex justify-content-between mb-2">
-                    <span>Tổng tiền:</span>
+                    <span>Tổng tiền hàng:</span>
                     <strong>{{ formatMoney(order.totalAmount) }}</strong>
+                  </div>
+
+                  <div
+                    v-if="getOrderShippingFee(order) > 0"
+                    class="d-flex justify-content-between mb-2"
+                  >
+                    <span>Phí vận chuyển:</span>
+                    <strong>{{ formatMoney(getOrderShippingFee(order)) }}</strong>
                   </div>
 
                   <div class="d-flex justify-content-between mb-2">
@@ -147,9 +546,6 @@
                     </strong>
                   </div>
 
-                  <div v-if="order.voucher" class="mt-2 small text-muted">
-                    Voucher: {{ order.voucher.voucherCode }}
-                  </div>
                 </div>
               </div>
             </div>
@@ -157,6 +553,36 @@
         </div>
 
         <div class="modal-footer">
+          <button
+            v-if="order && canAcceptReturn(order)"
+            class="btn btn-success"
+            type="button"
+            @click="$emit('accept-return', order)"
+          >
+            <i class="bi bi-check-circle me-1"></i>
+            Chấp nhận hoàn
+          </button>
+
+          <button
+            v-if="order && canRejectReturn(order)"
+            class="btn btn-outline-danger"
+            type="button"
+            @click="$emit('reject-return', order)"
+          >
+            <i class="bi bi-x-circle me-1"></i>
+            Từ chối
+          </button>
+
+          <button
+            v-if="order && canMarkReturnRefunded(order)"
+            class="btn btn-success"
+            type="button"
+            @click="$emit('mark-return-refunded', order)"
+          >
+            <i class="bi bi-cash-coin me-1"></i>
+            Đã hoàn tiền
+          </button>
+
           <button class="btn btn-secondary" @click="$emit('close')">
             Đóng
           </button>
@@ -165,26 +591,56 @@
     </div>
   </div>
 
+  <div v-if="selectedMediaUrl" class="return-media-modal" @click="closeMedia">
+    <div class="return-media-modal-content" @click.stop>
+      <button type="button" class="btn-close-media" @click="closeMedia">
+        ×
+      </button>
+
+      <video
+        v-if="isVideoUrl(selectedMediaUrl)"
+        :src="normalizeImageUrl(selectedMediaUrl)"
+        controls
+        autoplay
+      ></video>
+
+      <img
+        v-else
+        :src="normalizeImageUrl(selectedMediaUrl)"
+        alt="Bằng chứng hoàn hàng"
+      />
+    </div>
+  </div>
+
   <div v-if="show" class="modal-backdrop show"></div>
 </template>
 
 <script setup lang="ts">
+import { ref } from "vue";
 import type {
   AdminOrderItemResponse,
   AdminOrderResponse,
+  AdminReturnItemResponse,
 } from "../types/order.type";
 import OrderStatusBadge from "./OrderStatusBadge.vue";
 
-defineProps<{
+const props = defineProps<{
   show: boolean;
   order: AdminOrderResponse | null;
 }>();
 
 defineEmits<{
   close: [];
+  "accept-return": [order: AdminOrderResponse];
+  "reject-return": [order: AdminOrderResponse];
+  "mark-return-refunded": [order: AdminOrderResponse];
 }>();
 
+void props;
+
 const BACKEND_URL = "http://localhost:8080";
+
+const selectedMediaUrl = ref<string | null>(null);
 
 const FALLBACK_IMAGE =
   "data:image/svg+xml;utf8," +
@@ -296,6 +752,323 @@ function getOrderItemImageUrl(item: AdminOrderItemResponse) {
   return listImage || FALLBACK_IMAGE;
 }
 
+function getReturnItemImageUrl(item: AdminReturnItemResponse) {
+  return getImageUrlFromObject(item.imageUrl) || FALLBACK_IMAGE;
+}
+
+function toMoneyNumber(value?: number | null) {
+  const numberValue = Number(value || 0);
+
+  return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+function pickMoneyValue(...values: unknown[]) {
+  for (const value of values) {
+    const numberValue = Number(value || 0);
+
+    if (Number.isFinite(numberValue) && numberValue > 0) {
+      return numberValue;
+    }
+  }
+
+  return 0;
+}
+
+function getOrderShippingFee(order?: AdminOrderResponse | null) {
+  return pickMoneyValue(
+    (order as any)?.shippingFee,
+    (order as any)?.shippingfee,
+    (order as any)?.shippingFeeAmount,
+    (order as any)?.shipFee,
+    (order as any)?.deliveryFee,
+    (order as any)?.shippingAmount
+  );
+}
+
+function getReturnShippingFee(order?: AdminOrderResponse | null) {
+  return pickMoneyValue(
+    (order as any)?.returnShippingFee,
+    (order as any)?.refundShippingFee,
+    (order as any)?.shippingFeeRefundAmount
+  );
+}
+
+function getReturnProductRefundAmount(order: AdminOrderResponse) {
+  return Math.max(0, getReturnRefundAmount(order) - getReturnShippingFee(order));
+}
+
+function getOrderItemOriginalPrice(item: AdminOrderItemResponse) {
+  const originalPrice = toMoneyNumber(item.originalPrice);
+  const finalPrice = toMoneyNumber(item.finalPrice);
+  const discountAmount = toMoneyNumber(item.discountAmount);
+
+  return originalPrice > 0 ? originalPrice : finalPrice + discountAmount;
+}
+
+function getOrderItemFinalPrice(item: AdminOrderItemResponse) {
+  return toMoneyNumber(item.finalPrice);
+}
+
+function hasOrderItemDiscount(item: AdminOrderItemResponse) {
+  return (
+    toMoneyNumber(item.discountAmount) > 0 ||
+    getOrderItemOriginalPrice(item) > getOrderItemFinalPrice(item)
+  );
+}
+
+function getReturnItemOriginalPrice(item: AdminReturnItemResponse) {
+  const originalPrice = toMoneyNumber(item.unitOriginalPrice);
+  const finalPrice = toMoneyNumber(item.unitFinalPrice);
+  const discountAmount = toMoneyNumber(item.unitDiscountAmount);
+
+  return originalPrice > 0 ? originalPrice : finalPrice + discountAmount;
+}
+
+function getReturnItemFinalPrice(item: AdminReturnItemResponse) {
+  return toMoneyNumber(item.unitFinalPrice);
+}
+
+function hasReturnItemDiscount(item: AdminReturnItemResponse) {
+  return (
+    toMoneyNumber(item.unitDiscountAmount) > 0 ||
+    getReturnItemOriginalPrice(item) > getReturnItemFinalPrice(item)
+  );
+}
+
+function getReturnRefundAmount(order: AdminOrderResponse) {
+  return Number(order.returnRefundAmount ?? order.refundAmount ?? 0);
+}
+
+function getDeliverySuccessMediaList(order?: AdminOrderResponse | null) {
+  return ((order as any)?.deliverySuccessMediaUrls || []).filter(
+    (url: string) => Boolean(url && String(url).trim())
+  );
+}
+
+function getDeliveryFailedMediaList(order?: AdminOrderResponse | null) {
+  return ((order as any)?.deliveryFailedMediaUrls || []).filter(
+    (url: string) => Boolean(url && String(url).trim())
+  );
+}
+
+function hasDeliveryCompletedInfo(order?: AdminOrderResponse | null) {
+  return Boolean(
+    Number(order?.status) === 3 ||
+      order?.completedAt ||
+      (order as any)?.deliveryCompletedByName ||
+      getDeliverySuccessMediaList(order).length > 0
+  );
+}
+
+function hasDeliveryFailedInfo(order?: AdminOrderResponse | null) {
+  return Boolean(
+    Number(order?.status) === 5 ||
+      (order as any)?.deliveryFailedReason ||
+      (order as any)?.deliveryFailedDescription ||
+      (order as any)?.deliveryFailedAt ||
+      (order as any)?.deliveryFailedByName ||
+      getDeliveryFailedMediaList(order).length > 0
+  );
+}
+
+function hasDeliveryInfo(order?: AdminOrderResponse | null) {
+  return hasDeliveryCompletedInfo(order) || hasDeliveryFailedInfo(order);
+}
+
+function hasReturnInfo(order: AdminOrderResponse) {
+  return (
+    Number(order.status) === 6 ||
+    Number(order.status) === 7 ||
+    Boolean(order.returnReason) ||
+    Boolean(order.returnDescription) ||
+    Boolean(order.returnRequestedAt) ||
+    Boolean(order.bankAccountNumber) ||
+    Boolean(order.returnItems && order.returnItems.length > 0)
+  );
+}
+
+function normalizeRefundMethodValue(method?: string | number | null) {
+  const value = String(method || "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (!value) {
+    return "";
+  }
+
+  if (
+    value === "1" ||
+    value === "BANK_TRANSFER" ||
+    value.includes("BANK") ||
+    value.includes("TRANSFER") ||
+    value.includes("CHUYEN KHOAN") ||
+    value.includes("NGAN HANG")
+  ) {
+    return "BANK_TRANSFER";
+  }
+
+  if (
+    value === "2" ||
+    value === "STORE" ||
+    value.includes("CUA HANG") ||
+    value.includes("TAI QUAY")
+  ) {
+    return "STORE";
+  }
+
+  return value;
+}
+
+function shouldShowBankRefundInfo(order: AdminOrderResponse | null) {
+  if (!order) {
+    return false;
+  }
+
+  const refundMethod = normalizeRefundMethodValue(order.refundMethod);
+
+  if (refundMethod === "STORE") {
+    return false;
+  }
+
+  if (refundMethod === "BANK_TRANSFER") {
+    return true;
+  }
+
+  return Boolean(
+    order.bankName ||
+      order.bankAccountNumber ||
+      order.bankAccountHolder
+  );
+}
+
+function getReturnProcessStatus(order: AdminOrderResponse) {
+  const directStatus = Number(order.returnProcessStatus);
+
+  if (Number.isFinite(directStatus)) {
+    return directStatus;
+  }
+
+  const itemStatuses = (order.returnItems || [])
+    .map((item) => Number(item.status))
+    .filter((value) => Number.isFinite(value));
+
+  if (Number(order.status) === 7 || itemStatuses.some((value) => value === 3)) {
+    return 3;
+  }
+
+  if (itemStatuses.length > 0 && itemStatuses.every((value) => value === 2)) {
+    return 2;
+  }
+
+  if (itemStatuses.length > 0 && itemStatuses.every((value) => value === 1)) {
+    return 1;
+  }
+
+  if (Number(order.status) === 6) {
+    return 0;
+  }
+
+  return null;
+}
+
+function getReturnProcessStatusText(order: AdminOrderResponse) {
+  if (order.returnProcessStatusText) {
+    return order.returnProcessStatusText;
+  }
+
+  switch (getReturnProcessStatus(order)) {
+    case 0:
+      return "Chờ xử lý";
+    case 1:
+      return "Đã chấp nhận / Chờ hoàn tiền";
+    case 2:
+      return "Đã từ chối";
+    case 3:
+      return "Đã xử lý hoàn tiền";
+    default:
+      return Number(order.status) === 7 ? "Đã xử lý hoàn tiền" : "Chờ xử lý";
+  }
+}
+
+function getReturnProcessBadgeClass(order: AdminOrderResponse) {
+  return {
+    "is-pending": getReturnProcessStatus(order) === 0,
+    "is-accepted": getReturnProcessStatus(order) === 1,
+    "is-rejected": getReturnProcessStatus(order) === 2,
+    "is-refunded": getReturnProcessStatus(order) === 3,
+  };
+}
+
+function canAcceptReturn(order: AdminOrderResponse) {
+  if (order.canAcceptReturn !== undefined && order.canAcceptReturn !== null) {
+    return order.canAcceptReturn === true;
+  }
+
+  return Number(order.status) === 6 && getReturnProcessStatus(order) === 0;
+}
+
+function canRejectReturn(order: AdminOrderResponse) {
+  if (order.canRejectReturn !== undefined && order.canRejectReturn !== null) {
+    return order.canRejectReturn === true;
+  }
+
+  return Number(order.status) === 6 && getReturnProcessStatus(order) === 0;
+}
+
+function canMarkReturnRefunded(order: AdminOrderResponse) {
+  if (
+    order.canMarkReturnRefunded !== undefined &&
+    order.canMarkReturnRefunded !== null
+  ) {
+    return order.canMarkReturnRefunded === true;
+  }
+
+  return Number(order.status) === 6 && getReturnProcessStatus(order) === 1;
+}
+
+function getOrderReturnRejectReason(order: AdminOrderResponse) {
+  const reason =
+    order.returnRejectReason ??
+    order.rejectReason ??
+    order.rejectedReason ??
+    "";
+
+  return String(reason || "").trim();
+}
+
+function getReturnItemRejectReason(item: AdminReturnItemResponse) {
+  const reason = item.rejectReason ?? item.rejectedReason ?? "";
+
+  return String(reason || "").trim();
+}
+
+function getReturnMediaList(order: AdminOrderResponse) {
+  return [
+    ...(order.returnImages || []),
+    ...(order.returnVideos || []),
+    ...(order.returnMediaUrls || []),
+  ].filter((url): url is string => Boolean(url && String(url).trim()));
+}
+
+function isVideoUrl(value?: string | null) {
+  const url = String(value || "").toLowerCase();
+
+  return (
+    url.includes("/video/upload/") ||
+    /\.(mp4|webm|ogg|mov|m4v)(\?|#|$)/i.test(url)
+  );
+}
+
+function openMedia(mediaUrl: string) {
+  selectedMediaUrl.value = mediaUrl;
+}
+
+function closeMedia() {
+  selectedMediaUrl.value = null;
+}
+
 function handleImageError(event: Event) {
   const target = event.target as HTMLImageElement | null;
 
@@ -318,6 +1091,75 @@ function formatDate(value?: string | null) {
   if (!value) return "-";
 
   return new Date(value).toLocaleString("vi-VN");
+}
+
+function isCancelledOrder(order?: AdminOrderResponse | null) {
+  return Number(order?.status) === 4;
+}
+
+function getOrderCancelReason(order?: AdminOrderResponse | null) {
+  const rawReason =
+    (order as any)?.cancelReason ??
+    (order as any)?.cancellationReason ??
+    (order as any)?.cancelNote ??
+    (order as any)?.cancelDescription ??
+    "";
+
+  const reason = String(rawReason || "").trim();
+
+  return reason || "Chưa có lý do hủy";
+}
+
+function getOrderCancelledAt(order?: AdminOrderResponse | null) {
+  return (
+    (order as any)?.cancelledAt ??
+    (order as any)?.canceledAt ??
+    (order as any)?.cancelAt ??
+    (order as any)?.cancelDate ??
+    null
+  );
+}
+
+function formatRefundMethod(method?: string | number | null) {
+  const refundMethod = normalizeRefundMethodValue(method);
+
+  if (!refundMethod) {
+    return "-";
+  }
+
+  if (refundMethod === "BANK_TRANSFER") {
+    return "Chuyển khoản ngân hàng";
+  }
+
+  if (refundMethod === "STORE") {
+    return "Hoàn tại cửa hàng";
+  }
+
+  return String(method);
+}
+
+function formatReturnItemStatus(status?: number | null) {
+  switch (Number(status)) {
+    case 0:
+      return "Chờ xử lý";
+    case 1:
+      return "Đã chấp nhận";
+    case 2:
+      return "Từ chối";
+    case 3:
+      return "Đã hoàn tiền";
+    default:
+      return "-";
+  }
+}
+
+function getReturnItemStatusClass(status?: number | null) {
+  return {
+    "is-pending": Number(status) === 0,
+    "is-accepted": Number(status) === 1,
+    "is-rejected": Number(status) === 2,
+    "is-refunded": Number(status) === 3,
+  };
 }
 
 function formatOrderType(type?: string | null) {
@@ -383,5 +1225,273 @@ function formatPaymentMethod(method?: string | null) {
   object-fit: contain;
   padding: 3px;
   display: block;
+}
+
+.price-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  line-height: 1.2;
+}
+
+
+.old-price {
+  color: #9ca3af;
+  font-size: 12px;
+  text-decoration: line-through;
+}
+
+
+.final-price {
+  color: #111827;
+  font-weight: 800;
+}
+.return-section {
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.return-header {
+  border-bottom: 1px solid #fde68a;
+  padding-bottom: 10px;
+}
+
+.return-badge {
+  border-radius: 999px;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  color: #92400e;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.return-badge.is-accepted {
+  background: #dcfce7;
+  border-color: #16a34a;
+  color: #166534;
+}
+
+.return-badge.is-rejected {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #991b1b;
+}
+
+.return-badge.is-refunded {
+  background: #dbeafe;
+  border-color: #2563eb;
+  color: #1e40af;
+}
+
+.return-info-card {
+  background: #ffffff;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.return-info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 13px;
+}
+
+.return-info-row span {
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.return-info-row strong {
+  color: #111827;
+  text-align: right;
+}
+
+.return-money-row strong {
+  color: #dc2626;
+}
+
+.return-reject-reason,
+.return-item-reject-reason {
+  color: #b91c1c;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.delivery-section {
+  background: #fffdf8;
+}
+
+.delivery-info-card {
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.delivery-info-title {
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+
+.delivery-info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.delivery-info-row span {
+  color: #6b7280;
+}
+
+.delivery-info-row strong {
+  color: #111827;
+  text-align: right;
+}
+
+.delivery-media-label {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.return-media-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.return-media-item {
+  width: 74px;
+  height: 74px;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 0;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.return-media-item img,
+.return-media-item video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.return-item-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.return-item-status.is-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.return-item-status.is-accepted {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.return-item-status.is-rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.return-item-status.is-refunded {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.cancel-reason-box {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.cancel-reason-title {
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+}
+
+.cancel-reason-text {
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.cancel-reason-time {
+  margin-top: 5px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.return-media-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 1065;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.return-media-modal-content {
+  position: relative;
+  max-width: 92vw;
+  max-height: 92vh;
+  background: #111827;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.return-media-modal-content img,
+.return-media-modal-content video {
+  max-width: 88vw;
+  max-height: 84vh;
+  display: block;
+  border-radius: 8px;
+}
+
+.btn-close-media {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 700;
 }
 </style>
