@@ -36,6 +36,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
@@ -50,6 +51,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+
+import org.example.datn_sd69.entity.User;
+import org.example.datn_sd69.repository.UserRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -145,14 +149,23 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private final ReturnRequestRepository returnRequestRepository;
     private final ReturnRequestItemRepository returnRequestItemRepository;
     private final ReturnRequestMediaRepository returnRequestMediaRepository;
+    private final UserRepository userRepository;
     private final Cloudinary cloudinary;
     private final EntityManager entityManager;
+
     private record KeywordDateRange(
             String keyword,
             LocalDateTime fromDateTime,
             LocalDateTime toDateTime
     ) {
     }
+
+    private record AdminActorInfo(
+            String displayName,
+            String email
+    ) {
+    }
+
     @Override
     @Transactional(readOnly = true)
     public Page<AdminOrderResponse> getOrders(
@@ -283,9 +296,54 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         order.setDeliveryFailedAt(now);
         order.setDeliveryFailedByName(getCurrentAdminDisplayName());
 
+        applyDeliveryFailedRefundInfo(order);
+
         Order savedOrder = orderRepository.save(order);
 
         saveDeliveryEvidenceFiles(savedOrder, files, DELIVERY_EVIDENCE_TYPE_FAILED);
+
+        return mapOrderToResponse(savedOrder, true);
+    }
+
+    @Override
+    @Transactional
+    public AdminOrderResponse markDeliveryRefunded(Integer orderId) {
+        Order order = findOrderOrThrow(orderId);
+
+        if (safeStatus(order) != STATUS_DELIVERY_FAILED) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ được xác nhận hoàn tiền cho đơn giao hàng thất bại"
+            );
+        }
+
+        BigDecimal refundAmount = defaultMoney(order.getDeliveryRefundAmount());
+
+        if (refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Đơn hàng này không phát sinh hoàn tiền giao thất bại"
+            );
+        }
+
+        if (!hasDeliveryRefundBankInfo(order)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Khách chưa cung cấp đủ thông tin tài khoản hoàn tiền"
+            );
+        }
+
+        if (order.getDeliveryRefundedAt() != null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Đơn hàng này đã được xác nhận hoàn tiền"
+            );
+        }
+
+        order.setDeliveryRefundedAt(LocalDateTime.now());
+        order.setDeliveryRefundedByName(getCurrentAdminDisplayName());
+
+        Order savedOrder = orderRepository.save(order);
 
         return mapOrderToResponse(savedOrder, true);
     }
@@ -794,9 +852,309 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             return "Nhân viên cửa hàng";
         }
 
-        String name = normalizeOptionalText(authentication.getName());
+        String email = normalizeOptionalText(authentication.getName());
 
-        return name == null ? "Nhân viên cửa hàng" : name;
+        if (email == null) {
+            return "Nhân viên cửa hàng";
+        }
+
+        return resolveUserDisplayNameByEmail(email);
+    }
+
+    /**
+     * Lấy tên thật của nhân viên/admin theo email đăng nhập.
+     * Giá trị trả về được lưu vào các cột Delivery...ByName theo dạng:
+     * Dòng 1: Tên người thao tác
+     * Dòng 2: Email đăng nhập
+     */
+    private String resolveUserDisplayNameByEmail(String email) {
+        String cleanEmail = normalizeOptionalText(email);
+
+        if (cleanEmail == null) {
+            return "Nhân viên cửa hàng";
+        }
+
+        return formatAdminActorInfo(findAdminActorInfo(cleanEmail), cleanEmail);
+    }
+
+    private AdminActorInfo findAdminActorInfo(String principalName) {
+        String cleanPrincipalName = normalizeOptionalText(principalName);
+
+        if (cleanPrincipalName == null) {
+            return new AdminActorInfo(null, null);
+        }
+
+        try {
+            User user = userRepository.findByEmailIgnoreCase(cleanPrincipalName).orElse(null);
+
+            if (user != null) {
+                return new AdminActorInfo(
+                        normalizeOptionalText(user.getName()),
+                        normalizeOptionalText(user.getEmail())
+                );
+            }
+        } catch (Exception ignored) {
+            // Không để lỗi lấy entity người dùng làm hỏng luồng xử lý đơn.
+        }
+
+        try {
+            List<?> result = entityManager
+                    .createNativeQuery("SELECT TOP 1 Name, Email FROM dbo.Users WHERE LOWER(Email) = LOWER(:principalName)")
+                    .setParameter("principalName", cleanPrincipalName)
+                    .getResultList();
+
+            if (!result.isEmpty()) {
+                Object row = result.get(0);
+
+                if (row instanceof Object[] values) {
+                    String displayName = values.length > 0 ? normalizeObjectText(values[0]) : null;
+                    String email = values.length > 1 ? normalizeObjectText(values[1]) : null;
+
+                    return new AdminActorInfo(displayName, email);
+                }
+            }
+        } catch (Exception ignored) {
+            // Không để lỗi truy vấn thông tin người dùng làm hỏng luồng xử lý đơn.
+        }
+
+        if (isEmailLike(cleanPrincipalName)) {
+            return new AdminActorInfo(null, cleanPrincipalName);
+        }
+
+        return new AdminActorInfo(cleanPrincipalName, null);
+    }
+
+    private String normalizeObjectText(Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        return normalizeOptionalText(value.toString());
+    }
+
+    /**
+     * Chuẩn hóa lại dữ liệu người xác nhận trước khi trả ra FE.
+     * Nếu dữ liệu cũ trong DB chỉ là email, service sẽ lookup Users để bổ sung tên thật.
+     */
+    private String normalizeActorDisplayName(String value) {
+        String cleanValue = normalizeActorText(value);
+
+        if (cleanValue == null) {
+            return null;
+        }
+
+        String extractedEmail = extractEmail(cleanValue);
+
+        if (cleanValue.contains("\n")) {
+            String[] lines = cleanValue.split("\\R+");
+            String displayName = lines.length > 0 ? normalizeOptionalText(lines[0]) : null;
+            String email = extractedEmail;
+
+            if (email != null) {
+                AdminActorInfo actorInfo = findAdminActorInfo(email);
+                String resolvedName = normalizeOptionalText(actorInfo.displayName());
+
+                if (resolvedName != null
+                        && !resolvedName.equalsIgnoreCase(email)
+                        && (displayName == null || "Nhân viên cửa hàng".equalsIgnoreCase(displayName))) {
+                    displayName = resolvedName;
+                }
+            }
+
+            if (displayName != null && email != null && !displayName.equalsIgnoreCase(email)) {
+                return truncateDeliveryActorInfo(displayName + "\n" + email);
+            }
+
+            if (email != null) {
+                return resolveUserDisplayNameByEmail(email);
+            }
+
+            return truncateDeliveryActorInfo(cleanValue);
+        }
+
+        if (isEmailLike(cleanValue)) {
+            return resolveUserDisplayNameByEmail(cleanValue);
+        }
+
+        if (extractedEmail != null) {
+            AdminActorInfo actorInfo = findAdminActorInfo(extractedEmail);
+            String resolvedName = normalizeOptionalText(actorInfo.displayName());
+
+            if (resolvedName != null && !resolvedName.equalsIgnoreCase(extractedEmail)) {
+                return truncateDeliveryActorInfo(resolvedName + "\n" + extractedEmail);
+            }
+        }
+
+        return truncateDeliveryActorInfo(cleanValue);
+    }
+
+    private String formatAdminActorInfo(AdminActorInfo actorInfo, String fallbackValue) {
+        String fallback = normalizeOptionalText(fallbackValue);
+        String displayName = actorInfo == null ? null : normalizeOptionalText(actorInfo.displayName());
+        String email = actorInfo == null ? null : normalizeOptionalText(actorInfo.email());
+
+        if (displayName != null && email != null && !displayName.equalsIgnoreCase(email)) {
+            return truncateDeliveryActorInfo(displayName + "\n" + email);
+        }
+
+        if (displayName != null) {
+            return truncateDeliveryActorInfo(displayName);
+        }
+
+        if (email != null) {
+            return truncateDeliveryActorInfo("Nhân viên cửa hàng\n" + email);
+        }
+
+        if (fallback != null) {
+            return truncateDeliveryActorInfo(fallback);
+        }
+
+        return "Nhân viên cửa hàng";
+    }
+
+    private String truncateDeliveryActorInfo(String value) {
+        String cleanValue = normalizeActorText(value);
+
+        if (cleanValue == null) {
+            return "Nhân viên cửa hàng";
+        }
+
+        if (cleanValue.length() <= 255) {
+            return cleanValue;
+        }
+
+        return cleanValue.substring(0, 255).trim();
+    }
+
+    private String normalizeActorText(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String cleanValue = value
+                .trim()
+                .replaceAll("\\r\\n|\\r", "\n")
+                .replaceAll("\\t+", " ");
+
+        String[] lines = cleanValue.split("\\n+");
+        List<String> cleanLines = new ArrayList<>();
+
+        for (String line : lines) {
+            String cleanLine = normalizeOptionalText(line);
+
+            if (cleanLine != null) {
+                cleanLines.add(cleanLine);
+            }
+        }
+
+        if (cleanLines.isEmpty()) {
+            return null;
+        }
+
+        return String.join("\n", cleanLines);
+    }
+
+    private String extractEmail(String value) {
+        String cleanValue = normalizeOptionalText(value);
+
+        if (cleanValue == null) {
+            return null;
+        }
+
+        String[] parts = cleanValue.split("\\s+");
+
+        for (String part : parts) {
+            String cleanPart = part
+                    .trim()
+                    .replaceAll("^[<({\\[]+", "")
+                    .replaceAll("[>)}\\],.;:]+$", "");
+
+            if (isEmailLike(cleanPart)) {
+                return cleanPart;
+            }
+        }
+
+        return null;
+    }
+
+    private boolean isEmailLike(String value) {
+        String cleanValue = normalizeOptionalText(value);
+
+        return cleanValue != null
+                && cleanValue.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
+    }
+
+    private void applyDeliveryFailedRefundInfo(Order order) {
+        if (order == null) {
+            return;
+        }
+
+        if (isPrepaidPaymentMethod(order.getPaymentMethod())) {
+            BigDecimal refundAmount = defaultMoney(order.getFinalAmount());
+
+            if (refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Số tiền cần hoàn không hợp lệ"
+                );
+            }
+
+            order.setDeliveryRefundAmount(refundAmount);
+            order.setDeliveryRefundedAt(null);
+            order.setDeliveryRefundedByName(null);
+            return;
+        }
+
+        order.setDeliveryRefundAmount(null);
+        order.setDeliveryRefundBankName(null);
+        order.setDeliveryRefundBankAccountNumber(null);
+        order.setDeliveryRefundBankAccountHolder(null);
+        order.setDeliveryRefundedAt(null);
+        order.setDeliveryRefundedByName(null);
+    }
+
+    private boolean isPrepaidPaymentMethod(String paymentMethod) {
+        String method = normalizeOptionalText(paymentMethod);
+
+        if (method == null) {
+            return false;
+        }
+
+        String upperMethod = method.toUpperCase(Locale.ROOT);
+
+        if (upperMethod.contains("COD")) {
+            return false;
+        }
+
+        return upperMethod.contains("VNPAY")
+                || upperMethod.contains("VIETQR")
+                || upperMethod.contains("QR")
+                || upperMethod.contains("BANK")
+                || upperMethod.contains("TRANSFER")
+                || upperMethod.contains("MOMO");
+    }
+
+    private boolean hasDeliveryRefundBankInfo(Order order) {
+        if (order == null) {
+            return false;
+        }
+
+        return normalizeOptionalText(order.getDeliveryRefundBankName()) != null
+                && normalizeOptionalText(order.getDeliveryRefundBankAccountNumber()) != null
+                && normalizeOptionalText(order.getDeliveryRefundBankAccountHolder()) != null;
+    }
+
+    private boolean isDeliveryRefundRequired(Order order) {
+        return order != null
+                && defaultMoney(order.getDeliveryRefundAmount()).compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    private boolean canMarkDeliveryRefunded(Order order) {
+        return order != null
+                && safeStatus(order) == STATUS_DELIVERY_FAILED
+                && isDeliveryRefundRequired(order)
+                && hasDeliveryRefundBankInfo(order)
+                && order.getDeliveryRefundedAt() == null;
     }
 
     private AdminOrderResponse mapOrderToResponse(Order order, boolean includeItems) {
@@ -840,11 +1198,21 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         response.setStatusText(getStatusText(order.getStatus()));
         response.setCreatedAt(order.getCreatedAt());
         response.setCompletedAt(order.getCompletedAt());
-        response.setDeliveryCompletedByName(normalizeOptionalText(order.getDeliveryCompletedByName()));
+        response.setDeliveryCompletedByName(normalizeActorDisplayName(order.getDeliveryCompletedByName()));
         response.setDeliveryFailedReason(normalizeOptionalText(order.getDeliveryFailedReason()));
         response.setDeliveryFailedDescription(normalizeOptionalText(order.getDeliveryFailedDescription()));
         response.setDeliveryFailedAt(order.getDeliveryFailedAt());
-        response.setDeliveryFailedByName(normalizeOptionalText(order.getDeliveryFailedByName()));
+        response.setDeliveryFailedByName(normalizeActorDisplayName(order.getDeliveryFailedByName()));
+        response.setDeliveryRefundAmount(order.getDeliveryRefundAmount());
+        response.setDeliveryRefundBankName(normalizeOptionalText(order.getDeliveryRefundBankName()));
+        response.setDeliveryRefundBankAccountNumber(normalizeOptionalText(order.getDeliveryRefundBankAccountNumber()));
+        response.setDeliveryRefundBankAccountHolder(normalizeOptionalText(order.getDeliveryRefundBankAccountHolder()));
+        response.setDeliveryRefundedAt(order.getDeliveryRefundedAt());
+        response.setDeliveryRefundedByName(normalizeActorDisplayName(order.getDeliveryRefundedByName()));
+        response.setDeliveryRefundRequired(isDeliveryRefundRequired(order));
+        response.setDeliveryRefundBankInfoProvided(hasDeliveryRefundBankInfo(order));
+        response.setDeliveryRefundCompleted(order.getDeliveryRefundedAt() != null);
+        response.setCanMarkDeliveryRefunded(canMarkDeliveryRefunded(order));
         response.setDeliverySuccessMediaUrls(getDeliveryEvidenceUrls(order, DELIVERY_EVIDENCE_TYPE_SUCCESS));
         response.setDeliveryFailedMediaUrls(getDeliveryEvidenceUrls(order, DELIVERY_EVIDENCE_TYPE_FAILED));
         response.setCancelReason(normalizeOptionalText(order.getCancelReason()));
@@ -1447,13 +1815,13 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         try {
             return entityManager.createQuery(
                             """
-                            SELECT img.imageUrl
-                            FROM ProductImage img
-                            WHERE img.product.id = :productId
-                              AND img.imageUrl IS NOT NULL
-                              AND img.imageUrl <> ''
-                            ORDER BY img.id ASC
-                            """,
+                                    SELECT img.imageUrl
+                                    FROM ProductImage img
+                                    WHERE img.product.id = :productId
+                                      AND img.imageUrl IS NOT NULL
+                                      AND img.imageUrl <> ''
+                                    ORDER BY img.id ASC
+                                    """,
                             String.class
                     )
                     .setParameter("productId", variant.getProduct().getId())
@@ -1720,6 +2088,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         return value + "ml";
     }
+
     @Override
     @Transactional(readOnly = true)
     public AdminOrderStatusCountResponse getStatusCounts(

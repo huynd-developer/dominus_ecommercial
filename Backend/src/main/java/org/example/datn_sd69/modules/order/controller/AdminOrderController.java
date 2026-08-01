@@ -115,7 +115,7 @@ public class AdminOrderController {
 
     /**
      * Giao hàng thành công.
-     * Chỉ áp dụng cho đơn đang giao hàng và bắt buộc có ảnh/video minh chứng.
+     * Chỉ áp dụng cho đơn đang giao hàng và bắt buộc có ảnh minh chứng.
      *
      * PATCH /api/admin/orders/{orderId}/delivery-completed
      */
@@ -148,6 +148,19 @@ public class AdminOrderController {
     ) {
         return ResponseEntity.ok(
                 adminOrderService.markDeliveryFailed(orderId, request)
+        );
+    }
+
+    /**
+     * Admin xác nhận đã hoàn tiền thực tế cho đơn giao thất bại.
+     * Chỉ dùng cho đơn giao thất bại đã thanh toán trước và đã có thông tin ngân hàng của khách.
+     *
+     * PATCH /api/admin/orders/{orderId}/delivery-refunded
+     */
+    @PatchMapping({"/{orderId}/delivery-refunded", "/{orderId}/delivery-refunded/"})
+    public ResponseEntity<?> markDeliveryRefunded(@PathVariable Integer orderId) {
+        return ResponseEntity.ok(
+                adminOrderService.markDeliveryRefunded(orderId)
         );
     }
 

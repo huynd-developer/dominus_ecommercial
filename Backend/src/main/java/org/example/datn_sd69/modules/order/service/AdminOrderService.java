@@ -41,6 +41,8 @@ public interface AdminOrderService {
 
     AdminOrderResponse markDeliveryFailed(Integer orderId, MarkDeliveryFailedRequest request);
 
+    AdminOrderResponse markDeliveryRefunded(Integer orderId);
+
     AdminOrderResponse acceptReturnRequest(Integer orderId);
 
     AdminOrderResponse rejectReturnRequest(Integer orderId, RejectReturnRequest request);

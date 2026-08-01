@@ -3,6 +3,7 @@ package org.example.datn_sd69.modules.customerOrder.controller;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
+import org.example.datn_sd69.modules.customerOrder.dto.request.SubmitDeliveryRefundBankRequest;
 import org.example.datn_sd69.modules.customerOrder.service.CustomerOrderService;
 import org.example.datn_sd69.modules.order.dto.request.CancelOrderRequest;
 import org.springframework.http.MediaType;
@@ -32,28 +33,35 @@ public class CustomerOrderController {
 
     @GetMapping("/{orderId}")
     public ResponseEntity<?> getOrderDetail(
-            @PathVariable
-            @Positive(message = "orderId phải là số nguyên dương")
-            Integer orderId
+            @PathVariable @Positive(message = "orderId phải là số nguyên dương") Integer orderId
     ) {
         return ResponseEntity.ok(customerOrderService.getOrderDetail(orderId));
     }
 
     @PatchMapping("/{orderId}/cancel")
     public ResponseEntity<?> cancelOrder(
-            @PathVariable
-            @Positive(message = "orderId phải là số nguyên dương")
-            Integer orderId,
-
-            @Valid
-            @RequestBody
-            CancelOrderRequest request
+            @PathVariable @Positive(message = "orderId phải là số nguyên dương") Integer orderId,
+            @Valid @RequestBody CancelOrderRequest request
     ) {
         customerOrderService.cancelOrder(orderId, request);
 
-        return ResponseEntity.ok(Map.of(
-                "message", "Hủy đơn hàng thành công"
-        ));
+        return ResponseEntity.ok(Map.of("message", "Hủy đơn hàng thành công"));
+    }
+
+    /**
+     * Khách nhập thông tin tài khoản ngân hàng để shop hoàn tiền thủ công
+     * cho đơn giao hàng thất bại đã thanh toán trước.
+     *
+     * PATCH /api/customer/orders/{orderId}/delivery-refund-bank
+     */
+    @PatchMapping("/{orderId}/delivery-refund-bank")
+    public ResponseEntity<?> submitDeliveryRefundBank(
+            @PathVariable @Positive(message = "orderId phải là số nguyên dương") Integer orderId,
+            @Valid @RequestBody SubmitDeliveryRefundBankRequest request
+    ) {
+        return ResponseEntity.ok(
+                customerOrderService.submitDeliveryRefundBank(orderId, request)
+        );
     }
 
     /**
@@ -69,15 +77,9 @@ public class CustomerOrderController {
      * - returnItems hoặc items: JSON string [{"orderItemId":1,"quantity":1}]
      * - mediaFiles hoặc files
      */
-    @PutMapping(
-            value = "/{orderId}/request-return",
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
-    )
+    @PutMapping(value = "/{orderId}/request-return", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> requestReturnOrder(
-            @PathVariable
-            @Positive(message = "orderId phải là số nguyên dương")
-            Integer orderId,
-
+            @PathVariable @Positive(message = "orderId phải là số nguyên dương") Integer orderId,
             @RequestParam String returnType,
             @RequestParam String reason,
             @RequestParam(required = false) String description,
@@ -86,15 +88,10 @@ public class CustomerOrderController {
             @RequestParam(required = false) String bankName,
             @RequestParam(required = false) String bankAccountNumber,
             @RequestParam(required = false) String bankAccountHolder,
-
             @RequestParam(required = false) String returnItems,
             @RequestParam(required = false) String items,
-
-            @RequestParam(required = false, name = "mediaFiles")
-            List<MultipartFile> mediaFiles,
-
-            @RequestParam(required = false, name = "files")
-            List<MultipartFile> files
+            @RequestParam(required = false, name = "mediaFiles") List<MultipartFile> mediaFiles,
+            @RequestParam(required = false, name = "files") List<MultipartFile> files
     ) {
         customerOrderService.requestReturnOrder(
                 orderId,
@@ -110,24 +107,16 @@ public class CustomerOrderController {
                 mergeFiles(mediaFiles, files)
         );
 
-        return ResponseEntity.ok(Map.of(
-                "message", "Gửi yêu cầu hoàn hàng thành công"
-        ));
+        return ResponseEntity.ok(Map.of("message", "Gửi yêu cầu hoàn hàng thành công"));
     }
 
     /**
      * Giữ lại route JSON cũ, nhưng vẫn bắt buộc có returnItems/items.
      * Không tự mặc định hoàn toàn bộ đơn.
      */
-    @PutMapping(
-            value = "/{orderId}/request-return",
-            consumes = MediaType.APPLICATION_JSON_VALUE
-    )
+    @PutMapping(value = "/{orderId}/request-return", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> requestReturnOrderJson(
-            @PathVariable
-            @Positive(message = "orderId phải là số nguyên dương")
-            Integer orderId,
-
+            @PathVariable @Positive(message = "orderId phải là số nguyên dương") Integer orderId,
             @RequestBody Map<String, String> payload
     ) {
         String returnItemsPayload = payload == null
@@ -148,22 +137,16 @@ public class CustomerOrderController {
                 null
         );
 
-        return ResponseEntity.ok(Map.of(
-                "message", "Gửi yêu cầu hoàn hàng thành công"
-        ));
+        return ResponseEntity.ok(Map.of("message", "Gửi yêu cầu hoàn hàng thành công"));
     }
 
     @PutMapping("/{orderId}/cancel-return")
     public ResponseEntity<?> cancelReturnRequest(
-            @PathVariable
-            @Positive(message = "orderId phải là số nguyên dương")
-            Integer orderId
+            @PathVariable @Positive(message = "orderId phải là số nguyên dương") Integer orderId
     ) {
         customerOrderService.cancelReturnRequest(orderId);
 
-        return ResponseEntity.ok(Map.of(
-                "message", "Đã hủy yêu cầu hoàn hàng thành công"
-        ));
+        return ResponseEntity.ok(Map.of("message", "Đã hủy yêu cầu hoàn hàng thành công"));
     }
 
     private String chooseReturnItemsPayload(String returnItems, String items) {
@@ -178,10 +161,7 @@ public class CustomerOrderController {
         return null;
     }
 
-    private List<MultipartFile> mergeFiles(
-            List<MultipartFile> mediaFiles,
-            List<MultipartFile> files
-    ) {
+    private List<MultipartFile> mergeFiles(List<MultipartFile> mediaFiles, List<MultipartFile> files) {
         List<MultipartFile> result = new ArrayList<>();
 
         if (mediaFiles != null) {

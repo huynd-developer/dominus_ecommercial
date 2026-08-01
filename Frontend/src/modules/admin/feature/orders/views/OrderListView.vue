@@ -116,6 +116,7 @@
       @accept-return="confirmAcceptReturn"
       @reject-return="confirmRejectReturn"
       @mark-return-refunded="confirmMarkReturnRefunded"
+      @mark-delivery-refunded="confirmMarkDeliveryRefunded"
     />
   </div>
 </template>
@@ -1490,6 +1491,73 @@ function normalizeRejectReasonDetail(value: string) {
     .replace(/\s{2,}/g, " ");
 }
 
+
+async function confirmMarkDeliveryRefunded(order: AdminOrderResponse) {
+  if (!order || !order.orderId) {
+    return;
+  }
+
+  if (!canMarkDeliveryRefunded(order)) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Chưa thể hoàn tiền",
+      text: "Chỉ được xác nhận khi đơn giao thất bại, có số tiền cần hoàn và khách đã nhập đủ thông tin tài khoản.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  const result = await Swal.fire({
+    icon: "question",
+    title: "Xác nhận đã chuyển tiền?",
+    html: `
+      <div style="text-align:left">
+        <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
+        <p><b>Số tiền hoàn:</b> ${formatMoneyForAlert(getDeliveryRefundAmount(order))}</p>
+        <p><b>Ngân hàng:</b> ${escapeAlertHtml(order.deliveryRefundBankName || "-")}</p>
+        <p><b>Số tài khoản:</b> ${escapeAlertHtml(order.deliveryRefundBankAccountNumber || "-")}</p>
+        <p><b>Chủ tài khoản:</b> ${escapeAlertHtml(order.deliveryRefundBankAccountHolder || "-")}</p>
+        <p class="mb-0 text-danger"><b>Lưu ý:</b> Chỉ bấm khi shop đã chuyển khoản hoàn tiền thực tế cho khách.</p>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Đã chuyển tiền",
+    cancelButtonText: "Hủy",
+    confirmButtonColor: "#16a34a",
+    cancelButtonColor: "#6b7280",
+  });
+
+  if (!result.isConfirmed) {
+    return;
+  }
+
+  loading.value = true;
+
+  try {
+    await orderService.markDeliveryRefunded(order.orderId);
+
+    await Swal.fire({
+      icon: "success",
+      title: "Đã xác nhận hoàn tiền",
+      text: "Hệ thống đã ghi nhận shop đã chuyển tiền hoàn cho khách.",
+      confirmButtonColor: "#bd9a5f",
+    });
+
+    await refreshOrderAfterWorkflow(order.orderId);
+  } catch (error: any) {
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể xác nhận hoàn tiền",
+      text:
+        error?.response?.data?.message ||
+        "Vui lòng kiểm tra thông tin hoàn tiền hoặc thử lại sau.",
+      confirmButtonColor: "#bd9a5f",
+    });
+  } finally {
+    loading.value = false;
+  }
+}
+
 async function confirmMarkReturnRefunded(order: AdminOrderResponse) {
   if (!order || !order.orderId) {
     return;
@@ -1653,6 +1721,38 @@ function canMarkReturnRefunded(order: AdminOrderResponse) {
   }
 
   return Number(order.status) === 6 && getReturnProcessStatus(order) === 1;
+}
+
+function getDeliveryRefundAmount(order: AdminOrderResponse | null) {
+  return Number((order as any)?.deliveryRefundAmount ?? 0);
+}
+
+function hasDeliveryRefundBankInfo(order: AdminOrderResponse | null) {
+  return Boolean(
+    String((order as any)?.deliveryRefundBankName || "").trim() &&
+      String((order as any)?.deliveryRefundBankAccountNumber || "").trim() &&
+      String((order as any)?.deliveryRefundBankAccountHolder || "").trim()
+  );
+}
+
+function canMarkDeliveryRefunded(order: AdminOrderResponse | null) {
+  if (!order) {
+    return false;
+  }
+
+  if (
+    order.canMarkDeliveryRefunded !== undefined &&
+    order.canMarkDeliveryRefunded !== null
+  ) {
+    return order.canMarkDeliveryRefunded === true;
+  }
+
+  return (
+    Number(order.status) === 5 &&
+    getDeliveryRefundAmount(order) > 0 &&
+    hasDeliveryRefundBankInfo(order) &&
+    !order.deliveryRefundedAt
+  );
 }
 
 function formatMoneyForAlert(value?: number | null) {

@@ -18,9 +18,10 @@ import org.example.datn_sd69.entity.ReturnRequest;
 import org.example.datn_sd69.entity.ReturnRequestItem;
 import org.example.datn_sd69.entity.ReturnRequestMedia;
 import org.example.datn_sd69.entity.User;
-import org.example.datn_sd69.modules.customerOrder.dto.CustomerOrderItemResponse;
-import org.example.datn_sd69.modules.customerOrder.dto.CustomerOrderResponse;
-import org.example.datn_sd69.modules.customerOrder.dto.CustomerReturnItemResponse;
+import org.example.datn_sd69.modules.customerOrder.dto.response.CustomerOrderItemResponse;
+import org.example.datn_sd69.modules.customerOrder.dto.response.CustomerOrderResponse;
+import org.example.datn_sd69.modules.customerOrder.dto.response.CustomerReturnItemResponse;
+import org.example.datn_sd69.modules.customerOrder.dto.request.SubmitDeliveryRefundBankRequest;
 import org.example.datn_sd69.modules.customerOrder.service.CustomerOrderService;
 import org.example.datn_sd69.repository.CustomerRepository;
 import org.example.datn_sd69.repository.OrderDeliveryEvidenceRepository;
@@ -227,6 +228,58 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
 
         return mapToOrderResponse(order, items);
+    }
+
+    @Override
+    @Transactional
+    public CustomerOrderResponse submitDeliveryRefundBank(
+            Integer orderId,
+            SubmitDeliveryRefundBankRequest request
+    ) {
+        Customer customer = getCurrentCustomer();
+
+        validateId(orderId, "orderId");
+
+        Order order = orderRepository.findByIdAndCustomer_UserId(orderId, customer.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn"
+                ));
+
+        if (order.getStatus() == null || order.getStatus() != STATUS_DELIVERY_FAILED) {
+            throw badRequest("Chỉ được nhập thông tin hoàn tiền cho đơn giao hàng thất bại");
+        }
+
+        if (!isDeliveryRefundRequired(order)) {
+            throw badRequest("Đơn hàng này không phát sinh hoàn tiền giao thất bại");
+        }
+
+        if (order.getDeliveryRefundedAt() != null) {
+            throw badRequest("Đơn hàng này đã được shop xác nhận hoàn tiền");
+        }
+
+        if (hasAnyDeliveryRefundBankInfo(order)) {
+            throw badRequest("Thông tin tài khoản hoàn tiền đã được gửi, không thể chỉnh sửa. Vui lòng liên hệ shop nếu cần thay đổi.");
+        }
+
+        String bankName = normalizeOptionalCollapsed(request == null ? null : request.bankName());
+        String bankAccountNumber = normalizeDeliveryRefundBankAccountNumber(
+                request == null ? null : request.bankAccountNumber()
+        );
+        String bankAccountHolder = normalizeOptionalCollapsed(
+                request == null ? null : request.bankAccountHolder()
+        );
+
+        validateDeliveryRefundBankInfo(bankName, bankAccountNumber, bankAccountHolder);
+
+        order.setDeliveryRefundBankName(bankName);
+        order.setDeliveryRefundBankAccountNumber(bankAccountNumber);
+        order.setDeliveryRefundBankAccountHolder(bankAccountHolder);
+
+        Order savedOrder = orderRepository.save(order);
+        List<OrderItem> items = orderItemRepository.findByOrderId(savedOrder.getId());
+
+        return mapToOrderResponse(savedOrder, items);
     }
 
     @Override
@@ -612,6 +665,16 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 normalizeOptional(order.getDeliveryFailedDescription()),
                 order.getDeliveryFailedAt(),
                 normalizeOptional(order.getDeliveryFailedByName()),
+                order.getDeliveryRefundAmount(),
+                normalizeOptional(order.getDeliveryRefundBankName()),
+                normalizeOptional(order.getDeliveryRefundBankAccountNumber()),
+                normalizeOptional(order.getDeliveryRefundBankAccountHolder()),
+                order.getDeliveryRefundedAt(),
+                normalizeOptional(order.getDeliveryRefundedByName()),
+                isDeliveryRefundRequired(order),
+                hasDeliveryRefundBankInfo(order),
+                order.getDeliveryRefundedAt() != null,
+                canSubmitDeliveryRefundBank(order),
                 deliverySuccessMediaUrls,
                 deliveryFailedMediaUrls,
                 returnRequest != null ? returnRequest.getReason() : null,
@@ -1121,6 +1184,120 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
         if (!email.matches("^[A-Za-z0-9+_.-]+@(.+)$")) {
             throw badRequest("Email không hợp lệ");
+        }
+    }
+
+    private boolean isDeliveryRefundRequired(Order order) {
+        return order != null
+                && moneyOrZero(order.getDeliveryRefundAmount()).compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    private boolean hasDeliveryRefundBankInfo(Order order) {
+        if (order == null) {
+            return false;
+        }
+
+        return normalizeOptional(order.getDeliveryRefundBankName()) != null
+                && normalizeOptional(order.getDeliveryRefundBankAccountNumber()) != null
+                && normalizeOptional(order.getDeliveryRefundBankAccountHolder()) != null;
+    }
+
+    private boolean hasAnyDeliveryRefundBankInfo(Order order) {
+        if (order == null) {
+            return false;
+        }
+
+        return normalizeOptional(order.getDeliveryRefundBankName()) != null
+                || normalizeOptional(order.getDeliveryRefundBankAccountNumber()) != null
+                || normalizeOptional(order.getDeliveryRefundBankAccountHolder()) != null;
+    }
+
+    private boolean canSubmitDeliveryRefundBank(Order order) {
+        return order != null
+                && Integer.valueOf(STATUS_DELIVERY_FAILED).equals(order.getStatus())
+                && isDeliveryRefundRequired(order)
+                && order.getDeliveryRefundedAt() == null
+                && !hasAnyDeliveryRefundBankInfo(order);
+    }
+
+    private String normalizeDeliveryRefundBankAccountNumber(String value) {
+        String cleanValue = normalizeOptional(value);
+
+        if (cleanValue == null) {
+            return null;
+        }
+
+        /*
+         * Cho phép khách nhập khoảng trắng để dễ đọc STK,
+         * nhưng khi lưu DB chỉ lưu dãy số.
+         */
+        return cleanValue.replaceAll("\\s+", "");
+    }
+
+    private void validateDeliveryRefundBankInfo(
+            String bankName,
+            String bankAccountNumber,
+            String bankAccountHolder
+    ) {
+        if (bankName == null) {
+            throw badRequest("Vui lòng chọn ngân hàng nhận hoàn tiền");
+        }
+
+        if (!SUPPORTED_BANK_NAMES.contains(bankName)) {
+            throw badRequest("Vui lòng chọn ngân hàng trong danh sách hỗ trợ");
+        }
+
+        if (bankName.length() < MIN_BANK_NAME_LENGTH || bankName.length() > MAX_BANK_NAME_LENGTH) {
+            throw badRequest("Tên ngân hàng phải từ 2 đến 100 ký tự");
+        }
+
+        if (!bankName.matches(".*\\p{L}.*")) {
+            throw badRequest("Tên ngân hàng phải có ít nhất một chữ cái");
+        }
+
+        if (bankName.matches("^[0-9]+$")) {
+            throw badRequest("Tên ngân hàng không được chỉ gồm số");
+        }
+
+        if (!bankName.matches("^[\\p{L}0-9\\s.()\\-/&]+$")) {
+            throw badRequest("Tên ngân hàng chứa ký tự không hợp lệ");
+        }
+
+        if (bankAccountNumber == null) {
+            throw badRequest("Vui lòng nhập số tài khoản nhận hoàn tiền");
+        }
+
+        if (!bankAccountNumber.matches("^[0-9]{6,30}$")) {
+            throw badRequest("Số tài khoản chỉ được nhập số, cho phép khoảng trắng khi nhập và phải từ 6 đến 30 chữ số");
+        }
+
+        if (bankAccountNumber.matches("^0+$")) {
+            throw badRequest("Số tài khoản không hợp lệ");
+        }
+
+        if (bankAccountHolder == null) {
+            throw badRequest("Vui lòng nhập tên chủ tài khoản nhận hoàn tiền");
+        }
+
+        if (bankAccountHolder.trim().split("\\s+").length < 2) {
+            throw badRequest("Tên chủ tài khoản phải gồm ít nhất 2 từ");
+        }
+
+        if (bankAccountHolder.length() < MIN_BANK_ACCOUNT_HOLDER_LENGTH
+                || bankAccountHolder.length() > MAX_BANK_ACCOUNT_HOLDER_LENGTH) {
+            throw badRequest("Tên chủ tài khoản phải từ 2 đến 100 ký tự");
+        }
+
+        if (!bankAccountHolder.matches(".*\\p{L}.*")) {
+            throw badRequest("Tên chủ tài khoản phải có ít nhất một chữ cái");
+        }
+
+        if (bankAccountHolder.matches(".*[0-9].*")) {
+            throw badRequest("Tên chủ tài khoản không được chứa số");
+        }
+
+        if (!bankAccountHolder.matches("^[\\p{L}\\s'.-]+$")) {
+            throw badRequest("Tên chủ tài khoản chứa ký tự không hợp lệ");
         }
     }
 

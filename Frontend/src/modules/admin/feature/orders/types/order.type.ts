@@ -148,6 +148,21 @@ export interface AdminOrderResponse {
   deliveryFailedAt?: string | null;
   deliveryFailedByName?: string | null;
 
+  /**
+   * Thông tin hoàn tiền riêng cho đơn giao hàng thất bại đã thanh toán trước.
+   * Không có deliveryRefundStatus; FE suy ra từ amount/bank/refundedAt.
+   */
+  deliveryRefundAmount?: number | null;
+  deliveryRefundBankName?: string | null;
+  deliveryRefundBankAccountNumber?: string | null;
+  deliveryRefundBankAccountHolder?: string | null;
+  deliveryRefundedAt?: string | null;
+  deliveryRefundedByName?: string | null;
+  deliveryRefundRequired?: boolean | null;
+  deliveryRefundBankInfoProvided?: boolean | null;
+  deliveryRefundCompleted?: boolean | null;
+  canMarkDeliveryRefunded?: boolean | null;
+
   /** Ảnh minh chứng giao hàng. */
   deliverySuccessMediaUrls?: string[] | null;
   deliveryFailedMediaUrls?: string[] | null;
