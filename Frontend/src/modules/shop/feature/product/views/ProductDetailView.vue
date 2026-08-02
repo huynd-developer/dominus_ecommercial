@@ -9,7 +9,7 @@
       <main class="product-main">
         <div
           v-if="isLoading"
-          style="padding: 50px; text-align: center; color: #666;"
+          style="padding: 50px; text-align: center; color: #666"
         >
           Đang tải danh sách sản phẩm...
         </div>
@@ -44,6 +44,11 @@ const productList = ref<any[]>([]);
 const isLoading = ref(false);
 
 const BACKEND_URL = "http://localhost:8080";
+
+const toNumber = (value: unknown, fallback = 0) => {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : fallback;
+};
 
 const getRouteQueryValue = (value: unknown) => {
   if (Array.isArray(value)) {
@@ -128,6 +133,8 @@ const getImageUrlFromObject = (value: any) => {
       value?.ThumbnailUrl ??
       value?.mainImageUrl ??
       value?.MainImageUrl ??
+      value?.mainImage ??
+      value?.MainImage ??
       ""
   );
 };
@@ -244,7 +251,6 @@ const selectedFlashSaleOnly = computed(() => {
   return value === "true" || value === "1";
 });
 
-// === STATE CHO PHÂN TRANG ===
 const currentPage = ref(1);
 const itemsPerPage = ref(6);
 
@@ -327,6 +333,70 @@ const normalizeStock = (variant: any) => {
   );
 };
 
+const getDiscountPercentFromPrice = (
+  salePrice: number,
+  originalPrice: number
+) => {
+  if (originalPrice > 0 && salePrice > 0 && salePrice < originalPrice) {
+    return Math.round(((originalPrice - salePrice) / originalPrice) * 100);
+  }
+
+  return 0;
+};
+
+const getProductIdValue = (item: any) => {
+  return Number(item?.productId ?? item?.id ?? item?.Id ?? 0);
+};
+
+const getVariantIdValue = (item: any) => {
+  return Number(
+    item?.productVariantId ??
+      item?.variantId ??
+      item?.id ??
+      item?.Id ??
+      0
+  );
+};
+
+const buildPriceFields = (
+  salePriceInput: unknown,
+  originalPriceInput: unknown,
+  fallbackInput: unknown = 0
+) => {
+  const fallback = toNumber(fallbackInput, 0);
+  const originalPrice = toNumber(originalPriceInput, fallback);
+  const salePrice = toNumber(salePriceInput, originalPrice || fallback);
+
+  const finalSalePrice =
+    salePrice > 0 ? salePrice : originalPrice > 0 ? originalPrice : fallback;
+
+  const finalOriginalPrice =
+    originalPrice > 0 ? originalPrice : finalSalePrice;
+
+  const discountPercent = getDiscountPercentFromPrice(
+    finalSalePrice,
+    finalOriginalPrice
+  );
+
+  return {
+    price: finalSalePrice,
+    salePrice: finalSalePrice,
+    promotionPrice: finalSalePrice,
+    flashSalePrice: finalSalePrice,
+    currentPrice: finalSalePrice,
+    displayPrice: finalSalePrice,
+    finalPrice: finalSalePrice,
+    minPrice: finalSalePrice,
+
+    originalPrice: finalOriginalPrice,
+    oldPrice: finalOriginalPrice,
+    listPrice: finalOriginalPrice,
+    basePrice: finalOriginalPrice,
+
+    discountPercent,
+  };
+};
+
 const mapVariant = (variant: any) => {
   const stock = normalizeStock(variant);
   const rawCapacity = getVariantCapacityRaw(variant);
@@ -334,28 +404,72 @@ const mapVariant = (variant: any) => {
   const variantImages = getVariantImageList(variant);
   const variantMainImage = variantImages[0] || "";
 
+  const originalPrice = toNumber(
+    variant?.originalPrice ??
+      variant?.oldPrice ??
+      variant?.price ??
+      variant?.Price,
+    0
+  );
+
+  const salePrice = toNumber(
+    variant?.salePrice ??
+      variant?.promotionPrice ??
+      variant?.flashSalePrice ??
+      variant?.price ??
+      variant?.Price,
+    originalPrice
+  );
+
+  const discountPercent =
+    toNumber(
+      variant?.discountPercent ??
+        variant?.discount ??
+        variant?.salePercent ??
+        variant?.promotionPercent,
+      0
+    ) || getDiscountPercentFromPrice(salePrice, originalPrice);
+
+  const hasDiscount =
+    discountPercent > 0 && originalPrice > 0 && salePrice < originalPrice;
+
   return {
     ...variant,
     id: variant?.id || variant?.Id || variant?.productVariantId,
     productVariantId: variant?.productVariantId || variant?.id || variant?.Id,
+    variantId:
+      variant?.variantId ||
+      variant?.productVariantId ||
+      variant?.id ||
+      variant?.Id,
     sku: variant?.sku || variant?.SKU || "",
     capacity,
     capacityKey: normalizeCapacityKey(rawCapacity || capacity),
-    price: Number(variant?.originalPrice || variant?.price || variant?.Price || 0),
-    salePrice: Number(variant?.salePrice || variant?.price || variant?.Price || 0),
-    originalPrice: Number(variant?.originalPrice || variant?.price || variant?.Price || 0),
+
+    price: hasDiscount ? salePrice : originalPrice || salePrice,
+    salePrice: hasDiscount ? salePrice : originalPrice || salePrice,
+    promotionPrice: hasDiscount ? salePrice : undefined,
+    flashSalePrice: hasDiscount ? salePrice : undefined,
+    currentPrice: hasDiscount ? salePrice : originalPrice || salePrice,
+    displayPrice: hasDiscount ? salePrice : originalPrice || salePrice,
+    finalPrice: hasDiscount ? salePrice : originalPrice || salePrice,
+    minPrice: hasDiscount ? salePrice : originalPrice || salePrice,
+
+    originalPrice: originalPrice || salePrice,
+    oldPrice: originalPrice || salePrice,
+    listPrice: originalPrice || salePrice,
+    basePrice: originalPrice || salePrice,
+
     stock,
     stockQuantity: stock,
     bottleType:
       typeof variant?.bottleType === "object"
         ? variant?.bottleType?.name
         : variant?.bottleTypeName || variant?.bottleType || "",
-    discountPercent: Number(
-      variant?.discountPercent ??
-        variant?.discount ??
-        variant?.salePercent ??
-        0
-    ),
+
+    discountPercent: hasDiscount ? discountPercent : 0,
+    isFlashSale: Boolean(variant?.isFlashSale || variant?.flashSale),
+    flashSale: Boolean(variant?.isFlashSale || variant?.flashSale),
 
     image: variantMainImage,
     imageUrl: variantMainImage,
@@ -407,28 +521,47 @@ const mapProduct = (item: any) => {
     );
   }
 
+  const representativeVariant =
+    mappedVariants.length > 0 ? mappedVariants[0] : null;
+
+  const productSalePrice = toNumber(
+    item?.salePrice ??
+      item?.promotionPrice ??
+      item?.flashSalePrice ??
+      item?.price ??
+      item?.Price,
+    0
+  );
+
+  const productOriginalPrice = toNumber(
+    item?.originalPrice ?? item?.oldPrice ?? item?.price ?? item?.Price,
+    productSalePrice
+  );
+
   const price =
-    mappedVariants.length > 0
-      ? mappedVariants[0].salePrice || mappedVariants[0].price
-      : Number(item?.salePrice || item?.price || item?.Price || 0);
+    representativeVariant?.salePrice ||
+    representativeVariant?.price ||
+    productSalePrice;
 
   const originalPrice =
-    mappedVariants.length > 0
-      ? mappedVariants[0].originalPrice || mappedVariants[0].price
-      : Number(item?.originalPrice || item?.price || item?.Price || 0);
+    representativeVariant?.originalPrice ||
+    representativeVariant?.oldPrice ||
+    productOriginalPrice ||
+    price;
+
+  const discountPercent =
+    toNumber(
+      item?.discountPercent ??
+        item?.discount ??
+        item?.salePercent ??
+        item?.promotionPercent,
+      0
+    ) || getDiscountPercentFromPrice(price, originalPrice);
 
   const category =
     typeof item?.category === "object"
       ? item?.category?.name || item?.category?.Name || ""
       : item?.categoryName || item?.category || item?.CategoryName || "";
-
-  const discountPercent = Number(
-    item?.discountPercent ??
-      item?.discount ??
-      item?.salePercent ??
-      item?.promotionPercent ??
-      0
-  );
 
   const productImages = getProductImageList(item, mappedVariants);
   const mainImage = productImages[0] || getPlaceholderImage();
@@ -464,10 +597,22 @@ const mapProduct = (item: any) => {
         : item?.brandName || item?.brand || item?.promotionName || "Premium",
     category,
     description: item?.description || item?.Description || "",
+
     price,
     salePrice: price,
+    promotionPrice: discountPercent > 0 ? price : undefined,
+    flashSalePrice: discountPercent > 0 ? price : undefined,
+    currentPrice: price,
+    displayPrice: price,
+    finalPrice: price,
+    minPrice: price,
+
     originalPrice,
+    oldPrice: originalPrice,
+    listPrice: originalPrice,
+    basePrice: originalPrice,
     discountPercent,
+
     variants: mappedVariants,
     scents: mappedScents.filter(Boolean),
     gender: genderText,
@@ -482,15 +627,16 @@ const mapProduct = (item: any) => {
   };
 };
 
-/* ===== GỘP CÁC BIẾN THỂ FLASH SALE THEO PRODUCT ID (GIỐNG TRANG CHỦ) ===== */
 const mapFlashSaleGroupedProducts = (rows: any[]) => {
   const productMap = new Map<number, any[]>();
 
   rows.forEach((item) => {
     const pId = Number(item.productId ?? item.productVariantId ?? 0);
+
     if (!productMap.has(pId)) {
       productMap.set(pId, []);
     }
+
     productMap.get(pId)!.push(item);
   });
 
@@ -498,46 +644,78 @@ const mapFlashSaleGroupedProducts = (rows: any[]) => {
 
   productMap.forEach((variants, productId) => {
     if (!variants || variants.length === 0) return;
+
     const firstItem = variants[0];
 
     const productImages = getProductImageList(firstItem, variants);
     const productImage = productImages[0] || getPlaceholderImage();
 
-    const salePrices = variants.map((v) => Number(v.salePrice || 0)).filter((p) => p > 0);
-    const minSalePrice = salePrices.length > 0 ? Math.min(...salePrices) : Number(firstItem?.salePrice || 0);
-
-    const originalPrices = variants.map((v) => Number(v.originalPrice || 0)).filter((p) => p > 0);
-    const minOriginalPrice = originalPrices.length > 0 ? Math.min(...originalPrices) : Number(firstItem?.originalPrice || 0);
-
-    const maxDiscount = Math.max(...variants.map((v) => Number(v.discountPercent || 0)));
-
     const mappedVariants = variants.map((v) => {
-      const vId = Number(v.productVariantId || v.id || 0);
+      const vId = Number(v.productVariantId || v.variantId || v.id || 0);
+      const vSalePrice = toNumber(v.salePrice, 0);
+      const vOriginalPrice = toNumber(v.originalPrice, vSalePrice);
+      const vStock = toNumber(v.stockQuantity, 0);
+      const vDiscountPercent =
+        toNumber(v.discountPercent, 0) ||
+        getDiscountPercentFromPrice(vSalePrice, vOriginalPrice);
+
       return {
         ...v,
         id: vId,
         productVariantId: vId,
         variantId: vId,
-        price: Number(v.originalPrice || 0),
-        originalPrice: Number(v.originalPrice || 0),
-        salePrice: Number(v.salePrice || 0),
-        stockQuantity: Number(v.stockQuantity || 0),
+
+        price: vSalePrice,
+        salePrice: vSalePrice,
+        promotionPrice: vSalePrice,
+        flashSalePrice: vSalePrice,
+        currentPrice: vSalePrice,
+        displayPrice: vSalePrice,
+        finalPrice: vSalePrice,
+        minPrice: vSalePrice,
+
+        originalPrice: vOriginalPrice,
+        oldPrice: vOriginalPrice,
+        listPrice: vOriginalPrice,
+        basePrice: vOriginalPrice,
+
+        discountPercent: vDiscountPercent,
+        isFlashSale: true,
+        flashSale: true,
+
+        stockQuantity: vStock,
+        stock: vStock,
         status: 1,
         capacity: v.capacity,
+        capacityKey: normalizeCapacityKey(v.capacity),
         bottleType: v.bottleType,
         imageUrl: getImageUrlFromObject(v) || productImage,
         image: getImageUrlFromObject(v) || productImage,
+        images: productImages,
+        productImages: productImages.map((imageUrl, index) => ({
+          id: index + 1,
+          imageUrl,
+          url: imageUrl,
+        })),
       };
     });
 
+    mappedVariants.sort((a: any, b: any) => {
+      const aSale = Number(a.salePrice || a.price || 0);
+      const bSale = Number(b.salePrice || b.price || 0);
+      return aSale - bSale;
+    });
+
+    const representativeVariant = mappedVariants[0];
+
     groupedProducts.push({
       id: productId,
-      productId: productId,
-      productVariantId: mappedVariants[0]?.productVariantId,
-      variantId: mappedVariants[0]?.productVariantId,
+      productId,
+      productVariantId: representativeVariant?.productVariantId,
+      variantId: representativeVariant?.productVariantId,
 
       name: firstItem?.productName || firstItem?.name || "Sản phẩm Flash Sale",
-      brand: firstItem?.promotionName || firstItem?.brand || "Flash Sale",
+      brand: firstItem?.brandName || firstItem?.brand || firstItem?.promotionName || "Flash Sale",
       color: "#0a192f",
 
       imageUrl: productImage,
@@ -552,16 +730,31 @@ const mapFlashSaleGroupedProducts = (rows: any[]) => {
         url: imageUrl,
       })),
 
-      price: minSalePrice,
-      salePrice: minSalePrice,
-      originalPrice: minOriginalPrice,
-      discountPercent: maxDiscount,
+      price: representativeVariant?.salePrice || 0,
+      salePrice: representativeVariant?.salePrice || 0,
+      promotionPrice: representativeVariant?.salePrice || 0,
+      flashSalePrice: representativeVariant?.salePrice || 0,
+      currentPrice: representativeVariant?.salePrice || 0,
+      displayPrice: representativeVariant?.salePrice || 0,
+      finalPrice: representativeVariant?.salePrice || 0,
+      minPrice: representativeVariant?.salePrice || 0,
+
+      originalPrice: representativeVariant?.originalPrice || 0,
+      oldPrice: representativeVariant?.originalPrice || 0,
+      listPrice: representativeVariant?.originalPrice || 0,
+      basePrice: representativeVariant?.originalPrice || 0,
+
+      discountPercent: representativeVariant?.discountPercent || 0,
 
       rating: 5,
       reviewCount: 0,
 
-      stockQuantity: mappedVariants.reduce((sum, v) => sum + (v.stockQuantity || 0), 0),
+      stockQuantity: mappedVariants.reduce(
+        (sum, v) => sum + (v.stockQuantity || 0),
+        0
+      ),
       isFlashSale: true,
+      flashSale: true,
       endDate: firstItem?.endDate,
 
       variants: mappedVariants,
@@ -571,31 +764,229 @@ const mapFlashSaleGroupedProducts = (rows: any[]) => {
   return groupedProducts;
 };
 
+const fetchActiveFlashSaleGroupedProducts = async () => {
+  try {
+    const res = await api.get("/promotions/flash-sale", {
+      params: {
+        page: 0,
+        size: 200,
+      },
+    });
+
+    const rawRows = extractArrayData(res.data);
+    return Array.isArray(rawRows) ? mapFlashSaleGroupedProducts(rawRows) : [];
+  } catch (error) {
+    console.error("Lỗi tải Flash Sale để đồng bộ danh sách:", error);
+    return [];
+  }
+};
+
+const mergeFlashSaleIntoProducts = (
+  products: any[],
+  flashSaleProducts: any[]
+) => {
+  if (!Array.isArray(products) || products.length === 0) {
+    return [];
+  }
+
+  if (!Array.isArray(flashSaleProducts) || flashSaleProducts.length === 0) {
+    return products;
+  }
+
+  const flashSaleByProductId = new Map<number, any>();
+  const flashSaleByVariantId = new Map<number, any>();
+
+  flashSaleProducts.forEach((flashSaleProduct) => {
+    const productId = getProductIdValue(flashSaleProduct);
+
+    if (productId > 0) {
+      flashSaleByProductId.set(productId, flashSaleProduct);
+    }
+
+    if (Array.isArray(flashSaleProduct?.variants)) {
+      flashSaleProduct.variants.forEach((variant: any) => {
+        const variantId = getVariantIdValue(variant);
+
+        if (variantId > 0) {
+          flashSaleByVariantId.set(variantId, {
+            ...variant,
+            productId,
+            endDate: flashSaleProduct?.endDate,
+          });
+        }
+      });
+    }
+  });
+
+  return products.map((product) => {
+    const productId = getProductIdValue(product);
+    const matchedFlashSaleProduct = flashSaleByProductId.get(productId);
+
+    if (!matchedFlashSaleProduct) {
+      return product;
+    }
+
+    const originalVariants = Array.isArray(product?.variants)
+      ? product.variants
+      : [];
+
+    const flashSaleVariants = Array.isArray(matchedFlashSaleProduct?.variants)
+      ? matchedFlashSaleProduct.variants
+      : [];
+
+    const mergedVariants =
+      originalVariants.length > 0
+        ? originalVariants.map((variant: any) => {
+            const variantId = getVariantIdValue(variant);
+            const flashSaleVariant = flashSaleByVariantId.get(variantId);
+
+            if (!flashSaleVariant) {
+              return variant;
+            }
+
+            const salePrice = toNumber(
+              flashSaleVariant?.salePrice ??
+                flashSaleVariant?.price ??
+                variant?.salePrice ??
+                variant?.price,
+              0
+            );
+
+            const originalPrice = toNumber(
+              flashSaleVariant?.originalPrice ??
+                flashSaleVariant?.oldPrice ??
+                variant?.originalPrice ??
+                variant?.oldPrice ??
+                variant?.price,
+              salePrice
+            );
+
+            const discountPercent =
+              toNumber(flashSaleVariant?.discountPercent, 0) ||
+              getDiscountPercentFromPrice(salePrice, originalPrice);
+
+            return {
+              ...variant,
+
+              price: salePrice,
+              salePrice,
+              promotionPrice: salePrice,
+              flashSalePrice: salePrice,
+              currentPrice: salePrice,
+              displayPrice: salePrice,
+              finalPrice: salePrice,
+              minPrice: salePrice,
+
+              originalPrice,
+              oldPrice: originalPrice,
+              listPrice: originalPrice,
+              basePrice: originalPrice,
+
+              discountPercent,
+              isFlashSale: true,
+              flashSale: true,
+              endDate: flashSaleVariant?.endDate,
+            };
+          })
+        : flashSaleVariants;
+
+    const flashSaleRepresentative =
+      flashSaleVariants
+        .slice()
+        .sort(
+          (a: any, b: any) =>
+            toNumber(a?.salePrice ?? a?.price, 0) -
+            toNumber(b?.salePrice ?? b?.price, 0)
+        )[0] || matchedFlashSaleProduct;
+
+    const salePrice = toNumber(
+      flashSaleRepresentative?.salePrice ??
+        flashSaleRepresentative?.price ??
+        matchedFlashSaleProduct?.salePrice ??
+        matchedFlashSaleProduct?.price,
+      0
+    );
+
+    const originalPrice = toNumber(
+      flashSaleRepresentative?.originalPrice ??
+        flashSaleRepresentative?.oldPrice ??
+        matchedFlashSaleProduct?.originalPrice ??
+        matchedFlashSaleProduct?.oldPrice,
+      salePrice
+    );
+
+    const discountPercent =
+      toNumber(
+        flashSaleRepresentative?.discountPercent ??
+          matchedFlashSaleProduct?.discountPercent,
+        0
+      ) || getDiscountPercentFromPrice(salePrice, originalPrice);
+
+    return {
+      ...product,
+
+      price: salePrice,
+      salePrice,
+      promotionPrice: salePrice,
+      flashSalePrice: salePrice,
+      currentPrice: salePrice,
+      displayPrice: salePrice,
+      finalPrice: salePrice,
+      minPrice: salePrice,
+
+      originalPrice,
+      oldPrice: originalPrice,
+      listPrice: originalPrice,
+      basePrice: originalPrice,
+
+      discountPercent,
+      isFlashSale: true,
+      flashSale: true,
+      endDate: matchedFlashSaleProduct?.endDate,
+
+      productVariantId:
+        flashSaleRepresentative?.productVariantId ||
+        flashSaleRepresentative?.variantId ||
+        product?.productVariantId ||
+        matchedFlashSaleProduct?.productVariantId,
+      variantId:
+        flashSaleRepresentative?.productVariantId ||
+        flashSaleRepresentative?.variantId ||
+        product?.variantId ||
+        matchedFlashSaleProduct?.variantId,
+
+      variants: mergedVariants,
+    };
+  });
+};
+
 const fetchProducts = async () => {
   try {
     isLoading.value = true;
     const isFlashSaleQuery = route.query.flashSale === "true";
 
-    let res;
     if (isFlashSaleQuery) {
-      res = await api.get("/promotions/flash-sale", {
-        params: {
-          page: 0,
-          size: 50,
-        },
-      });
-      const rawRows = extractArrayData(res.data);
-      productList.value = mapFlashSaleGroupedProducts(rawRows);
+      const flashSaleProducts = await fetchActiveFlashSaleGroupedProducts();
+      productList.value = flashSaleProducts;
     } else {
-      res = await api.get("/v1/products", {
-        params: {
-          brandId: selectedBrandId.value || undefined,
-        },
-      });
-      const rawData = extractArrayData(res.data);
-      productList.value = Array.isArray(rawData)
+      const [productRes, flashSaleProducts] = await Promise.all([
+        api.get("/v1/products", {
+          params: {
+            brandId: selectedBrandId.value || undefined,
+          },
+        }),
+        fetchActiveFlashSaleGroupedProducts(),
+      ]);
+
+      const rawData = extractArrayData(productRes.data);
+      const normalProducts = Array.isArray(rawData)
         ? rawData.map((item: any) => mapProduct(item))
         : [];
+
+      productList.value = mergeFlashSaleIntoProducts(
+        normalProducts,
+        flashSaleProducts
+      );
     }
   } catch (error) {
     console.error("Lỗi fetch API List:", error);

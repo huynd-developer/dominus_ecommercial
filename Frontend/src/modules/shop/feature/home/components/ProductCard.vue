@@ -3,8 +3,8 @@
     class="product-card h-100 position-relative overflow-hidden"
     @click="goToDetail"
   >
-    <span v-if="product.discountPercent" class="discount-badge">
-      -{{ product.discountPercent }}%
+    <span v-if="cardDiscountPercent > 0" class="discount-badge">
+      -{{ cardDiscountPercent }}%
     </span>
 
     <button
@@ -63,15 +63,17 @@
       </div>
 
       <div class="price-row d-flex align-items-end gap-2 mb-3 flex-wrap">
+        <span v-if="hasVariantPriceRange" class="price-prefix">Từ</span>
+
         <span class="sale-price">
-          {{ formatCurrency(product.salePrice) }}
+          {{ formatCurrency(cardSalePrice) }}
         </span>
 
         <span
-          v-if="product.discountPercent > 0"
+          v-if="cardDiscountPercent > 0 && cardOriginalPrice > cardSalePrice"
           class="original-price text-decoration-line-through"
         >
-          {{ formatCurrency(product.originalPrice) }}
+          {{ formatCurrency(cardOriginalPrice) }}
         </span>
       </div>
 
@@ -156,8 +158,8 @@
                       selectedVariant
                         ? selectedVariant.salePrice ||
                             selectedVariant.price ||
-                            product.salePrice
-                        : product.salePrice
+                            cardSalePrice
+                        : cardSalePrice
                     )
                   }}
                 </p>
@@ -172,10 +174,10 @@
                   {{ formatCurrency(selectedVariant.price) }}
                 </span>
                 <span
-                  v-else-if="!selectedVariant && product.discountPercent > 0"
+                  v-else-if="!selectedVariant && cardDiscountPercent > 0"
                   class="text-decoration-line-through text-muted small"
                 >
-                  {{ formatCurrency(product.originalPrice) }}
+                  {{ formatCurrency(cardOriginalPrice) }}
                 </span>
 
                 <span
@@ -292,7 +294,16 @@ interface ProductVariant {
   variantId?: number;
   productVariantId?: number;
   price?: number;
+  originalPrice?: number;
+  oldPrice?: number;
   salePrice?: number;
+  promotionPrice?: number;
+  flashSalePrice?: number;
+  currentPrice?: number;
+  displayPrice?: number;
+  finalPrice?: number;
+  minPrice?: number;
+  discountPercent?: number;
   stock?: number;
   stockQuantity?: number;
   availableQuantity?: number;
@@ -329,6 +340,14 @@ interface Product {
   name: string;
   brand: string;
   color?: string;
+  price?: number;
+  oldPrice?: number;
+  promotionPrice?: number;
+  flashSalePrice?: number;
+  currentPrice?: number;
+  displayPrice?: number;
+  finalPrice?: number;
+  minPrice?: number;
   salePrice: number;
   originalPrice: number;
   discountPercent: number;
@@ -472,6 +491,136 @@ const getBottleStyle = (color?: string): Record<string, string> => ({
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("vi-VN").format(Number(value || 0)) + " đ";
+
+const getVariantIdValue = (value: any) =>
+  Number(
+    value?.productVariantId ??
+      value?.variantId ??
+      value?.id ??
+      value?.Id ??
+      0
+  );
+
+const getRawOriginalPrice = (value: any) =>
+  toFiniteNumber(
+    value?.originalPrice ??
+      value?.oldPrice ??
+      value?.listPrice ??
+      value?.basePrice ??
+      value?.Price ??
+      value?.price,
+    0
+  );
+
+const getRawSalePrice = (value: any) =>
+  toFiniteNumber(
+    value?.salePrice ??
+      value?.promotionPrice ??
+      value?.flashSalePrice ??
+      value?.currentPrice ??
+      value?.displayPrice ??
+      value?.finalPrice ??
+      value?.minPrice ??
+      value?.price ??
+      value?.Price,
+    0
+  );
+
+const getRawDiscountPercent = (value: any) =>
+  Math.max(
+    0,
+    Math.round(
+      toFiniteNumber(
+        value?.discountPercent ??
+          value?.discount ??
+          value?.salePercent ??
+          value?.promotionPercent,
+        0
+      )
+    )
+  );
+
+const getStockValue = (value: any) =>
+  toFiniteNumber(
+    value?.stockQuantity ?? value?.stock ?? value?.availableQuantity ?? value?.quantity,
+    -1
+  );
+
+const getPriceInfo = (value: any) => {
+  const salePrice = getRawSalePrice(value);
+  const originalPrice = getRawOriginalPrice(value) || salePrice;
+  const discountFromField = getRawDiscountPercent(value);
+  const discountFromPrice =
+    originalPrice > 0 && salePrice > 0 && salePrice < originalPrice
+      ? Math.round(((originalPrice - salePrice) / originalPrice) * 100)
+      : 0;
+  const discountPercent = discountFromField || discountFromPrice;
+
+  return {
+    variantId: getVariantIdValue(value),
+    salePrice: salePrice || originalPrice,
+    originalPrice: originalPrice || salePrice,
+    discountPercent,
+    stock: getStockValue(value),
+    source: value,
+  };
+};
+
+const cardPriceInfo = computed(() => {
+  const p = props.product as any;
+  const variants = Array.isArray(p?.variants) ? p.variants : [];
+  const variantPrices = variants
+    .map((variant: any) => getPriceInfo(variant))
+    .filter((info: any) => info.salePrice > 0);
+
+  const inStockVariantPrices = variantPrices.filter((info: any) => info.stock !== 0);
+  const candidates = inStockVariantPrices.length > 0 ? inStockVariantPrices : variantPrices;
+
+  if (candidates.length > 0) {
+    return candidates
+      .slice()
+      .sort((a: any, b: any) => {
+        if (a.salePrice !== b.salePrice) {
+          return a.salePrice - b.salePrice;
+        }
+
+        return b.discountPercent - a.discountPercent;
+      })[0];
+  }
+
+  return getPriceInfo(p);
+});
+
+const cardSalePrice = computed(() => cardPriceInfo.value.salePrice || 0);
+
+const cardOriginalPrice = computed(
+  () => cardPriceInfo.value.originalPrice || cardSalePrice.value
+);
+
+const cardDiscountPercent = computed(() =>
+  Math.max(0, Math.round(cardPriceInfo.value.discountPercent || 0))
+);
+
+const cardRepresentativeVariantId = computed(() =>
+  Number(cardPriceInfo.value.variantId || 0)
+);
+
+const hasVariantPriceRange = computed(() => {
+  const variants = Array.isArray((props.product as any)?.variants)
+    ? (props.product as any).variants
+    : [];
+
+  if (variants.length <= 1) {
+    return false;
+  }
+
+  const prices = variants
+    .map((variant: any) => getPriceInfo(variant).salePrice)
+    .filter((price: number) => price > 0);
+
+  return new Set(prices).size > 1;
+});
+
 
 const normalizeImageUrl = (url: unknown) => {
   const rawUrl = String(url || "").trim();
@@ -823,7 +972,17 @@ const openVariantModal = async (type: "CART" | "BUY") => {
     fullVariants.value = processedVariants;
 
     if (fullVariants.value.length > 0) {
-      selectedVariant.value = fullVariants.value[0];
+      selectedVariant.value =
+        fullVariants.value.find((variant: any) => {
+          const variantId = Number(
+            variant?.productVariantId || variant?.variantId || variant?.id || 0
+          );
+
+          return (
+            cardRepresentativeVariantId.value > 0 &&
+            variantId === cardRepresentativeVariantId.value
+          );
+        }) || fullVariants.value[0];
     }
   } catch (error) {
     console.error("Lỗi lấy danh sách biến thể:", error);
@@ -1043,14 +1202,26 @@ const goToDetail = () => {
 
 const calculatedDiscountPercent = computed(() => {
   if (selectedVariant.value) {
-    const original = selectedVariant.value.price || props.product.originalPrice;
-    const sale = selectedVariant.value.salePrice || props.product.salePrice;
+    const original =
+      selectedVariant.value.originalPrice ||
+      selectedVariant.value.oldPrice ||
+      selectedVariant.value.price ||
+      cardOriginalPrice.value;
+    const sale =
+      selectedVariant.value.salePrice ||
+      selectedVariant.value.promotionPrice ||
+      selectedVariant.value.flashSalePrice ||
+      selectedVariant.value.price ||
+      cardSalePrice.value;
+
     if (original && sale && original > sale) {
       return Math.round(((original - sale) / original) * 100);
     }
+
     return 0;
   }
-  return props.product.discountPercent || 0;
+
+  return cardDiscountPercent.value;
 });
 
 const maxQuantity = computed(() => {
@@ -1288,6 +1459,13 @@ watch(
   color: #777777;
   font-size: 12px;
   font-weight: 500;
+}
+
+.price-prefix {
+  color: #718096;
+  font-size: 12px;
+  font-weight: 700;
+  align-self: center;
 }
 
 .sale-price {
@@ -1717,6 +1895,13 @@ watch(
 }
 
 .qty-wrapper input[type="number"] {
-  -moz-appearance: textfield; /* Dành cho trình duyệt Firefox */
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.qty-wrapper input[type="number"]::-webkit-inner-spin-button,
+.qty-wrapper input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 </style>
