@@ -265,11 +265,23 @@ const orderForm = ref({
   profileAddress: "",
 });
 
-// TỰ ĐỘNG LƯU DRAFT FORM VÀO SESSION STORAGE KHI CÓ THAY ĐỔI
+// TỰ ĐỘNG LƯU DRAFT FORM VÀO SESSION STORAGE
 watch(
   () => orderForm.value,
   (newVal) => {
-    sessionStorage.setItem("dominus_checkout_draft", JSON.stringify(newVal));
+    // Tách TOÀN BỘ các trường liên quan đến địa chỉ ra khỏi bản nháp.
+    // Chỉ giữ lại: Tên, SĐT, Ghi chú và Phương thức thanh toán.
+    const { 
+      profileAddress, 
+      profileLoaded, 
+      shippingAddress, 
+      provinceName, 
+      wardName, 
+      specificAddress, 
+      ...draftData 
+    } = newVal;
+    
+    sessionStorage.setItem("dominus_checkout_draft", JSON.stringify(draftData));
   },
   { deep: true }
 );
@@ -965,8 +977,34 @@ window.addEventListener("pageshow", async (event) => {
   }
 });
 
-onUnmounted(() => {
-  stopPaymentTimer();
+onMounted(async () => {
+  try {
+    isPageLoading.value = true;
+    
+    // Phục hồi draft form ngay khi mở trang
+    const draft = sessionStorage.getItem("dominus_checkout_draft");
+    if (draft) {
+      try {
+        const parsedDraft = JSON.parse(draft);
+        // Lọc bỏ toàn bộ địa chỉ cũ đang lưu lơ lửng trong máy
+        delete parsedDraft.shippingAddress;
+        delete parsedDraft.provinceName;
+        delete parsedDraft.wardName;
+        delete parsedDraft.specificAddress;
+        
+        Object.assign(orderForm.value, parsedDraft);
+      } catch (e) {}
+    }
+
+    await checkAndRestoreVnpayBackup();
+    if (await loadCustomerProfile()) {
+      await loadCartSummary();
+      await loadSavedVoucher();
+      formKey.value++; // Ép render lại form với dữ liệu mới
+    }
+  } finally {
+    isPageLoading.value = false;
+  }
 });
 </script>
 

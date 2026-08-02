@@ -411,14 +411,19 @@ const filteredVouchers = computed(() => {
     });
 
   return vouchers.sort((a, b) => {
-    const aUsable = canUseVoucherLocally(a) ? 1 : 0;
-    const bUsable = canUseVoucherLocally(b) ? 1 : 0;
+    const aUsable = canUseVoucherLocally(a);
+    const bUsable = canUseVoucherLocally(b);
     
-    // Ưu tiên mã đủ điều kiện lên trước
-    if (aUsable !== bUsable) return bUsable - aUsable;
+    // 1. Ưu tiên mã đủ điều kiện (đơn tối thiểu)
+    if (aUsable && !bUsable) return -1;
+    if (!aUsable && bUsable) return 1;
     
-    // Nếu cùng đủ điều kiện thì so sánh số tiền giảm thực tế
-    return getActualDiscountAmount(b) - getActualDiscountAmount(a);
+    // 2. Nếu cả 2 cùng trạng thái (cùng đủ điều kiện hoặc cùng không),
+    // thì so sánh số tiền giảm được thực tế trên đơn hàng hiện tại
+    const aDiscount = getActualDiscountAmount(a);
+    const bDiscount = getActualDiscountAmount(b);
+    
+    return bDiscount - aDiscount; // Sắp xếp giảm dần theo số tiền giảm
   }).slice(0, 10);
 });
 
@@ -788,14 +793,11 @@ onMounted(async () => {
 
   const savedVoucher = localStorage.getItem("applied_voucher");
 
-  // Nếu khách đã áp dụng 1 mã từ bước giỏ hàng -> Ưu tiên dùng luôn mã đó
+  // Nếu khách đã chọn mã ở giỏ hàng (được lưu trong localStorage)
+  // thì tự động điền lại mã đó và áp dụng
   if (savedVoucher && props.totalAmount > 0) {
     voucherCode.value = savedVoucher;
     await handleApplyVoucher();
-  } 
-  // Nếu chưa có mã nào thì tự động tìm mã giảm nhiều tiền nhất và ốp vào
-  else if (props.totalAmount > 0 && props.cartItems.length > 0) {
-    await autoApplyBestVoucher(); 
   }
 });
 </script>
