@@ -15,16 +15,26 @@
       </span>
 
       <span class="divider">/</span>
-      <span class="breadcrumb-item clickable" @click="navigateToShop('all')">Nước hoa</span>
-      
+      <span class="breadcrumb-item clickable" @click="navigateToShop('all')"
+        >Nước hoa</span
+      >
+
       <template v-if="genderText && genderText !== 'Đang cập nhật'">
         <span class="divider">/</span>
-        <span class="breadcrumb-item clickable" @click="navigateToShop('gender', product?.gender)">{{ genderText }}</span>
+        <span
+          class="breadcrumb-item clickable"
+          @click="navigateToShop('gender', product?.gender)"
+          >{{ genderText }}</span
+        >
       </template>
 
       <template v-if="brandText && brandText !== 'Đang cập nhật'">
         <span class="divider">/</span>
-        <span class="breadcrumb-item clickable" @click="navigateToShop('brand', product?.brand)">{{ brandText }}</span>
+        <span
+          class="breadcrumb-item clickable"
+          @click="navigateToShop('brand', product?.brand)"
+          >{{ brandText }}</span
+        >
       </template>
 
       <span class="divider">/</span>
@@ -64,10 +74,7 @@
           </button>
         </div>
 
-        <div
-          v-if="productGalleryImages.length > 0"
-          class="thumbnail-list"
-        >
+        <div v-if="productGalleryImages.length > 0" class="thumbnail-list">
           <button
             v-for="(image, index) in productGalleryImages"
             :key="`${image}-${index}`"
@@ -112,9 +119,7 @@
 
           <span class="divider-line">|</span>
 
-          <span class="reviews">
-            {{ reviewCount }} đánh giá
-          </span>
+          <span class="reviews"> {{ reviewCount }} đánh giá </span>
         </div>
 
         <div class="price-box">
@@ -185,7 +190,9 @@
 
             <div class="spec-item">
               <span>Tình trạng</span>
-              <strong :class="isVariantOutOfStock ? 'text-danger' : 'text-success'">
+              <strong
+                :class="isVariantOutOfStock ? 'text-danger' : 'text-success'"
+              >
                 {{ stockStatusText }}
               </strong>
             </div>
@@ -215,7 +222,7 @@
               ]"
               @click="selectVariant(variant)"
             >
-             <span>{{ getCapacityText(variant) }}</span>
+              <span>{{ getCapacityText(variant) }}</span>
 
               <span
                 v-if="
@@ -255,11 +262,21 @@
           </span>
         </div>
 
-        <div class="quantity-section" v-if="selectedVariant" style="display: flex; align-items: center; gap: 20px; margin-bottom: 30px; flex-wrap: wrap;">
-          <h4 style="margin: 0; min-width: 80px;">Số lượng</h4>
+        <div
+          class="quantity-section"
+          v-if="selectedVariant"
+          style="
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+          "
+        >
+          <h4 style="margin: 0; min-width: 80px">Số lượng</h4>
 
           <!-- Ghi đè margin-bottom: 0 để input không bị đẩy lên cao -->
-          <div class="qty-control" style="margin-bottom: 0;">
+          <div class="qty-control" style="margin-bottom: 0">
             <button
               type="button"
               @click="decreaseQty"
@@ -277,15 +294,6 @@
             >
               +
             </button>
-          </div>
-
-          <div class="stock-info" style="margin: 0;">
-            <span v-if="normalizeStock(selectedVariant) > 0" style="color: #718096; font-size: 14px;">
-              Kho còn: <strong>{{ normalizeStock(selectedVariant) }}</strong> sản phẩm
-            </span>
-            <span v-else style="color: #d32f2f; font-weight: 600; font-size: 14px;">
-              <i class="bi bi-x-circle me-1"></i> Đã hết hàng
-            </span>
           </div>
         </div>
 
@@ -317,10 +325,10 @@
               isVariantInvalidPrice
                 ? "LIÊN HỆ ĐỂ MUA"
                 : isVariantOutOfStock
-                  ? "TẠM HẾT HÀNG"
-                  : isAdding
-                    ? "ĐANG THÊM..."
-                    : "THÊM VÀO GIỎ HÀNG"
+                ? "TẠM HẾT HÀNG"
+                : isAdding
+                ? "ĐANG THÊM..."
+                : "THÊM VÀO GIỎ HÀNG"
             }}
           </button>
 
@@ -339,8 +347,8 @@
               isVariantInvalidPrice
                 ? "LIÊN HỆ ĐỂ MUA"
                 : isVariantOutOfStock
-                  ? "TẠM HẾT HÀNG"
-                  : "MUA NGAY"
+                ? "TẠM HẾT HÀNG"
+                : "MUA NGAY"
             }}
 
             <svg
@@ -492,9 +500,7 @@ const BACKEND_URL = "http://localhost:8080";
 
 const getCurrentRole = () => {
   return String(
-    localStorage.getItem("role") ||
-      localStorage.getItem("userRole") ||
-      ""
+    localStorage.getItem("role") || localStorage.getItem("userRole") || ""
   )
     .replace("ROLE_", "")
     .toUpperCase()
@@ -628,7 +634,9 @@ const productGalleryImages = computed(() => {
   }
 
   if (Array.isArray(productData?.images)) {
-    const primaryObj = productData.images.find((img: any) => Boolean(img?.isPrimary));
+    const primaryObj = productData.images.find((img: any) =>
+      Boolean(img?.isPrimary)
+    );
     if (primaryObj) {
       addUnique(primaryObj?.imageUrl || primaryObj);
     }
@@ -649,7 +657,9 @@ const productGalleryImages = computed(() => {
   appendImageList(images, productData?.productImages);
 
   if (selectedVariant.value) {
-    getVariantImageList(selectedVariant.value).forEach((imageUrl) => addUnique(imageUrl));
+    getVariantImageList(selectedVariant.value).forEach((imageUrl) =>
+      addUnique(imageUrl)
+    );
   }
 
   if (Array.isArray(productData?.variants)) {
@@ -771,9 +781,7 @@ const bottleTypeText = computed(() => {
 
 const selectedSkuText = computed(() => {
   return (
-    selectedVariant.value?.sku ||
-    selectedVariant.value?.SKU ||
-    "Đang cập nhật"
+    selectedVariant.value?.sku || selectedVariant.value?.SKU || "Đang cập nhật"
   );
 });
 
@@ -888,7 +896,9 @@ const formatCapacityNumber = (value: any) => {
     const numberValue = Number(numberPart);
 
     if (Number.isFinite(numberValue)) {
-      return `${Number.isInteger(numberValue) ? numberValue : numberValue.toString()}ml`;
+      return `${
+        Number.isInteger(numberValue) ? numberValue : numberValue.toString()
+      }ml`;
     }
 
     return text;
@@ -897,7 +907,9 @@ const formatCapacityNumber = (value: any) => {
   const numberValue = Number(text);
 
   if (Number.isFinite(numberValue)) {
-    return `${Number.isInteger(numberValue) ? numberValue : numberValue.toString()}ml`;
+    return `${
+      Number.isInteger(numberValue) ? numberValue : numberValue.toString()
+    }ml`;
   }
 
   return text.toLowerCase().includes("ml") ? text : `${text}ml`;
@@ -1002,9 +1014,7 @@ const selectedDisplayPrice = computed(() => {
 
   if (isVariantFlashSale(selectedVariant.value)) {
     return Number(
-      selectedVariant.value.salePrice ??
-        selectedVariant.value.price ??
-        0
+      selectedVariant.value.salePrice ?? selectedVariant.value.price ?? 0
     );
   }
 
@@ -1099,8 +1109,8 @@ const selectVariant = (variant: any) => {
   quantity.value = 1;
 
   const variantImages = getVariantImageList(variant);
-  const firstVariantImage = variantImages.find(
-    (imageUrl): imageUrl is string => Boolean(imageUrl)
+  const firstVariantImage = variantImages.find((imageUrl): imageUrl is string =>
+    Boolean(imageUrl)
   );
 
   if (firstVariantImage) {
@@ -1265,10 +1275,7 @@ const toggleFavorite = async () => {
   } catch (error: any) {
     console.error("Lỗi yêu thích sản phẩm:", error);
 
-    await showError(
-      "Không thể xử lý yêu thích",
-      getErrorMessage(error)
-    );
+    await showError("Không thể xử lý yêu thích", getErrorMessage(error));
   } finally {
     isFavoriteLoading.value = false;
   }
@@ -1281,8 +1288,7 @@ const getCurrentCartQuantity = async (productVariantId: number) => {
     const items = Array.isArray(res.data) ? res.data : [];
 
     const cartItem = items.find(
-      (item: any) =>
-        Number(item.productVariantId) === Number(productVariantId)
+      (item: any) => Number(item.productVariantId) === Number(productVariantId)
     );
 
     return Number(cartItem?.quantity || 0);
@@ -1341,10 +1347,7 @@ const validateBeforeCartAction = async () => {
   const quantityToAdd = Number(quantity.value || 1);
 
   if (quantityToAdd <= 0) {
-    await showWarning(
-      "Số lượng không hợp lệ",
-      "Số lượng phải lớn hơn 0."
-    );
+    await showWarning("Số lượng không hợp lệ", "Số lượng phải lớn hơn 0.");
     return false;
   }
 
@@ -1408,10 +1411,7 @@ const addToCart = async () => {
   } catch (error: any) {
     console.error("Lỗi khi thêm vào giỏ hàng:", error);
 
-    await showError(
-      "Không thể thêm vào giỏ",
-      getErrorMessage(error)
-    );
+    await showError("Không thể thêm vào giỏ", getErrorMessage(error));
   } finally {
     isAdding.value = false;
   }
@@ -1443,10 +1443,7 @@ const buyNow = async () => {
   } catch (error: any) {
     console.error("Lỗi khi xử lý Mua ngay:", error);
 
-    await showError(
-      "Không thể mua ngay",
-      getErrorMessage(error)
-    );
+    await showError("Không thể mua ngay", getErrorMessage(error));
   } finally {
     isAdding.value = false;
   }
@@ -1485,11 +1482,15 @@ watch(
     if (newProduct?.primaryImageUrl) {
       primaryUrl = getImageUrlFromObject(newProduct.primaryImageUrl);
     } else if (Array.isArray(newProduct?.images)) {
-      const primaryObj = newProduct.images.find((img: any) => Boolean(img?.isPrimary));
+      const primaryObj = newProduct.images.find((img: any) =>
+        Boolean(img?.isPrimary)
+      );
       if (primaryObj) {
         primaryUrl = getImageUrlFromObject(primaryObj?.imageUrl || primaryObj);
       } else if (newProduct.images.length > 0) {
-        primaryUrl = getImageUrlFromObject(newProduct.images[0]?.imageUrl || newProduct.images[0]);
+        primaryUrl = getImageUrlFromObject(
+          newProduct.images[0]?.imageUrl || newProduct.images[0]
+        );
       }
     }
 
