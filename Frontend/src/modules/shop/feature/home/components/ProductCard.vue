@@ -157,7 +157,7 @@
                         ? selectedVariant.salePrice ||
                             selectedVariant.price ||
                             product.salePrice
-                        : product.salePrice,
+                        : product.salePrice
                     )
                   }}
                 </p>
@@ -219,9 +219,6 @@
               >
                 <span class="vm-v-name">
                   {{ v.displayCapacity || formatVariantName(v) }}
-                </span>
-                <span class="vm-v-stock">
-                  Kho: {{ v.stockQuantity || v.stock || 0 }}
                 </span>
               </button>
             </div>
@@ -417,7 +414,7 @@ const shortBrand = computed(
     brandMap[props.product.brand] ||
     String(props.product.brand || "AURA")
       .slice(0, 8)
-      .toUpperCase(),
+      .toUpperCase()
 );
 
 const DEFAULT_RATING = 5;
@@ -513,7 +510,7 @@ const getImageUrlFromObject = (value: any) => {
       value?.MainImageUrl ??
       value?.mainImage ??
       value?.MainImage ??
-      "",
+      ""
   );
 };
 
@@ -576,7 +573,7 @@ const productImages = computed(() => {
   for (const arr of imageArrays) {
     if (Array.isArray(arr)) {
       const primaryObj = arr.find((img: any) =>
-        Boolean(img?.isPrimary || img?.is_primary || img?.primary),
+        Boolean(img?.isPrimary || img?.is_primary || img?.primary)
       );
       if (primaryObj) {
         addUnique(primaryObj?.imageUrl || primaryObj?.url || primaryObj);
@@ -609,7 +606,7 @@ const productImages = computed(() => {
 
 const productImage = computed(() => productImages.value[0] || "");
 const hasProductImage = computed(
-  () => Boolean(productImage.value) && !imageLoadError.value,
+  () => Boolean(productImage.value) && !imageLoadError.value
 );
 
 const modalImage = computed(() => {
@@ -685,7 +682,7 @@ const showToast = (
   type: "success" | "warning" | "error",
   title: string,
   message: string,
-  showCartLink = false,
+  showCartLink = false
 ) => {
   toast.value = { show: true, type, title, message, showCartLink };
   if (toastTimer) window.clearTimeout(toastTimer);
@@ -704,7 +701,7 @@ const checkLoginBeforeAction = () => {
     showToast(
       "warning",
       "Yêu cầu đăng nhập",
-      "Vui lòng đăng nhập để tiếp tục trải nghiệm mua sắm tại Dominus.",
+      "Vui lòng đăng nhập để tiếp tục trải nghiệm mua sắm tại Dominus."
     );
     setTimeout(() => {
       router
@@ -721,7 +718,7 @@ const checkLoginBeforeAction = () => {
     showToast(
       "error",
       "Từ chối thao tác",
-      "Chức năng này chỉ dành cho tài khoản Khách hàng.",
+      "Chức năng này chỉ dành cho tài khoản Khách hàng."
     );
     return false;
   }
@@ -763,12 +760,6 @@ const openVariantModal = async (type: "CART" | "BUY") => {
       rawVariants = props.product.variants || [props.product];
     }
 
-    if ((props.product as any)?.isFlashSale && flashSaleVariantIds.size > 0) {
-      rawVariants = rawVariants.filter((v: any) => {
-        const vId = Number(v.productVariantId || v.variantId || v.id);
-        return flashSaleVariantIds.has(vId);
-      });
-    }
 
     const processedVariants = rawVariants.map((v: any) => {
       const vId = Number(v.productVariantId || v.variantId || v.id);
@@ -827,7 +818,7 @@ const openVariantModal = async (type: "CART" | "BUY") => {
     });
 
     processedVariants.sort(
-      (a: any, b: any) => a.numericCapacity - b.numericCapacity,
+      (a: any, b: any) => a.numericCapacity - b.numericCapacity
     );
     fullVariants.value = processedVariants;
 
@@ -857,7 +848,7 @@ const confirmAction = async () => {
     selectedVariant.value.productVariantId ||
       selectedVariant.value.variantId ||
       selectedVariant.value.id ||
-      props.product.id,
+      props.product.id
   );
 
   if (actionType.value === "CART") {
@@ -873,13 +864,13 @@ const confirmAction = async () => {
         "success",
         "Thêm thành công",
         "Đã thêm sản phẩm vào giỏ.",
-        true,
+        true
       );
     } catch (error: any) {
       showToast(
         "error",
         "Lỗi",
-        error?.response?.data?.message || "Không thể thêm vào giỏ.",
+        error?.response?.data?.message || "Không thể thêm vào giỏ."
       );
     } finally {
       addCartLoading.value = false;
@@ -898,7 +889,7 @@ const confirmAction = async () => {
       showToast(
         "error",
         "Lỗi",
-        error?.response?.data?.message || "Không thể mua ngay lúc này.",
+        error?.response?.data?.message || "Không thể mua ngay lúc này."
       );
     } finally {
       buyNowLoading.value = false;
@@ -920,7 +911,7 @@ const getPrimaryVariantId = () => {
     props.product.productVariantId ||
       props.product.variantId ||
       props.product.id ||
-      0,
+      0
   );
 };
 
@@ -991,13 +982,13 @@ const handleToggleFavorite = async () => {
     window.dispatchEvent(
       new CustomEvent("favorite-updated", {
         detail: { productVariantId: variantId, favorited },
-      }),
+      })
     );
 
     showToast(
       favorited ? "success" : "warning",
       favorited ? "Đã thêm yêu thích" : "Đã bỏ yêu thích",
-      res.data?.message || "",
+      res.data?.message || ""
     );
   } catch (error: any) {
     showToast("error", "Lỗi", "Không thể xử lý yêu thích");
@@ -1065,22 +1056,22 @@ const calculatedDiscountPercent = computed(() => {
 const maxQuantity = computed(() => {
   return selectedVariant.value
     ? Number(
-        selectedVariant.value.stockQuantity || selectedVariant.value.stock || 0,
+        selectedVariant.value.stockQuantity || selectedVariant.value.stock || 0
       )
     : 0;
 });
 
 const validateQuantity = () => {
   let val = Number(quantity.value);
-  
+
   // Nếu nhập linh tinh, để trống hoặc nhập số nhỏ hơn 1 -> Đưa về 1
   if (Number.isNaN(val) || val < 1) {
     quantity.value = 1;
-  } 
+  }
   // Nếu nhập lớn hơn số lượng tồn kho -> Đưa về tối đa tồn kho
   else if (val > maxQuantity.value) {
     quantity.value = maxQuantity.value;
-  } 
+  }
   // Nếu nhập số thập phân -> Làm tròn thành số nguyên
   else {
     quantity.value = Math.floor(val);
@@ -1102,7 +1093,7 @@ watch(
   () => {
     loadFavoriteStatus();
   },
-  { deep: true },
+  { deep: true }
 );
 </script>
 
@@ -1227,8 +1218,11 @@ watch(
   width: 120px;
   height: 134px;
   border-radius: 16px 16px 24px 24px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.32), transparent 32%),
+  background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.32),
+      transparent 32%
+    ),
     linear-gradient(145deg, var(--bottle-color), #080808 86%);
   border: 2px solid rgba(255, 255, 255, 0.24);
   display: flex;
@@ -1600,12 +1594,6 @@ watch(
   font-size: 14px;
   font-weight: 800;
   color: #06132b;
-}
-
-.vm-v-stock {
-  font-size: 11px;
-  color: #718096;
-  font-weight: 500;
 }
 
 .vm-variant-btn.disabled {
