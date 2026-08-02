@@ -404,10 +404,16 @@ public class OrderService { //[cite: 7]
 
                 if (order != null) {
                     if ("00".equals(responseCode)) {
-                        order.setStatus(ORDER_STATUS_CONFIRMED); //[cite: 7]
+                        /*
+                         * VNPay trả về thành công chỉ có nghĩa là khách đã thanh toán.
+                         * Không tự chuyển đơn sang Đã xác nhận vì xác nhận đơn là thao tác
+                         * của shop/admin. Đơn vẫn phải ở trạng thái Chờ xác nhận.
+                         */
+                        order.setStatus(ORDER_STATUS_PENDING); //[cite: 7]
+                        order.setIsPaymentReported(true); //[cite: 7]
                         orderRepo.save(order); //[cite: 7]
                         response.put("success", true); //[cite: 7]
-                        response.put("message", "Thanh toán VNPay thành công"); //[cite: 7]
+                        response.put("message", "Thanh toán VNPay thành công. Đơn hàng đang chờ xác nhận."); //[cite: 7]
                     } else if ("24".equals(responseCode)) {
                         order.setStatus(ORDER_STATUS_CANCELLED); //[cite: 7]
                         orderRepo.save(order); //[cite: 7]
@@ -570,6 +576,11 @@ public class OrderService { //[cite: 7]
         LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(15); //[cite: 7]
         List<Order> abandonedOrders = orderRepo.findAll().stream()
                 .filter(o -> o.getStatus() == ORDER_STATUS_PENDING
+                        /*
+                         * Không tự hủy đơn đã thanh toán VNPay/VietQR nhưng còn chờ shop xác nhận.
+                         * isPaymentReported = true được dùng để đánh dấu khách đã thanh toán/báo thanh toán.
+                         */
+                        && !Boolean.TRUE.equals(o.getIsPaymentReported())
                         && o.getCreatedAt() != null
                         && o.getCreatedAt().isBefore(cutoffTime))
                 .toList(); //[cite: 7]
