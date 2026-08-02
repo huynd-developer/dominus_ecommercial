@@ -5,9 +5,10 @@ import jakarta.validation.constraints.*;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.time.LocalDate;
 
 @Data
 public class ProductRequest {
@@ -43,6 +44,31 @@ public class ProductRequest {
     @Valid
     @NotEmpty(message = "Sản phẩm phải có ít nhất 1 biến thể")
     private List<VariantRequestDTO> variants;
+
+    /**
+     * Không cho phép 1 sản phẩm có nhiều biến thể trùng dung tích.
+     * Ví dụ: không được có 2 dòng cùng capacityId = 10ml.
+     */
+    @AssertTrue(message = "Dung tích biến thể không được trùng trong cùng một sản phẩm")
+    public boolean isVariantCapacityUnique() {
+        if (variants == null || variants.isEmpty()) {
+            return true;
+        }
+
+        Set<Integer> capacityIds = new HashSet<>();
+
+        for (VariantRequestDTO variant : variants) {
+            if (variant == null || variant.getCapacityId() == null) {
+                continue;
+            }
+
+            if (!capacityIds.add(variant.getCapacityId())) {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     @Data
     public static class VariantRequestDTO {
