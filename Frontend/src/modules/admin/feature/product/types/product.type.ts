@@ -120,6 +120,8 @@ export interface ProductVariantRequest {
 
   bottleTypeId: number
 
+  sku?: string
+
   price: number
 
   stockQuantity: number

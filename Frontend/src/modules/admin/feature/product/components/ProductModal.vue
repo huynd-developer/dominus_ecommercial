@@ -303,6 +303,7 @@
                               v-for="item in capacityList"
                               :key="item.id"
                               :value="item.id"
+                              :disabled="isCapacitySelected(item.id, index)"
                             >
                               {{ item.value }} ml
                             </option>
@@ -590,6 +591,25 @@ const addVariant = () => {
   });
 };
 
+const isCapacitySelected = (
+  capacityId: number | string,
+  currentIndex: number | string,
+) => {
+  const currentCapacityId = Number(capacityId || 0);
+  const currentIndexNumber = Number(currentIndex);
+
+  if (!currentCapacityId || Number.isNaN(currentIndexNumber)) {
+    return false;
+  }
+
+  return formData.value.variants.some((variant: any, index: number) => {
+    return (
+      index !== currentIndexNumber &&
+      Number(variant?.capacityId || 0) === currentCapacityId
+    );
+  });
+};
+
 // ĐÃ SỬA: Tách hàm hiển thị giá ra khỏi template HTML
 const formatDisplayPrice = (price?: number) => {
   if (!price) return "";
@@ -779,7 +799,7 @@ const validateForm = () => {
     return false;
   }
 
-  const variantSet = new Set();
+  const capacityIdSet = new Set<number>();
   for (let i = 0; i < formData.value.variants.length; i++) {
     const variant = formData.value.variants[i];
 
@@ -800,16 +820,16 @@ const validateForm = () => {
       return false;
     }
 
-    const variantKey = `${variant.capacityId}-${variant.bottleTypeId}`;
-    if (variantSet.has(variantKey)) {
+    const capacityId = Number(variant.capacityId || 0);
+    if (capacityIdSet.has(capacityId)) {
       Swal.fire(
-        "Trùng lặp biến thể",
-        `Biến thể dòng ${i + 1} (Dung tích + Loại chai) đã tồn tại. Vui lòng gộp số lượng hoặc chọn loại khác.`,
+        "Trùng dung tích",
+        `Biến thể dòng ${i + 1}: Dung tích này đã tồn tại trong sản phẩm. Vui lòng chọn dung tích khác.`,
         "warning",
       );
       return false;
     }
-    variantSet.add(variantKey);
+    capacityIdSet.add(capacityId);
 
     if (variant.price <= 0 || isNaN(variant.price)) {
       Swal.fire(

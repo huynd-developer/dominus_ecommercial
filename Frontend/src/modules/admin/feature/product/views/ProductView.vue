@@ -223,7 +223,8 @@ const toggleProductStatus = async (product: Product, newStatus: number) => {
         stockQuantity: v.stockQuantity,
         manufacturingDate: v.manufacturingDate ? v.manufacturingDate.substring(0, 10) : '',
         expirationDate: v.expirationDate ? v.expirationDate.substring(0, 10) : '',
-        status: newStatus
+        status: newStatus,
+        sku: v.sku ? String(v.sku).trim() : undefined
       })) || []
     }
 
