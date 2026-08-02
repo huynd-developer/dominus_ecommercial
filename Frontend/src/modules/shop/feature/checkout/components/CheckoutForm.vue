@@ -290,6 +290,7 @@
             </div>
           </div>
 
+<<<<<<< HEAD
           <div class="mb-3">
             <label class="form-label fw-bold"
               >Địa chỉ cụ thể <span class="text-danger">*</span></label
@@ -300,6 +301,19 @@
               rows="3"
               placeholder="Ví dụ: Số 12/5, ngõ 36-A, đường Trần Phú"
             ></textarea>
+=======
+          <div class="form-group">
+            <label>Địa chỉ cụ thể <span class="text-danger">*</span></label>
+            <div class="input-box textarea-box">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              <textarea v-model="specificAddress" @input="validateSpecificAddress" :maxlength="MAX_SHIPPING_ADDRESS_LENGTH"
+                placeholder="Ví dụ: Số 12/5, ngõ 36-A, đường Trần Phú" autocomplete="street-address"></textarea>
+            </div>
+            <small class="field-hint">Nhập số nhà, ngõ, đường, tòa nhà. Tổng địa chỉ gửi hệ thống tối đa 200 ký tự.</small>
+>>>>>>> 2ac37da19f7b6e2bd8e971fac0c04547faa88d56
           </div>
 
           <div class="form-check mb-3">
@@ -365,12 +379,173 @@ const loadingWards = ref(false);
 // Đã ép kiểu an toàn (as any) để tránh lỗi TypeScript không tìm thấy thuộc tính userId/id
 const currentCustomerId = computed(() => (store.profileForm as any).userId || (store.profileForm as any).id || (store.profileForm as any).customerId);
 
+<<<<<<< HEAD
 const selectedProvince = computed(() =>
   provinces.value.find((item) => String(item.code) === String(selectedProvinceCode.value))
 );
 const selectedWard = computed(() =>
   wards.value.find((item) => String(item.code) === String(selectedWardCode.value))
 );
+=======
+const MIN_SHIPPING_ADDRESS_LENGTH = 5;
+const MAX_SHIPPING_ADDRESS_LENGTH = 200;
+
+const selectedProvince = computed(() => provinces.value.find((item) => String(item.code) === String(selectedProvinceCode.value)));
+const selectedWard = computed(() => wards.value.find((item) => String(item.code) === String(selectedWardCode.value)));
+
+const extractArray = (data: any) => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.results)) return data.results;
+  if (Array.isArray(data?.wards)) return data.wards;
+  return [];
+};
+
+const normalizeProvince = (item: any): Province => {
+  return {
+    code: item.code ?? item.province_code ?? item.provinceCode ?? item.id,
+    name: item.name ?? item.province_name ?? item.provinceName ?? "",
+    wards: Array.isArray(item.wards) ? item.wards.map(normalizeWard) : null,
+  };
+};
+
+const normalizeWard = (item: any): Ward => {
+  return {
+    code: item.code ?? item.ward_code ?? item.wardCode ?? item.id,
+    name: item.name ?? item.ward_name ?? item.wardName ?? "",
+  };
+};
+
+const collapseSpaces = (value: string) => String(value || "").replace(/\s{2,}/g, " ");
+const cleanText = (value: string) => collapseSpaces(String(value || "").replace(/^\s+/, ""));
+const cleanAddressText = (value: string) => cleanText(value).replace(/[^\p{L}\d\s,./#()\-]/gu, "");
+
+const buildFullAddress = (addressDetail: string, wardName: string, provinceName: string) => {
+  return [addressDetail, wardName, provinceName]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .join(", ");
+};
+
+const getMaxSpecificAddressLength = (wardName: string, provinceName: string) => {
+  const locationAddress = buildFullAddress("", wardName, provinceName);
+  const separatorLength = locationAddress ? 2 : 0;
+
+  return Math.max(MAX_SHIPPING_ADDRESS_LENGTH - locationAddress.length - separatorLength, 0);
+};
+
+const isShippingAddressValid = (address: string) => {
+  const length = String(address || "").trim().length;
+
+  return length >= MIN_SHIPPING_ADDRESS_LENGTH && length <= MAX_SHIPPING_ADDRESS_LENGTH;
+};
+
+const validateShippingAddressLength = (address: string) => {
+  if (!isShippingAddressValid(address)) {
+    addressLoadError.value = `Địa chỉ nhận hàng phải từ ${MIN_SHIPPING_ADDRESS_LENGTH} đến ${MAX_SHIPPING_ADDRESS_LENGTH} ký tự.`;
+    return false;
+  }
+
+  return true;
+};
+
+const syncFullAddress = () => {
+  const provinceName = selectedProvince.value?.name || "";
+  const wardName = selectedWard.value?.name || "";
+  const maxSpecificAddressLength = getMaxSpecificAddressLength(wardName, provinceName);
+  const addressDetail = cleanAddressText(specificAddress.value).slice(0, maxSpecificAddressLength);
+
+  specificAddress.value = addressDetail;
+
+  props.form.provinceName = provinceName;
+  props.form.wardName = wardName;
+  props.form.specificAddress = addressDetail;
+  props.form.shippingAddress = buildFullAddress(addressDetail, wardName, provinceName);
+};
+
+const validateName = () => { props.form.customerName = cleanText(String(props.form.customerName || "").replace(/[^\p{L}\s]/gu, "")).slice(0, 100); };
+const validatePhone = () => { props.form.customerPhone = String(props.form.customerPhone || "").replace(/[^\d]/g, "").slice(0, 10); };
+const validateSpecificAddress = () => { syncFullAddress(); };
+const validateNote = () => { props.form.note = cleanText(props.form.note).slice(0, 255); };
+
+// XỬ LÝ CHỌN ĐỊA CHỈ TỪ DANH SÁCH
+const applySelectedProfileAddress = () => {
+  if (selectedProfileAddressIndex.value === "") return;
+
+  const addr = parsedProfileAddresses.value[Number(selectedProfileAddressIndex.value)];
+  if (addr) {
+    const fullAddress = String(addr.fullAddress || "").trim();
+
+    if (!validateShippingAddressLength(fullAddress)) return;
+
+    addressLoadError.value = "";
+
+    if (addr.name) props.form.customerName = addr.name;
+    if (addr.phone) props.form.customerPhone = addr.phone;
+    props.form.shippingAddress = fullAddress;
+    
+    // Xóa form nhập tay & xóa state Validation để form check coi đây là địa chỉ "đã lưu"
+    selectedProvinceCode.value = "";
+    selectedWardCode.value = "";
+    specificAddress.value = "";
+    wards.value = [];
+    
+    props.form.provinceName = "";
+    props.form.wardName = "";
+    props.form.specificAddress = "";
+  }
+};
+
+const handleProvinceChange = async () => {
+  selectedWardCode.value = "";
+  wards.value = [];
+  syncFullAddress();
+  if (selectedProvinceCode.value) await loadWardsByProvince(selectedProvinceCode.value);
+};
+
+// HỦY BỎ THÊM MỚI
+const cancelAddNewAddress = () => {
+  isAddingNewAddress.value = false;
+  addressLoadError.value = "";
+  if (parsedProfileAddresses.value.length > 0) {
+    if (!selectedProfileAddressIndex.value) {
+      selectedProfileAddressIndex.value = "0";
+    }
+    applySelectedProfileAddress();
+  }
+};
+
+// LƯU ĐỊA CHỈ VÀO DANH SÁCH CHỌN
+const saveNewAddress = () => {
+  if (!selectedProvinceCode.value || !selectedWardCode.value || !specificAddress.value) {
+    addressLoadError.value = "Vui lòng chọn đầy đủ Tỉnh/Thành, Phường/Xã và Địa chỉ cụ thể.";
+    return;
+  }
+
+  syncFullAddress(); 
+
+  if (!validateShippingAddressLength(props.form.shippingAddress)) return;
+
+  addressLoadError.value = "";
+  
+  const newAddr = {
+    name: props.form.customerName,
+    phone: props.form.customerPhone,
+    fullAddress: props.form.shippingAddress,
+    isNew: true
+  };
+  
+  // Đẩy địa chỉ vừa nhập vào list để chọn luôn
+  parsedProfileAddresses.value.push(newAddr);
+  selectedProfileAddressIndex.value = String(parsedProfileAddresses.value.length - 1);
+  isAddingNewAddress.value = false;
+  
+  // Xóa các biến nhập tay để trick cho CheckoutView hiểu đây là địa chỉ được chọn từ danh sách 
+  props.form.provinceName = "";
+  props.form.wardName = "";
+  props.form.specificAddress = "";
+};
+>>>>>>> 2ac37da19f7b6e2bd8e971fac0c04547faa88d56
 
 const loadProvinces = async () => {
   try {

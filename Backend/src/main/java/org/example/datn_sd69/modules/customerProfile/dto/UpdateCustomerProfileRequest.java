@@ -24,7 +24,7 @@ public record UpdateCustomerProfileRequest(
         String phone,
 
         @NotBlank(message = "Địa chỉ không được để trống")
-        @Size(min = 5, max = 500, message = "Địa chỉ phải từ 5 đến 500 ký tự")
+        @Size(min = 5, max = 200, message = "Địa chỉ phải từ 5 đến 200 ký tự")
         String address,
 
         LocalDate dateOfBirth,
