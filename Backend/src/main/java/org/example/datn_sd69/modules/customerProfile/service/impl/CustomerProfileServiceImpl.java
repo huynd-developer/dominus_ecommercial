@@ -272,8 +272,8 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
     }
 
     private void validateAddress(String address) {
-        if (address.length() < 5 || address.length() > 500) {
-            throw badRequest("Địa chỉ phải từ 5 đến 500 ký tự");
+        if (address.length() < 5 || address.length() > 200) {
+            throw badRequest("Địa chỉ phải từ 5 đến 200 ký tự");
         }
     }
 

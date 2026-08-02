@@ -1,9 +1,10 @@
 package org.example.datn_sd69.modules.capacity.dto.request;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -12,9 +13,8 @@ import lombok.Setter;
 public class CapacityRequest {
 
     @NotNull(message = "Dung tích không được để trống")
-    @Positive(message = "Dung tích phải lớn hơn 0")
-    // 👇 BỔ SUNG: Chặn việc nhập số quá lớn (Nước hoa thực tế hiếm khi quá 5000ml)
-    @Max(value = 5000, message = "Dung tích không hợp lệ, không được vượt quá 5000 ml")
+    @DecimalMin(value = "0.01", message = "Dung tích phải lớn hơn 0")
+    @DecimalMax(value = "5000", message = "Dung tích không hợp lệ, không được vượt quá 5000 ml")
     private Double value;
 
     @NotNull(message = "Trạng thái không được để trống")
