@@ -40,6 +40,9 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
     private static final Pattern PASSWORD_PATTERN =
             Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&.#])[A-Za-z\\d@$!%*?&.#]{8,50}$");
 
+    private static final String PASSWORD_RULE_MESSAGE =
+            "Mật khẩu mới phải từ 8 đến 50 ký tự, có chữ hoa, chữ thường, số, ít nhất 1 ký tự đặc biệt trong @$!%*?&.# và không chứa khoảng trắng";
+
     private static final long MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of(
@@ -144,7 +147,7 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
         String confirmPassword = normalizeNoWhitespace(request.confirmPassword(), "Xác nhận mật khẩu");
 
         if (!PASSWORD_PATTERN.matcher(newPassword).matches()) {
-            throw badRequest("Mật khẩu mới phải có chữ hoa, chữ thường, số, ký tự đặc biệt và không chứa khoảng trắng");
+            throw badRequest(PASSWORD_RULE_MESSAGE);
         }
 
         if (!newPassword.equals(confirmPassword)) {
