@@ -362,8 +362,11 @@ const isDefaultAddress = ref(false);
 const loadingProvinces = ref(false);
 const loadingWards = ref(false);
 
-// Sửa đoạn này:
-const currentCustomerId = computed(() => (store.profileForm as any).userId || (store.profileForm as any).id || (store.profileForm as any).customerId);
+// Ép kiểu Number tường minh để tránh lỗi truyền ID dạng Proxy object lên BE
+const currentCustomerId = computed(() => {
+  const rawId = (store.profileForm as any).userId || (store.profileForm as any).id || (store.profileForm as any).customerId;
+  return rawId ? Number(rawId) : 0;
+});
 
 const selectedProvince = computed(() =>
   provinces.value.find((item) => String(item.code) === String(selectedProvinceCode.value))

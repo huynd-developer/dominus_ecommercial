@@ -458,54 +458,35 @@ const resolveMinVariantPrice = (rawVariants: any[]): number => {
 };
 
 const mapNormalProduct = (p: any): ProductCardItem => {
-  const rawVariants =
-    p?.variants ||
-    p?.productVariants ||
-    p?.productVariantList ||
-    [];
-
+  const rawVariants = p?.variants || p?.productVariants || p?.productVariantList || [];
   const variantList = Array.isArray(rawVariants) ? rawVariants : [];
-
-  const firstVariant =
-    variantList.length > 0 ? variantList[0] : null;
+  const firstVariant = variantList.length > 0 ? variantList[0] : null;
 
   const minVariantPrice = resolveMinVariantPrice(variantList);
-
-  const basePrice = toNumber(
-    minVariantPrice ||
-      firstVariant?.price ||
-      p.minPrice ||
-      p.price ||
-      p.originalPrice,
-    0
-  );
-
   const discountPercent = toNumber(p.discountPercent ?? p.discount, 0);
 
-  const salePrice =
-    discountPercent > 0
-      ? basePrice - (basePrice * discountPercent) / 100
-      : toNumber(p.salePrice, basePrice);
+  let salePrice = toNumber(p.salePrice ?? p.minPrice, 0);
+  let originalPrice = toNumber(p.originalPrice ?? p.price ?? p.maxPrice, 0);
+
+  if (salePrice === 0) salePrice = minVariantPrice || originalPrice;
+  if (originalPrice === 0) originalPrice = salePrice;
+
+  // ĐÃ SỬA: TRIỆT TIÊU LỖI GIẢM GIÁ ẢO TỪ BACKEND (VD: 10ml 350k vs 30ml 2.1M)
+  if (discountPercent <= 0) {
+    const actualBase = salePrice > 0 ? salePrice : originalPrice;
+    salePrice = actualBase;
+    originalPrice = actualBase;
+  } else if (salePrice >= originalPrice && discountPercent > 0) {
+    salePrice = originalPrice - (originalPrice * discountPercent) / 100;
+  }
 
   const productId = toNumber(p.productId ?? p.id, 0);
-
   const productVariantId = toNumber(
-    p.productVariantId ??
-      p.variantId ??
-      firstVariant?.productVariantId ??
-      firstVariant?.variantId ??
-      firstVariant?.id,
+    p.productVariantId ?? p.variantId ?? firstVariant?.productVariantId ?? firstVariant?.variantId ?? firstVariant?.id,
     0
   );
-
-  const stockQuantity = toNumber(
-    p.stockQuantity ??
-      p.stock ??
-      firstVariant?.stockQuantity ??
-      firstVariant?.stock,
-    1
-  );
-
+  
+  const stockQuantity = toNumber(p.stockQuantity ?? p.stock ?? firstVariant?.stockQuantity ?? firstVariant?.stock, 1);
   const productImages = resolveProductImages(p);
   const productImage = productImages[0] || "";
 
@@ -514,54 +495,36 @@ const mapNormalProduct = (p: any): ProductCardItem => {
     productId,
     productVariantId: productVariantId || undefined,
     variantId: productVariantId || undefined,
-
     name: p.name || p.productName || "Sản phẩm",
     brand: formatBrand(p),
     color: p.color || "#0a192f",
-
     imageUrl: productImage,
     image: productImage,
     mainImage: productImage,
     images: productImages,
-    productImages: productImages.map((imageUrl, index) => ({
-      id: index + 1,
-      imageUrl,
-      url: imageUrl,
-    })),
-
+    productImages: productImages.map((imageUrl, index) => ({ id: index + 1, imageUrl, url: imageUrl })),
     salePrice,
-    originalPrice: basePrice,
+    originalPrice,
     discountPercent,
-
     rating: toNumber(p.rating, 5),
     reviewCount: toNumber(p.reviewCount ?? p.reviews, 0),
-
     stockQuantity,
-
-    variants: productVariantId
-      ? [
-          {
-            id: productVariantId,
-            productVariantId,
-            variantId: productVariantId,
-            price: basePrice,
-            originalPrice: basePrice,
-            salePrice,
-            promotionPrice: discountPercent > 0 ? salePrice : undefined,
-            flashSalePrice: undefined,
-            stockQuantity,
-            status: toNumber(firstVariant?.status, 1),
-            imageUrl: productImage,
-            image: productImage,
-            images: productImages,
-            productImages: productImages.map((imageUrl, index) => ({
-              id: index + 1,
-              imageUrl,
-              url: imageUrl,
-            })),
-          },
-        ]
-      : undefined,
+    variants: productVariantId ? [{
+      id: productVariantId,
+      productVariantId,
+      variantId: productVariantId,
+      price: originalPrice,
+      originalPrice,
+      salePrice,
+      promotionPrice: discountPercent > 0 ? salePrice : undefined,
+      flashSalePrice: undefined,
+      stockQuantity,
+      status: toNumber(firstVariant?.status, 1),
+      imageUrl: productImage,
+      image: productImage,
+      images: productImages,
+      productImages: productImages.map((imageUrl, index) => ({ id: index + 1, imageUrl, url: imageUrl })),
+    }] : undefined,
   };
 };
 
@@ -655,14 +618,23 @@ const mergeFlashSaleIntoProduct = (
   const productId = getProductMapId(product);
   const flashSale = flashSaleMap.get(productId);
 
+  // NẾU SẢN PHẨM KHÔNG CÓ TRONG FLASH SALE -> GIỮ NGUYÊN BẢN, TUYỆT ĐỐI KHÔNG GÁN ĐÈ GIÁ SALE
   if (!flashSale) {
     return {
       ...product,
       isFlashSale: false,
-      variants: product.variants?.map((variant) => ({ ...variant })),
+      salePrice: product.originalPrice > 0 ? product.salePrice : product.salePrice,
+      discountPercent: 0, // Đảm bảo phần trăm giảm giá về 0
+      variants: product.variants?.map((variant) => ({
+        ...variant,
+        salePrice: variant.originalPrice || variant.price,
+        promotionPrice: undefined,
+        flashSalePrice: undefined,
+      })),
     };
   }
 
+  // Ngược lại nếu đúng có trong flash sale thì mới tiến hành gộp giá sale...
   const salePrice = toNumber(flashSale.salePrice, product.salePrice);
   const originalPrice = toNumber(
     flashSale.originalPrice,

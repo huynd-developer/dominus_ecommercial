@@ -380,6 +380,7 @@ interface Product {
   stockQuantity?: number;
   availableQuantity?: number;
   status?: number;
+  isFlashSale?: boolean;
   variants?: ProductVariant[];
 }
 
@@ -888,7 +889,7 @@ const openVariantModal = async (type: "CART" | "BUY") => {
     const flashSalePriceMap = new Map<number, number>();
     const flashSaleVariantIds = new Set<number>();
 
-    if (props.product?.variants && Array.isArray(props.product.variants)) {
+    if (props.product?.isFlashSale && props.product?.variants && Array.isArray(props.product.variants)) {
       props.product.variants.forEach((pv: any) => {
         const vId = Number(pv.productVariantId || pv.variantId || pv.id);
         if (vId) {

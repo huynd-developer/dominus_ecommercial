@@ -500,6 +500,7 @@
   </div>
 </template>
 
+<!-- (Giữ nguyên toàn bộ template và style hiện tại của ProductModal.vue, chỉ cập nhật lại phần script dưới đây) -->
 <script setup lang="ts">
 import { ref, watch, computed } from "vue";
 import Swal from "sweetalert2";
@@ -508,7 +509,6 @@ import { useAppStore } from "@/common/store/app.store";
 
 import type {
   Product,
-  ProductRequestDTO,
   Brand,
   Category,
   Concentration,
@@ -519,6 +519,7 @@ import type {
 
 const props = defineProps<{
   productSelected: Product | null;
+  isClone?: boolean;
   brandList: Brand[];
   categoryList: Category[];
   concentrationList: Concentration[];
@@ -547,7 +548,6 @@ interface ProductImageItem {
 const imageList = ref<ProductImageItem[]>([]);
 const deletedImageIds = ref<number[]>([]);
 
-// ĐÃ SỬA: Ép kiểu 'any' cho formData để TypeScript không báo lỗi rỗng giá trị ban đầu
 const formData = ref<any>({
   name: "",
   description: "",
@@ -561,6 +561,7 @@ const formData = ref<any>({
   variants: [],
 });
 
+// Thêm đoạn code này thay thế cho hàm resetForm cũ trong script của ProductModal.vue
 const resetForm = () => {
   formData.value = {
     name: "",
@@ -576,7 +577,28 @@ const resetForm = () => {
   };
   imageList.value = [];
   deletedImageIds.value = [];
-  addVariant();
+
+  // TỰ ĐỘNG FILL SẴN 3 BIẾN THỂ (10ml, 50ml, 100ml) VỚI GIÁ 100 VNĐ KHI THÊM MỚI
+  const defaultCapacities = [10, 50, 100];
+  defaultCapacities.forEach((targetVal) => {
+    const foundCap = props.capacityList?.find(
+      (c: any) => Number(c.value) === targetVal || Number(c.name) === targetVal
+    );
+    formData.value.variants.push({
+      capacityId: foundCap ? foundCap.id : 0,
+      // Dùng ?. và ?? để an toàn tuyệt đối với TypeScript
+      bottleTypeId: props.bottleTypeList?.[0]?.id ?? 0, 
+      price: 100, // Mặc định 100 VNĐ
+      stockQuantity: 10,
+      manufacturingDate: today.value,
+      expirationDate: new Date(new Date().setFullYear(new Date().getFullYear() + 3)).toISOString().split("T")[0],
+      status: 1,
+    });
+  });
+
+  if (formData.value.variants.length === 0) {
+    addVariant();
+  }
 };
 
 const addVariant = () => {
@@ -610,13 +632,11 @@ const isCapacitySelected = (
   });
 };
 
-// ĐÃ SỬA: Tách hàm hiển thị giá ra khỏi template HTML
 const formatDisplayPrice = (price?: number) => {
   if (!price) return "";
   return new Intl.NumberFormat("en-US").format(price);
 };
 
-// Hàm xử lý nhảy số tự động phẩy cho ô Giá Bán
 const onPriceInput = (index: any, event: Event) => {
   const input = event.target as HTMLInputElement;
   const rawValue = input.value.replace(/\D/g, "");
@@ -633,20 +653,20 @@ const formatDateForInput = (dateString?: string) => {
   return dateString.substring(0, 10);
 };
 
-const fillForm = (product: Product) => {
+const fillForm = (product: Product, isClone = false) => {
   formData.value = {
-    name: product.name,
+    name: isClone ? `${product.name} (Bản sao)` : product.name,
     description: product.description ?? "",
     brandId: product.brandId,
     categoryId: product.categoryId,
     concentrationId: product.concentrationId,
     gender: product.gender ?? 0,
     isNiche: product.isNiche ?? false,
-    status: product.status ?? 1,
+    status: isClone ? 1 : (product.status ?? 1),
     fragranceFamilyIds: product.fragranceFamilies?.map((item) => item.id) ?? [],
     variants:
       product.variants?.map((v) => ({
-        id: v.id,
+        id: isClone ? undefined : v.id,
         capacityId: v.capacityId,
         bottleTypeId: v.bottleTypeId,
         price: v.price,
@@ -654,7 +674,7 @@ const fillForm = (product: Product) => {
         manufacturingDate: formatDateForInput(v.manufacturingDate),
         expirationDate: formatDateForInput(v.expirationDate),
         status: v.status ?? 1,
-        sku: (v as any).sku,
+        sku: isClone ? undefined : (v as any).sku,
       })) ?? [],
   };
 
@@ -662,7 +682,7 @@ const fillForm = (product: Product) => {
 
   imageList.value = (
     product.images?.map((img) => ({
-      id: img.id,
+      id: isClone ? undefined : img.id,
       preview: img.imageUrl
         ? img.imageUrl.startsWith("http")
           ? img.imageUrl
@@ -677,8 +697,8 @@ watch(
   () => props.productSelected,
   (product) => {
     if (product) {
-      isEdit.value = true;
-      fillForm(product);
+      isEdit.value = !props.isClone;
+      fillForm(product, props.isClone);
     } else {
       isEdit.value = false;
       resetForm();
@@ -707,7 +727,6 @@ const handleImages = (event: Event) => {
   let hasInvalidFile = false;
 
   Array.from(files).forEach((file) => {
-    // Kiểm tra xem file gửi lên có thuộc định dạng ảnh hợp lệ không
     if (validTypes.includes(file.type.toLowerCase())) {
       imageList.value.push({
         file,
@@ -719,14 +738,12 @@ const handleImages = (event: Event) => {
     }
   });
 
-  // Reset value của input để lần sau người dùng bấm chọn lại đúng file đó vẫn nhận sự kiện @change
   input.value = "";
 
-  // Báo lỗi nếu người dùng cố tình chọn file định dạng khác
   if (hasInvalidFile) {
     Swal.fire(
       "Định dạng không hỗ trợ",
-      "Một số file không đúng định dạng hình ảnh (JPG, PNG, WEBP...) đã bị bỏ qua!",
+      "Một số file không đúng định dạng hình ảnh đã bị bỏ qua!",
       "warning",
     );
   }
@@ -746,7 +763,7 @@ const setPrimaryImage = (index: number) => {
 
 const removeImage = (index: number) => {
   const image = imageList.value[index];
-  if (image?.id) deletedImageIds.value.push(image.id);
+  if (image?.id && !props.isClone) deletedImageIds.value.push(image.id);
   imageList.value.splice(index, 1);
 
   if (imageList.value.length > 0 && !imageList.value.some((x) => x.isPrimary)) {
@@ -754,18 +771,9 @@ const removeImage = (index: number) => {
   }
 };
 
-// HÀM VALIDATE ĐẦY ĐỦ VÀ CHẶT CHẼ
 const validateForm = () => {
   if (!formData.value.name.trim()) {
     Swal.fire("Thiếu dữ liệu", "Vui lòng nhập Tên sản phẩm.", "warning");
-    return false;
-  }
-  if (formData.value.name.length > 255) {
-    Swal.fire(
-      "Lỗi dữ liệu",
-      "Tên sản phẩm không được vượt quá 255 ký tự.",
-      "warning",
-    );
     return false;
   }
   if (formData.value.brandId === 0) {
@@ -780,107 +788,34 @@ const validateForm = () => {
     Swal.fire("Thiếu dữ liệu", "Vui lòng chọn Nồng độ.", "warning");
     return false;
   }
-
   if (formData.value.fragranceFamilyIds.length === 0) {
-    Swal.fire(
-      "Thiếu dữ liệu",
-      "Vui lòng chọn ít nhất 1 Nhóm hương.",
-      "warning",
-    );
+    Swal.fire("Thiếu dữ liệu", "Vui lòng chọn ít nhất 1 Nhóm hương.", "warning");
     return false;
   }
-
   if (formData.value.variants.length === 0) {
-    Swal.fire(
-      "Thiếu dữ liệu",
-      "Phải có ít nhất 1 biến thể sản phẩm.",
-      "warning",
-    );
+    Swal.fire("Thiếu dữ liệu", "Phải có ít nhất 1 biến thể sản phẩm.", "warning");
     return false;
   }
 
   const capacityIdSet = new Set<number>();
   for (let i = 0; i < formData.value.variants.length; i++) {
     const variant = formData.value.variants[i];
-
-    if (variant.capacityId === 0) {
-      Swal.fire(
-        "Thiếu dữ liệu",
-        `Biến thể dòng ${i + 1}: Vui lòng chọn Dung tích.`,
-        "warning",
-      );
+    if (variant.capacityId === 0 || variant.bottleTypeId === 0) {
+      Swal.fire("Thiếu dữ liệu", `Biến thể dòng ${i + 1}: Vui lòng chọn Dung tích và Loại chai.`, "warning");
       return false;
     }
-    if (variant.bottleTypeId === 0) {
-      Swal.fire(
-        "Thiếu dữ liệu",
-        `Biến thể dòng ${i + 1}: Vui lòng chọn Loại chai.`,
-        "warning",
-      );
-      return false;
-    }
-
     const capacityId = Number(variant.capacityId || 0);
     if (capacityIdSet.has(capacityId)) {
-      Swal.fire(
-        "Trùng dung tích",
-        `Biến thể dòng ${i + 1}: Dung tích này đã tồn tại trong sản phẩm. Vui lòng chọn dung tích khác.`,
-        "warning",
-      );
+      Swal.fire("Trùng dung tích", `Biến thể dòng ${i + 1}: Dung tích này đã tồn tại trong sản phẩm.`, "warning");
       return false;
     }
     capacityIdSet.add(capacityId);
 
     if (variant.price <= 0 || isNaN(variant.price)) {
-      Swal.fire(
-        "Lỗi dữ liệu",
-        `Biến thể dòng ${i + 1}: Giá bán phải lớn hơn 0.`,
-        "warning",
-      );
-      return false;
-    }
-    if (
-      variant.stockQuantity < 0 ||
-      String(variant.stockQuantity) === "" ||
-      isNaN(variant.stockQuantity)
-    ) {
-      Swal.fire(
-        "Lỗi dữ liệu",
-        `Biến thể dòng ${i + 1}: Tồn kho không được để trống và không được nhỏ hơn 0.`,
-        "warning",
-      );
-      return false;
-    }
-    if (!variant.manufacturingDate || !variant.expirationDate) {
-      Swal.fire(
-        "Thiếu dữ liệu",
-        `Biến thể dòng ${i + 1}: Vui lòng nhập đầy đủ NSX và HSD.`,
-        "warning",
-      );
-      return false;
-    }
-
-    const nsx = new Date(variant.manufacturingDate);
-    const hsd = new Date(variant.expirationDate);
-    if (nsx >= hsd) {
-      Swal.fire(
-        "Lỗi ngày tháng",
-        `Biến thể dòng ${i + 1}: Ngày sản xuất bắt buộc phải diễn ra TRƯỚC Hạn sử dụng.`,
-        "warning",
-      );
+      Swal.fire("Lỗi dữ liệu", `Biến thể dòng ${i + 1}: Giá bán phải lớn hơn 0.`, "warning");
       return false;
     }
   }
-
-  if (imageList.value.length === 0) {
-    Swal.fire(
-      "Thiếu ảnh",
-      "Vui lòng upload ít nhất 1 ảnh cho sản phẩm.",
-      "warning",
-    );
-    return false;
-  }
-
   return true;
 };
 
@@ -890,9 +825,7 @@ const saveData = async () => {
   try {
     const payload = {
       name: formData.value.name.trim(),
-      description: formData.value.description
-        ? formData.value.description.trim()
-        : "",
+      description: formData.value.description ? formData.value.description.trim() : "",
       brandId: Number(formData.value.brandId),
       categoryId: Number(formData.value.categoryId),
       concentrationId: Number(formData.value.concentrationId),
@@ -900,44 +833,38 @@ const saveData = async () => {
       isNiche: Boolean(formData.value.isNiche),
       status: Number(formData.value.status ?? 1),
       variants: (formData.value.variants || []).map((v: any) => ({
-        id: v.id ? Number(v.id) : undefined,
+        id: props.isClone ? undefined : (v.id ? Number(v.id) : undefined),
         capacityId: Number(v.capacityId),
         bottleTypeId: Number(v.bottleTypeId),
         price: Number(v.price),
         stockQuantity: Number(v.stockQuantity),
-        manufacturingDate: v.manufacturingDate
-          ? String(v.manufacturingDate).substring(0, 10)
-          : "",
-        expirationDate: v.expirationDate
-          ? String(v.expirationDate).substring(0, 10)
-          : "",
+        manufacturingDate: v.manufacturingDate ? String(v.manufacturingDate).substring(0, 10) : "",
+        expirationDate: v.expirationDate ? String(v.expirationDate).substring(0, 10) : "",
         status: Number(v.status ?? 1),
         sku: v.sku ? String(v.sku).trim() : undefined,
       })),
-      fragranceFamilyIds: [
-        ...new Set((formData.value.fragranceFamilyIds || []).map(Number)),
-      ],
+      fragranceFamilyIds: [...new Set((formData.value.fragranceFamilyIds || []).map(Number))],
     } as any;
 
-    if (isEdit.value && props.productSelected) {
-      // 1. NẾU LÀ SỬA SẢN PHẨM -> HIỂN THỊ POPUP XÁC NHẬN
+    appStore.startLoading();
+
+    if (isEdit.value && props.productSelected && !props.isClone) {
       const confirmResult = await Swal.fire({
         title: "Xác nhận cập nhật?",
-        text: "Bạn có chắc chắn muốn lưu các thay đổi cho sản phẩm này không?",
+        text: "Bạn có chắc chắn muốn lưu các thay đổi không?",
         icon: "question",
         showCancelButton: true,
         confirmButtonColor: "#2563eb",
         cancelButtonColor: "#ef4444",
         confirmButtonText: "Đồng ý",
-        cancelButtonText: "Hủy bỏ",
+        cancelButtonText: "Hủy",
       });
 
-      // Nếu người dùng bấm Hủy -> Dừng lại, không chạy code bên dưới
-      if (!confirmResult.isConfirmed) return;
+      if (!confirmResult.isConfirmed) {
+        appStore.stopLoading();
+        return;
+      }
 
-      // Người dùng đã Đồng ý -> Bắt đầu loading và gọi API
-      appStore.startLoading();
-      
       await productService.updateProduct(props.productSelected.id, payload);
 
       for (const imageId of deletedImageIds.value) {
@@ -951,78 +878,37 @@ const saveData = async () => {
 
       const primaryImage = imageList.value.find((img) => img.isPrimary);
       if (primaryImage?.id) {
-        await productService.setPrimaryImage(
-          props.productSelected.id,
-          primaryImage.id,
-        );
-      } else if (primaryImage?.file) {
-        const updatedImages = await productService.getImagesByProduct(
-          props.productSelected.id,
-        );
-        if (updatedImages && updatedImages.length > 0) {
-          await productService.setPrimaryImage(
-            props.productSelected.id,
-            updatedImages[updatedImages.length - 1].id,
-          );
-        }
+        await productService.setPrimaryImage(props.productSelected.id, primaryImage.id);
       }
 
       emit("refresh");
       emit("close");
-
-      Swal.fire({
-        toast: true,
-        position: "top-end",
-        icon: "success",
-        title: "Cập nhật sản phẩm thành công",
-        showConfirmButton: false,
-        timer: 2000,
-        timerProgressBar: true,
-      });
+      Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Cập nhật sản phẩm thành công", showConfirmButton: false, timer: 2000 });
     } else {
-      // 2. NẾU LÀ THÊM MỚI SẢN PHẨM -> CHẠY LUÔN KHÔNG CẦN CONFIRM
-      appStore.startLoading();
+      // Thêm mới hoặc Nhân bản sản phẩm
       const created = await productService.createProduct(payload);
 
       for (const image of imageList.value) {
-        if (!image.file) continue;
-        await productService.uploadImage(created.id, image.file);
+        if (image.file) {
+          await productService.uploadImage(created.id, image.file);
+        }
       }
 
-      const uploadedImages = await productService.getImagesByProduct(
-        created.id,
-      );
+      const uploadedImages = await productService.getImagesByProduct(created.id);
       const primaryIndex = imageList.value.findIndex((img) => img.isPrimary);
 
       if (primaryIndex >= 0 && uploadedImages?.[primaryIndex]?.id) {
-        await productService.setPrimaryImage(
-          created.id,
-          uploadedImages[primaryIndex].id,
-        );
+        await productService.setPrimaryImage(created.id, uploadedImages[primaryIndex].id);
       }
 
       emit("refresh");
       emit("close");
-
-      Swal.fire({
-        toast: true,
-        position: "top-end",
-        icon: "success",
-        title: "Thêm sản phẩm thành công",
-        showConfirmButton: false,
-        timer: 2000,
-        timerProgressBar: true,
-      });
+      Swal.fire({ toast: true, position: "top-end", icon: "success", title: props.isClone ? "Nhân bản sản phẩm thành công" : "Thêm sản phẩm thành công", showConfirmButton: false, timer: 2000 });
     }
   } catch (e: any) {
     console.error(e);
-    Swal.fire({
-      icon: "error",
-      title: "Lỗi",
-      text: e?.response?.data?.message ?? "Không thể lưu sản phẩm",
-    });
+    Swal.fire({ icon: "error", title: "Lỗi", text: e?.response?.data?.message ?? "Không thể lưu sản phẩm" });
   } finally {
-    // Đảm bảo phải tắt loading dù API chạy thành công hay thất bại
     appStore.stopLoading();
   }
 };
