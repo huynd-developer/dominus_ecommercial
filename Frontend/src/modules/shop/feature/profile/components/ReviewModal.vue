@@ -403,7 +403,7 @@ const getVariantText = (reviewItem: any) => {
 };
 
 const isValid = computed(() => {
-  return rating.value > 0 && comment.value.length <= 1000;
+  return rating.value > 0 && comment.value.length <= 500;
 });
 
 const closeModal = () => {
