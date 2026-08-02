@@ -14,6 +14,91 @@ import type {
   UpdateReviewRequest,
 } from "../types/profile.type";
 
+type ProfileAddressItem = {
+  fullAddress?: string;
+  address?: string;
+  shippingAddress?: string;
+  isDefault?: boolean;
+  default?: boolean;
+  selected?: boolean;
+};
+
+const collapseSpaces = (value: string) => {
+  return String(value || "").trim().replace(/\s{2,}/g, " ");
+};
+
+/**
+ * BE hiện tại chỉ nhận 1 address dạng text 5-200 ký tự.
+ * Không được gửi JSON array vào address vì sẽ lỗi validate.
+ */
+const pickAddressFromList = (addresses: unknown): string => {
+  if (!Array.isArray(addresses) || addresses.length === 0) {
+    return "";
+  }
+
+  const selectedAddress =
+    addresses.find((item: ProfileAddressItem) => {
+      return Boolean(item?.isDefault || item?.default || item?.selected);
+    }) || addresses[0];
+
+  return collapseSpaces(
+    String(
+      selectedAddress?.fullAddress ||
+        selectedAddress?.address ||
+        selectedAddress?.shippingAddress ||
+        ""
+    )
+  );
+};
+
+const normalizeAddressForProfileApi = (address: unknown): string => {
+  if (Array.isArray(address)) {
+    return pickAddressFromList(address);
+  }
+
+  const rawAddress = collapseSpaces(String(address || ""));
+
+  if (!rawAddress) {
+    return "";
+  }
+
+  if (rawAddress.startsWith("[")) {
+    try {
+      const parsedAddress = JSON.parse(rawAddress);
+      return pickAddressFromList(parsedAddress);
+    } catch {
+      return rawAddress;
+    }
+  }
+
+  if (rawAddress.startsWith("{")) {
+    try {
+      const parsedAddress = JSON.parse(rawAddress);
+      return collapseSpaces(
+        String(
+          parsedAddress?.fullAddress ||
+            parsedAddress?.address ||
+            parsedAddress?.shippingAddress ||
+            ""
+        )
+      );
+    } catch {
+      return rawAddress;
+    }
+  }
+
+  return rawAddress;
+};
+
+const normalizeUpdateProfilePayload = (
+  data: UpdateCustomerProfileRequest
+): UpdateCustomerProfileRequest => {
+  return {
+    ...data,
+    address: normalizeAddressForProfileApi((data as any).address),
+  };
+};
+
 const appendReviewFormData = (
   formData: FormData,
   data: CreateReviewRequest | UpdateReviewRequest
@@ -55,7 +140,9 @@ export const customerProfileService = {
   },
 
   updateProfile(data: UpdateCustomerProfileRequest) {
-    return api.put<CustomerProfileResponse>("/customer/profile", data);
+    const payload = normalizeUpdateProfilePayload(data);
+
+    return api.put<CustomerProfileResponse>("/customer/profile", payload);
   },
 
   uploadAvatar(file: File) {
@@ -180,17 +267,15 @@ export const customerProfileService = {
   },
 
   createReview(data: CreateReviewRequest | FormData) {
-    const payload = data instanceof FormData
-      ? data
-      : buildCreateReviewFormData(data);
+    const payload =
+      data instanceof FormData ? data : buildCreateReviewFormData(data);
 
     return api.post<ReviewResponse>("/customer/reviews", payload);
   },
 
   updateReview(reviewId: number, data: UpdateReviewRequest | FormData) {
-    const payload = data instanceof FormData
-      ? data
-      : buildUpdateReviewFormData(data);
+    const payload =
+      data instanceof FormData ? data : buildUpdateReviewFormData(data);
 
     return api.patch<ReviewResponse>(`/customer/reviews/${reviewId}`, payload);
   },

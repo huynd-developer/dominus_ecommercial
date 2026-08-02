@@ -115,10 +115,10 @@
                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
                 <circle cx="12" cy="10" r="3" />
               </svg>
-              <textarea v-model="specificAddress" @input="validateSpecificAddress" maxlength="255"
+              <textarea v-model="specificAddress" @input="validateSpecificAddress" :maxlength="MAX_SHIPPING_ADDRESS_LENGTH"
                 placeholder="Ví dụ: Số 12/5, ngõ 36-A, đường Trần Phú" autocomplete="street-address"></textarea>
             </div>
-            <small class="field-hint">Nhập số nhà, ngõ, đường, tòa nhà. Không cần nhập lại phường/xã và tỉnh/thành.</small>
+            <small class="field-hint">Nhập số nhà, ngõ, đường, tòa nhà. Tổng địa chỉ gửi hệ thống tối đa 200 ký tự.</small>
           </div>
 
           <div class="d-flex justify-content-end gap-2 mt-2">
@@ -239,6 +239,9 @@ const parsedProfileAddresses = ref<any[]>([]);
 const selectedProfileAddressIndex = ref<string>("");
 const isAddingNewAddress = ref(false);
 
+const MIN_SHIPPING_ADDRESS_LENGTH = 5;
+const MAX_SHIPPING_ADDRESS_LENGTH = 200;
+
 const selectedProvince = computed(() => provinces.value.find((item) => String(item.code) === String(selectedProvinceCode.value)));
 const selectedWard = computed(() => wards.value.find((item) => String(item.code) === String(selectedWardCode.value)));
 
@@ -269,22 +272,52 @@ const collapseSpaces = (value: string) => String(value || "").replace(/\s{2,}/g,
 const cleanText = (value: string) => collapseSpaces(String(value || "").replace(/^\s+/, ""));
 const cleanAddressText = (value: string) => cleanText(value).replace(/[^\p{L}\d\s,./#()\-]/gu, "");
 
+const buildFullAddress = (addressDetail: string, wardName: string, provinceName: string) => {
+  return [addressDetail, wardName, provinceName]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .join(", ");
+};
+
+const getMaxSpecificAddressLength = (wardName: string, provinceName: string) => {
+  const locationAddress = buildFullAddress("", wardName, provinceName);
+  const separatorLength = locationAddress ? 2 : 0;
+
+  return Math.max(MAX_SHIPPING_ADDRESS_LENGTH - locationAddress.length - separatorLength, 0);
+};
+
+const isShippingAddressValid = (address: string) => {
+  const length = String(address || "").trim().length;
+
+  return length >= MIN_SHIPPING_ADDRESS_LENGTH && length <= MAX_SHIPPING_ADDRESS_LENGTH;
+};
+
+const validateShippingAddressLength = (address: string) => {
+  if (!isShippingAddressValid(address)) {
+    addressLoadError.value = `Địa chỉ nhận hàng phải từ ${MIN_SHIPPING_ADDRESS_LENGTH} đến ${MAX_SHIPPING_ADDRESS_LENGTH} ký tự.`;
+    return false;
+  }
+
+  return true;
+};
+
 const syncFullAddress = () => {
   const provinceName = selectedProvince.value?.name || "";
   const wardName = selectedWard.value?.name || "";
-  const addressDetail = specificAddress.value || "";
+  const maxSpecificAddressLength = getMaxSpecificAddressLength(wardName, provinceName);
+  const addressDetail = cleanAddressText(specificAddress.value).slice(0, maxSpecificAddressLength);
+
+  specificAddress.value = addressDetail;
 
   props.form.provinceName = provinceName;
   props.form.wardName = wardName;
   props.form.specificAddress = addressDetail;
-
-  const parts = [addressDetail, wardName, provinceName].map((item) => String(item || "").trim()).filter(Boolean);
-  props.form.shippingAddress = parts.join(", ");
+  props.form.shippingAddress = buildFullAddress(addressDetail, wardName, provinceName);
 };
 
 const validateName = () => { props.form.customerName = cleanText(String(props.form.customerName || "").replace(/[^\p{L}\s]/gu, "")).slice(0, 100); };
 const validatePhone = () => { props.form.customerPhone = String(props.form.customerPhone || "").replace(/[^\d]/g, "").slice(0, 10); };
-const validateSpecificAddress = () => { specificAddress.value = cleanAddressText(specificAddress.value).slice(0, 255); syncFullAddress(); };
+const validateSpecificAddress = () => { syncFullAddress(); };
 const validateNote = () => { props.form.note = cleanText(props.form.note).slice(0, 255); };
 
 // XỬ LÝ CHỌN ĐỊA CHỈ TỪ DANH SÁCH
@@ -293,9 +326,15 @@ const applySelectedProfileAddress = () => {
 
   const addr = parsedProfileAddresses.value[Number(selectedProfileAddressIndex.value)];
   if (addr) {
+    const fullAddress = String(addr.fullAddress || "").trim();
+
+    if (!validateShippingAddressLength(fullAddress)) return;
+
+    addressLoadError.value = "";
+
     if (addr.name) props.form.customerName = addr.name;
     if (addr.phone) props.form.customerPhone = addr.phone;
-    props.form.shippingAddress = addr.fullAddress || "";
+    props.form.shippingAddress = fullAddress;
     
     // Xóa form nhập tay & xóa state Validation để form check coi đây là địa chỉ "đã lưu"
     selectedProvinceCode.value = "";
@@ -334,8 +373,12 @@ const saveNewAddress = () => {
     addressLoadError.value = "Vui lòng chọn đầy đủ Tỉnh/Thành, Phường/Xã và Địa chỉ cụ thể.";
     return;
   }
-  addressLoadError.value = "";
+
   syncFullAddress(); 
+
+  if (!validateShippingAddressLength(props.form.shippingAddress)) return;
+
+  addressLoadError.value = "";
   
   const newAddr = {
     name: props.form.customerName,

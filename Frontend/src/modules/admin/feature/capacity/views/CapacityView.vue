@@ -7,33 +7,33 @@
           Quản lý dung tích
         </h3>
       </div>
-      
+
       <button @click="openAddModal" class="btn btn-primary px-4">
         <i class="bi bi-plus-circle me-2"></i>
         Thêm dung tích
       </button>
     </div>
-    
+
     <div class="toolbar">
       <div class="search-box">
         <i class="bi bi-search"></i>
-        <input 
-          v-model="searchKeyword" 
+        <input
+          v-model="searchKeyword"
           @keyup.enter="handleSearch"
-          type="number" 
+          type="number"
           step="0.1"
           placeholder="Tìm theo dung tích (VD: 50)..."
         >
       </div>
     </div>
-      
+
     <div v-if="capacityStore.isLoading" class="loading-state">
       Đang tải dữ liệu...
     </div>
 
     <div v-else class="table-wrapper">
-      <CapacityTable 
-        :capacities="capacityStore.capacities" 
+      <CapacityTable
+        :capacities="capacityStore.capacities"
         @edit="openEditModal"
         @delete="handleDelete"
         @toggle-status="handleToggleStatus"
@@ -45,16 +45,16 @@
         Đang hiển thị trang <b>{{ capacityStore.currentPage + 1 }}</b> / <b>{{ capacityStore.totalPages }}</b>
       </div>
       <div class="pagination">
-        <button 
-          class="btn btn-light" 
-          :disabled="capacityStore.currentPage === 0" 
+        <button
+          class="btn btn-light"
+          :disabled="capacityStore.currentPage === 0"
           @click="changePage(capacityStore.currentPage - 1)"
         >
           ←
         </button>
-        
-        <button 
-          v-for="p in capacityStore.totalPages" 
+
+        <button
+          v-for="p in capacityStore.totalPages"
           :key="p"
           class="btn"
           :class="capacityStore.currentPage === (p - 1) ? 'btn-primary' : 'btn-light'"
@@ -62,10 +62,10 @@
         >
           {{ p }}
         </button>
-        
-        <button 
-          class="btn btn-light" 
-          :disabled="capacityStore.currentPage === capacityStore.totalPages - 1" 
+
+        <button
+          class="btn btn-light"
+          :disabled="capacityStore.currentPage === capacityStore.totalPages - 1"
           @click="changePage(capacityStore.currentPage + 1)"
         >
           →
@@ -85,12 +85,13 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label">Giá trị (ml) <span class="text-danger">*</span></label>
-            <input 
-              v-model="formData.value" 
-              type="number" 
-              step="0.1" 
-              min="0.1" 
-              class="form-control" 
+            <input
+              v-model="formData.value"
+              type="number"
+              step="0.1"
+              min="0.01"
+              max="5000"
+              class="form-control"
               :class="{ 'is-invalid': errors.value }"
               placeholder="VD: 50, 100..."
               @input="validateForm"
@@ -111,7 +112,6 @@
         </div>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -120,7 +120,7 @@ import { ref, onMounted } from 'vue';
 import CapacityTable from '../components/CapacityTable.vue';
 import { useCapacityStore } from '../stores/capacity.store';
 import type { Capacity, CapacityRequest } from '../types/capacity.type';
-import Swal from 'sweetalert2'; 
+import Swal from 'sweetalert2';
 
 const capacityStore = useCapacityStore();
 const searchKeyword = ref('');
@@ -159,26 +159,79 @@ const changePage = (pageIndex: number) => {
   }
 };
 
-const validateForm = () => {
-  errors.value.value = ''; 
-  const val = formData.value.value;
+const normalizeCapacityValue = (value: unknown): number | null => {
+  if (value === null || value === undefined || String(value).trim() === '') {
+    return null;
+  }
 
-  if (val === null || val === undefined || String(val).trim() === '') {
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue)) {
+    return null;
+  }
+
+  return Number(numberValue.toFixed(2));
+};
+
+const formatCapacity = (value: unknown): string => {
+  const numberValue = normalizeCapacityValue(value);
+
+  if (numberValue === null) {
+    return '';
+  }
+
+  return Number.isInteger(numberValue)
+    ? String(numberValue)
+    : String(numberValue);
+};
+
+const isDuplicateCapacity = (value: unknown, currentId: number | null = null): boolean => {
+  const numberValue = normalizeCapacityValue(value);
+
+  if (numberValue === null) {
+    return false;
+  }
+
+  return capacityStore.capacities.some((capacity: Capacity) => {
+    const capacityValue = normalizeCapacityValue(capacity.value);
+
+    if (capacityValue === null) {
+      return false;
+    }
+
+    return capacityValue === numberValue && capacity.id !== currentId;
+  });
+};
+
+const validateForm = () => {
+  errors.value.value = '';
+
+  const numberValue = normalizeCapacityValue(formData.value.value);
+
+  if (numberValue === null) {
     errors.value.value = 'Vui lòng nhập dung tích';
     return false;
   }
-  if (Number(val) <= 0) {
+
+  if (numberValue <= 0) {
     errors.value.value = 'Dung tích phải lớn hơn 0';
     return false;
   }
+
+  if (numberValue > 5000) {
+    errors.value.value = 'Dung tích không hợp lệ, không được vượt quá 5000 ml';
+    return false;
+  }
+
+  formData.value.value = numberValue as any;
   return true;
 };
 
 const openAddModal = () => {
   isEdit.value = false;
   editId.value = null;
-  formData.value = { value: '' as any, status: 1 }; 
-  errors.value.value = ''; 
+  formData.value = { value: '' as any, status: 1 };
+  errors.value.value = '';
   showModal.value = true;
 };
 
@@ -186,7 +239,7 @@ const openEditModal = (capacity: Capacity) => {
   isEdit.value = true;
   editId.value = capacity.id;
   formData.value = { value: capacity.value, status: capacity.status };
-  errors.value.value = ''; 
+  errors.value.value = '';
   showModal.value = true;
 };
 
@@ -197,7 +250,23 @@ const closeModal = () => {
 const handleSubmit = async () => {
   if (!validateForm()) return;
 
+  const normalizedValue = normalizeCapacityValue(formData.value.value);
+
+  if (normalizedValue === null) {
+    errors.value.value = 'Vui lòng nhập dung tích';
+    return;
+  }
+
+  const currentId = isEdit.value ? editId.value : null;
+
+  if (isDuplicateCapacity(normalizedValue, currentId)) {
+    errors.value.value = `Dung tích '${formatCapacity(normalizedValue)} ml' đã tồn tại và đang hoạt động!`;
+    return;
+  }
+
+  formData.value.value = normalizedValue as any;
   isSaving.value = true;
+
   try {
     if (isEdit.value && editId.value) {
       await capacityStore.updateCapacity(editId.value, formData.value);
@@ -206,25 +275,32 @@ const handleSubmit = async () => {
       await capacityStore.createCapacity(formData.value);
       Toast.fire({ icon: 'success', title: 'Thêm dung tích thành công!' });
     }
+
     closeModal();
   } catch (error: any) {
-    console.error("Chi tiết lỗi Axios:", error);
+    console.error('Chi tiết lỗi Axios:', error);
+
     if (error.response && error.response.data) {
       const responseData = error.response.data;
+
       if (responseData.errors && responseData.errors.value) {
         errors.value.value = responseData.errors.value;
-        return; 
+        return;
       }
+
       if (responseData.message) {
         const lowerMsg = responseData.message.toLowerCase();
+
         if (lowerMsg.includes('tồn tại') || lowerMsg.includes('exists') || lowerMsg.includes('duplicate')) {
-          errors.value.value = 'Dung tích này đã tồn tại trong hệ thống!';
+          errors.value.value = responseData.message;
         } else {
           Toast.fire({ icon: 'error', title: responseData.message });
         }
+
         return;
       }
     }
+
     Toast.fire({ icon: 'error', title: 'Máy chủ không phản hồi!' });
   } finally {
     isSaving.value = false;
@@ -234,7 +310,7 @@ const handleSubmit = async () => {
 const handleDelete = (id: number) => {
   Swal.fire({
     title: 'Bạn có chắc chắn muốn xóa?',
-    text: "Hành động này sẽ đưa dung tích này vào thùng rác!",
+    text: 'Hành động này sẽ đưa dung tích này vào thùng rác!',
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#dc2626',
@@ -255,7 +331,7 @@ const handleDelete = (id: number) => {
 
 const handleToggleStatus = async (capacity: Capacity) => {
   const newStatus = capacity.status === 1 ? 0 : 1;
-  
+
   try {
     await capacityStore.updateCapacity(capacity.id, {
       value: capacity.value,
