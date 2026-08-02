@@ -178,7 +178,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, onUnmounted, watch } from "vue";
+import { computed, onMounted, onActivated, ref, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import api from "@/common/api";
@@ -423,7 +423,9 @@ const handleCancelVoucher = () => {
 
 const loadCustomerProfile = async () => {
   try {
-    const res = await api.get("/customer/profile");
+    // Thêm tham số chống cache vào đây nhé m
+    const res = await api.get(`/customer/profile?t=${Date.now()}`);
+    
     const profile = extractObjectData(res.data);
     const name = collapseSpacesForProfile(
       profile.name || profile.fullName || profile.customerName || "",
@@ -734,8 +736,8 @@ const handlePlaceOrder = async () => {
         vnpayUrl.value = url;
       }
 
-      cartItems.value = [];
-      window.dispatchEvent(new Event("cart-updated"));
+      // cartItems.value = [];
+      // window.dispatchEvent(new Event("cart-updated"));
 
       showPaymentModal.value = true;
       startPaymentTimer();
@@ -948,35 +950,14 @@ const checkAndRestoreVnpayBackup = async () => {
   }
 };
 
-onMounted(async () => {
-  try {
-    isPageLoading.value = true;
-    
-    // Phục hồi draft form ngay khi mở trang
-    const draft = sessionStorage.getItem("dominus_checkout_draft");
-    if (draft) {
-      try {
-        Object.assign(orderForm.value, JSON.parse(draft));
-      } catch (e) {}
-    }
-
-    await checkAndRestoreVnpayBackup();
-    if (await loadCustomerProfile()) {
-      await loadCartSummary();
-      await loadSavedVoucher();
-      formKey.value++; // Ép render lại form với dữ liệu mới
-    }
-  } finally {
-    isPageLoading.value = false;
-  }
-});
-
+// Bắt sự kiện back trang của trình duyệt để phục hồi VNPAY
 window.addEventListener("pageshow", async (event) => {
   if (event.persisted || sessionStorage.getItem("pending_vnpay_order")) {
     await checkAndRestoreVnpayBackup();
   }
 });
 
+// Chỉ dùng 1 hàm onMounted duy nhất để tránh xung đột
 onMounted(async () => {
   try {
     isPageLoading.value = true;

@@ -213,6 +213,9 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter, onBeforeRouteLeave } from "vue-router"; 
 
+import Swal from "sweetalert2";
+import api from "@/common/api";
+
 interface Ward { code: number | string; name: string; }
 interface Province { code: number | string; name: string; wards?: Ward[] | null; }
 
@@ -328,8 +331,8 @@ const cancelAddNewAddress = () => {
   }
 };
 
-// LƯU ĐỊA CHỈ VÀO DANH SÁCH CHỌN
-const saveNewAddress = () => {
+// LƯU ĐỊA CHỈ VÀ ĐỒNG BỘ NGAY LÊN PROFILE
+const saveNewAddress = async () => {
   if (!selectedProvinceCode.value || !selectedWardCode.value || !specificAddress.value) {
     addressLoadError.value = "Vui lòng chọn đầy đủ Tỉnh/Thành, Phường/Xã và Địa chỉ cụ thể.";
     return;
@@ -337,22 +340,56 @@ const saveNewAddress = () => {
   addressLoadError.value = "";
   syncFullAddress(); 
   
+  // Thêm cả mã tỉnh/huyện để qua Profile ấn "Sửa" nó tự bắt đúng dropdown
   const newAddr = {
+    provinceCode: selectedProvinceCode.value,
+    wardCode: selectedWardCode.value,
+    specificAddress: specificAddress.value,
+    fullAddress: props.form.shippingAddress,
     name: props.form.customerName,
     phone: props.form.customerPhone,
-    fullAddress: props.form.shippingAddress,
     isNew: true
   };
   
-  // Đẩy địa chỉ vừa nhập vào list để chọn luôn
-  parsedProfileAddresses.value.push(newAddr);
-  selectedProfileAddressIndex.value = String(parsedProfileAddresses.value.length - 1);
-  isAddingNewAddress.value = false;
-  
-  // Xóa các biến nhập tay để trick cho CheckoutView hiểu đây là địa chỉ được chọn từ danh sách 
-  props.form.provinceName = "";
-  props.form.wardName = "";
-  props.form.specificAddress = "";
+  try {
+    // 1. LẤY PROFILE CŨ TỪ DATABASE ĐỂ KHÔNG BỊ MẤT NGÀY SINH, GIỚI TÍNH...
+    const profileRes = await api.get("/customer/profile");
+    const currentProfile = profileRes.data?.data || profileRes.data?.result || profileRes.data || {};
+
+    const currentAddresses = [...parsedProfileAddresses.value];
+    currentAddresses.unshift(newAddr);
+    
+    // 2. GỘP ĐỊA CHỈ MỚI VÀO PROFILE CŨ
+    currentProfile.address = JSON.stringify(currentAddresses.slice(0, 10));
+    currentProfile.name = props.form.customerName;
+    currentProfile.phone = props.form.customerPhone;
+
+    // 3. ĐẨY TOÀN BỘ LÊN BACKEND
+    await api.put("/customer/profile", currentProfile);
+
+    // Cập nhật lại UI sau khi lưu DB thành công
+    parsedProfileAddresses.value = currentAddresses;
+    selectedProfileAddressIndex.value = "0";
+    isAddingNewAddress.value = false;
+    
+    props.form.profileAddress = currentProfile.address;
+    props.form.provinceName = "";
+    props.form.wardName = "";
+    props.form.specificAddress = "";
+
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: 'Đã đồng bộ địa chỉ vào Profile!',
+      showConfirmButton: false,
+      timer: 2000
+    });
+    
+  } catch (error) {
+    addressLoadError.value = "Lỗi đồng bộ địa chỉ. Vui lòng thử lại!";
+    console.error("Lỗi lưu địa chỉ:", error);
+  }
 };
 
 const loadProvinces = async () => {

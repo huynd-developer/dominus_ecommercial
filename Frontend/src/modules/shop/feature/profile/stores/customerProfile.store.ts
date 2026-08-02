@@ -285,9 +285,9 @@ export const useCustomerProfileStore = defineStore("customerProfile", {
         return "Địa chỉ không được chứa nhiều khoảng trắng liên tiếp";
       }
 
-      if (form.address.length < 5 || form.address.length > 500) {
-        return "Địa chỉ phải từ 5 đến 500 ký tự";
-      }
+      // if (form.address.length < 5 || form.address.length > 500) {
+      //   return "Địa chỉ phải từ 5 đến 500 ký tự";
+      // }
 
       if (
         form.gender !== null &&
