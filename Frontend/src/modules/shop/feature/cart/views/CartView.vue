@@ -9,14 +9,14 @@
         :isUpdating="isUpdating"
         @update-qty="updateQty"
         @remove-item="removeItem"
-        @update-variant="updateVariant" 
+        @update-variant="updateVariant"
       />
 
       <CartSummary
         v-if="cartItems.length > 0"
         :totalAmount="totalAmount"
         :discountAmount="discountAmount"
-        :shippingFee="shippingFee" 
+        :shippingFee="shippingFee"
         :finalTotal="finalTotal"
         :canCheckout="canCheckout"
         @checkout="goToCheckout"
@@ -52,6 +52,13 @@ interface CartItem {
   bottleType?: string | null;
   quantity?: number | null;
   price?: number | null;
+  originalPrice?: number | null;
+  salePrice?: number | null;
+  discountPercent?: number | null;
+  hasPromotion?: boolean | null;
+  promotionId?: number | null;
+  promotionName?: string | null;
+  promotionEndDate?: string | null;
   stockQuantity?: number | null;
   note?: string | null;
   image?: string | null;
@@ -281,7 +288,26 @@ const enrichCartItemsWithImages = async (items: CartItem[]) => {
   return await Promise.all(items.map((item) => enrichCartItemImage(item)));
 };
 
-const loadCart = async () => {
+const preserveCartOrder = (items: CartItem[]) => {
+  if (!cartItems.value.length) return items;
+
+  const orderMap = new Map<number, number>();
+  cartItems.value.forEach((item, index) => {
+    if (item?.cartItemId) orderMap.set(Number(item.cartItemId), index);
+  });
+
+  return [...items].sort((a, b) => {
+    const aOrder = orderMap.get(Number(a?.cartItemId || 0));
+    const bOrder = orderMap.get(Number(b?.cartItemId || 0));
+
+    if (aOrder == null && bOrder == null) return 0;
+    if (aOrder == null) return 1;
+    if (bOrder == null) return -1;
+    return aOrder - bOrder;
+  });
+};
+
+const loadCart = async (options: { preserveOrder?: boolean } = {}) => {
   try {
     isLoading.value = true;
     const res = await api.get("/v1/customer/cart/my-cart");
@@ -292,7 +318,10 @@ const loadCart = async () => {
     console.log("🛒 TỪNG ITEM TRONG GIỎ:", items);
     // ----------------------------------------
 
-    cartItems.value = await enrichCartItemsWithImages(items);
+    const enrichedItems = await enrichCartItemsWithImages(items);
+    cartItems.value = options.preserveOrder
+      ? preserveCartOrder(enrichedItems)
+      : enrichedItems;
     if (!canCheckout.value) resetVoucher();
   } catch (err: any) {
     await showError("Lỗi", "Không tải được giỏ hàng");
@@ -328,7 +357,9 @@ const updateQty = async (item: CartItem, newQty: number) => {
 };
 
 // ==========================================
-// T FIX LẠI LOGIC ĐỔI BIẾN THỂ (ADD MỚI -> DELETE CŨ)
+// ĐỔI BIẾN THỂ: UPDATE TRỰC TIẾP CART ITEM HIỆN TẠI
+// Không dùng add mới -> delete cũ vì cách đó tạo cartItemId mới,
+// backend trả lại giỏ theo id/thời gian sẽ làm sản phẩm nhảy vị trí.
 // ==========================================
 const updateVariant = async (item: CartItem, newVariantId: number) => {
   if (!item?.cartItemId || !newVariantId) return;
@@ -337,23 +368,27 @@ const updateVariant = async (item: CartItem, newVariantId: number) => {
   try {
     isUpdating.value = true;
 
-    // 1. GỌI API THÊM BIẾN THỂ MỚI VÀO GIỎ TRƯỚC
-    await api.post("/v1/customer/cart/add", {
+    await api.put("/v1/customer/cart/update", {
+      cartItemId: item.cartItemId,
       productVariantId: newVariantId,
-      quantity: item.quantity,
-      note: item.note || ""
+      quantity: Number(item.quantity || 1),
+      note: item.note || "",
     });
-
-    // 2. THÊM THÀNH CÔNG THÌ ĐÁ CÁI ITEM CŨ KHỎI GIỎ HÀNG
-    await api.delete(`/v1/customer/cart/remove/${item.cartItemId}`);
 
     resetVoucher();
     await showToast("success", "Đã đổi phân loại sản phẩm");
-    await loadCart(); 
+
+    // Reload lại để lấy đúng giá, tồn kho, NSX/HSD, ảnh... từ backend,
+    // nhưng giữ nguyên thứ tự các dòng đang hiển thị trên màn hình.
+    await loadCart({ preserveOrder: true });
   } catch (err: any) {
     console.error("Lỗi đổi biến thể:", err);
-    await showError("Lỗi", err?.response?.data?.message || "Không thể đổi loại sản phẩm. Vui lòng thử lại!");
-    await loadCart(); 
+    await showError(
+      "Lỗi",
+      err?.response?.data?.message ||
+        "Không thể đổi loại sản phẩm. Vui lòng thử lại!",
+    );
+    await loadCart({ preserveOrder: true });
   } finally {
     isUpdating.value = false;
   }
