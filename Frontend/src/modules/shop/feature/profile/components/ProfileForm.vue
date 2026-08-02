@@ -150,6 +150,8 @@
 import { computed, onBeforeUnmount, ref, onMounted } from "vue";
 import { useCustomerProfileStore } from "../stores/customerProfile.store";
 
+import Swal from "sweetalert2";
+
 interface Ward { code: number | string; name: string; }
 interface Province { code: number | string; name: string; wards?: Ward[] | null; }
 
@@ -277,9 +279,14 @@ const editAddress = async (index: number) => {
   showAddressModal.value = true;
 };
 
-const saveAddressNode = () => {
+const saveAddressNode = async () => {
   if (!selectedProvinceCode.value || !selectedWardCode.value || !specificAddress.value.trim()) {
-    alert("Vui lòng chọn đầy đủ Tỉnh/Thành phố, Phường/Xã và nhập Địa chỉ cụ thể!");
+    Swal.fire({
+      icon: 'warning',
+      title: 'Thiếu thông tin',
+      text: 'Vui lòng chọn đầy đủ Tỉnh/Thành phố, Phường/Xã và nhập Địa chỉ cụ thể!',
+      confirmButtonColor: '#212529'
+    });
     return;
   }
 
@@ -296,6 +303,7 @@ const saveAddressNode = () => {
     fullAddress: fullAddr
   };
 
+  // Cập nhật hoặc Thêm mới vào mảng
   if (editingIndex.value > -1) {
     addressList.value[editingIndex.value] = addrObj;
   } else {
@@ -303,11 +311,59 @@ const saveAddressNode = () => {
   }
   
   closeAddressModal();
+
+  // TỰ ĐỘNG LƯU: Cập nhật dữ liệu và gọi API
+  if (addressList.value.length > 0) {
+    store.profileForm.address = JSON.stringify(addressList.value);
+  } else {
+    store.profileForm.address = "";
+  }
+  await store.updateProfile();
+  
+  Swal.fire({
+    toast: true,
+    position: 'top-end',
+    icon: 'success',
+    title: editingIndex.value > -1 ? 'Cập nhật địa chỉ thành công' : 'Thêm địa chỉ thành công',
+    showConfirmButton: false,
+    timer: 1500
+  });
 };
 
-const removeAddress = (index: number) => {
-  if(confirm("Bạn có chắc chắn muốn xóa địa chỉ này?")) {
+const removeAddress = async (index: number) => {
+  const result = await Swal.fire({
+    title: "Xóa địa chỉ?",
+    text: "Bạn có chắc chắn muốn xóa địa chỉ này không?",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonColor: "#dc2626", // Màu đỏ cho nút xóa
+    cancelButtonColor: "#6b7280",
+    confirmButtonText: "Xác nhận xóa!",
+    cancelButtonText: "Hủy"
+  });
+
+  if (result.isConfirmed) {
+    // 1. Xóa khỏi mảng trên giao diện
     addressList.value.splice(index, 1);
+    
+    // 2. Cập nhật lại chuỗi JSON cho profileForm
+    if (addressList.value.length > 0) {
+      store.profileForm.address = JSON.stringify(addressList.value);
+    } else {
+      store.profileForm.address = "";
+    }
+    
+    // 3. Gọi API lưu thẳng lên Database
+    await store.updateProfile();
+
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: 'Đã xóa địa chỉ',
+      showConfirmButton: false,
+      timer: 1500
+    });
   }
 };
 

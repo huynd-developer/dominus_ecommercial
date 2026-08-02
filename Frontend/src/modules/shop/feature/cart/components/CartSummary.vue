@@ -217,14 +217,18 @@ const filteredVouchers = computed(() => {
   });
 
   return vouchers.sort((a, b) => {
-    const aUsable = getVoucherEligibility(a).usable ? 1 : 0;
-    const bUsable = getVoucherEligibility(b).usable ? 1 : 0;
+    const aUsable = getVoucherEligibility(a).usable;
+    const bUsable = getVoucherEligibility(b).usable;
     
-    // Ưu tiên cái dùng được lên trên cùng
-    if (aUsable !== bUsable) return bUsable - aUsable;
+    // 1. Ưu tiên mã đủ điều kiện lên trước
+    if (aUsable && !bUsable) return -1;
+    if (!aUsable && bUsable) return 1;
     
-    // Nếu cùng dùng được thì thằng nào giảm nhiều tiền hơn ưu tiên xếp trên
-    return getActualDiscountAmount(b) - getActualDiscountAmount(a);
+    // 2. Nếu cùng đủ điều kiện (hoặc cùng không), xếp theo số tiền giảm được
+    const aDiscount = getActualDiscountAmount(a);
+    const bDiscount = getActualDiscountAmount(b);
+    
+    return bDiscount - aDiscount;
   });
 });
 
@@ -491,12 +495,10 @@ onMounted(async () => {
 
   const savedVoucher = localStorage.getItem("applied_voucher");
 
-  // Nếu trước đó khách đã nhập tay 1 mã thì ưu tiên xài lại mã đó, ngược lại cho hệ thống tự auto-chọn
+  // Áp dụng lại đúng mã khách đã chọn nếu họ tải lại trang giỏ hàng
   if (savedVoucher && props.totalAmount > 0 && props.canCheckout) {
     voucherCode.value = savedVoucher;
     await handleApplyVoucher();
-  } else if (props.totalAmount > 0 && props.canCheckout) {
-    await autoApplyBestVoucher(); 
   }
 });
 </script>
