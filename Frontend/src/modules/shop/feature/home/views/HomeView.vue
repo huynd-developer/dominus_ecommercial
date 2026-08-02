@@ -193,8 +193,14 @@ interface ProductCardVariant {
   productVariantId?: number;
   variantId?: number;
   price?: number;
+  originalPrice?: number;
+  salePrice?: number;
+  promotionPrice?: number;
+  flashSalePrice?: number;
   stockQuantity?: number;
   status?: number;
+  capacity?: string | null;
+  bottleType?: string | null;
   imageUrl?: string;
   image?: string;
   images?: string[];
@@ -231,6 +237,7 @@ interface ProductCardItem {
 }
 
 const flashSaleProducts = ref<ProductCardItem[]>([]);
+const normalHomeProducts = ref<ProductCardItem[]>([]);
 const newestProducts = ref<ProductCardItem[]>([]);
 const featuredProducts = ref<ProductCardItem[]>([]);
 const specialProducts = ref<ProductCardItem[]>([]);
@@ -537,7 +544,11 @@ const mapNormalProduct = (p: any): ProductCardItem => {
             id: productVariantId,
             productVariantId,
             variantId: productVariantId,
-            price: salePrice,
+            price: basePrice,
+            originalPrice: basePrice,
+            salePrice,
+            promotionPrice: discountPercent > 0 ? salePrice : undefined,
+            flashSalePrice: undefined,
             stockQuantity,
             status: toNumber(firstVariant?.status, 1),
             imageUrl: productImage,
@@ -600,9 +611,15 @@ const mapFlashSaleProduct = (item: FlashSaleProductResponse): ProductCardItem =>
         id: productVariantId,
         productVariantId,
         variantId: productVariantId,
-        price: salePrice,
+        price: originalPrice,
+        originalPrice,
+        salePrice,
+        promotionPrice: salePrice,
+        flashSalePrice: salePrice,
         stockQuantity,
         status: 1,
+        capacity: item.capacity,
+        bottleType: item.bottleType,
         imageUrl: productImage,
         image: productImage,
         images: productImages,
@@ -614,6 +631,152 @@ const mapFlashSaleProduct = (item: FlashSaleProductResponse): ProductCardItem =>
       },
     ],
   };
+};
+
+const getProductMapId = (product: ProductCardItem) =>
+  toNumber(product.productId ?? product.id, 0);
+
+const cloneProductImages = (product: ProductCardItem) => {
+  const images = Array.isArray(product.images) ? product.images : [];
+
+  if (images.length > 0) {
+    return images;
+  }
+
+  return [product.imageUrl, product.image, product.mainImage].filter(
+    (value): value is string => Boolean(value)
+  );
+};
+
+const mergeFlashSaleIntoProduct = (
+  product: ProductCardItem,
+  flashSaleMap: Map<number, ProductCardItem>
+): ProductCardItem => {
+  const productId = getProductMapId(product);
+  const flashSale = flashSaleMap.get(productId);
+
+  if (!flashSale) {
+    return {
+      ...product,
+      isFlashSale: false,
+      variants: product.variants?.map((variant) => ({ ...variant })),
+    };
+  }
+
+  const salePrice = toNumber(flashSale.salePrice, product.salePrice);
+  const originalPrice = toNumber(
+    flashSale.originalPrice,
+    product.originalPrice || product.salePrice
+  );
+  const discountPercent = toNumber(
+    flashSale.discountPercent,
+    originalPrice > salePrice && originalPrice > 0
+      ? Math.round(((originalPrice - salePrice) / originalPrice) * 100)
+      : 0
+  );
+
+  const productImages = cloneProductImages(product);
+  const productImage =
+    product.imageUrl ||
+    product.image ||
+    product.mainImage ||
+    productImages[0] ||
+    flashSale.imageUrl ||
+    "";
+
+  const flashSaleVariants =
+    Array.isArray(flashSale.variants) && flashSale.variants.length > 0
+      ? flashSale.variants
+      : [];
+
+  const mergedVariants =
+    flashSaleVariants.length > 0
+      ? flashSaleVariants.map((variant) => {
+          const variantOriginalPrice = toNumber(
+            variant.originalPrice ?? variant.price,
+            originalPrice
+          );
+          const variantSalePrice = toNumber(
+            variant.salePrice ?? variant.promotionPrice ?? variant.flashSalePrice,
+            salePrice
+          );
+
+          return {
+            ...variant,
+            price: variantOriginalPrice,
+            originalPrice: variantOriginalPrice,
+            salePrice: variantSalePrice,
+            promotionPrice: variantSalePrice,
+            flashSalePrice: variantSalePrice,
+            imageUrl: variant.imageUrl || productImage,
+            image: variant.image || productImage,
+            images:
+              Array.isArray(variant.images) && variant.images.length > 0
+                ? variant.images
+                : productImages,
+          };
+        })
+      : product.variants?.map((variant) => ({
+          ...variant,
+          price: toNumber(variant.originalPrice ?? variant.price, originalPrice),
+          originalPrice: toNumber(
+            variant.originalPrice ?? variant.price,
+            originalPrice
+          ),
+          salePrice,
+          promotionPrice: salePrice,
+          flashSalePrice: salePrice,
+        }));
+
+  return {
+    ...product,
+    salePrice,
+    originalPrice,
+    discountPercent,
+    isFlashSale: true,
+    endDate: flashSale.endDate,
+    productVariantId: flashSale.productVariantId || product.productVariantId,
+    variantId: flashSale.variantId || product.variantId,
+    stockQuantity: flashSale.stockQuantity ?? product.stockQuantity,
+    imageUrl: productImage,
+    image: productImage,
+    mainImage: productImage,
+    images: productImages,
+    productImages:
+      product.productImages && product.productImages.length > 0
+        ? product.productImages
+        : productImages.map((imageUrl, index) => ({
+            id: index + 1,
+            imageUrl,
+            url: imageUrl,
+          })),
+    variants: mergedVariants,
+  };
+};
+
+const refreshHomeProductSections = () => {
+  const flashSaleMap = new Map<number, ProductCardItem>();
+
+  flashSaleProducts.value.forEach((product) => {
+    const productId = getProductMapId(product);
+
+    if (productId > 0) {
+      flashSaleMap.set(productId, product);
+    }
+  });
+
+  const formatted = normalHomeProducts.value.map((product) =>
+    mergeFlashSaleIntoProduct(product, flashSaleMap)
+  );
+
+  newestProducts.value = formatted.slice(0, 4);
+
+  const featured = formatted.slice(4, 8);
+  featuredProducts.value =
+    featured.length > 0 ? featured : formatted.slice(0, 4);
+
+  const special = formatted.slice(8, 10);
+  specialProducts.value = special.length > 0 ? special : formatted.slice(0, 2);
 };
 
 const fetchFlashSaleProducts = async () => {
@@ -717,9 +880,11 @@ const fetchFlashSaleProducts = async () => {
     });
 
     flashSaleProducts.value = groupedProducts;
+    refreshHomeProductSections();
   } catch (error) {
     console.error("Lỗi tải Flash Sale:", error);
     flashSaleProducts.value = [];
+    refreshHomeProductSections();
   } finally {
     flashSaleLoading.value = false;
   }
@@ -737,18 +902,12 @@ const fetchNormalProducts = async () => {
     });
 
     const rows = resolvePageContent<any>(res.data);
-    const formatted = rows.map(mapNormalProduct);
-
-    newestProducts.value = formatted.slice(0, 4);
-
-    const featured = formatted.slice(4, 8);
-    featuredProducts.value = featured.length > 0 ? featured : formatted.slice(0, 4);
-
-    const special = formatted.slice(8, 10);
-    specialProducts.value = special.length > 0 ? special : formatted.slice(0, 2);
+    normalHomeProducts.value = rows.map(mapNormalProduct);
+    refreshHomeProductSections();
   } catch (error) {
     console.error("Lỗi tải sản phẩm trang chủ:", error);
 
+    normalHomeProducts.value = [];
     newestProducts.value = [];
     featuredProducts.value = [];
     specialProducts.value = [];
