@@ -64,9 +64,7 @@
                   :value="v.id || v.productVariantId || v.variantId"
                   :disabled="v.status === 0 || v.stockQuantity === 0"
                 >
-                  {{ formatVariantLabel(v) }} ({{
-                    formatCurrency(v.price || v.salePrice || v.originalPrice)
-                  }})
+                  {{ formatVariantLabel(v) }}
                 </option>
               </select>
             </template>
@@ -81,13 +79,13 @@
           </div>
 
           <div class="date-grid">
-            <span
-              >NSX:
-              <strong>{{ formatDate(item.manufacturingDate) }}</strong></span
-            >
-            <span :class="{ 'text-danger': isExpired(item) }"
-              >HSD: <strong>{{ formatDate(item.expirationDate) }}</strong></span
-            >
+            <span>
+              NSX:
+              <strong>{{ formatDate(item.manufacturingDate) }}</strong>
+            </span>
+            <span :class="{ 'text-danger': isExpired(item) }">
+              HSD: <strong>{{ formatDate(item.expirationDate) }}</strong>
+            </span>
           </div>
 
           <p class="stock-line">
@@ -137,13 +135,14 @@
             <span
               class="unit-price text-muted"
               style="text-decoration: line-through"
-              >Giá gốc:
-              {{ formatCurrency(item.originalPrice || item.price) }}</span
             >
+              Giá gốc:
+              {{ formatCurrency(item.originalPrice || item.price) }}
+            </span>
             <div class="promotion-price-box">
-              <span class="price">{{
-                formatCurrency(getLineTotal(item))
-              }}</span>
+              <span class="price">
+                {{ formatCurrency(getLineTotal(item)) }}
+              </span>
               <span
                 class="discount-badge-new"
                 v-if="(item.discountPercent || 0) > 0"
@@ -153,9 +152,9 @@
             </div>
           </template>
           <template v-else>
-            <span class="unit-price"
-              >Đơn giá: {{ formatCurrency(item.price) }}</span
-            >
+            <span class="unit-price">
+              Đơn giá: {{ formatCurrency(item.price) }}
+            </span>
             <span class="price">{{ formatCurrency(getLineTotal(item)) }}</span>
           </template>
 
@@ -232,6 +231,7 @@ const props = defineProps<{
   isLoading: boolean;
   isUpdating?: boolean;
 }>();
+
 const emit = defineEmits<{
   (e: "update-qty", item: CartItem, quantity: number): void;
   (e: "remove-item", cartItemId: number): void;
@@ -303,6 +303,7 @@ const FALLBACK_IMAGE =
 
 const toDateOnly = (value?: string | null) =>
   value ? String(value).substring(0, 10) : null;
+
 const isBeforeToday = (value?: string | null) => {
   const dateOnly = toDateOnly(value);
   if (!dateOnly) return false;
@@ -311,6 +312,7 @@ const isBeforeToday = (value?: string | null) => {
   today.setHours(0, 0, 0, 0);
   return !Number.isNaN(date.getTime()) && date.getTime() < today.getTime();
 };
+
 const isAfterToday = (value?: string | null) => {
   const dateOnly = toDateOnly(value);
   if (!dateOnly) return false;
@@ -319,12 +321,14 @@ const isAfterToday = (value?: string | null) => {
   today.setHours(0, 0, 0, 0);
   return !Number.isNaN(date.getTime()) && date.getTime() > today.getTime();
 };
+
 const formatDate = (value?: string | null) => {
   const dateOnly = toDateOnly(value);
   if (!dateOnly) return "-";
   const date = new Date(`${dateOnly}T00:00:00`);
   return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString("vi-VN");
 };
+
 const formatDateTime = (value?: string | null) => {
   if (!value) return "";
   const date = new Date(value);
@@ -400,6 +404,7 @@ const handleImageError = (event: Event) => {
 
 const isExpired = (item: CartItem) =>
   Boolean(item?.expired) || isBeforeToday(item?.expirationDate);
+
 const getUnavailableReason = (item: CartItem) => {
   if (!item) return "Sản phẩm không hợp lệ";
   if (item.unavailableReason) return item.unavailableReason;
@@ -416,6 +421,7 @@ const getUnavailableReason = (item: CartItem) => {
   if (isExpired(item)) return "Sản phẩm đã hết hạn sử dụng";
   return "Sản phẩm hiện không khả dụng";
 };
+
 const isItemAvailable = (item: CartItem) => {
   if (!item) return false;
   if (item.available === false || item.sellable === false) return false;
@@ -457,10 +463,12 @@ const formatVariantLabel = (v: any) => {
 
 const getLineTotal = (item: CartItem) =>
   Number(item?.price || 0) * Number(item?.quantity || 0);
+
 const formatCurrency = (val?: number | null) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(
     Number(val || 0),
   );
+
 const formatDiscount = (value?: number | null) => {
   const num = Number(value || 0);
   return Number.isInteger(num)
@@ -478,12 +486,14 @@ const formatDiscount = (value?: number | null) => {
   padding: 40px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
 }
+
 .card-header {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 30px;
 }
+
 .header-icon {
   background: #06132b;
   color: white;
@@ -494,10 +504,12 @@ const formatDiscount = (value?: number | null) => {
   align-items: center;
   justify-content: center;
 }
+
 .header-icon svg {
   width: 18px;
   height: 18px;
 }
+
 .card-header h2 {
   font-size: 22px;
   color: #06132b;
@@ -505,6 +517,7 @@ const formatDiscount = (value?: number | null) => {
   position: relative;
   font-weight: 700;
 }
+
 .card-header h2::after {
   content: "";
   position: absolute;
@@ -515,25 +528,30 @@ const formatDiscount = (value?: number | null) => {
   background: #b78d52;
   border-radius: 2px;
 }
+
 .loading {
   padding: 30px 0;
   color: #718096;
 }
+
 .empty {
   margin-top: 20px;
   color: #718096;
   font-size: 16px;
 }
+
 .empty a {
   color: #b78d52;
   font-weight: bold;
   text-decoration: none;
   margin-left: 5px;
 }
+
 .empty a:hover {
   text-decoration: underline;
   color: #8e6c3a;
 }
+
 .cart-item {
   display: flex;
   align-items: center;
@@ -541,13 +559,16 @@ const formatDiscount = (value?: number | null) => {
   padding: 30px 0;
   border-bottom: 1px solid #f0f0f0;
 }
+
 .cart-item:last-child {
   border-bottom: none;
   padding-bottom: 0;
 }
+
 .item-unavailable {
   opacity: 0.72;
 }
+
 .item-img {
   width: 140px;
   height: 140px;
@@ -557,17 +578,20 @@ const formatDiscount = (value?: number | null) => {
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
   background: #f8fafc;
 }
+
 .item-info {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
+
 .name-row {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
+
 .item-name {
   font-size: 19px;
   font-weight: 700;
@@ -575,16 +599,19 @@ const formatDiscount = (value?: number | null) => {
   color: #0a142f;
   line-height: 1.35;
 }
+
 .variant-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
+
 .item-variant {
   font-size: 15px;
   color: #718096;
   margin: 0;
 }
+
 .item-variant strong {
   color: #b78d52;
   font-weight: 700;
@@ -614,10 +641,12 @@ const formatDiscount = (value?: number | null) => {
   background-size: 16px;
   margin-top: 5px;
 }
+
 .variant-select:hover:not(:disabled) {
   border-color: #b78d52;
   background-color: #fcf4e8;
 }
+
 .variant-select:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -634,26 +663,32 @@ const formatDiscount = (value?: number | null) => {
   font-size: 13px;
   color: #64748b;
 }
+
 .date-grid strong {
   color: #06132b;
 }
+
 .text-danger strong,
 .text-danger {
   color: #dc2626 !important;
 }
+
 .stock-line {
   margin: 0;
   color: #64748b;
   font-size: 13px;
 }
+
 .stock-line strong {
   color: #06132b;
 }
+
 .status-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .status-badge {
   width: fit-content;
   border-radius: 999px;
@@ -661,16 +696,19 @@ const formatDiscount = (value?: number | null) => {
   font-size: 12px;
   font-weight: 800;
 }
+
 .status-ok {
   background: #dcfce7;
   color: #166534;
   border: 1px solid #bbf7d0;
 }
+
 .status-error {
   background: #fee2e2;
   color: #991b1b;
   border: 1px solid #fecaca;
 }
+
 .unavailable-text {
   margin: 0;
   color: #dc2626;
@@ -681,6 +719,7 @@ const formatDiscount = (value?: number | null) => {
   width: fit-content;
   font-size: 13px;
 }
+
 .qty-wrapper {
   display: inline-flex;
   border: 1px solid #cbd5e0;
@@ -689,6 +728,7 @@ const formatDiscount = (value?: number | null) => {
   width: fit-content;
   margin-top: 5px;
 }
+
 .qty-wrapper button {
   width: 45px;
   height: 45px;
@@ -700,14 +740,17 @@ const formatDiscount = (value?: number | null) => {
   font-weight: bold;
   transition: 0.2s;
 }
+
 .qty-wrapper button:hover:not(:disabled) {
   background: #e2e8f0;
 }
+
 .qty-wrapper button:disabled {
   color: #cbd5e0;
   cursor: not-allowed;
   background: #f8f9fa;
 }
+
 .qty-wrapper input {
   width: 55px;
   text-align: center;
@@ -719,6 +762,7 @@ const formatDiscount = (value?: number | null) => {
   border-right: 1px solid #cbd5e0;
   color: #0a142f;
 }
+
 .item-action {
   text-align: right;
   display: flex;
@@ -728,6 +772,7 @@ const formatDiscount = (value?: number | null) => {
   gap: 10px;
   min-height: 130px;
 }
+
 .unit-price {
   color: #64748b;
   font-size: 13px;
@@ -742,6 +787,7 @@ const formatDiscount = (value?: number | null) => {
   gap: 8px;
   margin-top: 4px;
 }
+
 .discount-badge-new {
   background: #fee2e2;
   color: #dc2626;
@@ -751,6 +797,7 @@ const formatDiscount = (value?: number | null) => {
   font-size: 12px;
   font-weight: 800;
 }
+
 .price {
   font-weight: 800;
   font-size: 20px;
@@ -770,10 +817,12 @@ const formatDiscount = (value?: number | null) => {
   transition: 0.2s;
   margin-top: 8px;
 }
+
 .btn-delete svg {
   width: 22px;
   height: 22px;
 }
+
 .btn-delete:hover {
   background: #e53e3e;
   color: white;
@@ -785,17 +834,21 @@ const formatDiscount = (value?: number | null) => {
   .cart-left {
     padding: 24px;
   }
+
   .cart-item {
     align-items: flex-start;
     gap: 16px;
   }
+
   .item-img {
     width: 90px;
     height: 90px;
   }
+
   .item-action {
     min-height: auto;
   }
+
   .price {
     font-size: 17px;
   }
