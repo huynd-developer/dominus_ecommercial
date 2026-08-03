@@ -112,7 +112,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             ".webp"
     );
 
-    private static final long MAX_DELIVERY_IMAGE_SIZE = 10L * 1024L * 1024L;
+    private static final long MAX_DELIVERY_EVIDENCE_TOTAL_SIZE = 10L * 1024L * 1024L;
 
     private static final String DELIVERY_EVIDENCE_CLOUDINARY_FOLDER = "order-delivery-evidence";
 
@@ -708,6 +708,17 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             );
         }
 
+        long totalSize = files.stream()
+                .mapToLong(MultipartFile::getSize)
+                .sum();
+
+        if (totalSize > MAX_DELIVERY_EVIDENCE_TOTAL_SIZE) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Tổng dung lượng ảnh minh chứng không được vượt quá 10MB"
+            );
+        }
+
         for (MultipartFile file : files) {
             validateSingleDeliveryEvidenceImage(file);
         }
@@ -741,12 +752,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             );
         }
 
-        if (file.getSize() > MAX_DELIVERY_IMAGE_SIZE) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Mỗi ảnh minh chứng không được vượt quá 10MB"
-            );
-        }
     }
 
     private String getFileExtension(String filename) {

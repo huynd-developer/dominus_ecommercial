@@ -272,6 +272,9 @@ const deliveryFailedReasonOptions = [
   },
 ];
 
+const MAX_DELIVERY_EVIDENCE_IMAGE_COUNT = 2;
+const MAX_DELIVERY_EVIDENCE_TOTAL_SIZE = 10 * 1024 * 1024;
+
 const safeTotalPages = computed(() => {
   if (totalElements.value <= 0) {
     return 1;
@@ -629,7 +632,7 @@ async function confirmDeliveryCompleted(order: AdminOrderResponse) {
           style="display:block;width:100%;margin:0;border:1px solid #d1d5db;border-radius:8px;padding:10px"
         />
         <div style="font-size:12px;color:#6b7280;margin-top:6px">
-          Bắt buộc có ảnh minh chứng vì hệ thống đang xử lý theo hướng cửa hàng tự giao hàng. Tối đa 2 ảnh, mỗi ảnh tối đa 10MB.
+          Bắt buộc có ảnh minh chứng vì hệ thống đang xử lý theo hướng cửa hàng tự giao hàng. Tối đa 2 ảnh, tổng dung lượng tối đa 10MB.
         </div>
 
         <div id="delivery-success-preview" style="margin-top:10px"></div>
@@ -765,7 +768,7 @@ async function confirmDeliveryFailed(order: AdminOrderResponse) {
           style="display:block;width:100%;margin:0;border:1px solid #d1d5db;border-radius:8px;padding:10px"
         />
         <div style="font-size:12px;color:#6b7280;margin-top:6px">
-          Bắt buộc ảnh minh chứng với lý do nhạy cảm: khách từ chối, sai địa chỉ, hư hỏng, không liên hệ được nhiều lần hoặc Khác. Tối đa 2 ảnh, mỗi ảnh tối đa 10MB.
+          Bắt buộc ảnh minh chứng với lý do nhạy cảm: khách từ chối, sai địa chỉ, hư hỏng, không liên hệ được nhiều lần hoặc Khác. Tối đa 2 ảnh, tổng dung lượng tối đa 10MB.
         </div>
 
         <div id="delivery-failed-preview" style="margin-top:10px"></div>
@@ -1009,11 +1012,23 @@ function buildDeliveryFailedReasonOptionsHtml() {
 }
 
 function validateDeliveryFiles(files: File[]) {
-  if (files.length > 2) {
-    return "Chỉ được tải tối đa 2 ảnh minh chứng.";
+  if (files.length > MAX_DELIVERY_EVIDENCE_IMAGE_COUNT) {
+    return `Chỉ được tải tối đa ${MAX_DELIVERY_EVIDENCE_IMAGE_COUNT} ảnh minh chứng.`;
   }
 
-  return validateDeliveryImageContent(files);
+  const contentMessage = validateDeliveryImageContent(files);
+
+  if (contentMessage) {
+    return contentMessage;
+  }
+
+  const totalSize = getDeliveryFilesTotalSize(files);
+
+  if (totalSize > MAX_DELIVERY_EVIDENCE_TOTAL_SIZE) {
+    return "Tổng dung lượng ảnh minh chứng không được vượt quá 10MB.";
+  }
+
+  return "";
 }
 
 function validateDeliveryImageContent(files: File[]) {
@@ -1034,13 +1049,21 @@ function validateDeliveryImageContent(files: File[]) {
     if (!isAllowedImageType || !hasAllowedExtension) {
       return "Ảnh minh chứng chỉ hỗ trợ JPG, JPEG, PNG hoặc WEBP.";
     }
-
-    if (file.size > 10 * 1024 * 1024) {
-      return "Mỗi ảnh minh chứng không được vượt quá 10MB.";
-    }
   }
 
   return "";
+}
+
+function getDeliveryFilesTotalSize(files: File[]) {
+  return files.reduce((total, file) => total + Math.max(0, file?.size || 0), 0);
+}
+
+function formatDeliveryFileSize(size: number) {
+  if (size >= 1024 * 1024) {
+    return `${(size / 1024 / 1024).toFixed(2)}MB`;
+  }
+
+  return `${Math.max(1, Math.round(size / 1024))}KB`;
 }
 
 
@@ -1080,7 +1103,18 @@ function setupDeliveryImagePicker(options: DeliveryImagePickerOptions) {
       return;
     }
 
-    const invalidMessage = validateDeliveryImageContent(cleanFiles);
+    const contentMessage = validateDeliveryImageContent(cleanFiles);
+
+    if (contentMessage) {
+      input.value = "";
+      syncDeliveryImageInput(input, currentFiles);
+      renderDeliveryImagePreview(options);
+      Swal.showValidationMessage(contentMessage);
+      return;
+    }
+
+    const limitedFiles = cleanFiles.slice(0, MAX_DELIVERY_EVIDENCE_IMAGE_COUNT);
+    const invalidMessage = validateDeliveryFiles(limitedFiles);
 
     if (invalidMessage) {
       input.value = "";
@@ -1090,15 +1124,13 @@ function setupDeliveryImagePicker(options: DeliveryImagePickerOptions) {
       return;
     }
 
-    const limitedFiles = cleanFiles.slice(0, 2);
-
     options.setFiles(limitedFiles);
     syncDeliveryImageInput(input, limitedFiles);
     renderDeliveryImagePreview(options);
 
-    if (cleanFiles.length > 2) {
+    if (cleanFiles.length > MAX_DELIVERY_EVIDENCE_IMAGE_COUNT) {
       Swal.showValidationMessage(
-        "Chỉ được chọn tối đa 2 ảnh. Hệ thống đã giữ 2 ảnh đầu tiên hợp lệ."
+        `Chỉ được chọn tối đa ${MAX_DELIVERY_EVIDENCE_IMAGE_COUNT} ảnh. Hệ thống đã giữ ${MAX_DELIVERY_EVIDENCE_IMAGE_COUNT} ảnh đầu tiên hợp lệ.`
       );
       return;
     }
@@ -1128,6 +1160,7 @@ function renderDeliveryImagePreview(options: DeliveryImagePickerOptions) {
   }
 
   const files = options.getFiles();
+  const totalSize = getDeliveryFilesTotalSize(files);
 
   if (files.length === 0) {
     preview.innerHTML = `
@@ -1143,7 +1176,7 @@ function renderDeliveryImagePreview(options: DeliveryImagePickerOptions) {
       ${files
         .map((file, index) => {
           const imageUrl = URL.createObjectURL(file);
-          const fileSizeMb = (file.size / 1024 / 1024).toFixed(2);
+          const fileSizeText = formatDeliveryFileSize(file.size);
 
           return `
             <div style="position:relative;width:96px">
@@ -1170,12 +1203,15 @@ function renderDeliveryImagePreview(options: DeliveryImagePickerOptions) {
               >×</button>
 
               <div style="font-size:11px;color:#6b7280;margin-top:4px;line-height:1.25;word-break:break-word">
-                ${escapeAlertHtml(file.name || `Ảnh ${index + 1}`)}<br />${fileSizeMb}MB
+                ${escapeAlertHtml(file.name || `Ảnh ${index + 1}`)}<br />${fileSizeText}
               </div>
             </div>
           `;
         })
         .join("")}
+    </div>
+    <div style="font-size:12px;color:#6b7280;margin-top:8px">
+      Tổng dung lượng: ${formatDeliveryFileSize(totalSize)} / ${formatDeliveryFileSize(MAX_DELIVERY_EVIDENCE_TOTAL_SIZE)}
     </div>
   `;
 

@@ -342,7 +342,7 @@
                   <i class="bi bi-camera"></i>
                   <strong>Thêm Hình ảnh</strong>
                   <span>({{ imageFiles.length }}/{{ MAX_IMAGE_COUNT }})</span>
-                  <small>Tối đa: 20MB</small>
+                  <small>Tổng ảnh tối đa: 10MB</small>
                 </button>
 
                 <button
@@ -354,7 +354,7 @@
                   <i class="bi bi-camera-video"></i>
                   <strong>Thêm video</strong>
                   <span>({{ videoFiles.length }}/{{ MAX_VIDEO_COUNT }})</span>
-                  <small>Tối đa: 200MB</small>
+                  <small>Tối đa: 10MB</small>
                 </button>
               </div>
 
@@ -392,9 +392,9 @@
               />
 
               <div class="file-note">
-                Tối đa {{ MAX_IMAGE_COUNT }} hình ảnh và
-                {{ MAX_VIDEO_COUNT }} video. Hãy tải lên bằng chứng liên quan
-                đến vấn đề sản phẩm.
+                Tối đa {{ MAX_IMAGE_COUNT }} hình ảnh với tổng dung lượng 10MB
+                và {{ MAX_VIDEO_COUNT }} video, mỗi video tối đa 10MB. Hãy tải lên
+                bằng chứng liên quan đến vấn đề sản phẩm.
               </div>
 
               <div v-if="reasonNeedsEvidence" class="file-required-note">
@@ -624,8 +624,8 @@ const hoveredReasonValue = ref("");
 
 const MAX_IMAGE_COUNT = 6;
 const MAX_VIDEO_COUNT = 1;
-const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
-const MAX_VIDEO_SIZE = 200 * 1024 * 1024;
+const MAX_TOTAL_IMAGE_SIZE = 10 * 1024 * 1024;
+const MAX_VIDEO_SIZE = 10 * 1024 * 1024;
 
 const MIN_BANK_NAME_LENGTH = 2;
 const MAX_BANK_NAME_LENGTH = 100;
@@ -1405,6 +1405,18 @@ function rebuildVideoPreviewUrls() {
   videoPreviewUrls.value = videoFiles.value.map((file) => URL.createObjectURL(file));
 }
 
+function getTotalImageSize(fileList: File[]) {
+  return fileList.reduce((total, file) => total + file.size, 0);
+}
+
+function validateTotalImageSize(fileList: File[]) {
+  if (getTotalImageSize(fileList) > MAX_TOTAL_IMAGE_SIZE) {
+    return "Tổng dung lượng hình ảnh không được vượt quá 10MB.";
+  }
+
+  return "";
+}
+
 function validateImageFile(file: File) {
   if (!file.type.startsWith("image/")) {
     return `File "${file.name}" không phải hình ảnh.`;
@@ -1412,10 +1424,6 @@ function validateImageFile(file: File) {
 
   if (!ALLOWED_IMAGE_EXTENSIONS.has(getFileExtension(file.name))) {
     return `Ảnh "${file.name}" chỉ hỗ trợ JPG, JPEG, PNG hoặc WEBP.`;
-  }
-
-  if (file.size > MAX_IMAGE_SIZE) {
-    return `Ảnh "${file.name}" vượt quá dung lượng 20MB.`;
   }
 
   return "";
@@ -1431,7 +1439,7 @@ function validateVideoFile(file: File) {
   }
 
   if (file.size > MAX_VIDEO_SIZE) {
-    return `Video "${file.name}" vượt quá dung lượng 200MB.`;
+    return `Video "${file.name}" vượt quá dung lượng 10MB.`;
   }
 
   return "";
@@ -1487,7 +1495,16 @@ function handleImageFilesChange(event: Event) {
     validFiles.push(file);
   }
 
-  imageFiles.value = [...imageFiles.value, ...validFiles].slice(0, MAX_IMAGE_COUNT);
+  const nextImageFiles = [...imageFiles.value, ...validFiles].slice(0, MAX_IMAGE_COUNT);
+  const totalImageSizeError = validateTotalImageSize(nextImageFiles);
+
+  if (totalImageSizeError) {
+    showFileWarning(totalImageSizeError);
+    target.value = "";
+    return;
+  }
+
+  imageFiles.value = nextImageFiles;
   rebuildImagePreviewUrls();
 
   target.value = "";
@@ -1561,8 +1578,20 @@ function handleReplaceImageFileChange(event: Event) {
     return;
   }
 
-  imageFiles.value.splice(editingImageIndex.value, 1, file);
-  imageFiles.value = imageFiles.value.slice(0, MAX_IMAGE_COUNT);
+  const nextImageFiles = [...imageFiles.value];
+  nextImageFiles.splice(editingImageIndex.value, 1, file);
+
+  const limitedImageFiles = nextImageFiles.slice(0, MAX_IMAGE_COUNT);
+  const totalImageSizeError = validateTotalImageSize(limitedImageFiles);
+
+  if (totalImageSizeError) {
+    showFileWarning(totalImageSizeError);
+    target.value = "";
+    editingImageIndex.value = null;
+    return;
+  }
+
+  imageFiles.value = limitedImageFiles;
   rebuildImagePreviewUrls();
 
   target.value = "";
@@ -1689,6 +1718,16 @@ function validateForm() {
 
   if (reasonNeedsEvidence.value && files.value.length === 0) {
     return "Vui lòng tải lên ảnh hoặc video bằng chứng cho lý do hoàn hàng này.";
+  }
+
+  const totalImageSizeError = validateTotalImageSize(imageFiles.value);
+  if (totalImageSizeError) {
+    return totalImageSizeError;
+  }
+
+  const oversizedVideo = videoFiles.value.find((file) => file.size > MAX_VIDEO_SIZE);
+  if (oversizedVideo) {
+    return `Video "${oversizedVideo.name}" vượt quá dung lượng 10MB.`;
   }
 
   if (form.refundMethod === "BANK_TRANSFER") {

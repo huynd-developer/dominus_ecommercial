@@ -84,10 +84,10 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     private static final int MAX_RETURN_IMAGE_COUNT = 6;
     private static final int MAX_RETURN_VIDEO_COUNT = 1;
 
-    private static final long RETURN_REQUEST_DEADLINE_DAYS = 15L;
+    private static final long RETURN_REQUEST_DEADLINE_DAYS = 3L;
 
-    private static final long MAX_RETURN_IMAGE_SIZE = 20L * 1024L * 1024L;
-    private static final long MAX_RETURN_VIDEO_SIZE = 200L * 1024L * 1024L;
+    private static final long MAX_TOTAL_RETURN_IMAGE_SIZE = 10L * 1024L * 1024L;
+    private static final long MAX_RETURN_VIDEO_SIZE = 10L * 1024L * 1024L;
 
     private static final String RETURN_TYPE_RECEIVED_WITH_PROBLEM = "RECEIVED_WITH_PROBLEM";
     private static final String RETURN_TYPE_NOT_RECEIVED_OR_MISSING = "NOT_RECEIVED_OR_MISSING";
@@ -980,7 +980,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         LocalDateTime deadline = completedAt.plusDays(RETURN_REQUEST_DEADLINE_DAYS);
 
         if (now.isAfter(deadline)) {
-            throw badRequest("Đã quá hạn 15 ngày yêu cầu trả hàng / hoàn tiền.");
+            throw badRequest("Đã quá hạn 3 ngày kể từ lúc đơn hàng hoàn thành, không thể yêu cầu trả hàng / hoàn tiền.");
         }
     }
 
@@ -1662,6 +1662,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
         int imageCount = 0;
         int videoCount = 0;
+        long totalImageSize = 0L;
 
         for (MultipartFile file : mediaFiles) {
             if (file == null || file.isEmpty()) {
@@ -1688,8 +1689,9 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                     throw badRequest("Chỉ được tải tối đa 6 hình ảnh");
                 }
 
-                if (file.getSize() > MAX_RETURN_IMAGE_SIZE) {
-                    throw badRequest("Mỗi hình ảnh không được vượt quá 20MB");
+                totalImageSize += file.getSize();
+                if (totalImageSize > MAX_TOTAL_RETURN_IMAGE_SIZE) {
+                    throw badRequest("Tổng dung lượng hình ảnh không được vượt quá 10MB");
                 }
 
                 if (!ALLOWED_IMAGE_EXTENSIONS.contains(extension)) {
@@ -1705,7 +1707,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 }
 
                 if (file.getSize() > MAX_RETURN_VIDEO_SIZE) {
-                    throw badRequest("Video không được vượt quá 200MB");
+                    throw badRequest("Video không được vượt quá 10MB");
                 }
 
                 if (!ALLOWED_VIDEO_EXTENSIONS.contains(extension)) {

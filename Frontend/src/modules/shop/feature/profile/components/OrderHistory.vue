@@ -1201,7 +1201,7 @@ const router = useRouter();
 
 const currentTab = ref<number | "ALL" | "RETURN">("ALL");
 
-const RETURN_REQUEST_DEADLINE_DAYS = 15;
+const RETURN_REQUEST_DEADLINE_DAYS = 3;
 const REVIEW_EDIT_DEADLINE_DAYS = 30;
 
 const reviewLoading = ref(false);
@@ -1400,7 +1400,7 @@ const getReturnDeadlineText = (order: any) => {
   const daysLeft = getDaysLeftFromDeadline(deadlineTime);
 
   if (daysLeft <= 0) {
-    return "Đã quá hạn 15 ngày yêu cầu hoàn hàng";
+    return "Đã quá hạn 3 ngày kể từ lúc đơn hàng hoàn thành, không thể yêu cầu hoàn hàng";
   }
 
   return `Còn ${daysLeft} ngày để yêu cầu hoàn hàng`;
@@ -2881,7 +2881,7 @@ const getReturnProcessAlert = (order: any): ReturnProcessAlert | null => {
   if (status === "CUSTOMER_CANCELLED") {
     return {
       title: "Bạn đã hủy yêu cầu hoàn hàng",
-      desc: "Yêu cầu cũ đã được rút lại. Nếu đơn còn trong hạn 15 ngày, bạn có thể gửi yêu cầu hoàn hàng mới.",
+      desc: "Yêu cầu cũ đã được rút lại. Nếu đơn còn trong hạn 3 ngày kể từ lúc đơn hàng hoàn thành, bạn có thể gửi yêu cầu hoàn hàng mới.",
       icon: "bi-arrow-counterclockwise",
       className: "is-cancelled",
     };
