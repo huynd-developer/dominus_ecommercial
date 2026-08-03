@@ -3,6 +3,7 @@ package org.example.datn_sd69.modules.order.service.impl;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import jakarta.persistence.EntityManager;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.Order;
 import org.example.datn_sd69.entity.OrderDeliveryEvidence;
@@ -35,6 +36,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
@@ -340,6 +343,10 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             );
         }
 
+        if (shouldRestoreStockAfterRefund()) {
+            restoreStockWhenDeliveryRefunded(order);
+        }
+
         order.setDeliveryRefundedAt(LocalDateTime.now());
         order.setDeliveryRefundedByName(getCurrentAdminDisplayName());
 
@@ -459,6 +466,10 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             );
         }
 
+        if (shouldRestoreStockAfterRefund()) {
+            restoreStockWhenReturnRefunded(returnItems);
+        }
+
         returnItems.forEach(item -> item.setStatus(RETURN_ITEM_STATUS_COMPLETED));
         returnRequestItemRepository.saveAll(returnItems);
 
@@ -527,6 +538,47 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         return returnItems != null
                 && returnItems.stream().anyMatch(item -> item != null
                 && Integer.valueOf(status).equals(item.getStatus()));
+    }
+
+    /**
+     * FE sẽ hỏi riêng sau khi admin xác nhận đã hoàn tiền:
+     * - Có nhập kho: gửi restoreStock=true
+     * - Không nhập kho: gửi restoreStock=false
+     *
+     * Method vẫn đọc được cả query param restoreStock và header X-Restore-Stock
+     * để không bắt buộc sửa chữ ký service/controller hiện tại.
+     */
+    private boolean shouldRestoreStockAfterRefund() {
+        try {
+            if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes)) {
+                return false;
+            }
+
+            HttpServletRequest request = attributes.getRequest();
+
+            if (request == null) {
+                return false;
+            }
+
+            String rawValue = normalizeOptionalText(request.getHeader("X-Restore-Stock"));
+
+            if (rawValue == null) {
+                rawValue = normalizeOptionalText(request.getParameter("restoreStock"));
+            }
+
+            if (rawValue == null) {
+                return false;
+            }
+
+            String normalized = rawValue.trim().toLowerCase(Locale.ROOT);
+
+            return normalized.equals("true")
+                    || normalized.equals("1")
+                    || normalized.equals("yes")
+                    || normalized.equals("y");
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private String normalizeAdminCancelReason(AdminCancelOrderRequest request) {
@@ -598,20 +650,68 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         }
 
         for (OrderItem item : orderItems) {
-            if (item == null || item.getProductVariant() == null) {
+            restoreStockByOrderItemQuantity(item);
+        }
+    }
+
+    private void restoreStockWhenDeliveryRefunded(Order order) {
+        if (order == null || order.getId() == null) {
+            return;
+        }
+
+        List<OrderItem> orderItems = orderItemRepository.findDetailByOrderId(order.getId());
+
+        if (orderItems == null || orderItems.isEmpty()) {
+            return;
+        }
+
+        for (OrderItem item : orderItems) {
+            restoreStockByOrderItemQuantity(item);
+        }
+    }
+
+    private void restoreStockWhenReturnRefunded(List<ReturnRequestItem> returnItems) {
+        if (returnItems == null || returnItems.isEmpty()) {
+            return;
+        }
+
+        for (ReturnRequestItem returnItem : returnItems) {
+            if (returnItem == null || returnItem.getOrderItem() == null) {
                 continue;
             }
 
-            ProductVariant variant = item.getProductVariant();
-            int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+            OrderItem orderItem = returnItem.getOrderItem();
+
+            if (orderItem.getProductVariant() == null) {
+                continue;
+            }
+
+            int quantity = returnItem.getReturnQuantity() == null ? 0 : returnItem.getReturnQuantity();
 
             if (quantity <= 0) {
                 continue;
             }
 
+            ProductVariant variant = orderItem.getProductVariant();
             int currentStock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
             variant.setStockQuantity(currentStock + quantity);
         }
+    }
+
+    private void restoreStockByOrderItemQuantity(OrderItem item) {
+        if (item == null || item.getProductVariant() == null) {
+            return;
+        }
+
+        ProductVariant variant = item.getProductVariant();
+        int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+
+        if (quantity <= 0) {
+            return;
+        }
+
+        int currentStock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
+        variant.setStockQuantity(currentStock + quantity);
     }
 
     private String normalizeRejectReason(RejectReturnRequest request) {

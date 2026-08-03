@@ -3040,34 +3040,22 @@ const getDeliveryRefundBoxClass = (order: any) => ({
   "is-refunded": isDeliveryRefundCompleted(order),
 });
 
-const DELIVERY_REFUND_BANK_OPTIONS = [
-  "Vietcombank",
-  "BIDV",
-  "VietinBank",
-  "Agribank",
-  "MB Bank",
-  "Techcombank",
-  "ACB",
-  "VPBank",
-  "TPBank",
-  "Sacombank",
-  "VIB",
-  "SHB",
-  "HDBank",
-  "MSB",
-  "OCB",
-  "Eximbank",
-  "LPBank",
-  "SeABank",
-  "Nam A Bank",
-  "Bac A Bank",
-  "ABBank",
-  "PVcomBank",
-  "NCB",
-  "KienlongBank",
-  "VietBank",
-  "SaigonBank",
-];
+type VietQrBank = {
+  id: string;
+  name: string;
+  code: string;
+  bin: string;
+  shortName: string;
+  logo: string;
+  displayName: string;
+  searchText: string;
+};
+
+const VIETQR_BANKS_API_URL = "https://api.vietqr.io/v2/banks";
+const VIETQR_BANK_CACHE_MS = 60 * 60 * 1000;
+
+const deliveryRefundBanks = ref<VietQrBank[]>([]);
+const deliveryRefundBanksLoadedAt = ref(0);
 
 const normalizeDeliveryRefundInput = (value: unknown) =>
   String(value ?? "")
@@ -3078,6 +3066,205 @@ const normalizeDeliveryRefundInput = (value: unknown) =>
 const normalizeDeliveryRefundAccountNumber = (value: unknown) =>
   String(value ?? "").replace(/\s+/g, "").trim();
 
+const normalizeBankSearchText = (value: unknown) =>
+  normalizeDeliveryRefundInput(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const buildBankSearchText = (values: unknown[]) =>
+  values
+    .map((value) => normalizeBankSearchText(value))
+    .filter(Boolean)
+    .join(" ");
+
+const mapVietQrBank = (rawBank: unknown): VietQrBank | null => {
+  if (!rawBank || typeof rawBank !== "object") {
+    return null;
+  }
+
+  const bank = rawBank as Record<string, unknown>;
+  const name = normalizeDeliveryRefundInput(bank.name);
+  const shortName = normalizeDeliveryRefundInput(bank.shortName);
+  const code = normalizeDeliveryRefundInput(bank.code);
+  const bin = normalizeDeliveryRefundInput(bank.bin);
+  const logo = normalizeDeliveryRefundInput(bank.logo);
+  const displayName = shortName || name || code;
+
+  if (!displayName) {
+    return null;
+  }
+
+  return {
+    id: normalizeDeliveryRefundInput(bank.id) || `${code}-${bin}-${displayName}`,
+    name,
+    code,
+    bin,
+    shortName,
+    logo,
+    displayName,
+    searchText: buildBankSearchText([name, shortName, code, bin]),
+  };
+};
+
+const fetchDeliveryRefundBanksFromVietQr = async (force = false) => {
+  const now = Date.now();
+
+  if (
+    !force &&
+    deliveryRefundBanks.value.length > 0 &&
+    now - deliveryRefundBanksLoadedAt.value < VIETQR_BANK_CACHE_MS
+  ) {
+    return deliveryRefundBanks.value;
+  }
+
+  const response = await fetch(VIETQR_BANKS_API_URL, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Không tải được danh sách ngân hàng VietQR.");
+  }
+
+  const payload: { data?: unknown } = await response.json();
+  const rawBanks: unknown[] = Array.isArray(payload.data) ? payload.data : [];
+
+  const banks: VietQrBank[] = rawBanks
+    .map((bank: unknown) => mapVietQrBank(bank))
+    .filter((bank: VietQrBank | null): bank is VietQrBank => bank !== null)
+    .filter((bank: VietQrBank) => bank.displayName.length <= 100);
+
+  if (banks.length === 0) {
+    throw new Error("Danh sách ngân hàng VietQR đang trống.");
+  }
+
+  deliveryRefundBanks.value = banks;
+  deliveryRefundBanksLoadedAt.value = now;
+
+  return banks;
+};
+
+const findDeliveryRefundBank = (bankName: string) => {
+  const cleanBankName = normalizeBankSearchText(bankName);
+
+  if (!cleanBankName) {
+    return null;
+  }
+
+  return (
+    deliveryRefundBanks.value.find((bank) => {
+      return [
+        bank.displayName,
+        bank.shortName,
+        bank.name,
+        bank.code,
+        bank.bin,
+      ].some((value) => normalizeBankSearchText(value) === cleanBankName);
+    }) || null
+  );
+};
+
+const getDeliveryRefundBankSubtitle = (bank: VietQrBank) => {
+  const meta = [bank.code, bank.bin].filter(Boolean).join(" · ");
+
+  if (bank.name && bank.name !== bank.displayName) {
+    return meta ? `${bank.name} · ${meta}` : bank.name;
+  }
+
+  return meta || "Ngân hàng hỗ trợ VietQR";
+};
+
+const buildDeliveryRefundBankOptionsHtml = (
+  keyword = "",
+  selectedBank?: string | null,
+) => {
+  const cleanKeyword = normalizeBankSearchText(keyword);
+  const selected = normalizeDeliveryRefundInput(selectedBank);
+
+  const banks = cleanKeyword
+    ? deliveryRefundBanks.value.filter((bank) => bank.searchText.includes(cleanKeyword))
+    : deliveryRefundBanks.value;
+
+  if (banks.length === 0) {
+    return `
+      <div class="delivery-refund-bank-empty">
+        Không tìm thấy ngân hàng phù hợp.
+      </div>
+    `;
+  }
+
+  return banks
+    .map((bank) => {
+      const isSelected =
+        normalizeBankSearchText(bank.displayName) === normalizeBankSearchText(selected) ||
+        normalizeBankSearchText(bank.name) === normalizeBankSearchText(selected) ||
+        normalizeBankSearchText(bank.shortName) === normalizeBankSearchText(selected) ||
+        normalizeBankSearchText(bank.code) === normalizeBankSearchText(selected);
+
+      const selectedClass = isSelected ? " is-selected" : "";
+      const selectedIcon = isSelected ? '<i class="bi bi-check-lg"></i>' : "";
+      const logoHtml = bank.logo
+        ? `<img src="${escapeHtml(bank.logo)}" alt="${escapeHtml(bank.displayName)}" class="delivery-refund-bank-logo" />`
+        : `<span class="delivery-refund-bank-logo is-empty"><i class="bi bi-bank"></i></span>`;
+
+      return `
+        <button
+          type="button"
+          class="delivery-refund-bank-option${selectedClass}"
+          data-bank-value="${escapeHtml(bank.displayName)}"
+        >
+          ${logoHtml}
+          <span class="delivery-refund-bank-content">
+            <strong>${escapeHtml(bank.displayName)}</strong>
+            <small>${escapeHtml(getDeliveryRefundBankSubtitle(bank))}</small>
+          </span>
+          ${selectedIcon}
+        </button>
+      `;
+    })
+    .join("");
+};
+
+const setDeliveryRefundBankListHtml = (
+  keyword = "",
+  selectedBank?: string | null,
+) => {
+  const bankListElement = document.getElementById("delivery-refund-bank-list");
+
+  if (!bankListElement) {
+    return;
+  }
+
+  bankListElement.innerHTML = buildDeliveryRefundBankOptionsHtml(keyword, selectedBank);
+
+  bankListElement
+    .querySelectorAll<HTMLButtonElement>(".delivery-refund-bank-option")
+    .forEach((button) => {
+      button.addEventListener("click", () => {
+        const bankName = normalizeDeliveryRefundInput(button.dataset.bankValue);
+        const hiddenInput = document.getElementById(
+          "delivery-refund-bank-name",
+        ) as HTMLInputElement | null;
+        const searchInput = document.getElementById(
+          "delivery-refund-bank-search",
+        ) as HTMLInputElement | null;
+
+        if (hiddenInput) {
+          hiddenInput.value = bankName;
+        }
+
+        if (searchInput) {
+          searchInput.value = bankName;
+        }
+
+        setDeliveryRefundBankListHtml(bankName, bankName);
+      });
+    });
+};
+
 const validateDeliveryRefundBankForm = (
   bankName: string,
   bankAccountNumber: string,
@@ -3087,8 +3274,8 @@ const validateDeliveryRefundBankForm = (
     return "Vui lòng chọn ngân hàng.";
   }
 
-  if (!DELIVERY_REFUND_BANK_OPTIONS.includes(bankName)) {
-    return "Vui lòng chọn ngân hàng trong danh sách hỗ trợ.";
+  if (!findDeliveryRefundBank(bankName)) {
+    return "Vui lòng chọn ngân hàng trong danh sách VietQR.";
   }
 
   if (bankName.length < 2 || bankName.length > 100) {
@@ -3138,20 +3325,27 @@ const validateDeliveryRefundBankForm = (
   return "";
 };
 
-const buildDeliveryRefundBankOptionsHtml = (selectedBank?: string | null) => {
-  const selected = String(selectedBank || "").trim();
-
-  return DELIVERY_REFUND_BANK_OPTIONS.map((bank) => {
-    const safeBank = escapeHtml(bank);
-    const selectedAttr = bank === selected ? " selected" : "";
-    return `<option value="${safeBank}"${selectedAttr}>${safeBank}</option>`;
-  }).join("");
-};
-
 const openDeliveryRefundBankModal = async (order: CustomerOrderResponse) => {
   if (!canSubmitDeliveryRefundBank(order)) {
     return;
   }
+
+  try {
+    await fetchDeliveryRefundBanksFromVietQr();
+  } catch (error: any) {
+    await Swal.fire({
+      icon: "error",
+      title: "Không tải được ngân hàng",
+      text:
+        error?.message ||
+        "Không lấy được danh sách ngân hàng từ VietQR. Vui lòng thử lại sau.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  const currentBank = findDeliveryRefundBank(order.deliveryRefundBankName || "");
+  const currentBankName = currentBank?.displayName || "";
 
   const result = await Swal.fire<{
     bankName: string;
@@ -3168,13 +3362,30 @@ const openDeliveryRefundBankModal = async (order: CustomerOrderResponse) => {
           )}</strong> cho đơn ${escapeHtml(generateOrderCode(order.orderId))}. Thông tin này chỉ gửi được 1 lần và không thể tự chỉnh sửa.</span>
         </div>
 
-        <label for="delivery-refund-bank-name" class="delivery-refund-modal-label">
+        <label for="delivery-refund-bank-search" class="delivery-refund-modal-label">
           Ngân hàng <span>*</span>
         </label>
-        <select id="delivery-refund-bank-name" class="swal2-select delivery-refund-modal-control">
-          <option value="">-- Chọn ngân hàng --</option>
-          ${buildDeliveryRefundBankOptionsHtml(order.deliveryRefundBankName)}
-        </select>
+        <div class="delivery-refund-bank-picker">
+          <div class="delivery-refund-bank-search-wrap">
+            <i class="bi bi-search"></i>
+            <input
+              id="delivery-refund-bank-search"
+              class="delivery-refund-bank-search"
+              autocomplete="off"
+              placeholder="Tìm theo tên ngân hàng, mã ngân hàng hoặc BIN"
+              value="${escapeHtml(currentBankName)}"
+            />
+          </div>
+          <input
+            id="delivery-refund-bank-name"
+            type="hidden"
+            value="${escapeHtml(currentBankName)}"
+          />
+          <div id="delivery-refund-bank-list" class="delivery-refund-bank-list"></div>
+        </div>
+        <div class="delivery-refund-modal-help">
+          Danh sách ngân hàng và logo được lấy trực tiếp từ VietQR.
+        </div>
 
         <label for="delivery-refund-account-number" class="delivery-refund-modal-label">
           Số tài khoản <span>*</span>
@@ -3215,12 +3426,43 @@ const openDeliveryRefundBankModal = async (order: CustomerOrderResponse) => {
       confirmButton: "swal-gold-confirm",
     },
     didOpen: () => {
+      const bankSearchInput = document.getElementById(
+        "delivery-refund-bank-search",
+      ) as HTMLInputElement | null;
+      const bankHiddenInput = document.getElementById(
+        "delivery-refund-bank-name",
+      ) as HTMLInputElement | null;
       const accountInput = document.getElementById(
         "delivery-refund-account-number",
       ) as HTMLInputElement | null;
       const accountHolderInput = document.getElementById(
         "delivery-refund-account-holder",
       ) as HTMLInputElement | null;
+
+      setDeliveryRefundBankListHtml("", currentBankName);
+
+      bankSearchInput?.addEventListener("input", () => {
+        const keyword = normalizeDeliveryRefundInput(bankSearchInput.value);
+        const matchedBank = findDeliveryRefundBank(keyword);
+
+        if (bankHiddenInput) {
+          bankHiddenInput.value =
+            matchedBank &&
+            normalizeBankSearchText(matchedBank.displayName) ===
+              normalizeBankSearchText(keyword)
+              ? matchedBank.displayName
+              : "";
+        }
+
+        setDeliveryRefundBankListHtml(keyword, bankHiddenInput?.value || "");
+      });
+
+      bankSearchInput?.addEventListener("focus", () => {
+        setDeliveryRefundBankListHtml(
+          normalizeDeliveryRefundInput(bankSearchInput.value),
+          bankHiddenInput?.value || "",
+        );
+      });
 
       accountInput?.addEventListener("input", () => {
         accountInput.value = accountInput.value
@@ -3238,7 +3480,7 @@ const openDeliveryRefundBankModal = async (order: CustomerOrderResponse) => {
     preConfirm: () => {
       const bankElement = document.getElementById(
         "delivery-refund-bank-name",
-      ) as HTMLSelectElement | null;
+      ) as HTMLInputElement | null;
       const accountNumberElement = document.getElementById(
         "delivery-refund-account-number",
       ) as HTMLInputElement | null;
@@ -6325,4 +6567,118 @@ input.delivery-refund-modal-control {
   font-size: 12px;
   line-height: 1.4;
 }
+
+
+.delivery-refund-bank-picker {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.delivery-refund-bank-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 10px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #64748b;
+}
+
+.delivery-refund-bank-search {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+  font-size: 14px;
+  color: #0f172a;
+  background: transparent;
+}
+
+.delivery-refund-bank-list {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.delivery-refund-bank-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  padding: 8px;
+  text-align: left;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+.delivery-refund-bank-option:hover,
+.delivery-refund-bank-option.is-selected {
+  background: #f8fafc;
+}
+
+.delivery-refund-bank-option.is-selected {
+  outline: 1px solid #bd9a5f;
+}
+
+.delivery-refund-bank-logo {
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  padding: 3px;
+}
+
+.delivery-refund-bank-logo.is-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+}
+
+.delivery-refund-bank-content {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.delivery-refund-bank-content strong {
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delivery-refund-bank-content small {
+  overflow: hidden;
+  color: #64748b;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delivery-refund-bank-option > .bi-check-lg {
+  color: #16a34a;
+  font-size: 16px;
+}
+
+.delivery-refund-bank-empty {
+  padding: 18px 10px;
+  color: #64748b;
+  font-size: 13px;
+  text-align: center;
+}
+
 </style>

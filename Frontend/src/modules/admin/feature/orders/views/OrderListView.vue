@@ -128,6 +128,7 @@ import OrderFilter from "../components/OrderFilter.vue";
 import OrderTable from "../components/OrderTable.vue";
 import OrderDetailModal from "../components/OrderDetailModal.vue";
 import { orderService } from "../services/order.service";
+import api from "@/common/api";
 import type { AdminCancelOrderRequest, AdminOrderResponse, MarkDeliveryFailedRequest } from "../types/order.type";
 
 const orders = ref<AdminOrderResponse[]>([]);
@@ -1527,6 +1528,218 @@ function normalizeRejectReasonDetail(value: string) {
     .replace(/\s{2,}/g, " ");
 }
 
+type RefundRestockMode = "DELIVERY_FAILED" | "RETURN_REQUEST";
+
+type RefundRestockItemView = {
+  productName: string;
+  sku: string;
+  capacity: string;
+  bottleType: string;
+  quantity: number;
+};
+
+const REFUND_RESTOCK_PARAM_NAME = "restoreStock";
+
+function toPositiveInteger(value: unknown) {
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue) && numberValue > 0
+    ? Math.floor(numberValue)
+    : 0;
+}
+
+function normalizeRestockText(value: unknown, fallback = "-") {
+  const text = String(value ?? "").trim();
+
+  return text || fallback;
+}
+
+function getRestockCapacityText(item: any) {
+  return normalizeRestockText(
+    item?.capacity ?? item?.capacityName ?? item?.capacityText ?? item?.volume,
+    "Đang cập nhật"
+  );
+}
+
+function getRestockBottleTypeText(item: any) {
+  return normalizeRestockText(
+    item?.bottleType ?? item?.bottleTypeName ?? item?.bottleName,
+    "Đang cập nhật"
+  );
+}
+
+function mapOrderItemToRestockItem(item: any): RefundRestockItemView | null {
+  const quantity = toPositiveInteger(item?.quantity ?? item?.orderedQuantity);
+
+  if (quantity <= 0) {
+    return null;
+  }
+
+  return {
+    productName: normalizeRestockText(
+      item?.productName ?? item?.name,
+      "Sản phẩm"
+    ),
+    sku: normalizeRestockText(item?.sku),
+    capacity: getRestockCapacityText(item),
+    bottleType: getRestockBottleTypeText(item),
+    quantity,
+  };
+}
+
+function mapReturnItemToRestockItem(item: any): RefundRestockItemView | null {
+  const quantity = toPositiveInteger(
+    item?.returnQuantity ??
+      item?.returnedQuantity ??
+      item?.requestQuantity ??
+      item?.quantity
+  );
+
+  if (quantity <= 0) {
+    return null;
+  }
+
+  return {
+    productName: normalizeRestockText(
+      item?.productName ?? item?.name,
+      "Sản phẩm"
+    ),
+    sku: normalizeRestockText(item?.sku),
+    capacity: getRestockCapacityText(item),
+    bottleType: getRestockBottleTypeText(item),
+    quantity,
+  };
+}
+
+function getDeliveryRefundRestockItems(order: AdminOrderResponse) {
+  const rawItems = Array.isArray((order as any)?.items)
+    ? ((order as any).items as any[])
+    : [];
+
+  return rawItems
+    .map(mapOrderItemToRestockItem)
+    .filter((item): item is RefundRestockItemView => item !== null);
+}
+
+function getReturnRefundRestockItems(order: AdminOrderResponse) {
+  const rawItems = Array.isArray((order as any)?.returnItems)
+    ? ((order as any).returnItems as any[])
+    : [];
+
+  return rawItems
+    .map(mapReturnItemToRestockItem)
+    .filter((item): item is RefundRestockItemView => item !== null);
+}
+
+function buildRefundRestockItemsHtml(items: RefundRestockItemView[]) {
+  if (items.length === 0) {
+    return `
+      <div style="padding:12px;border:1px dashed #f59e0b;border-radius:10px;background:#fffbeb;color:#92400e;font-size:13px;font-weight:700">
+        Không tìm thấy danh sách sản phẩm để nhập kho. Nếu vẫn chọn Có, backend sẽ xử lý theo dữ liệu đơn hàng hiện có.
+      </div>
+    `;
+  }
+
+  const rows = items
+    .map(
+      (item, index) => `
+        <tr>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;color:#64748b">${index + 1}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb">
+            <div style="font-weight:800;color:#0f172a">${escapeAlertHtml(item.productName)}</div>
+            <div style="font-size:12px;color:#64748b;margin-top:2px">
+              SKU: ${escapeAlertHtml(item.sku)} · ${escapeAlertHtml(item.capacity)} · ${escapeAlertHtml(item.bottleType)}
+            </div>
+          </td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:900;color:#16a34a">+${item.quantity}</td>
+        </tr>
+      `
+    )
+    .join("");
+
+  return `
+    <div style="max-height:260px;overflow:auto;border:1px solid #e5e7eb;border-radius:10px;background:#ffffff">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#f8fafc;color:#475569">
+            <th style="padding:8px;text-align:left;width:42px">#</th>
+            <th style="padding:8px;text-align:left">Sản phẩm</th>
+            <th style="padding:8px;text-align:right;width:86px">SL nhập</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function askRestoreStockAfterRefund(
+  order: AdminOrderResponse,
+  mode: RefundRestockMode
+) {
+  const items =
+    mode === "DELIVERY_FAILED"
+      ? getDeliveryRefundRestockItems(order)
+      : getReturnRefundRestockItems(order);
+
+  const modeText =
+    mode === "DELIVERY_FAILED"
+      ? "đơn giao hàng thất bại"
+      : "yêu cầu hoàn hàng";
+
+  const result = await Swal.fire({
+    icon: "question",
+    title: "Có nhập lại kho không?",
+    html: `
+      <div style="text-align:left;line-height:1.55">
+        <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
+        <p style="margin-bottom:10px">Shop đã xác nhận bước hoàn tiền cho ${escapeAlertHtml(modeText)}. Chọn tiếp cách xử lý kho:</p>
+        ${buildRefundRestockItemsHtml(items)}
+        <div style="margin-top:12px;padding:10px 12px;border-radius:10px;background:#f8fafc;color:#475569;font-size:13px">
+          <p style="margin:0 0 4px"><b>Có, nhập kho:</b> hệ thống cộng lại số lượng sản phẩm ở bảng trên.</p>
+          <p style="margin:0"><b>Không nhập kho:</b> chỉ ghi nhận đã hoàn tiền, không cộng tồn kho.</p>
+        </div>
+      </div>
+    `,
+    showCancelButton: true,
+    showDenyButton: true,
+    confirmButtonText: "Có, nhập kho",
+    denyButtonText: "Không nhập kho",
+    cancelButtonText: "Quay lại",
+    confirmButtonColor: "#16a34a",
+    denyButtonColor: "#6b7280",
+    cancelButtonColor: "#9ca3af",
+  });
+
+  if (result.isConfirmed) {
+    return true;
+  }
+
+  if (result.isDenied) {
+    return false;
+  }
+
+  return null;
+}
+
+async function runRefundActionWithRestockParam<T>(
+  restoreStock: boolean,
+  action: () => Promise<T>
+): Promise<T> {
+  const previousParams = api.defaults.params;
+
+  api.defaults.params = {
+    ...(previousParams || {}),
+    [REFUND_RESTOCK_PARAM_NAME]: restoreStock ? "true" : "false",
+  };
+
+  try {
+    return await action();
+  } finally {
+    api.defaults.params = previousParams;
+  }
+}
+
 
 async function confirmMarkDeliveryRefunded(order: AdminOrderResponse) {
   if (!order || !order.orderId) {
@@ -1567,15 +1780,30 @@ async function confirmMarkDeliveryRefunded(order: AdminOrderResponse) {
     return;
   }
 
+  const shouldRestoreStock = await askRestoreStockAfterRefund(
+    order,
+    "DELIVERY_FAILED"
+  );
+
+  if (shouldRestoreStock === null) {
+    return;
+  }
+
   loading.value = true;
 
   try {
-    await orderService.markDeliveryRefunded(order.orderId);
+    await runRefundActionWithRestockParam(shouldRestoreStock, () =>
+      orderService.markDeliveryRefunded(order.orderId)
+    );
 
     await Swal.fire({
       icon: "success",
-      title: "Đã xác nhận hoàn tiền",
-      text: "Hệ thống đã ghi nhận shop đã chuyển tiền hoàn cho khách.",
+      title: shouldRestoreStock
+        ? "Đã hoàn tiền và nhập kho"
+        : "Đã xác nhận hoàn tiền",
+      text: shouldRestoreStock
+        ? "Hệ thống đã ghi nhận shop đã chuyển tiền hoàn cho khách và cộng sản phẩm về kho."
+        : "Hệ thống đã ghi nhận shop đã chuyển tiền hoàn cho khách. Sản phẩm không được cộng về kho.",
       confirmButtonColor: "#bd9a5f",
     });
 
@@ -1646,15 +1874,30 @@ async function confirmMarkReturnRefunded(order: AdminOrderResponse) {
     return;
   }
 
+  const shouldRestoreStock = await askRestoreStockAfterRefund(
+    order,
+    "RETURN_REQUEST"
+  );
+
+  if (shouldRestoreStock === null) {
+    return;
+  }
+
   loading.value = true;
 
   try {
-    await orderService.markReturnRefunded(order.orderId);
+    await runRefundActionWithRestockParam(shouldRestoreStock, () =>
+      orderService.markReturnRefunded(order.orderId)
+    );
 
     await Swal.fire({
       icon: "success",
-      title: "Đã cập nhật hoàn tiền",
-      text: "Đơn hàng đã chuyển sang trạng thái hoàn hàng hoàn tất.",
+      title: shouldRestoreStock
+        ? "Đã hoàn tiền và nhập kho"
+        : "Đã cập nhật hoàn tiền",
+      text: shouldRestoreStock
+        ? "Đơn hàng đã chuyển sang trạng thái hoàn hàng hoàn tất và sản phẩm hoàn đã được cộng về kho."
+        : "Đơn hàng đã chuyển sang trạng thái hoàn hàng hoàn tất. Sản phẩm hoàn không được cộng về kho.",
       confirmButtonColor: "#bd9a5f",
     });
 

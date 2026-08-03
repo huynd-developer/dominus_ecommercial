@@ -39,13 +39,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -124,34 +128,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             "Thùng hàng rỗng"
     );
 
-    private static final Set<String> SUPPORTED_BANK_NAMES = Set.of(
-            "Vietcombank",
-            "BIDV",
-            "VietinBank",
-            "Agribank",
-            "MB Bank",
-            "Techcombank",
-            "ACB",
-            "VPBank",
-            "TPBank",
-            "Sacombank",
-            "VIB",
-            "SHB",
-            "HDBank",
-            "MSB",
-            "OCB",
-            "Eximbank",
-            "LPBank",
-            "SeABank",
-            "Nam A Bank",
-            "Bac A Bank",
-            "ABBank",
-            "PVcomBank",
-            "NCB",
-            "KienlongBank",
-            "VietBank",
-            "SaigonBank"
-    );
+    private static final String VIETQR_BANKS_API_URL = "https://api.vietqr.io/v2/banks";
+    private static final long VIETQR_BANK_CACHE_MINUTES = 60L;
 
     private static final Set<String> EVIDENCE_REQUIRED_REASONS = Set.of(
             "Thiếu hàng",
@@ -197,6 +175,11 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     private final ReturnRequestMediaRepository returnRequestMediaRepository;
     private final Cloudinary cloudinary;
     private final ObjectMapper objectMapper;
+
+    private final RestTemplate vietQrRestTemplate = new RestTemplate();
+
+    private volatile Set<String> cachedSupportedBankNames = Collections.emptySet();
+    private volatile LocalDateTime cachedSupportedBankNamesAt;
 
     @Override
     @Transactional(readOnly = true)
@@ -1234,6 +1217,94 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         return cleanValue.replaceAll("\\s+", "");
     }
 
+    private boolean isSupportedBankName(String bankName) {
+        String cleanBankName = normalizeOptionalCollapsed(bankName);
+
+        if (cleanBankName == null) {
+            return false;
+        }
+
+        return getSupportedBankNamesFromVietQr()
+                .stream()
+                .anyMatch(supportedBankName -> supportedBankName.equalsIgnoreCase(cleanBankName));
+    }
+
+    private Set<String> getSupportedBankNamesFromVietQr() {
+        LocalDateTime now = LocalDateTime.now();
+        Set<String> cachedBankNames = cachedSupportedBankNames;
+
+        if (cachedSupportedBankNamesAt != null
+                && cachedBankNames != null
+                && !cachedBankNames.isEmpty()
+                && cachedSupportedBankNamesAt.plusMinutes(VIETQR_BANK_CACHE_MINUTES).isAfter(now)) {
+            return cachedBankNames;
+        }
+
+        try {
+            Set<String> fetchedBankNames = fetchSupportedBankNamesFromVietQr();
+
+            if (!fetchedBankNames.isEmpty()) {
+                cachedSupportedBankNames = fetchedBankNames;
+                cachedSupportedBankNamesAt = now;
+                return fetchedBankNames;
+            }
+        } catch (RestClientException exception) {
+            if (cachedBankNames != null && !cachedBankNames.isEmpty()) {
+                return cachedBankNames;
+            }
+
+            throw badRequest("Không tải được danh sách ngân hàng từ VietQR. Vui lòng thử lại sau.");
+        }
+
+        if (cachedBankNames != null && !cachedBankNames.isEmpty()) {
+            return cachedBankNames;
+        }
+
+        throw badRequest("Danh sách ngân hàng VietQR đang trống. Vui lòng thử lại sau.");
+    }
+
+    private Set<String> fetchSupportedBankNamesFromVietQr() {
+        Map<?, ?> response = vietQrRestTemplate.getForObject(VIETQR_BANKS_API_URL, Map.class);
+
+        if (response == null) {
+            return Collections.emptySet();
+        }
+
+        Object data = response.get("data");
+
+        if (!(data instanceof List<?> banks)) {
+            return Collections.emptySet();
+        }
+
+        Set<String> bankNames = new LinkedHashSet<>();
+
+        for (Object bank : banks) {
+            if (!(bank instanceof Map<?, ?> bankMap)) {
+                continue;
+            }
+
+            addSupportedBankName(bankNames, bankMap.get("name"));
+            addSupportedBankName(bankNames, bankMap.get("shortName"));
+            addSupportedBankName(bankNames, bankMap.get("code"));
+        }
+
+        return bankNames;
+    }
+
+    private void addSupportedBankName(Set<String> bankNames, Object value) {
+        String bankName = normalizeOptionalCollapsed(value == null ? null : String.valueOf(value));
+
+        if (bankName == null || bankName.length() > MAX_BANK_NAME_LENGTH) {
+            return;
+        }
+
+        if (!bankName.matches(".*\\p{L}.*")) {
+            return;
+        }
+
+        bankNames.add(bankName);
+    }
+
     private void validateDeliveryRefundBankInfo(
             String bankName,
             String bankAccountNumber,
@@ -1243,7 +1314,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             throw badRequest("Vui lòng chọn ngân hàng nhận hoàn tiền");
         }
 
-        if (!SUPPORTED_BANK_NAMES.contains(bankName)) {
+        if (!isSupportedBankName(bankName)) {
             throw badRequest("Vui lòng chọn ngân hàng trong danh sách hỗ trợ");
         }
 
@@ -1315,7 +1386,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             throw badRequest("Vui lòng chọn ngân hàng");
         }
 
-        if (!SUPPORTED_BANK_NAMES.contains(bankName)) {
+        if (!isSupportedBankName(bankName)) {
             throw badRequest("Vui lòng chọn ngân hàng trong danh sách hỗ trợ");
         }
 
