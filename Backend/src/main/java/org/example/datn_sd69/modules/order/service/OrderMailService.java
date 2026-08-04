@@ -1,5 +1,6 @@
 package org.example.datn_sd69.modules.order.service;
 
+import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.datn_sd69.entity.Customer;
@@ -9,8 +10,8 @@ import org.example.datn_sd69.entity.ProductVariant;
 import org.example.datn_sd69.entity.User;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -27,8 +28,14 @@ public class OrderMailService {
     private static final Locale VIETNAM_LOCALE = Locale.forLanguageTag("vi-VN");
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
+    private static final String TONE_SUCCESS = "SUCCESS";
+    private static final String TONE_INFO = "INFO";
+    private static final String TONE_WARNING = "WARNING";
+    private static final String TONE_DANGER = "DANGER";
+
     private final JavaMailSender javaMailSender;
     private final OrderItemRepository orderItemRepository;
+    private final OrderMailTemplateService orderMailTemplateService;
 
     @Value("${app.mail.enabled:false}")
     private boolean mailEnabled;
@@ -42,6 +49,9 @@ public class OrderMailService {
     @Value("${spring.mail.username:}")
     private String mailUsername;
 
+    @Value("${app.frontend-url:http://localhost:5173}")
+    private String frontendUrl;
+
     public void sendOrderPlaced(Order order) {
         String paymentMethod = normalizeText(order == null ? null : order.getPaymentMethod());
         String message;
@@ -49,7 +59,7 @@ public class OrderMailService {
         if ("VNPAY".equalsIgnoreCase(paymentMethod)) {
             message = "Đơn hàng của bạn đã được tạo. Vui lòng hoàn tất thanh toán VNPay để shop tiếp nhận xử lý.";
         } else if ("VIETQR".equalsIgnoreCase(paymentMethod)) {
-            message = "Đơn hàng của bạn đã được tạo. Vui lòng chuyển khoản/báo thanh toán để shop tiếp nhận xử lý.";
+            message = "Đơn hàng của bạn đã được tạo. Vui lòng chuyển khoản hoặc báo thanh toán để shop tiếp nhận xử lý.";
         } else {
             message = "Đơn hàng của bạn đã được tạo thành công và đang chờ shop xác nhận.";
         }
@@ -57,9 +67,12 @@ public class OrderMailService {
         sendOrderMail(
                 order,
                 "Đặt hàng thành công - " + resolveOrderCode(order),
-                "ĐẶT HÀNG THÀNH CÔNG",
+                "Đặt hàng thành công",
                 message,
-                null
+                "Chờ xác nhận",
+                TONE_WARNING,
+                null,
+                true
         );
     }
 
@@ -67,9 +80,12 @@ public class OrderMailService {
         sendOrderMail(
                 order,
                 "Thanh toán VNPay thành công - " + resolveOrderCode(order),
-                "THANH TOÁN THÀNH CÔNG",
+                "Thanh toán thành công",
                 "Shop đã ghi nhận thanh toán VNPay thành công. Đơn hàng vẫn đang ở trạng thái Chờ xác nhận và sẽ được shop xử lý sớm.",
-                null
+                "Đã thanh toán",
+                TONE_SUCCESS,
+                null,
+                false
         );
     }
 
@@ -77,9 +93,12 @@ public class OrderMailService {
         sendOrderMail(
                 order,
                 "Đơn hàng đã được xác nhận - " + resolveOrderCode(order),
-                "ĐƠN HÀNG ĐÃ ĐƯỢC XÁC NHẬN",
+                "Đơn hàng đã được xác nhận",
                 "Shop đã xác nhận đơn hàng của bạn và bắt đầu chuẩn bị hàng.",
-                null
+                "Đã xác nhận",
+                TONE_SUCCESS,
+                null,
+                false
         );
     }
 
@@ -87,9 +106,12 @@ public class OrderMailService {
         sendOrderMail(
                 order,
                 "Đơn hàng đã bị hủy - " + resolveOrderCode(order),
-                "ĐƠN HÀNG ĐÃ BỊ HỦY",
-                "Đơn hàng của bạn đã bị hủy.",
-                "Lý do hủy: " + normalizeFallback(reason, "Không có")
+                "Đơn hàng đã bị hủy",
+                "Đơn hàng của bạn đã được cập nhật sang trạng thái Đã hủy.",
+                "Đã hủy",
+                TONE_DANGER,
+                "Lý do hủy: " + normalizeFallback(reason, "Không có"),
+                false
         );
     }
 
@@ -97,9 +119,12 @@ public class OrderMailService {
         sendOrderMail(
                 order,
                 "Đơn hàng đã tự động hủy - " + resolveOrderCode(order),
-                "ĐƠN HÀNG ĐÃ TỰ ĐỘNG HỦY",
-                "Đơn hàng của bạn đã quá thời gian thanh toán/xác nhận thanh toán nên hệ thống tự động hủy.",
-                null
+                "Đơn hàng đã tự động hủy",
+                "Đơn hàng của bạn đã quá thời gian thanh toán hoặc xác nhận thanh toán nên hệ thống tự động hủy.",
+                "Tự động hủy",
+                TONE_DANGER,
+                null,
+                false
         );
     }
 
@@ -107,9 +132,12 @@ public class OrderMailService {
         sendOrderMail(
                 order,
                 "Giao hàng thành công - " + resolveOrderCode(order),
-                "GIAO HÀNG THÀNH CÔNG",
+                "Giao hàng thành công",
                 "Đơn hàng của bạn đã được xác nhận giao hàng thành công. Cảm ơn bạn đã mua hàng tại " + resolveShopName() + ".",
-                null
+                "Hoàn thành",
+                TONE_SUCCESS,
+                null,
+                false
         );
     }
 
@@ -118,15 +146,18 @@ public class OrderMailService {
         String description = normalizeText(order == null ? null : order.getDeliveryFailedDescription());
 
         if (description != null) {
-            extra += System.lineSeparator() + "Mô tả: " + description;
+            extra += "\nMô tả: " + description;
         }
 
         sendOrderMail(
                 order,
                 "Giao hàng thất bại - " + resolveOrderCode(order),
-                "GIAO HÀNG THẤT BẠI",
+                "Giao hàng thất bại",
                 "Đơn hàng của bạn đã được cập nhật là giao hàng thất bại.",
-                extra
+                "Giao thất bại",
+                TONE_DANGER,
+                extra,
+                false
         );
     }
 
@@ -134,9 +165,12 @@ public class OrderMailService {
         sendOrderMail(
                 order,
                 "Đã hoàn tiền đơn giao thất bại - " + resolveOrderCode(order),
-                "ĐÃ HOÀN TIỀN",
+                "Đã hoàn tiền",
                 "Shop đã xác nhận hoàn tiền cho đơn giao hàng thất bại.",
-                "Số tiền hoàn: " + formatMoney(order == null ? null : order.getDeliveryRefundAmount())
+                "Đã hoàn tiền",
+                TONE_SUCCESS,
+                "Số tiền hoàn: " + formatMoney(order == null ? null : order.getDeliveryRefundAmount()),
+                false
         );
     }
 
@@ -144,9 +178,12 @@ public class OrderMailService {
         sendOrderMail(
                 order,
                 "Đã nhận thông tin hoàn tiền - " + resolveOrderCode(order),
-                "ĐÃ NHẬN THÔNG TIN HOÀN TIỀN",
+                "Đã nhận thông tin hoàn tiền",
                 "Shop đã nhận thông tin tài khoản ngân hàng của bạn cho đơn giao hàng thất bại. Shop sẽ kiểm tra và hoàn tiền thủ công trong thời gian sớm nhất.",
-                null
+                "Đã tiếp nhận",
+                TONE_INFO,
+                null,
+                false
         );
     }
 
@@ -154,9 +191,12 @@ public class OrderMailService {
         sendOrderMail(
                 order,
                 "Đã gửi yêu cầu hoàn hàng - " + resolveOrderCode(order),
-                "YÊU CẦU HOÀN HÀNG ĐÃ ĐƯỢC GỬI",
+                "Yêu cầu hoàn hàng đã được gửi",
                 "Shop đã nhận yêu cầu hoàn hàng/hoàn tiền của bạn. Yêu cầu đang chờ shop kiểm tra và xử lý.",
-                null
+                "Chờ xử lý",
+                TONE_WARNING,
+                null,
+                false
         );
     }
 
@@ -164,9 +204,12 @@ public class OrderMailService {
         sendOrderMail(
                 order,
                 "Đã hủy yêu cầu hoàn hàng - " + resolveOrderCode(order),
-                "ĐÃ HỦY YÊU CẦU HOÀN HÀNG",
+                "Đã hủy yêu cầu hoàn hàng",
                 "Yêu cầu hoàn hàng của bạn đã được hủy. Đơn hàng đã quay lại trạng thái Hoàn thành.",
-                null
+                "Đã hủy yêu cầu",
+                TONE_INFO,
+                null,
+                false
         );
     }
 
@@ -174,9 +217,12 @@ public class OrderMailService {
         sendOrderMail(
                 order,
                 "Yêu cầu hoàn hàng đã được chấp nhận - " + resolveOrderCode(order),
-                "YÊU CẦU HOÀN HÀNG ĐÃ ĐƯỢC CHẤP NHẬN",
+                "Yêu cầu hoàn hàng đã được chấp nhận",
                 "Shop đã chấp nhận yêu cầu hoàn hàng của bạn. Shop sẽ tiếp tục xử lý bước hoàn tiền theo phương án đã chọn.",
-                null
+                "Đã chấp nhận",
+                TONE_SUCCESS,
+                null,
+                false
         );
     }
 
@@ -184,9 +230,12 @@ public class OrderMailService {
         sendOrderMail(
                 order,
                 "Yêu cầu hoàn hàng bị từ chối - " + resolveOrderCode(order),
-                "YÊU CẦU HOÀN HÀNG BỊ TỪ CHỐI",
+                "Yêu cầu hoàn hàng bị từ chối",
                 "Shop đã từ chối yêu cầu hoàn hàng của bạn.",
-                "Lý do từ chối: " + normalizeFallback(reason, "Không có")
+                "Đã từ chối",
+                TONE_DANGER,
+                "Lý do từ chối: " + normalizeFallback(reason, "Không có"),
+                false
         );
     }
 
@@ -194,9 +243,12 @@ public class OrderMailService {
         sendOrderMail(
                 order,
                 "Đã hoàn tiền đơn hoàn hàng - " + resolveOrderCode(order),
-                "ĐÃ HOÀN TIỀN HOÀN HÀNG",
+                "Đã hoàn tiền hoàn hàng",
                 "Shop đã xác nhận hoàn tiền cho yêu cầu hoàn hàng của bạn.",
-                null
+                "Đã hoàn tiền",
+                TONE_SUCCESS,
+                null,
+                false
         );
     }
 
@@ -205,7 +257,10 @@ public class OrderMailService {
             String subject,
             String title,
             String mainMessage,
-            String extraMessage
+            String badgeText,
+            String tone,
+            String extraMessage,
+            boolean createdTemplate
     ) {
         if (!mailEnabled) {
             return;
@@ -223,75 +278,127 @@ public class OrderMailService {
         }
 
         try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(from);
-            message.setTo(recipient);
-            message.setSubject("[" + resolveShopName() + "] " + subject);
-            message.setText(buildMailBody(order, title, mainMessage, extraMessage));
+            MimeMessage mimeMessage = javaMailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, false, "UTF-8");
 
-            javaMailSender.send(message);
+            helper.setFrom(from);
+            helper.setTo(recipient);
+            helper.setSubject("[" + resolveShopName() + "] " + subject);
+
+            OrderMailTemplateService.OrderMailTemplateModel model = buildMailModel(
+                    order,
+                    title,
+                    mainMessage,
+                    badgeText,
+                    tone,
+                    extraMessage
+            );
+
+            String htmlContent = createdTemplate
+                    ? orderMailTemplateService.renderOrderCreated(model)
+                    : orderMailTemplateService.renderOrderStatus(model);
+
+            helper.setText(htmlContent, true);
+            javaMailSender.send(mimeMessage);
         } catch (Exception exception) {
             /*
-             * Tuyệt đối không làm fail nghiệp vụ đặt hàng/đổi trạng thái chỉ vì lỗi gửi mail.
-             * Lỗi được log để dev kiểm tra lại SMTP.
+             * Không làm fail nghiệp vụ đặt hàng/đổi trạng thái chỉ vì lỗi gửi mail.
+             * Lỗi được log để dev kiểm tra lại SMTP/template.
              */
             log.warn("Không gửi được mail đơn hàng {} đến {}: {}", resolveOrderCode(order), recipient, exception.getMessage());
         }
     }
 
-    private String buildMailBody(Order order, String title, String mainMessage, String extraMessage) {
-        StringBuilder builder = new StringBuilder();
-
-        builder.append(resolveShopName()).append(System.lineSeparator());
-        builder.append("==============================").append(System.lineSeparator());
-        builder.append(title).append(System.lineSeparator()).append(System.lineSeparator());
-        builder.append(normalizeFallback(mainMessage, "Đơn hàng của bạn đã được cập nhật.")).append(System.lineSeparator()).append(System.lineSeparator());
-
-        if (extraMessage != null && !extraMessage.isBlank()) {
-            builder.append(extraMessage.trim()).append(System.lineSeparator()).append(System.lineSeparator());
-        }
-
-        builder.append("THÔNG TIN ĐƠN HÀNG").append(System.lineSeparator());
-        builder.append("Mã đơn: ").append(resolveOrderCode(order)).append(System.lineSeparator());
-        builder.append("Khách hàng: ").append(normalizeFallback(order == null ? null : order.getCustomerName(), "-")).append(System.lineSeparator());
-        builder.append("Số điện thoại: ").append(normalizeFallback(order == null ? null : order.getCustomerPhone(), "-")).append(System.lineSeparator());
-        builder.append("Địa chỉ: ").append(normalizeFallback(order == null ? null : order.getShippingAddress(), "-")).append(System.lineSeparator());
-        builder.append("Phương thức thanh toán: ").append(formatPaymentMethod(order == null ? null : order.getPaymentMethod())).append(System.lineSeparator());
-        builder.append("Trạng thái hiện tại: ").append(formatOrderStatus(order == null ? null : order.getStatus())).append(System.lineSeparator());
-
-        if (order != null && order.getCreatedAt() != null) {
-            builder.append("Thời gian đặt: ").append(order.getCreatedAt().format(DATE_TIME_FORMATTER)).append(System.lineSeparator());
-        }
-
-        builder.append(System.lineSeparator());
-        builder.append("SẢN PHẨM").append(System.lineSeparator());
-        builder.append(buildOrderItemsText(order)).append(System.lineSeparator());
-
-        builder.append(System.lineSeparator());
-        builder.append("Tạm tính: ").append(formatMoney(order == null ? null : order.getTotalAmount())).append(System.lineSeparator());
-        builder.append("Giảm giá: ").append(formatMoney(order == null ? null : order.getDiscountAmount())).append(System.lineSeparator());
-        builder.append("Phí vận chuyển: ").append(formatMoney(order == null ? null : order.getShippingFee())).append(System.lineSeparator());
-        builder.append("Thanh toán: ").append(formatMoney(order == null ? null : order.getFinalAmount())).append(System.lineSeparator());
-
-        builder.append(System.lineSeparator());
-        builder.append("Nếu có thắc mắc, vui lòng liên hệ shop để được hỗ trợ.").append(System.lineSeparator());
-        builder.append("Cảm ơn bạn đã mua hàng tại ").append(resolveShopName()).append(".");
-
-        return builder.toString();
+    private OrderMailTemplateService.OrderMailTemplateModel buildMailModel(
+            Order order,
+            String title,
+            String mainMessage,
+            String badgeText,
+            String tone,
+            String extraMessage
+    ) {
+        return new OrderMailTemplateService.OrderMailTemplateModel(
+                escapeHtml(resolveShopName()),
+                escapeHtml(normalizeFallback(mainMessage, "Đơn hàng của bạn đã được cập nhật.")),
+                escapeHtml(normalizeFallback(title, "Cập nhật đơn hàng")),
+                escapeHtml(normalizeFallback(mainMessage, "Đơn hàng của bạn đã được cập nhật.")),
+                escapeHtml(normalizeFallback(badgeText, formatOrderStatus(order == null ? null : order.getStatus()))),
+                resolveBadgeBackground(tone),
+                resolveBadgeTextColor(tone),
+                escapeHtml(resolveOrderCode(order)),
+                escapeHtml(normalizeFallback(order == null ? null : order.getCustomerName(), "-")),
+                escapeHtml(normalizeFallback(order == null ? null : order.getCustomerPhone(), "-")),
+                escapeHtml(normalizeFallback(order == null ? null : order.getShippingAddress(), "-")),
+                escapeHtml(formatPaymentMethod(order == null ? null : order.getPaymentMethod())),
+                escapeHtml(formatOrderStatus(order == null ? null : order.getStatus())),
+                escapeHtml(formatCreatedAt(order)),
+                escapeHtml(formatMoney(order == null ? null : order.getTotalAmount())),
+                escapeHtml(formatMoney(order == null ? null : order.getDiscountAmount())),
+                escapeHtml(formatMoney(order == null ? null : order.getShippingFee())),
+                escapeHtml(formatMoney(order == null ? null : order.getFinalAmount())),
+                buildOrderItemsHtml(order),
+                buildExtraBlock(extraMessage, tone),
+                escapeHtml(resolveOrderDetailUrl()),
+                escapeHtml("Nếu có thắc mắc, vui lòng phản hồi email này hoặc liên hệ shop để được hỗ trợ."),
+                escapeHtml("Email này được gửi tự động từ hệ thống " + resolveShopName() + ". Vui lòng không chia sẻ thông tin đơn hàng cho người khác.")
+        );
     }
 
-    private String buildOrderItemsText(Order order) {
+    private String buildExtraBlock(String extraMessage, String tone) {
+        String cleanExtraMessage = normalizeText(extraMessage);
+
+        if (cleanExtraMessage == null) {
+            return "";
+        }
+
+        String borderColor = switch (normalizeText(tone) == null ? "" : tone.toUpperCase(Locale.ROOT)) {
+            case TONE_DANGER -> "#fecaca";
+            case TONE_WARNING -> "#fcd34d";
+            case TONE_SUCCESS -> "#bbf7d0";
+            default -> "#bfdbfe";
+        };
+
+        String backgroundColor = switch (normalizeText(tone) == null ? "" : tone.toUpperCase(Locale.ROOT)) {
+            case TONE_DANGER -> "#fef2f2";
+            case TONE_WARNING -> "#fffbeb";
+            case TONE_SUCCESS -> "#f0fdf4";
+            default -> "#eff6ff";
+        };
+
+        String textColor = switch (normalizeText(tone) == null ? "" : tone.toUpperCase(Locale.ROOT)) {
+            case TONE_DANGER -> "#991b1b";
+            case TONE_WARNING -> "#92400e";
+            case TONE_SUCCESS -> "#166534";
+            default -> "#1e40af";
+        };
+
+        return """
+                <tr>
+                    <td style=\"padding:22px 32px 0 32px;\">
+                        <div style=\"background:%s;border:1px solid %s;border-radius:16px;padding:15px 16px;color:%s;font-size:14px;line-height:1.7;font-weight:700;\">
+                            %s
+                        </div>
+                    </td>
+                </tr>
+                """.formatted(
+                backgroundColor,
+                borderColor,
+                textColor,
+                escapeHtml(cleanExtraMessage).replace("\n", "<br>")
+        );
+    }
+
+    private String buildOrderItemsHtml(Order order) {
         if (order == null || order.getId() == null) {
-            return "- Không có dữ liệu sản phẩm";
+            return buildEmptyOrderItemRow();
         }
 
         List<OrderItem> items = orderItemRepository.findDetailByOrderId(order.getId());
         if (items == null || items.isEmpty()) {
-            return "- Không có dữ liệu sản phẩm";
+            return buildEmptyOrderItemRow();
         }
 
         StringBuilder builder = new StringBuilder();
-        int index = 1;
 
         for (OrderItem item : items) {
             if (item == null) {
@@ -301,20 +408,47 @@ public class OrderMailService {
             int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
             BigDecimal unitPrice = defaultMoney(item.getFinalPrice());
             BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(Math.max(quantity, 0)));
+            String productDetail = buildProductDetail(item);
 
-            builder.append(index++).append(". ")
-                    .append(resolveOrderItemName(item))
-                    .append(" | SKU: ").append(normalizeFallback(item.getSku(), "-"))
-                    .append(" | ").append(normalizeFallback(item.getCapacityName(), "-"))
-                    .append(" | ").append(normalizeFallback(item.getBottleTypeName(), "-"))
-                    .append(" | SL: ").append(quantity)
-                    .append(" | Giá: ").append(formatMoney(unitPrice))
-                    .append(" | Thành tiền: ").append(formatMoney(lineTotal))
-                    .append(System.lineSeparator());
+            builder.append("""
+                    <tr>
+                        <td style=\"padding:14px;border-bottom:1px solid #e5e7eb;vertical-align:top;\">
+                            <div style=\"font-size:14px;color:#111827;font-weight:800;line-height:1.45;\">%s</div>
+                            <div style=\"font-size:12px;color:#6b7280;line-height:1.6;margin-top:4px;\">%s</div>
+                        </td>
+                        <td align=\"center\" style=\"padding:14px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:14px;color:#111827;font-weight:800;\">%d</td>
+                        <td align=\"right\" style=\"padding:14px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:14px;color:#111827;font-weight:700;white-space:nowrap;\">%s</td>
+                        <td align=\"right\" style=\"padding:14px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:14px;color:#b7791f;font-weight:900;white-space:nowrap;\">%s</td>
+                    </tr>
+                    """.formatted(
+                    escapeHtml(resolveOrderItemName(item)),
+                    escapeHtml(productDetail),
+                    quantity,
+                    escapeHtml(formatMoney(unitPrice)),
+                    escapeHtml(formatMoney(lineTotal))
+            ));
         }
 
-        String text = builder.toString().trim();
-        return text.isBlank() ? "- Không có dữ liệu sản phẩm" : text;
+        String html = builder.toString().trim();
+        return html.isBlank() ? buildEmptyOrderItemRow() : html;
+    }
+
+    private String buildEmptyOrderItemRow() {
+        return """
+                <tr>
+                    <td colspan=\"4\" style=\"padding:18px;text-align:center;color:#6b7280;font-size:14px;\">
+                        Không có dữ liệu sản phẩm
+                    </td>
+                </tr>
+                """;
+    }
+
+    private String buildProductDetail(OrderItem item) {
+        String sku = normalizeFallback(item == null ? null : item.getSku(), "-");
+        String capacity = normalizeFallback(item == null ? null : item.getCapacityName(), "-");
+        String bottleType = normalizeFallback(item == null ? null : item.getBottleTypeName(), "-");
+
+        return "SKU: " + sku + " • " + capacity + " • " + bottleType;
     }
 
     private String resolveOrderItemName(OrderItem item) {
@@ -360,6 +494,46 @@ public class OrderMailService {
         }
 
         return normalizeText(mailUsername);
+    }
+
+    private String resolveOrderDetailUrl() {
+        String baseUrl = normalizeFallback(frontendUrl, "http://localhost:5173");
+
+        while (baseUrl.endsWith("/")) {
+            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+        }
+
+        return baseUrl + "/customer/profile?tab=orders";
+    }
+
+    private String resolveBadgeBackground(String tone) {
+        String normalizedTone = normalizeText(tone) == null ? "" : tone.toUpperCase(Locale.ROOT);
+
+        return switch (normalizedTone) {
+            case TONE_SUCCESS -> "#dcfce7";
+            case TONE_WARNING -> "#fef3c7";
+            case TONE_DANGER -> "#fee2e2";
+            default -> "#dbeafe";
+        };
+    }
+
+    private String resolveBadgeTextColor(String tone) {
+        String normalizedTone = normalizeText(tone) == null ? "" : tone.toUpperCase(Locale.ROOT);
+
+        return switch (normalizedTone) {
+            case TONE_SUCCESS -> "#166534";
+            case TONE_WARNING -> "#92400e";
+            case TONE_DANGER -> "#991b1b";
+            default -> "#1e40af";
+        };
+    }
+
+    private String formatCreatedAt(Order order) {
+        if (order == null || order.getCreatedAt() == null) {
+            return "-";
+        }
+
+        return order.getCreatedAt().format(DATE_TIME_FORMATTER);
     }
 
     private String normalizeText(String value) {
@@ -431,5 +605,18 @@ public class OrderMailService {
             case 7 -> "Hoàn hàng / đổi trả hoàn tất";
             default -> "Không xác định";
         };
+    }
+
+    private String escapeHtml(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        return value
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
     }
 }
