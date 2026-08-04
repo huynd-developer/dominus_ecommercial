@@ -97,9 +97,6 @@ export type PosCheckoutPaymentMethod = "CASH" | "VNPAY" | "VIETQR" | "MIXED";
 export type PosTransferProvider = "" | "VNPAY" | "VIETQR";
 type NonEmptyTransferProvider = "VNPAY" | "VIETQR";
 
-const MAX_POS_ITEM_QUANTITY_PER_PRODUCT = 10;
-
-
 export interface PosStoreState {
   allProducts: PosProduct[];
   categories: string[];
@@ -230,7 +227,7 @@ const getMaxBuyQuantity = (product?: PosProduct | null): number => {
     return 0;
   }
 
-  return Math.min(Math.trunc(stockQuantity), MAX_POS_ITEM_QUANTITY_PER_PRODUCT);
+  return Math.trunc(stockQuantity);
 };
 
 const getMaxBuyQuantityMessage = (product?: PosProduct | null): string => {
@@ -240,14 +237,13 @@ const getMaxBuyQuantityMessage = (product?: PosProduct | null): string => {
     return "Sản phẩm đã hết hàng.";
   }
 
-  if (maxQuantity < MAX_POS_ITEM_QUANTITY_PER_PRODUCT) {
-    return `Kho chỉ còn tối đa ${maxQuantity} lọ cho sản phẩm này.`;
-  }
-
-  return `Mỗi sản phẩm chỉ được mua tối đa ${MAX_POS_ITEM_QUANTITY_PER_PRODUCT} lọ trong một đơn hàng.`;
+  return `Kho chỉ còn tối đa ${maxQuantity} lọ cho sản phẩm này.`;
 };
 
-const normalizeCartQuantity = (quantity: unknown, product?: PosProduct | null): number => {
+const normalizeCartQuantity = (
+  quantity: unknown,
+  product?: PosProduct | null
+): number => {
   const maxQuantity = getMaxBuyQuantity(product);
   const numberValue = Number(quantity || 0);
 
@@ -662,7 +658,9 @@ const fetchFirstAvailable = async (urls: string[]) => {
   throw lastError;
 };
 
-const getOrderPaymentMethod = (order?: Partial<PosHeldOrder> | null): string => {
+const getOrderPaymentMethod = (
+  order?: Partial<PosHeldOrder> | null
+): string => {
   return String(order?.paymentMethod || "")
     .trim()
     .toUpperCase();
@@ -673,13 +671,9 @@ const isPendingOnlinePaymentOrder = (
 ): boolean => {
   const method = getOrderPaymentMethod(order);
 
-  return [
-    "VNPAY",
-    "VIETQR",
-    "MIXED",
-    "MIXED_VNPAY",
-    "MIXED_VIETQR",
-  ].includes(method);
+  return ["VNPAY", "VIETQR", "MIXED", "MIXED_VNPAY", "MIXED_VIETQR"].includes(
+    method
+  );
 };
 
 const isRealHeldOrder = (order?: Partial<PosHeldOrder> | null): boolean => {
@@ -772,7 +766,11 @@ const mapHeldOrderFromBackend = (raw: any): PosHeldOrder => {
     paymentMethod,
     totalAmount: numberValue(raw?.totalAmount, raw?.total, raw?.subTotal),
     discountAmount: numberValue(raw?.discountAmount, raw?.discount),
-    finalAmount: numberValue(raw?.finalAmount, raw?.payableAmount, raw?.totalPay),
+    finalAmount: numberValue(
+      raw?.finalAmount,
+      raw?.payableAmount,
+      raw?.totalPay
+    ),
     createdAt: raw?.createdAt || raw?.createdDate || raw?.created_at || "",
     cashierId: raw?.cashierId ?? raw?.employeeId,
     cashierName: raw?.cashierName || raw?.employeeName || raw?.staffName || "",
@@ -1132,14 +1130,16 @@ export const usePosStore = defineStore("posStore", {
         this.lastOrderId = draft.lastOrderId || null;
 
         this.activePendingPaymentOrderId =
-          draft.activePendingPaymentOrderId || draft.pendingVietQrOrderId || null;
+          draft.activePendingPaymentOrderId ||
+          draft.pendingVietQrOrderId ||
+          null;
 
-        this.activePendingPaymentTransferProvider =
-          this.activePendingPaymentOrderId
-            ? draft.activePendingPaymentTransferProvider ||
-              draft.transferProvider ||
-              (draft.paymentMethod === "VNPAY" ? "VNPAY" : "")
-            : ""; 
+        this.activePendingPaymentTransferProvider = this
+          .activePendingPaymentOrderId
+          ? draft.activePendingPaymentTransferProvider ||
+            draft.transferProvider ||
+            (draft.paymentMethod === "VNPAY" ? "VNPAY" : "")
+          : "";
 
         this.activeHeldOrderId = this.activePendingPaymentOrderId
           ? null
@@ -1261,7 +1261,11 @@ export const usePosStore = defineStore("posStore", {
         // 2. Khử trùng lặp dựa trên Tên sản phẩm kết hợp Tên biến thể (subName) để gom các dòng trùng y hệt nhau
         const uniqueMap = new Map<string, PosProduct>();
         for (const prod of activeProducts) {
-          const compositeKey = `${prod.name.trim().toLowerCase()}|${(prod.subName || "").trim().toLowerCase()}`;
+          const compositeKey = `${prod.name.trim().toLowerCase()}|${(
+            prod.subName || ""
+          )
+            .trim()
+            .toLowerCase()}`;
           if (!uniqueMap.has(compositeKey)) {
             uniqueMap.set(compositeKey, prod);
           }
@@ -1315,7 +1319,9 @@ export const usePosStore = defineStore("posStore", {
       }
     },
 
-    findLocalHeldOrderByCustomerPhone(phone?: string | null): PosHeldOrder | null {
+    findLocalHeldOrderByCustomerPhone(
+      phone?: string | null
+    ): PosHeldOrder | null {
       const cleanPhone = normalizePhone(phone);
 
       if (!cleanPhone) {
@@ -1361,24 +1367,33 @@ export const usePosStore = defineStore("posStore", {
           ? "PENDING_PAYMENT"
           : "HELD",
         paymentMethod: normalizedPaymentMethod || "HOLD",
-        totalAmount: Number(existingOrder?.totalAmount || this.totalAmount || 0),
+        totalAmount: Number(
+          existingOrder?.totalAmount || this.totalAmount || 0
+        ),
         discountAmount: Number(
           existingOrder?.discountAmount || this.discountAmount || 0
         ),
-        finalAmount: Number(existingOrder?.finalAmount || this.finalAmount || 0),
+        finalAmount: Number(
+          existingOrder?.finalAmount || this.finalAmount || 0
+        ),
         createdAt: existingOrder?.createdAt || new Date().toISOString(),
         cashierId: existingOrder?.cashierId,
         cashierName:
           existingOrder?.cashierName || this.activeHeldOrderCashierName || "",
         customerId: existingOrder?.customerId || this.customer?.customerId,
         customerName: existingOrder?.customerName || this.customer?.name || "",
-        customerPhone: existingOrder?.customerPhone || this.customer?.phone || "",
-        customerEmail: existingOrder?.customerEmail || this.customer?.email || "",
+        customerPhone:
+          existingOrder?.customerPhone || this.customer?.phone || "",
+        customerEmail:
+          existingOrder?.customerEmail || this.customer?.email || "",
         ownOrder: existingOrder?.ownOrder ?? existingOrder?.isOwnOrder ?? true,
-        isOwnOrder: existingOrder?.isOwnOrder ?? existingOrder?.ownOrder ?? true,
+        isOwnOrder:
+          existingOrder?.isOwnOrder ?? existingOrder?.ownOrder ?? true,
         canOpen: true,
         canCheckout: true,
-        canTransfer: isRealHeldOrder({ paymentMethod: normalizedPaymentMethod }),
+        canTransfer: isRealHeldOrder({
+          paymentMethod: normalizedPaymentMethod,
+        }),
         canCancel: isRealHeldOrder({ paymentMethod: normalizedPaymentMethod }),
         itemCount: this.cart.length || existingOrder?.itemCount || 0,
         totalQuantity:
@@ -1413,7 +1428,9 @@ export const usePosStore = defineStore("posStore", {
 
     preparePartialTransferMethodChange(orderId?: number | string | null) {
       const targetOrderId =
-        orderId || this.activePendingPaymentOrderId || this.pendingVietQrOrderId;
+        orderId ||
+        this.activePendingPaymentOrderId ||
+        this.pendingVietQrOrderId;
 
       if (!targetOrderId) {
         this.errorMsg =
@@ -1458,10 +1475,13 @@ export const usePosStore = defineStore("posStore", {
 
     async cancelPartialPaidOrder(orderId?: number | string | null) {
       const targetOrderId =
-        orderId || this.activePendingPaymentOrderId || this.pendingVietQrOrderId;
+        orderId ||
+        this.activePendingPaymentOrderId ||
+        this.pendingVietQrOrderId;
 
       if (this.cashPaid <= 0) {
-        this.errorMsg = "Đơn chưa nhận tiền mặt một phần nên không cần hủy theo luồng hoàn tiền.";
+        this.errorMsg =
+          "Đơn chưa nhận tiền mặt một phần nên không cần hủy theo luồng hoàn tiền.";
         return false;
       }
 
@@ -1509,7 +1529,9 @@ export const usePosStore = defineStore("posStore", {
 
     async cancelPendingPaymentForEdit(orderId?: number | string | null) {
       const targetOrderId =
-        orderId || this.activePendingPaymentOrderId || this.pendingVietQrOrderId;
+        orderId ||
+        this.activePendingPaymentOrderId ||
+        this.pendingVietQrOrderId;
 
       if (!targetOrderId) {
         this.vnpayUrl = "";
@@ -1553,22 +1575,33 @@ export const usePosStore = defineStore("posStore", {
         }
 
         const customerPhone =
-          data?.customerPhone || localProcessingOrder?.customerPhone || this.customer?.phone;
+          data?.customerPhone ||
+          localProcessingOrder?.customerPhone ||
+          this.customer?.phone;
         const customerName =
-          data?.customerName || localProcessingOrder?.customerName || this.customer?.name;
+          data?.customerName ||
+          localProcessingOrder?.customerName ||
+          this.customer?.name;
         const customerEmail =
-          data?.customerEmail || localProcessingOrder?.customerEmail || this.customer?.email;
+          data?.customerEmail ||
+          localProcessingOrder?.customerEmail ||
+          this.customer?.email;
 
         if (customerPhone || customerName || customerEmail) {
           this.customer = {
             customerId:
-              data?.customerId || localProcessingOrder?.customerId || this.customer?.customerId,
+              data?.customerId ||
+              localProcessingOrder?.customerId ||
+              this.customer?.customerId,
             name: customerName || "",
             phone: customerPhone || "",
             email: customerEmail || "",
-            customerRank: data?.customerRank || this.customer?.customerRank || "BRONZE",
+            customerRank:
+              data?.customerRank || this.customer?.customerRank || "BRONZE",
             loyaltyPoints: Number(
-              data?.customerLoyaltyPointsAfter || this.customer?.loyaltyPoints || 0
+              data?.customerLoyaltyPointsAfter ||
+                this.customer?.loyaltyPoints ||
+                0
             ),
           };
           this.markCustomerSaved();
@@ -1670,7 +1703,8 @@ export const usePosStore = defineStore("posStore", {
 
       if (
         !this.customer ||
-        normalizePhone(this.customer.phone) !== normalizePhone(order.customerPhone)
+        normalizePhone(this.customer.phone) !==
+          normalizePhone(order.customerPhone)
       ) {
         this.customer = {
           customerId: order.customerId,
@@ -1790,7 +1824,10 @@ export const usePosStore = defineStore("posStore", {
           return;
         }
 
-        existingItem.quantity = normalizeCartQuantity(existingItem.quantity + 1, product);
+        existingItem.quantity = normalizeCartQuantity(
+          existingItem.quantity + 1,
+          product
+        );
         this.clearVoucherLocal(true);
         return;
       }
@@ -2619,7 +2656,10 @@ export const usePosStore = defineStore("posStore", {
           cashGiven > 0 &&
           isCashStillMissingMessage(message)
         ) {
-          this.cashPaid = Math.max(Number(this.cashPaid || 0), Number(cashGiven || 0));
+          this.cashPaid = Math.max(
+            Number(this.cashPaid || 0),
+            Number(cashGiven || 0)
+          );
           this.paymentMethod = "VIETQR";
           this.transferProvider = "VIETQR";
           this.errorMsg = `Đã nhận tiền mặt ${formatMoney(
@@ -2821,7 +2861,7 @@ export const usePosStore = defineStore("posStore", {
           ...latestProduct,
           stockQuantity: Math.max(
             Number(latestProduct.stockQuantity || 0),
-            Math.min(itemQuantity, MAX_POS_ITEM_QUANTITY_PER_PRODUCT)
+            itemQuantity
           ),
         };
 
@@ -2860,7 +2900,7 @@ export const usePosStore = defineStore("posStore", {
               itemQuantity ||
               1
           ),
-          Math.min(itemQuantity, MAX_POS_ITEM_QUANTITY_PER_PRODUCT)
+          itemQuantity
         ),
         image:
           item.image ||

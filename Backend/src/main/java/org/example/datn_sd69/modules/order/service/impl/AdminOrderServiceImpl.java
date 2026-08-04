@@ -3,6 +3,7 @@ package org.example.datn_sd69.modules.order.service.impl;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import jakarta.persistence.EntityManager;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.Order;
 import org.example.datn_sd69.entity.OrderDeliveryEvidence;
@@ -20,6 +21,7 @@ import org.example.datn_sd69.modules.order.dto.request.MarkDeliveryCompletedRequ
 import org.example.datn_sd69.modules.order.dto.request.MarkDeliveryFailedRequest;
 import org.example.datn_sd69.modules.order.dto.request.RejectReturnRequest;
 import org.example.datn_sd69.modules.order.service.AdminOrderService;
+import org.example.datn_sd69.modules.order.service.OrderMailService;
 import org.example.datn_sd69.repository.OrderDeliveryEvidenceRepository;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
@@ -35,6 +37,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
@@ -112,7 +116,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             ".webp"
     );
 
-    private static final long MAX_DELIVERY_IMAGE_SIZE = 10L * 1024L * 1024L;
+    private static final long MAX_DELIVERY_EVIDENCE_TOTAL_SIZE = 10L * 1024L * 1024L;
 
     private static final String DELIVERY_EVIDENCE_CLOUDINARY_FOLDER = "order-delivery-evidence";
 
@@ -152,6 +156,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private final UserRepository userRepository;
     private final Cloudinary cloudinary;
     private final EntityManager entityManager;
+    private final OrderMailService orderMailService;
 
     private record KeywordDateRange(
             String keyword,
@@ -228,6 +233,29 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         return mapOrderToResponse(order, true);
     }
 
+
+    @Override
+    @Transactional
+    public AdminOrderResponse confirmOrder(Integer orderId) {
+        Order order = findOrderOrThrow(orderId);
+
+        if (safeStatus(order) != STATUS_PENDING) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ được xác nhận đơn hàng khi đơn còn ở trạng thái chờ xác nhận"
+            );
+        }
+
+        deductStockWhenConfirm(order);
+
+        order.setStatus(STATUS_CONFIRMED);
+        Order savedOrder = orderRepository.save(order);
+
+        orderMailService.sendOrderConfirmed(savedOrder);
+
+        return mapOrderToResponse(savedOrder, true);
+    }
+
     @Override
     @Transactional
     public AdminOrderResponse markDeliveryCompleted(
@@ -255,6 +283,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         Order savedOrder = orderRepository.save(order);
 
         saveDeliveryEvidenceFiles(savedOrder, files, DELIVERY_EVIDENCE_TYPE_SUCCESS);
+        orderMailService.sendDeliveryCompleted(savedOrder);
 
         return mapOrderToResponse(savedOrder, true);
     }
@@ -301,6 +330,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         Order savedOrder = orderRepository.save(order);
 
         saveDeliveryEvidenceFiles(savedOrder, files, DELIVERY_EVIDENCE_TYPE_FAILED);
+        orderMailService.sendDeliveryFailed(savedOrder);
 
         return mapOrderToResponse(savedOrder, true);
     }
@@ -340,10 +370,16 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             );
         }
 
+        if (shouldRestoreStockAfterRefund()) {
+            restoreStockWhenDeliveryRefunded(order);
+        }
+
         order.setDeliveryRefundedAt(LocalDateTime.now());
         order.setDeliveryRefundedByName(getCurrentAdminDisplayName());
 
         Order savedOrder = orderRepository.save(order);
+
+        orderMailService.sendDeliveryRefunded(savedOrder);
 
         return mapOrderToResponse(savedOrder, true);
     }
@@ -362,13 +398,17 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         String cancelReason = normalizeAdminCancelReason(request);
 
-        restoreStockWhenAdminCancel(order);
-
+        /*
+         * Đơn Chờ xác nhận chưa trừ kho, nên hủy ở trạng thái này không cộng lại kho.
+         * Kho chỉ được cộng lại ở các luồng hoàn/hoàn tiền khi trước đó đơn đã được xác nhận và đã trừ kho.
+         */
         order.setStatus(STATUS_CANCELLED);
         order.setCancelReason(cancelReason);
         order.setCancelledAt(LocalDateTime.now());
 
         Order savedOrder = orderRepository.save(order);
+
+        orderMailService.sendOrderCancelled(savedOrder, cancelReason);
 
         return mapOrderToResponse(savedOrder, true);
     }
@@ -394,7 +434,10 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         returnRequestItemRepository.saveAll(returnItems);
 
-        return mapOrderToResponse(orderRepository.save(order), true);
+        Order savedOrder = orderRepository.save(order);
+        orderMailService.sendReturnAccepted(savedOrder);
+
+        return mapOrderToResponse(savedOrder, true);
     }
 
     @Override
@@ -428,6 +471,8 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         order.setStatus(STATUS_COMPLETED);
         Order savedOrder = orderRepository.save(order);
 
+        orderMailService.sendReturnRejected(savedOrder, rejectReason);
+
         return mapOrderToResponse(savedOrder, true);
     }
 
@@ -459,11 +504,17 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             );
         }
 
+        if (shouldRestoreStockAfterRefund()) {
+            restoreStockWhenReturnRefunded(returnItems);
+        }
+
         returnItems.forEach(item -> item.setStatus(RETURN_ITEM_STATUS_COMPLETED));
         returnRequestItemRepository.saveAll(returnItems);
 
         order.setStatus(STATUS_RETURN_COMPLETED);
         Order savedOrder = orderRepository.save(order);
+
+        orderMailService.sendReturnRefunded(savedOrder);
 
         return mapOrderToResponse(savedOrder, true);
     }
@@ -529,6 +580,47 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                 && Integer.valueOf(status).equals(item.getStatus()));
     }
 
+    /**
+     * FE sẽ hỏi riêng sau khi admin xác nhận đã hoàn tiền:
+     * - Có nhập kho: gửi restoreStock=true
+     * - Không nhập kho: gửi restoreStock=false
+     *
+     * Method vẫn đọc được cả query param restoreStock và header X-Restore-Stock
+     * để không bắt buộc sửa chữ ký service/controller hiện tại.
+     */
+    private boolean shouldRestoreStockAfterRefund() {
+        try {
+            if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes)) {
+                return false;
+            }
+
+            HttpServletRequest request = attributes.getRequest();
+
+            if (request == null) {
+                return false;
+            }
+
+            String rawValue = normalizeOptionalText(request.getHeader("X-Restore-Stock"));
+
+            if (rawValue == null) {
+                rawValue = normalizeOptionalText(request.getParameter("restoreStock"));
+            }
+
+            if (rawValue == null) {
+                return false;
+            }
+
+            String normalized = rawValue.trim().toLowerCase(Locale.ROOT);
+
+            return normalized.equals("true")
+                    || normalized.equals("1")
+                    || normalized.equals("yes")
+                    || normalized.equals("y");
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
     private String normalizeAdminCancelReason(AdminCancelOrderRequest request) {
         if (request == null || request.reason() == null || request.reason().trim().isEmpty()) {
             throw new ResponseStatusException(
@@ -586,6 +678,76 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         return fullReason;
     }
 
+
+    private void deductStockWhenConfirm(Order order) {
+        if (order == null || order.getId() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Đơn hàng không hợp lệ"
+            );
+        }
+
+        List<OrderItem> orderItems = orderItemRepository.findDetailByOrderId(order.getId());
+
+        if (orderItems == null || orderItems.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Đơn hàng chưa có sản phẩm để xác nhận"
+            );
+        }
+
+        for (OrderItem item : orderItems) {
+            if (item == null || item.getProductVariant() == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Đơn hàng có sản phẩm không hợp lệ"
+                );
+            }
+
+            ProductVariant variant = item.getProductVariant();
+            int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+
+            if (quantity <= 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Số lượng sản phẩm trong đơn không hợp lệ"
+                );
+            }
+
+            int currentStock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
+
+            if (currentStock < quantity) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Sản phẩm " + resolveOrderItemSku(item, variant)
+                                + " chỉ còn " + currentStock
+                                + " trong kho, không đủ để xác nhận đơn"
+                );
+            }
+        }
+
+        for (OrderItem item : orderItems) {
+            ProductVariant variant = item.getProductVariant();
+            int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+            int currentStock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
+
+            variant.setStockQuantity(currentStock - quantity);
+            entityManager.merge(variant);
+        }
+    }
+
+    private String resolveOrderItemSku(OrderItem item, ProductVariant variant) {
+        String itemSku = item == null ? null : normalizeOptionalText(item.getSku());
+
+        if (itemSku != null) {
+            return itemSku;
+        }
+
+        String variantSku = variant == null ? null : normalizeOptionalText(variant.getSku());
+
+        return variantSku == null ? "không xác định" : variantSku;
+    }
+
     private void restoreStockWhenAdminCancel(Order order) {
         if (order == null || order.getId() == null) {
             return;
@@ -598,20 +760,68 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         }
 
         for (OrderItem item : orderItems) {
-            if (item == null || item.getProductVariant() == null) {
+            restoreStockByOrderItemQuantity(item);
+        }
+    }
+
+    private void restoreStockWhenDeliveryRefunded(Order order) {
+        if (order == null || order.getId() == null) {
+            return;
+        }
+
+        List<OrderItem> orderItems = orderItemRepository.findDetailByOrderId(order.getId());
+
+        if (orderItems == null || orderItems.isEmpty()) {
+            return;
+        }
+
+        for (OrderItem item : orderItems) {
+            restoreStockByOrderItemQuantity(item);
+        }
+    }
+
+    private void restoreStockWhenReturnRefunded(List<ReturnRequestItem> returnItems) {
+        if (returnItems == null || returnItems.isEmpty()) {
+            return;
+        }
+
+        for (ReturnRequestItem returnItem : returnItems) {
+            if (returnItem == null || returnItem.getOrderItem() == null) {
                 continue;
             }
 
-            ProductVariant variant = item.getProductVariant();
-            int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+            OrderItem orderItem = returnItem.getOrderItem();
+
+            if (orderItem.getProductVariant() == null) {
+                continue;
+            }
+
+            int quantity = returnItem.getReturnQuantity() == null ? 0 : returnItem.getReturnQuantity();
 
             if (quantity <= 0) {
                 continue;
             }
 
+            ProductVariant variant = orderItem.getProductVariant();
             int currentStock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
             variant.setStockQuantity(currentStock + quantity);
         }
+    }
+
+    private void restoreStockByOrderItemQuantity(OrderItem item) {
+        if (item == null || item.getProductVariant() == null) {
+            return;
+        }
+
+        ProductVariant variant = item.getProductVariant();
+        int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+
+        if (quantity <= 0) {
+            return;
+        }
+
+        int currentStock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
+        variant.setStockQuantity(currentStock + quantity);
     }
 
     private String normalizeRejectReason(RejectReturnRequest request) {
@@ -708,6 +918,17 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             );
         }
 
+        long totalSize = files.stream()
+                .mapToLong(MultipartFile::getSize)
+                .sum();
+
+        if (totalSize > MAX_DELIVERY_EVIDENCE_TOTAL_SIZE) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Tổng dung lượng ảnh minh chứng không được vượt quá 10MB"
+            );
+        }
+
         for (MultipartFile file : files) {
             validateSingleDeliveryEvidenceImage(file);
         }
@@ -741,12 +962,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             );
         }
 
-        if (file.getSize() > MAX_DELIVERY_IMAGE_SIZE) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Mỗi ảnh minh chứng không được vượt quá 10MB"
-            );
-        }
     }
 
     private String getFileExtension(String filename) {

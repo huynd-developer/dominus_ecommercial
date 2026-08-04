@@ -23,11 +23,11 @@ import org.example.datn_sd69.modules.customerOrder.dto.response.CustomerOrderRes
 import org.example.datn_sd69.modules.customerOrder.dto.response.CustomerReturnItemResponse;
 import org.example.datn_sd69.modules.customerOrder.dto.request.SubmitDeliveryRefundBankRequest;
 import org.example.datn_sd69.modules.customerOrder.service.CustomerOrderService;
+import org.example.datn_sd69.modules.order.service.OrderMailService;
 import org.example.datn_sd69.repository.CustomerRepository;
 import org.example.datn_sd69.repository.OrderDeliveryEvidenceRepository;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
-import org.example.datn_sd69.repository.ProductVariantRepository;
 import org.example.datn_sd69.repository.ReturnRequestItemRepository;
 import org.example.datn_sd69.repository.ReturnRequestMediaRepository;
 import org.example.datn_sd69.repository.ReturnRequestRepository;
@@ -39,13 +39,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -84,10 +88,10 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     private static final int MAX_RETURN_IMAGE_COUNT = 6;
     private static final int MAX_RETURN_VIDEO_COUNT = 1;
 
-    private static final long RETURN_REQUEST_DEADLINE_DAYS = 15L;
+    private static final long RETURN_REQUEST_DEADLINE_DAYS = 3L;
 
-    private static final long MAX_RETURN_IMAGE_SIZE = 20L * 1024L * 1024L;
-    private static final long MAX_RETURN_VIDEO_SIZE = 200L * 1024L * 1024L;
+    private static final long MAX_TOTAL_RETURN_IMAGE_SIZE = 10L * 1024L * 1024L;
+    private static final long MAX_RETURN_VIDEO_SIZE = 10L * 1024L * 1024L;
 
     private static final String RETURN_TYPE_RECEIVED_WITH_PROBLEM = "RECEIVED_WITH_PROBLEM";
     private static final String RETURN_TYPE_NOT_RECEIVED_OR_MISSING = "NOT_RECEIVED_OR_MISSING";
@@ -124,34 +128,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             "Thùng hàng rỗng"
     );
 
-    private static final Set<String> SUPPORTED_BANK_NAMES = Set.of(
-            "Vietcombank",
-            "BIDV",
-            "VietinBank",
-            "Agribank",
-            "MB Bank",
-            "Techcombank",
-            "ACB",
-            "VPBank",
-            "TPBank",
-            "Sacombank",
-            "VIB",
-            "SHB",
-            "HDBank",
-            "MSB",
-            "OCB",
-            "Eximbank",
-            "LPBank",
-            "SeABank",
-            "Nam A Bank",
-            "Bac A Bank",
-            "ABBank",
-            "PVcomBank",
-            "NCB",
-            "KienlongBank",
-            "VietBank",
-            "SaigonBank"
-    );
+    private static final String VIETQR_BANKS_API_URL = "https://api.vietqr.io/v2/banks";
+    private static final long VIETQR_BANK_CACHE_MINUTES = 60L;
 
     private static final Set<String> EVIDENCE_REQUIRED_REASONS = Set.of(
             "Thiếu hàng",
@@ -191,12 +169,17 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     private final OrderRepository orderRepository;
     private final OrderDeliveryEvidenceRepository orderDeliveryEvidenceRepository;
     private final OrderItemRepository orderItemRepository;
-    private final ProductVariantRepository productVariantRepository;
     private final ReturnRequestRepository returnRequestRepository;
     private final ReturnRequestItemRepository returnRequestItemRepository;
     private final ReturnRequestMediaRepository returnRequestMediaRepository;
     private final Cloudinary cloudinary;
     private final ObjectMapper objectMapper;
+    private final OrderMailService orderMailService;
+
+    private final RestTemplate vietQrRestTemplate = new RestTemplate();
+
+    private volatile Set<String> cachedSupportedBankNames = Collections.emptySet();
+    private volatile LocalDateTime cachedSupportedBankNamesAt;
 
     @Override
     @Transactional(readOnly = true)
@@ -277,6 +260,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         order.setDeliveryRefundBankAccountHolder(bankAccountHolder);
 
         Order savedOrder = orderRepository.save(order);
+        orderMailService.sendDeliveryRefundBankSubmitted(savedOrder);
+
         List<OrderItem> items = orderItemRepository.findByOrderId(savedOrder.getId());
 
         return mapToOrderResponse(savedOrder, items);
@@ -307,13 +292,16 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             throw badRequest("Đơn hàng không có sản phẩm, không thể hủy");
         }
 
-        restoreStockWhenCancel(items);
-
+        /*
+         * Đơn Chờ xác nhận chưa trừ kho, nên khách hủy ở trạng thái này không cộng lại kho.
+         * Kho chỉ được trừ khi admin xác nhận đơn và chỉ được cộng lại ở các luồng hoàn/hoàn tiền phù hợp.
+         */
         order.setStatus(STATUS_CANCELLED);
         order.setCancelReason(cancelReason);
         order.setCancelledAt(LocalDateTime.now());
 
-        orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+        orderMailService.sendOrderCancelled(savedOrder, cancelReason);
     }
 
     @Override
@@ -472,7 +460,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         saveReturnRequestMedia(savedReturnRequest, mediaFiles);
 
         order.setStatus(STATUS_RETURN_REQUESTED);
-        orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+        orderMailService.sendReturnRequested(savedOrder);
     }
 
     @Override
@@ -518,7 +507,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         returnRequestItemRepository.saveAll(returnItems);
 
         order.setStatus(STATUS_COMPLETED);
-        orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+        orderMailService.sendReturnRequestCancelled(savedOrder);
     }
 
     private void validatePreviousReturnRequestBeforeCreate(Order order) {
@@ -594,29 +584,6 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         }
 
         return reason;
-    }
-
-    private void restoreStockWhenCancel(List<OrderItem> items) {
-        for (OrderItem item : items) {
-            ProductVariant variant = item.getProductVariant();
-
-            if (variant == null) {
-                throw badRequest("Dữ liệu sản phẩm trong đơn hàng không hợp lệ");
-            }
-
-            Integer quantity = item.getQuantity();
-
-            if (quantity == null || quantity <= 0) {
-                throw badRequest("Số lượng sản phẩm trong đơn hàng không hợp lệ");
-            }
-
-            Integer currentStock = variant.getStockQuantity() == null
-                    ? 0
-                    : variant.getStockQuantity();
-
-            variant.setStockQuantity(currentStock + quantity);
-            productVariantRepository.save(variant);
-        }
     }
 
     private CustomerOrderResponse mapToOrderResponse(Order order, List<OrderItem> items) {
@@ -980,7 +947,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         LocalDateTime deadline = completedAt.plusDays(RETURN_REQUEST_DEADLINE_DAYS);
 
         if (now.isAfter(deadline)) {
-            throw badRequest("Đã quá hạn 15 ngày yêu cầu trả hàng / hoàn tiền.");
+            throw badRequest("Đã quá hạn 3 ngày kể từ lúc đơn hàng hoàn thành, không thể yêu cầu trả hàng / hoàn tiền.");
         }
     }
 
@@ -1234,6 +1201,94 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         return cleanValue.replaceAll("\\s+", "");
     }
 
+    private boolean isSupportedBankName(String bankName) {
+        String cleanBankName = normalizeOptionalCollapsed(bankName);
+
+        if (cleanBankName == null) {
+            return false;
+        }
+
+        return getSupportedBankNamesFromVietQr()
+                .stream()
+                .anyMatch(supportedBankName -> supportedBankName.equalsIgnoreCase(cleanBankName));
+    }
+
+    private Set<String> getSupportedBankNamesFromVietQr() {
+        LocalDateTime now = LocalDateTime.now();
+        Set<String> cachedBankNames = cachedSupportedBankNames;
+
+        if (cachedSupportedBankNamesAt != null
+                && cachedBankNames != null
+                && !cachedBankNames.isEmpty()
+                && cachedSupportedBankNamesAt.plusMinutes(VIETQR_BANK_CACHE_MINUTES).isAfter(now)) {
+            return cachedBankNames;
+        }
+
+        try {
+            Set<String> fetchedBankNames = fetchSupportedBankNamesFromVietQr();
+
+            if (!fetchedBankNames.isEmpty()) {
+                cachedSupportedBankNames = fetchedBankNames;
+                cachedSupportedBankNamesAt = now;
+                return fetchedBankNames;
+            }
+        } catch (RestClientException exception) {
+            if (cachedBankNames != null && !cachedBankNames.isEmpty()) {
+                return cachedBankNames;
+            }
+
+            throw badRequest("Không tải được danh sách ngân hàng từ VietQR. Vui lòng thử lại sau.");
+        }
+
+        if (cachedBankNames != null && !cachedBankNames.isEmpty()) {
+            return cachedBankNames;
+        }
+
+        throw badRequest("Danh sách ngân hàng VietQR đang trống. Vui lòng thử lại sau.");
+    }
+
+    private Set<String> fetchSupportedBankNamesFromVietQr() {
+        Map<?, ?> response = vietQrRestTemplate.getForObject(VIETQR_BANKS_API_URL, Map.class);
+
+        if (response == null) {
+            return Collections.emptySet();
+        }
+
+        Object data = response.get("data");
+
+        if (!(data instanceof List<?> banks)) {
+            return Collections.emptySet();
+        }
+
+        Set<String> bankNames = new LinkedHashSet<>();
+
+        for (Object bank : banks) {
+            if (!(bank instanceof Map<?, ?> bankMap)) {
+                continue;
+            }
+
+            addSupportedBankName(bankNames, bankMap.get("name"));
+            addSupportedBankName(bankNames, bankMap.get("shortName"));
+            addSupportedBankName(bankNames, bankMap.get("code"));
+        }
+
+        return bankNames;
+    }
+
+    private void addSupportedBankName(Set<String> bankNames, Object value) {
+        String bankName = normalizeOptionalCollapsed(value == null ? null : String.valueOf(value));
+
+        if (bankName == null || bankName.length() > MAX_BANK_NAME_LENGTH) {
+            return;
+        }
+
+        if (!bankName.matches(".*\\p{L}.*")) {
+            return;
+        }
+
+        bankNames.add(bankName);
+    }
+
     private void validateDeliveryRefundBankInfo(
             String bankName,
             String bankAccountNumber,
@@ -1243,7 +1298,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             throw badRequest("Vui lòng chọn ngân hàng nhận hoàn tiền");
         }
 
-        if (!SUPPORTED_BANK_NAMES.contains(bankName)) {
+        if (!isSupportedBankName(bankName)) {
             throw badRequest("Vui lòng chọn ngân hàng trong danh sách hỗ trợ");
         }
 
@@ -1315,7 +1370,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             throw badRequest("Vui lòng chọn ngân hàng");
         }
 
-        if (!SUPPORTED_BANK_NAMES.contains(bankName)) {
+        if (!isSupportedBankName(bankName)) {
             throw badRequest("Vui lòng chọn ngân hàng trong danh sách hỗ trợ");
         }
 
@@ -1662,6 +1717,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
         int imageCount = 0;
         int videoCount = 0;
+        long totalImageSize = 0L;
 
         for (MultipartFile file : mediaFiles) {
             if (file == null || file.isEmpty()) {
@@ -1688,8 +1744,9 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                     throw badRequest("Chỉ được tải tối đa 6 hình ảnh");
                 }
 
-                if (file.getSize() > MAX_RETURN_IMAGE_SIZE) {
-                    throw badRequest("Mỗi hình ảnh không được vượt quá 20MB");
+                totalImageSize += file.getSize();
+                if (totalImageSize > MAX_TOTAL_RETURN_IMAGE_SIZE) {
+                    throw badRequest("Tổng dung lượng hình ảnh không được vượt quá 10MB");
                 }
 
                 if (!ALLOWED_IMAGE_EXTENSIONS.contains(extension)) {
@@ -1705,7 +1762,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 }
 
                 if (file.getSize() > MAX_RETURN_VIDEO_SIZE) {
-                    throw badRequest("Video không được vượt quá 200MB");
+                    throw badRequest("Video không được vượt quá 10MB");
                 }
 
                 if (!ALLOWED_VIDEO_EXTENSIONS.contains(extension)) {

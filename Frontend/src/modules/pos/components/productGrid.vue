@@ -282,8 +282,7 @@
       </template>
 
       <template v-else>
-        Tick checkbox để thêm sản phẩm vào đơn. Mỗi sản phẩm chỉ được mua tối đa
-        10 lọ trong một đơn hàng.
+        Tick checkbox để thêm sản phẩm vào đơn. Số lượng được giới hạn theo tồn kho thực tế.
       </template>
     </div>
   </div>
@@ -301,8 +300,6 @@ const posStore = usePosStore();
 const selectedCapacity = ref<string>("");
 const selectedBottleType = ref<string>("");
 const selectedStockFilter = ref<"" | "AVAILABLE" | "LOW">("");
-
-const MAX_POS_ITEM_QUANTITY_PER_PRODUCT = 10;
 
 const brandSelectOptions = computed<string[]>(() => {
   return (posStore.categories || [])
@@ -679,7 +676,7 @@ const getProductMaxQuantity = (product?: PosProduct | null) => {
     return 0;
   }
 
-  return Math.min(Math.trunc(stockQuantity), MAX_POS_ITEM_QUANTITY_PER_PRODUCT);
+  return Math.trunc(stockQuantity);
 };
 
 const getProductMaxQuantityMessage = (product?: PosProduct | null) => {
@@ -689,11 +686,7 @@ const getProductMaxQuantityMessage = (product?: PosProduct | null) => {
     return "Sản phẩm đã hết hàng.";
   }
 
-  if (maxQuantity < MAX_POS_ITEM_QUANTITY_PER_PRODUCT) {
-    return `Kho chỉ còn tối đa ${maxQuantity} lọ cho sản phẩm này.`;
-  }
-
-  return `Mỗi sản phẩm chỉ được mua tối đa ${MAX_POS_ITEM_QUANTITY_PER_PRODUCT} lọ trong một đơn hàng.`;
+  return `Kho chỉ còn ${maxQuantity} lọ cho sản phẩm này.`;
 };
 
 const checkboxTitle = (product: PosProduct) => {

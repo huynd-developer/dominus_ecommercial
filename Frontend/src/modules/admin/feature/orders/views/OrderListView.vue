@@ -128,6 +128,7 @@ import OrderFilter from "../components/OrderFilter.vue";
 import OrderTable from "../components/OrderTable.vue";
 import OrderDetailModal from "../components/OrderDetailModal.vue";
 import { orderService } from "../services/order.service";
+import api from "@/common/api";
 import type { AdminCancelOrderRequest, AdminOrderResponse, MarkDeliveryFailedRequest } from "../types/order.type";
 
 const orders = ref<AdminOrderResponse[]>([]);
@@ -271,6 +272,9 @@ const deliveryFailedReasonOptions = [
     evidenceRequired: true,
   },
 ];
+
+const MAX_DELIVERY_EVIDENCE_IMAGE_COUNT = 2;
+const MAX_DELIVERY_EVIDENCE_TOTAL_SIZE = 10 * 1024 * 1024;
 
 const safeTotalPages = computed(() => {
   if (totalElements.value <= 0) {
@@ -523,6 +527,11 @@ async function confirmChangeStatus(
     return;
   }
 
+  if (nextStatus === 1) {
+    await confirmAdminConfirmOrder(order);
+    return;
+  }
+
   if (nextStatus === 4) {
     await confirmAdminCancelOrder(order);
     return;
@@ -594,6 +603,69 @@ async function confirmChangeStatus(
   }
 }
 
+async function confirmAdminConfirmOrder(order: AdminOrderResponse) {
+  if (!order || !order.orderId) return;
+
+  if (Number(order.status) !== 0) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Không thể xác nhận đơn",
+      text: "Chỉ được xác nhận đơn khi đơn còn ở trạng thái Chờ xác nhận.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  const result = await Swal.fire({
+    icon: "question",
+    title: "Xác nhận đơn hàng?",
+    html: `
+      <div style="text-align:left">
+        <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
+        <p><b>Trạng thái hiện tại:</b> ${escapeAlertHtml(
+          order.statusText || getStatusText(Number(order.status))
+        )}</p>
+        <p>Sau khi xác nhận, hệ thống sẽ trừ tồn kho theo số lượng sản phẩm trong đơn.</p>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Xác nhận đơn",
+    cancelButtonText: "Quay lại",
+    confirmButtonColor: "#bd9a5f",
+    cancelButtonColor: "#6b7280",
+  });
+
+  if (!result.isConfirmed) return;
+
+  loading.value = true;
+
+  try {
+    const response = await orderService.confirmOrder(order.orderId);
+
+    await Swal.fire({
+      icon: "success",
+      title: "Đã xác nhận đơn hàng",
+      text:
+        response.statusText ||
+        "Đơn hàng đã chuyển sang trạng thái Đã xác nhận và tồn kho đã được cập nhật.",
+      confirmButtonColor: "#bd9a5f",
+    });
+
+    await refreshOrderAfterWorkflow(order.orderId);
+  } catch (error: any) {
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể xác nhận đơn",
+      text:
+        error?.response?.data?.message ||
+        "Tồn kho không đủ hoặc đơn hàng không thể xác nhận.",
+      confirmButtonColor: "#bd9a5f",
+    });
+  } finally {
+    loading.value = false;
+  }
+}
+
 async function confirmDeliveryCompleted(order: AdminOrderResponse) {
   if (!order || !order.orderId) return;
 
@@ -629,7 +701,7 @@ async function confirmDeliveryCompleted(order: AdminOrderResponse) {
           style="display:block;width:100%;margin:0;border:1px solid #d1d5db;border-radius:8px;padding:10px"
         />
         <div style="font-size:12px;color:#6b7280;margin-top:6px">
-          Bắt buộc có ảnh minh chứng vì hệ thống đang xử lý theo hướng cửa hàng tự giao hàng. Tối đa 2 ảnh, mỗi ảnh tối đa 10MB.
+          Bắt buộc có ảnh minh chứng vì hệ thống đang xử lý theo hướng cửa hàng tự giao hàng. Tối đa 2 ảnh, tổng dung lượng tối đa 10MB.
         </div>
 
         <div id="delivery-success-preview" style="margin-top:10px"></div>
@@ -765,7 +837,7 @@ async function confirmDeliveryFailed(order: AdminOrderResponse) {
           style="display:block;width:100%;margin:0;border:1px solid #d1d5db;border-radius:8px;padding:10px"
         />
         <div style="font-size:12px;color:#6b7280;margin-top:6px">
-          Bắt buộc ảnh minh chứng với lý do nhạy cảm: khách từ chối, sai địa chỉ, hư hỏng, không liên hệ được nhiều lần hoặc Khác. Tối đa 2 ảnh, mỗi ảnh tối đa 10MB.
+          Bắt buộc ảnh minh chứng với lý do nhạy cảm: khách từ chối, sai địa chỉ, hư hỏng, không liên hệ được nhiều lần hoặc Khác. Tối đa 2 ảnh, tổng dung lượng tối đa 10MB.
         </div>
 
         <div id="delivery-failed-preview" style="margin-top:10px"></div>
@@ -1009,11 +1081,23 @@ function buildDeliveryFailedReasonOptionsHtml() {
 }
 
 function validateDeliveryFiles(files: File[]) {
-  if (files.length > 2) {
-    return "Chỉ được tải tối đa 2 ảnh minh chứng.";
+  if (files.length > MAX_DELIVERY_EVIDENCE_IMAGE_COUNT) {
+    return `Chỉ được tải tối đa ${MAX_DELIVERY_EVIDENCE_IMAGE_COUNT} ảnh minh chứng.`;
   }
 
-  return validateDeliveryImageContent(files);
+  const contentMessage = validateDeliveryImageContent(files);
+
+  if (contentMessage) {
+    return contentMessage;
+  }
+
+  const totalSize = getDeliveryFilesTotalSize(files);
+
+  if (totalSize > MAX_DELIVERY_EVIDENCE_TOTAL_SIZE) {
+    return "Tổng dung lượng ảnh minh chứng không được vượt quá 10MB.";
+  }
+
+  return "";
 }
 
 function validateDeliveryImageContent(files: File[]) {
@@ -1034,13 +1118,21 @@ function validateDeliveryImageContent(files: File[]) {
     if (!isAllowedImageType || !hasAllowedExtension) {
       return "Ảnh minh chứng chỉ hỗ trợ JPG, JPEG, PNG hoặc WEBP.";
     }
-
-    if (file.size > 10 * 1024 * 1024) {
-      return "Mỗi ảnh minh chứng không được vượt quá 10MB.";
-    }
   }
 
   return "";
+}
+
+function getDeliveryFilesTotalSize(files: File[]) {
+  return files.reduce((total, file) => total + Math.max(0, file?.size || 0), 0);
+}
+
+function formatDeliveryFileSize(size: number) {
+  if (size >= 1024 * 1024) {
+    return `${(size / 1024 / 1024).toFixed(2)}MB`;
+  }
+
+  return `${Math.max(1, Math.round(size / 1024))}KB`;
 }
 
 
@@ -1080,7 +1172,18 @@ function setupDeliveryImagePicker(options: DeliveryImagePickerOptions) {
       return;
     }
 
-    const invalidMessage = validateDeliveryImageContent(cleanFiles);
+    const contentMessage = validateDeliveryImageContent(cleanFiles);
+
+    if (contentMessage) {
+      input.value = "";
+      syncDeliveryImageInput(input, currentFiles);
+      renderDeliveryImagePreview(options);
+      Swal.showValidationMessage(contentMessage);
+      return;
+    }
+
+    const limitedFiles = cleanFiles.slice(0, MAX_DELIVERY_EVIDENCE_IMAGE_COUNT);
+    const invalidMessage = validateDeliveryFiles(limitedFiles);
 
     if (invalidMessage) {
       input.value = "";
@@ -1090,15 +1193,13 @@ function setupDeliveryImagePicker(options: DeliveryImagePickerOptions) {
       return;
     }
 
-    const limitedFiles = cleanFiles.slice(0, 2);
-
     options.setFiles(limitedFiles);
     syncDeliveryImageInput(input, limitedFiles);
     renderDeliveryImagePreview(options);
 
-    if (cleanFiles.length > 2) {
+    if (cleanFiles.length > MAX_DELIVERY_EVIDENCE_IMAGE_COUNT) {
       Swal.showValidationMessage(
-        "Chỉ được chọn tối đa 2 ảnh. Hệ thống đã giữ 2 ảnh đầu tiên hợp lệ."
+        `Chỉ được chọn tối đa ${MAX_DELIVERY_EVIDENCE_IMAGE_COUNT} ảnh. Hệ thống đã giữ ${MAX_DELIVERY_EVIDENCE_IMAGE_COUNT} ảnh đầu tiên hợp lệ.`
       );
       return;
     }
@@ -1128,6 +1229,7 @@ function renderDeliveryImagePreview(options: DeliveryImagePickerOptions) {
   }
 
   const files = options.getFiles();
+  const totalSize = getDeliveryFilesTotalSize(files);
 
   if (files.length === 0) {
     preview.innerHTML = `
@@ -1143,7 +1245,7 @@ function renderDeliveryImagePreview(options: DeliveryImagePickerOptions) {
       ${files
         .map((file, index) => {
           const imageUrl = URL.createObjectURL(file);
-          const fileSizeMb = (file.size / 1024 / 1024).toFixed(2);
+          const fileSizeText = formatDeliveryFileSize(file.size);
 
           return `
             <div style="position:relative;width:96px">
@@ -1170,12 +1272,15 @@ function renderDeliveryImagePreview(options: DeliveryImagePickerOptions) {
               >×</button>
 
               <div style="font-size:11px;color:#6b7280;margin-top:4px;line-height:1.25;word-break:break-word">
-                ${escapeAlertHtml(file.name || `Ảnh ${index + 1}`)}<br />${fileSizeMb}MB
+                ${escapeAlertHtml(file.name || `Ảnh ${index + 1}`)}<br />${fileSizeText}
               </div>
             </div>
           `;
         })
         .join("")}
+    </div>
+    <div style="font-size:12px;color:#6b7280;margin-top:8px">
+      Tổng dung lượng: ${formatDeliveryFileSize(totalSize)} / ${formatDeliveryFileSize(MAX_DELIVERY_EVIDENCE_TOTAL_SIZE)}
     </div>
   `;
 
@@ -1491,6 +1596,218 @@ function normalizeRejectReasonDetail(value: string) {
     .replace(/\s{2,}/g, " ");
 }
 
+type RefundRestockMode = "DELIVERY_FAILED" | "RETURN_REQUEST";
+
+type RefundRestockItemView = {
+  productName: string;
+  sku: string;
+  capacity: string;
+  bottleType: string;
+  quantity: number;
+};
+
+const REFUND_RESTOCK_PARAM_NAME = "restoreStock";
+
+function toPositiveInteger(value: unknown) {
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue) && numberValue > 0
+    ? Math.floor(numberValue)
+    : 0;
+}
+
+function normalizeRestockText(value: unknown, fallback = "-") {
+  const text = String(value ?? "").trim();
+
+  return text || fallback;
+}
+
+function getRestockCapacityText(item: any) {
+  return normalizeRestockText(
+    item?.capacity ?? item?.capacityName ?? item?.capacityText ?? item?.volume,
+    "Đang cập nhật"
+  );
+}
+
+function getRestockBottleTypeText(item: any) {
+  return normalizeRestockText(
+    item?.bottleType ?? item?.bottleTypeName ?? item?.bottleName,
+    "Đang cập nhật"
+  );
+}
+
+function mapOrderItemToRestockItem(item: any): RefundRestockItemView | null {
+  const quantity = toPositiveInteger(item?.quantity ?? item?.orderedQuantity);
+
+  if (quantity <= 0) {
+    return null;
+  }
+
+  return {
+    productName: normalizeRestockText(
+      item?.productName ?? item?.name,
+      "Sản phẩm"
+    ),
+    sku: normalizeRestockText(item?.sku),
+    capacity: getRestockCapacityText(item),
+    bottleType: getRestockBottleTypeText(item),
+    quantity,
+  };
+}
+
+function mapReturnItemToRestockItem(item: any): RefundRestockItemView | null {
+  const quantity = toPositiveInteger(
+    item?.returnQuantity ??
+      item?.returnedQuantity ??
+      item?.requestQuantity ??
+      item?.quantity
+  );
+
+  if (quantity <= 0) {
+    return null;
+  }
+
+  return {
+    productName: normalizeRestockText(
+      item?.productName ?? item?.name,
+      "Sản phẩm"
+    ),
+    sku: normalizeRestockText(item?.sku),
+    capacity: getRestockCapacityText(item),
+    bottleType: getRestockBottleTypeText(item),
+    quantity,
+  };
+}
+
+function getDeliveryRefundRestockItems(order: AdminOrderResponse) {
+  const rawItems = Array.isArray((order as any)?.items)
+    ? ((order as any).items as any[])
+    : [];
+
+  return rawItems
+    .map(mapOrderItemToRestockItem)
+    .filter((item): item is RefundRestockItemView => item !== null);
+}
+
+function getReturnRefundRestockItems(order: AdminOrderResponse) {
+  const rawItems = Array.isArray((order as any)?.returnItems)
+    ? ((order as any).returnItems as any[])
+    : [];
+
+  return rawItems
+    .map(mapReturnItemToRestockItem)
+    .filter((item): item is RefundRestockItemView => item !== null);
+}
+
+function buildRefundRestockItemsHtml(items: RefundRestockItemView[]) {
+  if (items.length === 0) {
+    return `
+      <div style="padding:12px;border:1px dashed #f59e0b;border-radius:10px;background:#fffbeb;color:#92400e;font-size:13px;font-weight:700">
+        Không tìm thấy danh sách sản phẩm để nhập kho. Nếu vẫn chọn Có, backend sẽ xử lý theo dữ liệu đơn hàng hiện có.
+      </div>
+    `;
+  }
+
+  const rows = items
+    .map(
+      (item, index) => `
+        <tr>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;color:#64748b">${index + 1}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb">
+            <div style="font-weight:800;color:#0f172a">${escapeAlertHtml(item.productName)}</div>
+            <div style="font-size:12px;color:#64748b;margin-top:2px">
+              SKU: ${escapeAlertHtml(item.sku)} · ${escapeAlertHtml(item.capacity)} · ${escapeAlertHtml(item.bottleType)}
+            </div>
+          </td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:900;color:#16a34a">+${item.quantity}</td>
+        </tr>
+      `
+    )
+    .join("");
+
+  return `
+    <div style="max-height:260px;overflow:auto;border:1px solid #e5e7eb;border-radius:10px;background:#ffffff">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#f8fafc;color:#475569">
+            <th style="padding:8px;text-align:left;width:42px">#</th>
+            <th style="padding:8px;text-align:left">Sản phẩm</th>
+            <th style="padding:8px;text-align:right;width:86px">SL nhập</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function askRestoreStockAfterRefund(
+  order: AdminOrderResponse,
+  mode: RefundRestockMode
+) {
+  const items =
+    mode === "DELIVERY_FAILED"
+      ? getDeliveryRefundRestockItems(order)
+      : getReturnRefundRestockItems(order);
+
+  const modeText =
+    mode === "DELIVERY_FAILED"
+      ? "đơn giao hàng thất bại"
+      : "yêu cầu hoàn hàng";
+
+  const result = await Swal.fire({
+    icon: "question",
+    title: "Có nhập lại kho không?",
+    html: `
+      <div style="text-align:left;line-height:1.55">
+        <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
+        <p style="margin-bottom:10px">Shop đã xác nhận bước hoàn tiền cho ${escapeAlertHtml(modeText)}. Chọn tiếp cách xử lý kho:</p>
+        ${buildRefundRestockItemsHtml(items)}
+        <div style="margin-top:12px;padding:10px 12px;border-radius:10px;background:#f8fafc;color:#475569;font-size:13px">
+          <p style="margin:0 0 4px"><b>Có, nhập kho:</b> hệ thống cộng lại số lượng sản phẩm ở bảng trên.</p>
+          <p style="margin:0"><b>Không nhập kho:</b> chỉ ghi nhận đã hoàn tiền, không cộng tồn kho.</p>
+        </div>
+      </div>
+    `,
+    showCancelButton: true,
+    showDenyButton: true,
+    confirmButtonText: "Có, nhập kho",
+    denyButtonText: "Không nhập kho",
+    cancelButtonText: "Quay lại",
+    confirmButtonColor: "#16a34a",
+    denyButtonColor: "#6b7280",
+    cancelButtonColor: "#9ca3af",
+  });
+
+  if (result.isConfirmed) {
+    return true;
+  }
+
+  if (result.isDenied) {
+    return false;
+  }
+
+  return null;
+}
+
+async function runRefundActionWithRestockParam<T>(
+  restoreStock: boolean,
+  action: () => Promise<T>
+): Promise<T> {
+  const previousParams = api.defaults.params;
+
+  api.defaults.params = {
+    ...(previousParams || {}),
+    [REFUND_RESTOCK_PARAM_NAME]: restoreStock ? "true" : "false",
+  };
+
+  try {
+    return await action();
+  } finally {
+    api.defaults.params = previousParams;
+  }
+}
+
 
 async function confirmMarkDeliveryRefunded(order: AdminOrderResponse) {
   if (!order || !order.orderId) {
@@ -1531,15 +1848,30 @@ async function confirmMarkDeliveryRefunded(order: AdminOrderResponse) {
     return;
   }
 
+  const shouldRestoreStock = await askRestoreStockAfterRefund(
+    order,
+    "DELIVERY_FAILED"
+  );
+
+  if (shouldRestoreStock === null) {
+    return;
+  }
+
   loading.value = true;
 
   try {
-    await orderService.markDeliveryRefunded(order.orderId);
+    await runRefundActionWithRestockParam(shouldRestoreStock, () =>
+      orderService.markDeliveryRefunded(order.orderId)
+    );
 
     await Swal.fire({
       icon: "success",
-      title: "Đã xác nhận hoàn tiền",
-      text: "Hệ thống đã ghi nhận shop đã chuyển tiền hoàn cho khách.",
+      title: shouldRestoreStock
+        ? "Đã hoàn tiền và nhập kho"
+        : "Đã xác nhận hoàn tiền",
+      text: shouldRestoreStock
+        ? "Hệ thống đã ghi nhận shop đã chuyển tiền hoàn cho khách và cộng sản phẩm về kho."
+        : "Hệ thống đã ghi nhận shop đã chuyển tiền hoàn cho khách. Sản phẩm không được cộng về kho.",
       confirmButtonColor: "#bd9a5f",
     });
 
@@ -1610,15 +1942,30 @@ async function confirmMarkReturnRefunded(order: AdminOrderResponse) {
     return;
   }
 
+  const shouldRestoreStock = await askRestoreStockAfterRefund(
+    order,
+    "RETURN_REQUEST"
+  );
+
+  if (shouldRestoreStock === null) {
+    return;
+  }
+
   loading.value = true;
 
   try {
-    await orderService.markReturnRefunded(order.orderId);
+    await runRefundActionWithRestockParam(shouldRestoreStock, () =>
+      orderService.markReturnRefunded(order.orderId)
+    );
 
     await Swal.fire({
       icon: "success",
-      title: "Đã cập nhật hoàn tiền",
-      text: "Đơn hàng đã chuyển sang trạng thái hoàn hàng hoàn tất.",
+      title: shouldRestoreStock
+        ? "Đã hoàn tiền và nhập kho"
+        : "Đã cập nhật hoàn tiền",
+      text: shouldRestoreStock
+        ? "Đơn hàng đã chuyển sang trạng thái hoàn hàng hoàn tất và sản phẩm hoàn đã được cộng về kho."
+        : "Đơn hàng đã chuyển sang trạng thái hoàn hàng hoàn tất. Sản phẩm hoàn không được cộng về kho.",
       confirmButtonColor: "#bd9a5f",
     });
 

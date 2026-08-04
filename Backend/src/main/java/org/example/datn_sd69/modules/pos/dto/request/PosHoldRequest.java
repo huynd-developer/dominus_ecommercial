@@ -43,7 +43,7 @@ public class PosHoldRequest {
 
     /**
      * Validate từng dòng sản phẩm qua PosItemRequest.
-     * Mỗi SKU vẫn được service cộng dồn và chặn tối đa 10 lọ để tránh gửi trùng dòng lách validate.
+     * Service sẽ cộng dồn các dòng trùng SKU và kiểm tra theo tồn kho thực tế.
      */
     @Valid
     @NotEmpty(message = "Phiếu treo phải có ít nhất 1 sản phẩm")

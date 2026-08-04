@@ -98,6 +98,19 @@ public class AdminOrderController {
     }
 
     /**
+     * Admin xác nhận đơn hàng.
+     * Khi chuyển từ Chờ xác nhận sang Đã xác nhận thì mới trừ tồn kho.
+     *
+     * PATCH /api/admin/orders/{orderId}/confirm
+     */
+    @PatchMapping({"/{orderId}/confirm", "/{orderId}/confirm/"})
+    public ResponseEntity<?> confirmOrder(@PathVariable Integer orderId) {
+        return ResponseEntity.ok(
+                adminOrderService.confirmOrder(orderId)
+        );
+    }
+
+    /**
      * Admin hủy đơn khi đơn còn ở trạng thái chờ xác nhận.
      * Bắt buộc có lý do hủy để admin/khách xem lại lịch sử.
      *

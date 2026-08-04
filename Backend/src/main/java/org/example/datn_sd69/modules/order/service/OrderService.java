@@ -50,6 +50,7 @@ public class OrderService { //[cite: 7]
     private final CustomerRepository customerRepo; //[cite: 7]
     private final VoucherRepository voucherRepo; //[cite: 7]
     private final FlashSalePriceService flashSalePriceService; //[cite: 7]
+    private final OrderMailService orderMailService;
     private final jakarta.persistence.EntityManager entityManager; //[cite: 7]
 
     @org.springframework.beans.factory.annotation.Value("${vnpay.tmnCode}")
@@ -209,11 +210,13 @@ public class OrderService { //[cite: 7]
 
         Order savedOrder = orderRepo.save(order); //[cite: 7]
 
-        // 4. Tạo OrderItem
+        /*
+         * 4. Tạo OrderItem.
+         * Không trừ kho khi đơn mới ở trạng thái Chờ xác nhận.
+         * Kho chỉ được trừ khi admin xác nhận đơn ở AdminOrderServiceImpl.confirmOrder().
+         */
         for (CartItem item : cartItems) { //[cite: 7]
             ProductVariant variant = item.getProductVariant(); //[cite: 7]
-            variant.setStockQuantity(variant.getStockQuantity() - item.getQuantity()); //[cite: 7]
-            variantRepo.save(variant); //[cite: 7]
 
             String itemImage = item.getThumbnailUrl(); //[cite: 7]
             if ((itemImage == null || itemImage.trim().isEmpty()) && variant.getProduct() != null) {
@@ -264,6 +267,8 @@ public class OrderService { //[cite: 7]
         cartItemRepository.deleteAll(cartItems); //[cite: 7]
         cart.getCartItems().clear(); //[cite: 7]
         cartRepo.save(cart); //[cite: 7]
+
+        orderMailService.sendOrderPlaced(savedOrder);
 
         // 6. Trả về kết quả
         Map<String, Object> response = new LinkedHashMap<>(); //[cite: 7]
@@ -409,19 +414,37 @@ public class OrderService { //[cite: 7]
                          * Không tự chuyển đơn sang Đã xác nhận vì xác nhận đơn là thao tác
                          * của shop/admin. Đơn vẫn phải ở trạng thái Chờ xác nhận.
                          */
+                        boolean wasPaymentReported = Boolean.TRUE.equals(order.getIsPaymentReported());
                         order.setStatus(ORDER_STATUS_PENDING); //[cite: 7]
                         order.setIsPaymentReported(true); //[cite: 7]
-                        orderRepo.save(order); //[cite: 7]
+                        Order savedOrder = orderRepo.save(order); //[cite: 7]
+
+                        if (!wasPaymentReported) {
+                            orderMailService.sendPaymentSuccess(savedOrder);
+                        }
+
                         response.put("success", true); //[cite: 7]
                         response.put("message", "Thanh toán VNPay thành công. Đơn hàng đang chờ xác nhận."); //[cite: 7]
                     } else if ("24".equals(responseCode)) {
+                        boolean wasCancelled = ORDER_STATUS_CANCELLED == (order.getStatus() == null ? ORDER_STATUS_PENDING : order.getStatus());
                         order.setStatus(ORDER_STATUS_CANCELLED); //[cite: 7]
-                        orderRepo.save(order); //[cite: 7]
+                        Order savedOrder = orderRepo.save(order); //[cite: 7]
+
+                        if (!wasCancelled) {
+                            orderMailService.sendOrderCancelled(savedOrder, "Khách hàng đã hủy giao dịch VNPay");
+                        }
+
                         response.put("success", false); //[cite: 7]
                         response.put("message", "Khách hàng đã hủy giao dịch"); //[cite: 7]
                     } else {
+                        boolean wasCancelled = ORDER_STATUS_CANCELLED == (order.getStatus() == null ? ORDER_STATUS_PENDING : order.getStatus());
                         order.setStatus(ORDER_STATUS_CANCELLED); //[cite: 7]
-                        orderRepo.save(order); //[cite: 7]
+                        Order savedOrder = orderRepo.save(order); //[cite: 7]
+
+                        if (!wasCancelled) {
+                            orderMailService.sendOrderCancelled(savedOrder, "Giao dịch VNPay không thành công (Mã lỗi: " + responseCode + ")");
+                        }
+
                         response.put("success", false); //[cite: 7]
                         response.put("message", "Giao dịch không thành công (Mã lỗi: " + responseCode + ")"); //[cite: 7]
                     }
@@ -590,6 +613,11 @@ public class OrderService { //[cite: 7]
                 order.setStatus(ORDER_STATUS_CANCELLED); //[cite: 7]
             }
             orderRepo.saveAll(abandonedOrders); //[cite: 7]
+
+            for (Order order : abandonedOrders) {
+                orderMailService.sendOrderAutoCancelled(order);
+            }
+
             System.out.println("[HỆ THỐNG] Đã tự động hủy " + abandonedOrders.size() + " đơn hàng quá hạn thanh toán."); //[cite: 7]
         }
     }

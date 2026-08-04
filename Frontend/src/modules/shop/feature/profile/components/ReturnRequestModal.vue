@@ -342,7 +342,7 @@
                   <i class="bi bi-camera"></i>
                   <strong>Thêm Hình ảnh</strong>
                   <span>({{ imageFiles.length }}/{{ MAX_IMAGE_COUNT }})</span>
-                  <small>Tối đa: 20MB</small>
+                  <small>Tổng ảnh tối đa: 10MB</small>
                 </button>
 
                 <button
@@ -354,7 +354,7 @@
                   <i class="bi bi-camera-video"></i>
                   <strong>Thêm video</strong>
                   <span>({{ videoFiles.length }}/{{ MAX_VIDEO_COUNT }})</span>
-                  <small>Tối đa: 200MB</small>
+                  <small>Tối đa: 10MB</small>
                 </button>
               </div>
 
@@ -392,9 +392,9 @@
               />
 
               <div class="file-note">
-                Tối đa {{ MAX_IMAGE_COUNT }} hình ảnh và
-                {{ MAX_VIDEO_COUNT }} video. Hãy tải lên bằng chứng liên quan
-                đến vấn đề sản phẩm.
+                Tối đa {{ MAX_IMAGE_COUNT }} hình ảnh với tổng dung lượng 10MB
+                và {{ MAX_VIDEO_COUNT }} video, mỗi video tối đa 10MB. Hãy tải lên
+                bằng chứng liên quan đến vấn đề sản phẩm.
               </div>
 
               <div v-if="reasonNeedsEvidence" class="file-required-note">
@@ -446,21 +446,88 @@
                   Ngân hàng
                 </label>
 
-                <select
-                  v-model="form.bankName"
-                  class="return-input"
-                  @change="normalizeBankFields"
-                >
-                  <option value="">Chọn ngân hàng</option>
-
-                  <option
-                    v-for="bank in supportedBanks"
-                    :key="bank.code"
-                    :value="bank.name"
+                <div class="bank-select" :class="{ open: bankDropdownOpen }">
+                  <button
+                    type="button"
+                    class="bank-select-toggle"
+                    :disabled="bankLoading"
+                    @click="toggleBankDropdown"
                   >
-                    {{ bank.name }}
-                  </option>
-                </select>
+                    <span v-if="selectedBank" class="bank-select-value">
+                      <img
+                        v-if="selectedBank.logo"
+                        :src="selectedBank.logo"
+                        class="bank-logo"
+                        :alt="selectedBank.displayName"
+                      />
+
+                      <span class="bank-select-text">
+                        <strong>{{ selectedBank.displayName }}</strong>
+                        <small v-if="selectedBank.fullName">
+                          {{ selectedBank.fullName }}
+                        </small>
+                      </span>
+                    </span>
+
+                    <span v-else class="bank-placeholder">
+                      {{ bankLoading ? "Đang tải ngân hàng..." : "Chọn ngân hàng" }}
+                    </span>
+
+                    <i
+                      class="bi bi-chevron-down bank-chevron"
+                      :class="{ rotated: bankDropdownOpen }"
+                    ></i>
+                  </button>
+
+                  <div v-if="bankDropdownOpen" class="bank-dropdown">
+                    <button
+                      v-if="bankLoadError"
+                      type="button"
+                      class="bank-option bank-option-error"
+                      @click="fetchSupportedBanks(true)"
+                    >
+                      <span>{{ bankLoadError }}</span>
+                      <strong>Thử lại</strong>
+                    </button>
+
+                    <button
+                      v-else-if="!bankLoading && supportedBanks.length === 0"
+                      type="button"
+                      class="bank-option bank-option-error"
+                      @click="fetchSupportedBanks(true)"
+                    >
+                      <span>Không có dữ liệu ngân hàng VietQR</span>
+                      <strong>Tải lại</strong>
+                    </button>
+
+                    <div v-else-if="bankLoading" class="bank-loading">
+                      Đang tải danh sách ngân hàng từ VietQR...
+                    </div>
+
+                    <template v-else>
+                      <button
+                        v-for="bank in supportedBanks"
+                        :key="bank.id || bank.code || bank.value"
+                        type="button"
+                        class="bank-option"
+                        :class="{ selected: form.bankName === bank.value }"
+                        @click="chooseBank(bank)"
+                      >
+                        <img
+                          v-if="bank.logo"
+                          :src="bank.logo"
+                          class="bank-logo"
+                          :alt="bank.displayName"
+                        />
+
+                        <span class="bank-option-text">
+                          <strong>{{ bank.displayName }}</strong>
+                          <small v-if="bank.fullName">{{ bank.fullName }}</small>
+                        </span>
+                      </button>
+                    </template>
+                  </div>
+                </div>
               </div>
 
               <div class="form-row">
@@ -624,8 +691,8 @@ const hoveredReasonValue = ref("");
 
 const MAX_IMAGE_COUNT = 6;
 const MAX_VIDEO_COUNT = 1;
-const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
-const MAX_VIDEO_SIZE = 200 * 1024 * 1024;
+const MAX_TOTAL_IMAGE_SIZE = 10 * 1024 * 1024;
+const MAX_VIDEO_SIZE = 10 * 1024 * 1024;
 
 const MIN_BANK_NAME_LENGTH = 2;
 const MAX_BANK_NAME_LENGTH = 100;
@@ -651,38 +718,40 @@ const EVIDENCE_REQUIRED_REASONS = new Set([
   "Hàng giả, nhái",
   "Thùng hàng rỗng",
 ]);
-const supportedBanks = [
-  { code: "VCB", name: "Vietcombank" },
-  { code: "BIDV", name: "BIDV" },
-  { code: "CTG", name: "VietinBank" },
-  { code: "AGRIBANK", name: "Agribank" },
-  { code: "MB", name: "MB Bank" },
-  { code: "TCB", name: "Techcombank" },
-  { code: "ACB", name: "ACB" },
-  { code: "VPB", name: "VPBank" },
-  { code: "TPB", name: "TPBank" },
-  { code: "STB", name: "Sacombank" },
-  { code: "VIB", name: "VIB" },
-  { code: "SHB", name: "SHB" },
-  { code: "HDB", name: "HDBank" },
-  { code: "MSB", name: "MSB" },
-  { code: "OCB", name: "OCB" },
-  { code: "EIB", name: "Eximbank" },
-  { code: "LPB", name: "LPBank" },
-  { code: "SEA", name: "SeABank" },
-  { code: "NAB", name: "Nam A Bank" },
-  { code: "BAB", name: "Bac A Bank" },
-  { code: "ABB", name: "ABBank" },
-  { code: "PVCB", name: "PVcomBank" },
-  { code: "NCB", name: "NCB" },
-  { code: "KLB", name: "KienlongBank" },
-  { code: "VIETBANK", name: "VietBank" },
-  { code: "SAIGONBANK", name: "SaigonBank" },
-];
+const VIETQR_BANKS_API_URL = "https://api.vietqr.io/v2/banks";
+
+type VietQrBankOption = {
+  id: number | string | null;
+  name: string;
+  shortName: string;
+  code: string;
+  bin: string;
+  logo: string;
+  value: string;
+  displayName: string;
+  fullName: string;
+};
+
+const supportedBanks = ref<VietQrBankOption[]>([]);
+const bankLoading = ref(false);
+const bankLoadError = ref("");
+const bankDropdownOpen = ref(false);
 const ALLOWED_IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
 const ALLOWED_VIDEO_EXTENSIONS = new Set(["mp4", "mov", "webm"]);
 
 const files = computed(() => [...imageFiles.value, ...videoFiles.value]);
+
+const selectedBank = computed(() => {
+  const bankName = normalizeSpaces(form.bankName);
+
+  if (!bankName) {
+    return null;
+  }
+
+  return (
+    supportedBanks.value.find((bank) => isSameBankValue(bank, bankName)) || null
+  );
+});
 
 type ReasonOption = {
   value: string;
@@ -1009,6 +1078,7 @@ watch(
   (visible) => {
     if (visible) {
       resetForm();
+      fetchSupportedBanks(false);
     }
   }
 );
@@ -1031,6 +1101,7 @@ function resetForm() {
   editingVideoIndex.value = null;
   reasonDropdownOpen.value = false;
   hoveredReasonValue.value = "";
+  bankDropdownOpen.value = false;
 
   form.returnType = "";
   form.reason = "";
@@ -1376,6 +1447,111 @@ function normalizeBankFields() {
   form.bankAccountHolder = normalizeSpaces(form.bankAccountHolder);
 }
 
+function normalizeBankText(value: unknown) {
+  return normalizeSpaces(String(value || ""));
+}
+
+function mapVietQrBank(rawBank: any): VietQrBankOption | null {
+  const name = normalizeBankText(rawBank?.name);
+  const shortName = normalizeBankText(rawBank?.shortName);
+  const code = normalizeBankText(rawBank?.code);
+  const bin = normalizeBankText(rawBank?.bin);
+  const logo = normalizeBankText(rawBank?.logo);
+  const value = shortName || name || code;
+
+  if (!value) {
+    return null;
+  }
+
+  return {
+    id: rawBank?.id ?? bin ?? code ?? value,
+    name,
+    shortName,
+    code,
+    bin,
+    logo,
+    value,
+    displayName: shortName || code || name,
+    fullName: name && name !== shortName ? name : "",
+  };
+}
+
+function isSameBankValue(bank: VietQrBankOption, value: string) {
+  const cleanValue = normalizeBankText(value).toLowerCase();
+
+  if (!cleanValue) {
+    return false;
+  }
+
+  return [bank.value, bank.name, bank.shortName, bank.code]
+    .map((item) => normalizeBankText(item).toLowerCase())
+    .some((item) => item === cleanValue);
+}
+
+async function fetchSupportedBanks(force = false) {
+  if (bankLoading.value) {
+    return;
+  }
+
+  if (!force && supportedBanks.value.length > 0) {
+    return;
+  }
+
+  bankLoading.value = true;
+  bankLoadError.value = "";
+
+  try {
+    const response = await fetch(VIETQR_BANKS_API_URL);
+
+    if (!response.ok) {
+      throw new Error(`VietQR banks API error: ${response.status}`);
+    }
+
+    const body = await response.json();
+    const rawBanks = Array.isArray(body?.data) ? body.data : [];
+
+    const banks = rawBanks
+      .map(mapVietQrBank)
+      .filter((bank: VietQrBankOption | null): bank is VietQrBankOption => Boolean(bank))
+      .sort((firstBank: VietQrBankOption, secondBank: VietQrBankOption) =>
+        firstBank.displayName.localeCompare(secondBank.displayName, "vi"),
+      );
+
+    if (banks.length === 0) {
+      throw new Error("VietQR banks API returned empty data");
+    }
+
+    supportedBanks.value = banks;
+  } catch (error) {
+    supportedBanks.value = [];
+    bankLoadError.value = "Không tải được danh sách ngân hàng từ VietQR.";
+  } finally {
+    bankLoading.value = false;
+  }
+}
+
+function toggleBankDropdown() {
+  if (bankLoading.value) {
+    return;
+  }
+
+  bankDropdownOpen.value = !bankDropdownOpen.value;
+
+  if (bankDropdownOpen.value) {
+    fetchSupportedBanks(false);
+  }
+}
+
+function chooseBank(bank: VietQrBankOption) {
+  form.bankName = bank.value;
+  bankDropdownOpen.value = false;
+  normalizeBankFields();
+}
+
+function isSupportedBankName(value: string) {
+  return supportedBanks.value.some((bank) => isSameBankValue(bank, value));
+}
+
 function getFileExtension(fileName: string | undefined | null) {
   if (!fileName) {
     return "";
@@ -1405,6 +1581,18 @@ function rebuildVideoPreviewUrls() {
   videoPreviewUrls.value = videoFiles.value.map((file) => URL.createObjectURL(file));
 }
 
+function getTotalImageSize(fileList: File[]) {
+  return fileList.reduce((total, file) => total + file.size, 0);
+}
+
+function validateTotalImageSize(fileList: File[]) {
+  if (getTotalImageSize(fileList) > MAX_TOTAL_IMAGE_SIZE) {
+    return "Tổng dung lượng hình ảnh không được vượt quá 10MB.";
+  }
+
+  return "";
+}
+
 function validateImageFile(file: File) {
   if (!file.type.startsWith("image/")) {
     return `File "${file.name}" không phải hình ảnh.`;
@@ -1412,10 +1600,6 @@ function validateImageFile(file: File) {
 
   if (!ALLOWED_IMAGE_EXTENSIONS.has(getFileExtension(file.name))) {
     return `Ảnh "${file.name}" chỉ hỗ trợ JPG, JPEG, PNG hoặc WEBP.`;
-  }
-
-  if (file.size > MAX_IMAGE_SIZE) {
-    return `Ảnh "${file.name}" vượt quá dung lượng 20MB.`;
   }
 
   return "";
@@ -1431,7 +1615,7 @@ function validateVideoFile(file: File) {
   }
 
   if (file.size > MAX_VIDEO_SIZE) {
-    return `Video "${file.name}" vượt quá dung lượng 200MB.`;
+    return `Video "${file.name}" vượt quá dung lượng 10MB.`;
   }
 
   return "";
@@ -1487,7 +1671,16 @@ function handleImageFilesChange(event: Event) {
     validFiles.push(file);
   }
 
-  imageFiles.value = [...imageFiles.value, ...validFiles].slice(0, MAX_IMAGE_COUNT);
+  const nextImageFiles = [...imageFiles.value, ...validFiles].slice(0, MAX_IMAGE_COUNT);
+  const totalImageSizeError = validateTotalImageSize(nextImageFiles);
+
+  if (totalImageSizeError) {
+    showFileWarning(totalImageSizeError);
+    target.value = "";
+    return;
+  }
+
+  imageFiles.value = nextImageFiles;
   rebuildImagePreviewUrls();
 
   target.value = "";
@@ -1561,8 +1754,20 @@ function handleReplaceImageFileChange(event: Event) {
     return;
   }
 
-  imageFiles.value.splice(editingImageIndex.value, 1, file);
-  imageFiles.value = imageFiles.value.slice(0, MAX_IMAGE_COUNT);
+  const nextImageFiles = [...imageFiles.value];
+  nextImageFiles.splice(editingImageIndex.value, 1, file);
+
+  const limitedImageFiles = nextImageFiles.slice(0, MAX_IMAGE_COUNT);
+  const totalImageSizeError = validateTotalImageSize(limitedImageFiles);
+
+  if (totalImageSizeError) {
+    showFileWarning(totalImageSizeError);
+    target.value = "";
+    editingImageIndex.value = null;
+    return;
+  }
+
+  imageFiles.value = limitedImageFiles;
   rebuildImagePreviewUrls();
 
   target.value = "";
@@ -1691,6 +1896,16 @@ function validateForm() {
     return "Vui lòng tải lên ảnh hoặc video bằng chứng cho lý do hoàn hàng này.";
   }
 
+  const totalImageSizeError = validateTotalImageSize(imageFiles.value);
+  if (totalImageSizeError) {
+    return totalImageSizeError;
+  }
+
+  const oversizedVideo = videoFiles.value.find((file) => file.size > MAX_VIDEO_SIZE);
+  if (oversizedVideo) {
+    return `Video "${oversizedVideo.name}" vượt quá dung lượng 10MB.`;
+  }
+
   if (form.refundMethod === "BANK_TRANSFER") {
     normalizeBankFields();
 
@@ -1702,8 +1917,16 @@ function validateForm() {
       return "Vui lòng chọn ngân hàng.";
     }
 
-    if (!supportedBanks.some((bank) => bank.name === bankName)) {
-      return "Vui lòng chọn ngân hàng trong danh sách hỗ trợ.";
+    if (bankLoading.value) {
+      return "Đang tải danh sách ngân hàng từ VietQR, vui lòng chờ trong giây lát.";
+    }
+
+    if (bankLoadError.value || supportedBanks.value.length === 0) {
+      return "Không tải được danh sách ngân hàng từ VietQR. Vui lòng thử lại.";
+    }
+
+    if (!isSupportedBankName(bankName)) {
+      return "Vui lòng chọn ngân hàng trong danh sách VietQR hỗ trợ.";
     }
 
     if (
@@ -2710,6 +2933,146 @@ function handleImageError(event: Event) {
   background: #fffdf9;
   border-radius: 14px;
   padding: 14px;
+}
+
+.bank-select {
+  position: relative;
+}
+
+.bank-select-toggle {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #e2d6bf;
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--return-text);
+  padding: 8px 40px 8px 12px;
+  outline: none;
+  display: flex;
+  align-items: center;
+  text-align: left;
+  position: relative;
+}
+
+.bank-select-toggle:disabled {
+  background: #f8fafc;
+  cursor: not-allowed;
+}
+
+.bank-select.open .bank-select-toggle,
+.bank-select-toggle:focus {
+  border-color: var(--return-gold);
+  box-shadow: 0 0 0 3px rgba(189, 154, 95, 0.16);
+}
+
+.bank-select-value,
+.bank-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bank-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: #ffffff;
+  border: 1px solid #f1e8d8;
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.bank-select-text,
+.bank-option-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bank-select-text strong,
+.bank-option-text strong {
+  font-size: 13px;
+  color: var(--return-navy);
+  line-height: 1.25;
+}
+
+.bank-select-text small,
+.bank-option-text small {
+  color: var(--return-muted);
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bank-placeholder {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.bank-chevron {
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #8a6a36;
+  transition: transform 0.18s ease;
+}
+
+.bank-chevron.rotated {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.bank-dropdown {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid #e2d6bf;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.16);
+  padding: 6px;
+}
+
+.bank-option {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 8px;
+  border-radius: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bank-option:hover,
+.bank-option.selected {
+  background: #fff7e8;
+}
+
+.bank-option-error,
+.bank-loading {
+  width: 100%;
+  min-height: 44px;
+  color: #92400e;
+  background: #fff7ed;
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 13px;
+}
+
+.bank-option-error {
+  justify-content: space-between;
+}
+
+.bank-option-error strong {
+  color: var(--return-gold-dark);
 }
 
 .store-refund-box {
