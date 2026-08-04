@@ -96,6 +96,18 @@ export const orderService = {
     return response.data;
   },
 
+  /**
+   * Admin xác nhận đơn từ Chờ xác nhận -> Đã xác nhận.
+   * BE sẽ trừ tồn kho tại bước này, không trừ khi khách vừa đặt đơn.
+   */
+  async confirmOrder(orderId: number) {
+    const response = await api.patch<AdminOrderResponse>(
+      `${ORDER_ADMIN_API}/${orderId}/confirm`
+    );
+
+    return response.data;
+  },
+
   async updateOrderStatus(orderId: number, status: number) {
     const response = await api.patch<UpdateOrderStatusResponse>(
       `${ORDER_ADMIN_API}/${orderId}/status`,

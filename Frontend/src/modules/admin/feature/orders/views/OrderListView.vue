@@ -527,6 +527,11 @@ async function confirmChangeStatus(
     return;
   }
 
+  if (nextStatus === 1) {
+    await confirmAdminConfirmOrder(order);
+    return;
+  }
+
   if (nextStatus === 4) {
     await confirmAdminCancelOrder(order);
     return;
@@ -595,6 +600,69 @@ async function confirmChangeStatus(
         "Trạng thái chuyển không hợp lệ hoặc đơn hàng không thể cập nhật.",
       confirmButtonColor: "#bd9a5f",
     });
+  }
+}
+
+async function confirmAdminConfirmOrder(order: AdminOrderResponse) {
+  if (!order || !order.orderId) return;
+
+  if (Number(order.status) !== 0) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Không thể xác nhận đơn",
+      text: "Chỉ được xác nhận đơn khi đơn còn ở trạng thái Chờ xác nhận.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  const result = await Swal.fire({
+    icon: "question",
+    title: "Xác nhận đơn hàng?",
+    html: `
+      <div style="text-align:left">
+        <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
+        <p><b>Trạng thái hiện tại:</b> ${escapeAlertHtml(
+          order.statusText || getStatusText(Number(order.status))
+        )}</p>
+        <p>Sau khi xác nhận, hệ thống sẽ trừ tồn kho theo số lượng sản phẩm trong đơn.</p>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Xác nhận đơn",
+    cancelButtonText: "Quay lại",
+    confirmButtonColor: "#bd9a5f",
+    cancelButtonColor: "#6b7280",
+  });
+
+  if (!result.isConfirmed) return;
+
+  loading.value = true;
+
+  try {
+    const response = await orderService.confirmOrder(order.orderId);
+
+    await Swal.fire({
+      icon: "success",
+      title: "Đã xác nhận đơn hàng",
+      text:
+        response.statusText ||
+        "Đơn hàng đã chuyển sang trạng thái Đã xác nhận và tồn kho đã được cập nhật.",
+      confirmButtonColor: "#bd9a5f",
+    });
+
+    await refreshOrderAfterWorkflow(order.orderId);
+  } catch (error: any) {
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể xác nhận đơn",
+      text:
+        error?.response?.data?.message ||
+        "Tồn kho không đủ hoặc đơn hàng không thể xác nhận.",
+      confirmButtonColor: "#bd9a5f",
+    });
+  } finally {
+    loading.value = false;
   }
 }
 

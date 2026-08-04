@@ -26,8 +26,6 @@ public interface AdminOrderService {
             Pageable pageable
     );
 
-    AdminOrderResponse getOrderDetail(Integer orderId);
-
     AdminOrderStatusCountResponse getStatusCounts(
             String keyword,
             String orderType,
@@ -35,11 +33,21 @@ public interface AdminOrderService {
             LocalDate toDate
     );
 
+    AdminOrderResponse getOrderDetail(Integer orderId);
+
+    AdminOrderResponse confirmOrder(Integer orderId);
+
     AdminOrderResponse cancelOrder(Integer orderId, AdminCancelOrderRequest request);
 
-    AdminOrderResponse markDeliveryCompleted(Integer orderId, MarkDeliveryCompletedRequest request);
+    AdminOrderResponse markDeliveryCompleted(
+            Integer orderId,
+            MarkDeliveryCompletedRequest request
+    );
 
-    AdminOrderResponse markDeliveryFailed(Integer orderId, MarkDeliveryFailedRequest request);
+    AdminOrderResponse markDeliveryFailed(
+            Integer orderId,
+            MarkDeliveryFailedRequest request
+    );
 
     AdminOrderResponse markDeliveryRefunded(Integer orderId);
 

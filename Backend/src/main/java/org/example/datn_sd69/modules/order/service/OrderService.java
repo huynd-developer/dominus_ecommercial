@@ -209,11 +209,13 @@ public class OrderService { //[cite: 7]
 
         Order savedOrder = orderRepo.save(order); //[cite: 7]
 
-        // 4. Tạo OrderItem
+        /*
+         * 4. Tạo OrderItem.
+         * Không trừ kho khi đơn mới ở trạng thái Chờ xác nhận.
+         * Kho chỉ được trừ khi admin xác nhận đơn ở AdminOrderServiceImpl.confirmOrder().
+         */
         for (CartItem item : cartItems) { //[cite: 7]
             ProductVariant variant = item.getProductVariant(); //[cite: 7]
-            variant.setStockQuantity(variant.getStockQuantity() - item.getQuantity()); //[cite: 7]
-            variantRepo.save(variant); //[cite: 7]
 
             String itemImage = item.getThumbnailUrl(); //[cite: 7]
             if ((itemImage == null || itemImage.trim().isEmpty()) && variant.getProduct() != null) {

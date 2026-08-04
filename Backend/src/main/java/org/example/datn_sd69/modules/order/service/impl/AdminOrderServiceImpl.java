@@ -231,6 +231,27 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         return mapOrderToResponse(order, true);
     }
 
+
+    @Override
+    @Transactional
+    public AdminOrderResponse confirmOrder(Integer orderId) {
+        Order order = findOrderOrThrow(orderId);
+
+        if (safeStatus(order) != STATUS_PENDING) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ được xác nhận đơn hàng khi đơn còn ở trạng thái chờ xác nhận"
+            );
+        }
+
+        deductStockWhenConfirm(order);
+
+        order.setStatus(STATUS_CONFIRMED);
+        Order savedOrder = orderRepository.save(order);
+
+        return mapOrderToResponse(savedOrder, true);
+    }
+
     @Override
     @Transactional
     public AdminOrderResponse markDeliveryCompleted(
@@ -369,8 +390,10 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         String cancelReason = normalizeAdminCancelReason(request);
 
-        restoreStockWhenAdminCancel(order);
-
+        /*
+         * Đơn Chờ xác nhận chưa trừ kho, nên hủy ở trạng thái này không cộng lại kho.
+         * Kho chỉ được cộng lại ở các luồng hoàn/hoàn tiền khi trước đó đơn đã được xác nhận và đã trừ kho.
+         */
         order.setStatus(STATUS_CANCELLED);
         order.setCancelReason(cancelReason);
         order.setCancelledAt(LocalDateTime.now());
@@ -636,6 +659,76 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         }
 
         return fullReason;
+    }
+
+
+    private void deductStockWhenConfirm(Order order) {
+        if (order == null || order.getId() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Đơn hàng không hợp lệ"
+            );
+        }
+
+        List<OrderItem> orderItems = orderItemRepository.findDetailByOrderId(order.getId());
+
+        if (orderItems == null || orderItems.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Đơn hàng chưa có sản phẩm để xác nhận"
+            );
+        }
+
+        for (OrderItem item : orderItems) {
+            if (item == null || item.getProductVariant() == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Đơn hàng có sản phẩm không hợp lệ"
+                );
+            }
+
+            ProductVariant variant = item.getProductVariant();
+            int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+
+            if (quantity <= 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Số lượng sản phẩm trong đơn không hợp lệ"
+                );
+            }
+
+            int currentStock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
+
+            if (currentStock < quantity) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Sản phẩm " + resolveOrderItemSku(item, variant)
+                                + " chỉ còn " + currentStock
+                                + " trong kho, không đủ để xác nhận đơn"
+                );
+            }
+        }
+
+        for (OrderItem item : orderItems) {
+            ProductVariant variant = item.getProductVariant();
+            int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+            int currentStock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
+
+            variant.setStockQuantity(currentStock - quantity);
+            entityManager.merge(variant);
+        }
+    }
+
+    private String resolveOrderItemSku(OrderItem item, ProductVariant variant) {
+        String itemSku = item == null ? null : normalizeOptionalText(item.getSku());
+
+        if (itemSku != null) {
+            return itemSku;
+        }
+
+        String variantSku = variant == null ? null : normalizeOptionalText(variant.getSku());
+
+        return variantSku == null ? "không xác định" : variantSku;
     }
 
     private void restoreStockWhenAdminCancel(Order order) {
