@@ -78,7 +78,6 @@ public class PosServiceImpl implements PosService {
 
     private static final String PAYMENT_HOLD = "HOLD";
     private static final BigDecimal POINT_RATE_AMOUNT = BigDecimal.valueOf(10_000);
-    private static final int MAX_POS_ITEM_QUANTITY_PER_PRODUCT = 10;
 
     private final ProductVariantRepository variantRepository;
     private final ProductImageRepository productImageRepository;
@@ -608,15 +607,7 @@ public class PosServiceImpl implements PosService {
                 throw new RuntimeException("Số lượng sản phẩm phải lớn hơn 0.");
             }
 
-            if (quantity > MAX_POS_ITEM_QUANTITY_PER_PRODUCT) {
-                throw new RuntimeException("Mỗi sản phẩm chỉ được mua tối đa " + MAX_POS_ITEM_QUANTITY_PER_PRODUCT + " lọ trong một đơn hàng.");
-            }
-
-            Integer mergedQuantity = skuQuantityMap.merge(sku, quantity, Integer::sum);
-
-            if (mergedQuantity != null && mergedQuantity > MAX_POS_ITEM_QUANTITY_PER_PRODUCT) {
-                throw new RuntimeException("Mỗi sản phẩm chỉ được mua tối đa " + MAX_POS_ITEM_QUANTITY_PER_PRODUCT + " lọ trong một đơn hàng.");
-            }
+            skuQuantityMap.merge(sku, quantity, Integer::sum);
         }
 
         if (skuQuantityMap.isEmpty()) {
@@ -1203,10 +1194,6 @@ public class PosServiceImpl implements PosService {
 
         if (quantity <= 0) {
             return "Số lượng sản phẩm phải lớn hơn 0.";
-        }
-
-        if (quantity > MAX_POS_ITEM_QUANTITY_PER_PRODUCT) {
-            return "Mỗi sản phẩm chỉ được mua tối đa " + MAX_POS_ITEM_QUANTITY_PER_PRODUCT + " lọ trong một đơn hàng.";
         }
 
         if (variant.getStockQuantity() < quantity) {
