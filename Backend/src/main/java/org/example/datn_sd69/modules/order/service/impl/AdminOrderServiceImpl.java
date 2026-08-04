@@ -21,6 +21,7 @@ import org.example.datn_sd69.modules.order.dto.request.MarkDeliveryCompletedRequ
 import org.example.datn_sd69.modules.order.dto.request.MarkDeliveryFailedRequest;
 import org.example.datn_sd69.modules.order.dto.request.RejectReturnRequest;
 import org.example.datn_sd69.modules.order.service.AdminOrderService;
+import org.example.datn_sd69.modules.order.service.OrderMailService;
 import org.example.datn_sd69.repository.OrderDeliveryEvidenceRepository;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
@@ -155,6 +156,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private final UserRepository userRepository;
     private final Cloudinary cloudinary;
     private final EntityManager entityManager;
+    private final OrderMailService orderMailService;
 
     private record KeywordDateRange(
             String keyword,
@@ -249,6 +251,8 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         order.setStatus(STATUS_CONFIRMED);
         Order savedOrder = orderRepository.save(order);
 
+        orderMailService.sendOrderConfirmed(savedOrder);
+
         return mapOrderToResponse(savedOrder, true);
     }
 
@@ -279,6 +283,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         Order savedOrder = orderRepository.save(order);
 
         saveDeliveryEvidenceFiles(savedOrder, files, DELIVERY_EVIDENCE_TYPE_SUCCESS);
+        orderMailService.sendDeliveryCompleted(savedOrder);
 
         return mapOrderToResponse(savedOrder, true);
     }
@@ -325,6 +330,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         Order savedOrder = orderRepository.save(order);
 
         saveDeliveryEvidenceFiles(savedOrder, files, DELIVERY_EVIDENCE_TYPE_FAILED);
+        orderMailService.sendDeliveryFailed(savedOrder);
 
         return mapOrderToResponse(savedOrder, true);
     }
@@ -373,6 +379,8 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         Order savedOrder = orderRepository.save(order);
 
+        orderMailService.sendDeliveryRefunded(savedOrder);
+
         return mapOrderToResponse(savedOrder, true);
     }
 
@@ -400,6 +408,8 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         Order savedOrder = orderRepository.save(order);
 
+        orderMailService.sendOrderCancelled(savedOrder, cancelReason);
+
         return mapOrderToResponse(savedOrder, true);
     }
 
@@ -424,7 +434,10 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         returnRequestItemRepository.saveAll(returnItems);
 
-        return mapOrderToResponse(orderRepository.save(order), true);
+        Order savedOrder = orderRepository.save(order);
+        orderMailService.sendReturnAccepted(savedOrder);
+
+        return mapOrderToResponse(savedOrder, true);
     }
 
     @Override
@@ -457,6 +470,8 @@ public class AdminOrderServiceImpl implements AdminOrderService {
          */
         order.setStatus(STATUS_COMPLETED);
         Order savedOrder = orderRepository.save(order);
+
+        orderMailService.sendReturnRejected(savedOrder, rejectReason);
 
         return mapOrderToResponse(savedOrder, true);
     }
@@ -498,6 +513,8 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         order.setStatus(STATUS_RETURN_COMPLETED);
         Order savedOrder = orderRepository.save(order);
+
+        orderMailService.sendReturnRefunded(savedOrder);
 
         return mapOrderToResponse(savedOrder, true);
     }

@@ -23,11 +23,11 @@ import org.example.datn_sd69.modules.customerOrder.dto.response.CustomerOrderRes
 import org.example.datn_sd69.modules.customerOrder.dto.response.CustomerReturnItemResponse;
 import org.example.datn_sd69.modules.customerOrder.dto.request.SubmitDeliveryRefundBankRequest;
 import org.example.datn_sd69.modules.customerOrder.service.CustomerOrderService;
+import org.example.datn_sd69.modules.order.service.OrderMailService;
 import org.example.datn_sd69.repository.CustomerRepository;
 import org.example.datn_sd69.repository.OrderDeliveryEvidenceRepository;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
-import org.example.datn_sd69.repository.ProductVariantRepository;
 import org.example.datn_sd69.repository.ReturnRequestItemRepository;
 import org.example.datn_sd69.repository.ReturnRequestMediaRepository;
 import org.example.datn_sd69.repository.ReturnRequestRepository;
@@ -169,12 +169,12 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     private final OrderRepository orderRepository;
     private final OrderDeliveryEvidenceRepository orderDeliveryEvidenceRepository;
     private final OrderItemRepository orderItemRepository;
-    private final ProductVariantRepository productVariantRepository;
     private final ReturnRequestRepository returnRequestRepository;
     private final ReturnRequestItemRepository returnRequestItemRepository;
     private final ReturnRequestMediaRepository returnRequestMediaRepository;
     private final Cloudinary cloudinary;
     private final ObjectMapper objectMapper;
+    private final OrderMailService orderMailService;
 
     private final RestTemplate vietQrRestTemplate = new RestTemplate();
 
@@ -260,6 +260,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         order.setDeliveryRefundBankAccountHolder(bankAccountHolder);
 
         Order savedOrder = orderRepository.save(order);
+        orderMailService.sendDeliveryRefundBankSubmitted(savedOrder);
+
         List<OrderItem> items = orderItemRepository.findByOrderId(savedOrder.getId());
 
         return mapToOrderResponse(savedOrder, items);
@@ -290,13 +292,16 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             throw badRequest("Đơn hàng không có sản phẩm, không thể hủy");
         }
 
-        restoreStockWhenCancel(items);
-
+        /*
+         * Đơn Chờ xác nhận chưa trừ kho, nên khách hủy ở trạng thái này không cộng lại kho.
+         * Kho chỉ được trừ khi admin xác nhận đơn và chỉ được cộng lại ở các luồng hoàn/hoàn tiền phù hợp.
+         */
         order.setStatus(STATUS_CANCELLED);
         order.setCancelReason(cancelReason);
         order.setCancelledAt(LocalDateTime.now());
 
-        orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+        orderMailService.sendOrderCancelled(savedOrder, cancelReason);
     }
 
     @Override
@@ -455,7 +460,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         saveReturnRequestMedia(savedReturnRequest, mediaFiles);
 
         order.setStatus(STATUS_RETURN_REQUESTED);
-        orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+        orderMailService.sendReturnRequested(savedOrder);
     }
 
     @Override
@@ -501,7 +507,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         returnRequestItemRepository.saveAll(returnItems);
 
         order.setStatus(STATUS_COMPLETED);
-        orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+        orderMailService.sendReturnRequestCancelled(savedOrder);
     }
 
     private void validatePreviousReturnRequestBeforeCreate(Order order) {
@@ -577,29 +584,6 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         }
 
         return reason;
-    }
-
-    private void restoreStockWhenCancel(List<OrderItem> items) {
-        for (OrderItem item : items) {
-            ProductVariant variant = item.getProductVariant();
-
-            if (variant == null) {
-                throw badRequest("Dữ liệu sản phẩm trong đơn hàng không hợp lệ");
-            }
-
-            Integer quantity = item.getQuantity();
-
-            if (quantity == null || quantity <= 0) {
-                throw badRequest("Số lượng sản phẩm trong đơn hàng không hợp lệ");
-            }
-
-            Integer currentStock = variant.getStockQuantity() == null
-                    ? 0
-                    : variant.getStockQuantity();
-
-            variant.setStockQuantity(currentStock + quantity);
-            productVariantRepository.save(variant);
-        }
     }
 
     private CustomerOrderResponse mapToOrderResponse(Order order, List<OrderItem> items) {
