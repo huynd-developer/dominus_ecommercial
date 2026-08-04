@@ -115,14 +115,18 @@
             >
               −
             </button>
-            <input type="text" :value="Number(item.quantity || 0)" readonly />
+
+            <input
+              type="number"
+              :value="Number(item.quantity || 0)"
+              @input="handleManualQuantity(item, $event)"
+              @blur="handleBlurQuantity(item, $event)"
+            />
+
             <button
               type="button"
               @click="changeQuantity(item, 1)"
-              :disabled="
-                !isItemAvailable(item) ||
-                Number(item.quantity || 0) >= Number(item.stockQuantity || 0)
-              "
+              :disabled="!isItemAvailable(item)"
             >
               +
             </button>
@@ -186,6 +190,7 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
+import Swal from "sweetalert2"; // Nhớ import cái này
 
 interface CartItem {
   cartItemId: number;
@@ -240,18 +245,85 @@ const emit = defineEmits<{
 
 let updateTimeout: ReturnType<typeof setTimeout> | null = null;
 
+// Tìm hàm changeQuantity và chép đè đoạn này vào
 const changeQuantity = (item: CartItem, delta: number) => {
   let currentQty = Number(item.quantity || 0);
   let newQty = currentQty + delta;
   if (newQty < 1) newQty = 1;
+
   const stock = Number(item.stockQuantity || 0);
-  if (stock > 0 && newQty > stock) newQty = stock;
+
+  if (newQty > 10) {
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "warning",
+      title: "Chỉ được mua tối đa 10 sản phẩm!",
+      showConfirmButton: false,
+      timer: 2000,
+    });
+    newQty = 10;
+  } else if (stock > 0 && newQty > stock) {
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "warning",
+      title: `Chỉ còn ${stock} sản phẩm trong kho!`,
+      showConfirmButton: false,
+      timer: 2000,
+    });
+    newQty = stock;
+  }
+
   if (currentQty === newQty) return;
+
   item.quantity = newQty;
   if (updateTimeout) clearTimeout(updateTimeout);
   updateTimeout = setTimeout(() => {
     emit("update-qty", item, newQty);
   }, 400);
+};
+
+// Hàm xử lý tức thì khi khách đang gõ phím
+const handleManualQuantity = (item: CartItem, event: Event) => {
+  const target = event.target as HTMLInputElement;
+  
+  // Nếu đang gõ mà khách xóa trắng (để nhập số mới) thì tạm thời cho qua, @blur sẽ xử lý sau
+  if (target.value === "") return;
+
+  let val = Number(target.value);
+  const stock = Number(item.stockQuantity || 0);
+  const maxAllow = Math.min(stock > 0 ? stock : 10, 10); // Lấy giới hạn: Tồn kho thực tế hoặc tối đa là 10
+
+  if (val > maxAllow) {
+    Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: `Chỉ được mua tối đa ${maxAllow} sản phẩm!`, showConfirmButton: false, timer: 2000 });
+    val = maxAllow;
+  } else if (val < 1) {
+    val = 1;
+  } else {
+    val = Math.floor(val);
+  }
+
+  // Ép giá trị hợp lệ ngược lại ngay trên ô input (Chặn khách thấy số lố)
+  target.value = String(val);
+
+  // Gọi API cập nhật nếu số lượng thực sự thay đổi
+  if (Number(item.quantity) !== val) {
+    item.quantity = val;
+    if (updateTimeout) clearTimeout(updateTimeout);
+    updateTimeout = setTimeout(() => {
+      emit("update-qty", item, val);
+    }, 400);
+  }
+};
+
+// Hàm dọn dẹp: Đề phòng khách xóa trắng ô input rồi click chuột ra ngoài
+const handleBlurQuantity = (item: CartItem, event: Event) => {
+  const target = event.target as HTMLInputElement;
+  if (target.value === "" || Number(target.value) < 1) {
+    target.value = "1";
+    handleManualQuantity(item, event); // Gọi lại hàm trên để ép về 1 và lưu API
+  }
 };
 
 const getVariantId = (item: CartItem) =>
@@ -851,6 +923,18 @@ const formatDiscount = (value?: number | null) => {
 
   .price {
     font-size: 17px;
+  }
+
+  /* Ẩn mũi tên tăng giảm mặc định của trình duyệt */
+  .qty-wrapper input[type="number"]::-webkit-inner-spin-button,
+  .qty-wrapper input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .qty-wrapper input[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
   }
 }
 </style>
