@@ -152,23 +152,26 @@ const getStatusText = (status: number) => {
   return status === 1 ? "Đang hoạt động" : "Đã khóa";
 };
 
-// HÀM FORMAT ĐỊA CHỈ TỪ JSON SANG TEXT
-const formatAddress = (addressStr: string | null) => {
-  if (!addressStr || addressStr === "Chưa cập nhật") return "Chưa cập nhật";
+// HÀM FORMAT ĐỊA CHỈ TỪ DANH SÁCH BẢNG CUSTOMER_ADDRESS
+const formatAddress = (addressData: any) => {
+  if (!addressData) return "Chưa cập nhật";
   
   try {
-    if (addressStr.trim().startsWith('[')) {
-      const parsedAddresses = JSON.parse(addressStr);
-      
-      if (Array.isArray(parsedAddresses) && parsedAddresses.length > 0) {
-        const defaultAddress = parsedAddresses[0];
-        return defaultAddress.fullAddress || defaultAddress.specificAddress || 'Chưa cập nhật';
+    // Nếu dữ liệu trả về dạng mảng từ API Address
+    if (Array.isArray(addressData) && addressData.length > 0) {
+      const defaultAddr = addressData.find((a: any) => a.isDefault) || addressData[0];
+      return defaultAddr.fullAddress || defaultAddr.specificAddress || 'Chưa cập nhật';
+    }
+    // Nếu dữ liệu dạng chuỗi JSON cũ
+    if (typeof addressData === 'string' && addressData.trim().startsWith('[')) {
+      const parsed = JSON.parse(addressData);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed[0].fullAddress || parsed[0].specificAddress || 'Chưa cập nhật';
       }
     }
-    return addressStr;
+    return String(addressData);
   } catch (error) {
-    console.error("Lỗi parse địa chỉ từ JSON:", error);
-    return addressStr;
+    return "Chưa cập nhật";
   }
 };
 </script>

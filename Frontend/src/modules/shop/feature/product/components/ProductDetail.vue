@@ -277,6 +277,7 @@
 
           <!-- Ghi đè margin-bottom: 0 để input không bị đẩy lên cao -->
           <div class="qty-control" style="margin-bottom: 0">
+            <!-- Nút trừ: Gọi hàm decreaseQty và bị mờ đi nếu số lượng <= 1 -->
             <button
               type="button"
               @click="decreaseQty"
@@ -285,15 +286,16 @@
               -
             </button>
 
-            <input type="number" v-model="quantity" readonly />
+            <input
+              type="number"
+              v-model="quantity"
+              @input="validateQuantity"
+              @blur="validateQuantity"
+              @keyup.enter="validateQuantity"
+            />
 
-            <button
-              type="button"
-              @click="increaseQty"
-              :disabled="quantity >= normalizeStock(selectedVariant)"
-            >
-              +
-            </button>
+            <!-- Nút cộng: Gọi hàm increaseQty (để nó tự văng thông báo nếu > 10) -->
+            <button type="button" @click="increaseQty">+</button>
           </div>
         </div>
 
@@ -325,10 +327,10 @@
               isVariantInvalidPrice
                 ? "LIÊN HỆ ĐỂ MUA"
                 : isVariantOutOfStock
-                ? "TẠM HẾT HÀNG"
-                : isAdding
-                ? "ĐANG THÊM..."
-                : "THÊM VÀO GIỎ HÀNG"
+                  ? "TẠM HẾT HÀNG"
+                  : isAdding
+                    ? "ĐANG THÊM..."
+                    : "THÊM VÀO GIỎ HÀNG"
             }}
           </button>
 
@@ -347,8 +349,8 @@
               isVariantInvalidPrice
                 ? "LIÊN HỆ ĐỂ MUA"
                 : isVariantOutOfStock
-                ? "TẠM HẾT HÀNG"
-                : "MUA NGAY"
+                  ? "TẠM HẾT HÀNG"
+                  : "MUA NGAY"
             }}
 
             <svg
@@ -500,7 +502,7 @@ const BACKEND_URL = "http://localhost:8080";
 
 const getCurrentRole = () => {
   return String(
-    localStorage.getItem("role") || localStorage.getItem("userRole") || ""
+    localStorage.getItem("role") || localStorage.getItem("userRole") || "",
   )
     .replace("ROLE_", "")
     .toUpperCase()
@@ -573,7 +575,7 @@ const getImageUrlFromObject = (value: any) => {
       value?.Path ??
       value?.fileUrl ??
       value?.FileUrl ??
-      ""
+      "",
   );
 };
 
@@ -635,7 +637,7 @@ const productGalleryImages = computed(() => {
 
   if (Array.isArray(productData?.images)) {
     const primaryObj = productData.images.find((img: any) =>
-      Boolean(img?.isPrimary)
+      Boolean(img?.isPrimary),
     );
     if (primaryObj) {
       addUnique(primaryObj?.imageUrl || primaryObj);
@@ -658,7 +660,7 @@ const productGalleryImages = computed(() => {
 
   if (selectedVariant.value) {
     getVariantImageList(selectedVariant.value).forEach((imageUrl) =>
-      addUnique(imageUrl)
+      addUnique(imageUrl),
     );
   }
 
@@ -801,7 +803,7 @@ const clampRating = (value: unknown) => {
 const reviewCount = computed(() => {
   const count = toFiniteNumber(
     reviewSummary.value?.reviewCount ?? props.product?.reviewCount,
-    0
+    0,
   );
 
   return Math.max(0, Math.floor(count));
@@ -812,7 +814,7 @@ const rawAverageRating = computed(() => {
     reviewSummary.value?.averageRating ??
       props.product?.averageRating ??
       props.product?.rating ??
-      0
+      0,
   );
 });
 
@@ -852,7 +854,7 @@ const normalizeStock = (variant: any) => {
       variant?.StockQuantity ??
       variant?.quantity ??
       variant?.availableQuantity ??
-      0
+      0,
   );
 };
 
@@ -862,7 +864,7 @@ const getVariantIdFromVariant = (variant: any) => {
       variant?.variantId ??
       variant?.id ??
       variant?.Id ??
-      0
+      0,
   );
 };
 
@@ -980,7 +982,7 @@ const getVariantId = () => {
 
 const isVariantFlashSale = (variant: any) => {
   const originalPrice = Number(
-    variant?.originalPrice ?? variant?.oldPrice ?? variant?.price ?? 0
+    variant?.originalPrice ?? variant?.oldPrice ?? variant?.price ?? 0,
   );
 
   const salePrice = Number(variant?.salePrice ?? variant?.price ?? 0);
@@ -1003,7 +1005,7 @@ const selectedOriginalPrice = computed(() => {
     selectedVariant.value.originalPrice ??
       selectedVariant.value.oldPrice ??
       selectedVariant.value.price ??
-      0
+      0,
   );
 });
 
@@ -1014,7 +1016,7 @@ const selectedDisplayPrice = computed(() => {
 
   if (isVariantFlashSale(selectedVariant.value)) {
     return Number(
-      selectedVariant.value.salePrice ?? selectedVariant.value.price ?? 0
+      selectedVariant.value.salePrice ?? selectedVariant.value.price ?? 0,
     );
   }
 
@@ -1110,7 +1112,7 @@ const selectVariant = (variant: any) => {
 
   const variantImages = getVariantImageList(variant);
   const firstVariantImage = variantImages.find((imageUrl): imageUrl is string =>
-    Boolean(imageUrl)
+    Boolean(imageUrl),
   );
 
   if (firstVariantImage) {
@@ -1123,6 +1125,24 @@ const selectVariant = (variant: any) => {
   }
 
   loadFavoriteStatus();
+};
+
+// Hàm validate số lượng khi khách tự nhập tay
+const validateQuantity = () => {
+  let val = Number(quantity.value);
+  const stock = selectedVariant.value ? normalizeStock(selectedVariant.value) : 0;
+
+  if (Number.isNaN(val) || val < 1) {
+    quantity.value = 1;
+  } else if (val > 10) {
+    quantity.value = 10;
+    showWarning("Vượt quá giới hạn", "Bạn chỉ có thể mua tối đa 10 sản phẩm cho mỗi phân loại.");
+  } else if (val > stock) {
+    quantity.value = stock;
+    showWarning("Vượt quá tồn kho", `Sản phẩm chỉ còn ${stock} trong kho.`);
+  } else {
+    quantity.value = Math.floor(val);
+  }
 };
 
 const decreaseQty = () => {
@@ -1138,9 +1158,20 @@ const increaseQty = () => {
 
   const stock = normalizeStock(selectedVariant.value);
 
-  if (quantity.value < stock) {
-    quantity.value++;
+  if (quantity.value >= 10) {
+    showWarning(
+      "Vượt quá giới hạn",
+      "Bạn chỉ có thể mua tối đa 10 sản phẩm cho mỗi phân loại.",
+    );
+    return;
   }
+
+  if (quantity.value >= stock) {
+    showWarning("Vượt quá tồn kho", `Sản phẩm chỉ còn ${stock} trong kho.`);
+    return;
+  }
+
+  quantity.value++;
 };
 
 const showWarning = async (title: string, text: string) => {
@@ -1174,7 +1205,7 @@ const showError = async (title: string, text: string) => {
 };
 
 const askLogin = async (
-  message = "Vui lòng đăng nhập để sử dụng chức năng này."
+  message = "Vui lòng đăng nhập để sử dụng chức năng này.",
 ) => {
   const result = await Swal.fire({
     icon: "info",
@@ -1225,14 +1256,14 @@ const toggleFavorite = async () => {
   if (!variantId || Number.isNaN(variantId)) {
     await showWarning(
       "Chưa chọn dung tích",
-      "Vui lòng chọn dung tích trước khi thêm yêu thích."
+      "Vui lòng chọn dung tích trước khi thêm yêu thích.",
     );
     return;
   }
 
   if (!hasToken()) {
     await askLogin(
-      "Vui lòng đăng nhập để thêm sản phẩm vào danh sách yêu thích."
+      "Vui lòng đăng nhập để thêm sản phẩm vào danh sách yêu thích.",
     );
     return;
   }
@@ -1240,7 +1271,7 @@ const toggleFavorite = async () => {
   if (!isCustomerLoggedIn()) {
     await showWarning(
       "Không thể sử dụng chức năng này",
-      "Chỉ tài khoản khách hàng mới được thêm sản phẩm yêu thích."
+      "Chỉ tài khoản khách hàng mới được thêm sản phẩm yêu thích.",
     );
     return;
   }
@@ -1258,7 +1289,7 @@ const toggleFavorite = async () => {
           productVariantId: variantId,
           favorited: isFavorited.value,
         },
-      })
+      }),
     );
 
     await Swal.fire({
@@ -1288,7 +1319,7 @@ const getCurrentCartQuantity = async (productVariantId: number) => {
     const items = Array.isArray(res.data) ? res.data : [];
 
     const cartItem = items.find(
-      (item: any) => Number(item.productVariantId) === Number(productVariantId)
+      (item: any) => Number(item.productVariantId) === Number(productVariantId),
     );
 
     return Number(cartItem?.quantity || 0);
@@ -1302,7 +1333,7 @@ const validateBeforeCartAction = async () => {
   if (!selectedVariant.value) {
     await showWarning(
       "Chưa chọn dung tích",
-      "Vui lòng chọn dung tích trước khi mua hàng."
+      "Vui lòng chọn dung tích trước khi mua hàng.",
     );
     return false;
   }
@@ -1312,7 +1343,7 @@ const validateBeforeCartAction = async () => {
   if (!variantId || Number.isNaN(variantId)) {
     await showError(
       "Biến thể không hợp lệ",
-      "Không xác định được biến thể sản phẩm. Vui lòng tải lại trang."
+      "Không xác định được biến thể sản phẩm. Vui lòng tải lại trang.",
     );
     return false;
   }
@@ -1320,7 +1351,7 @@ const validateBeforeCartAction = async () => {
   if (isVariantInvalidPrice.value) {
     await showWarning(
       "Sản phẩm chưa có giá",
-      "Sản phẩm chưa có giá bán. Vui lòng liên hệ cửa hàng."
+      "Sản phẩm chưa có giá bán. Vui lòng liên hệ cửa hàng.",
     );
     return false;
   }
@@ -1338,7 +1369,7 @@ const validateBeforeCartAction = async () => {
   if (!isCustomerLoggedIn()) {
     await showWarning(
       "Không thể mua hàng",
-      "Chỉ tài khoản khách hàng mới được thêm sản phẩm vào giỏ hàng."
+      "Chỉ tài khoản khách hàng mới được thêm sản phẩm vào giỏ hàng.",
     );
     return false;
   }
@@ -1354,13 +1385,22 @@ const validateBeforeCartAction = async () => {
   if (quantityToAdd > stockQuantity) {
     await showWarning(
       "Vượt quá tồn kho",
-      `Sản phẩm chỉ còn ${stockQuantity} trong kho.`
+      `Sản phẩm chỉ còn ${stockQuantity} trong kho.`,
     );
     return false;
   }
 
   const currentCartQuantity = await getCurrentCartQuantity(variantId);
   const totalAfterAdd = currentCartQuantity + quantityToAdd;
+
+  // THÊM ĐOẠN NÀY ĐỂ CHẶN MUA QUÁ 10 SẢN PHẨM / 1 LOẠI
+  if (totalAfterAdd > 10) {
+    await showWarningHtml(
+      "Vượt quá giới hạn",
+      `Bạn chỉ có thể mua tối đa <b>10</b> sản phẩm cho mỗi phân loại.<br/>Trong giỏ hàng của bạn hiện đã có <b>${currentCartQuantity}</b> sản phẩm.`,
+    );
+    return false;
+  }
 
   if (totalAfterAdd > stockQuantity) {
     await showWarningHtml(
@@ -1370,9 +1410,9 @@ const validateBeforeCartAction = async () => {
         Trong giỏ hàng của bạn hiện đã có <b>${currentCartQuantity}</b> sản phẩm.<br/>
         Bạn chỉ có thể thêm tối đa <b>${Math.max(
           stockQuantity - currentCartQuantity,
-          0
+          0,
         )}</b> sản phẩm nữa.
-      `
+      `,
     );
 
     return false;
@@ -1483,13 +1523,13 @@ watch(
       primaryUrl = getImageUrlFromObject(newProduct.primaryImageUrl);
     } else if (Array.isArray(newProduct?.images)) {
       const primaryObj = newProduct.images.find((img: any) =>
-        Boolean(img?.isPrimary)
+        Boolean(img?.isPrimary),
       );
       if (primaryObj) {
         primaryUrl = getImageUrlFromObject(primaryObj?.imageUrl || primaryObj);
       } else if (newProduct.images.length > 0) {
         primaryUrl = getImageUrlFromObject(
-          newProduct.images[0]?.imageUrl || newProduct.images[0]
+          newProduct.images[0]?.imageUrl || newProduct.images[0],
         );
       }
     }
@@ -1498,7 +1538,7 @@ watch(
   },
   {
     immediate: true,
-  }
+  },
 );
 
 watch(
@@ -1508,7 +1548,7 @@ watch(
   },
   {
     immediate: true,
-  }
+  },
 );
 </script>
 
@@ -2146,5 +2186,17 @@ watch(
   .current-price {
     font-size: 24px;
   }
+}
+
+/* Ẩn mũi tên tăng giảm mặc định của trình duyệt */
+.qty-control input[type="number"]::-webkit-inner-spin-button,
+.qty-control input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.qty-control input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
 </style>

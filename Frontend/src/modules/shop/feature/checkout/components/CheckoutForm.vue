@@ -41,13 +41,13 @@
         </div>
       </div>
 
-      <!-- KHỐI ĐỊA CHỈ ĐƯỢC THIẾT KẾ LẠI CHUẨN SHOPEE/LAZADA -->
+      <!-- KHỐI ĐỊA CHỈ NHẬN HÀNG (DÙNG BẢNG CUSTOMER_ADDRESS) -->
       <div class="address-box">
         <div class="d-flex justify-content-between align-items-end mb-3">
           <div class="address-title mb-0">
             <strong>Địa chỉ nhận hàng <span class="text-danger">*</span></strong>
           </div>
-          <button v-if="!isAddingNewAddress" type="button" class="btn-add-address" @click="isAddingNewAddress = true">
+          <button v-if="!isAddingNewAddress" type="button" class="btn-add-address" @click="openAddMode">
             <i class="bi bi-plus-circle me-1"></i> Thêm địa chỉ mới
           </button>
         </div>
@@ -56,35 +56,45 @@
           {{ addressLoadError }}
         </div>
 
-        <!-- DANH SÁCH ĐỊA CHỈ -->
+        <!-- DANH SÁCH ĐỊA CHỈ ĐÃ LƯU -->
         <div v-if="!isAddingNewAddress" class="address-list">
-          <label v-for="(addr, index) in parsedProfileAddresses" :key="index" class="address-card" :class="{ active: selectedProfileAddressIndex === String(index) }">
-            <input type="radio" name="selectedAddress" v-model="selectedProfileAddressIndex" :value="String(index)" @change="applySelectedProfileAddress" class="d-none">
+          <div v-if="addressList.length === 0" class="text-muted text-center py-3 border rounded bg-light small">
+            Bạn chưa lưu địa chỉ nào. Vui lòng thêm địa chỉ mới.
+          </div>
+          <label v-for="addr in addressList" :key="addr.id" class="address-card" :class="{ active: selectedAddressId === addr.id }">
+            <input type="radio" name="selectedAddress" :value="addr.id" v-model="selectedAddressId" @change="applySelectedAddress(addr)" class="d-none">
             
             <div class="address-card-inner">
-              <div class="d-flex justify-content-between">
-                <div class="d-flex align-items-center mb-1">
-                  <i class="bi bi-geo-alt-fill text-danger me-2"></i>
-                  <span class="fw-bold text-dark">{{ addr.name || form.customerName || 'Người nhận' }}</span>
-                  <span class="text-muted mx-2">|</span>
-                  <span class="text-muted">{{ addr.phone || form.customerPhone || 'SĐT' }}</span>
+              <div class="d-flex justify-content-between align-items-start w-100">
+                <div class="flex-grow-1">
+                  <div class="d-flex align-items-center mb-1">
+                    <i class="bi bi-geo-alt-fill text-danger me-2"></i>
+                    <span class="fw-bold text-dark">{{ addr.recipientName || form.customerName || 'Người nhận' }}</span>
+                    <span class="text-muted mx-2">|</span>
+                    <span class="text-muted">{{ addr.phone || form.customerPhone || 'SĐT' }}</span>
+                  </div>
+                  
+                  <div class="text-secondary small ms-4 mb-2" style="line-height: 1.5;">
+                    {{ addr.fullAddress }}
+                  </div>
+                  <div class="d-flex gap-2 ms-4">
+                    <span v-if="addr.isDefault" class="badge bg-danger bg-opacity-10 text-danger border border-danger">Mặc định</span>
+                  </div>
                 </div>
-                
-                <div class="d-flex gap-2">
-                  <span v-if="index === 0 && !addr.isNew" class="badge bg-danger bg-opacity-10 text-danger border border-danger">Mặc định</span>
-                  <span v-if="addr.isNew" class="badge bg-success bg-opacity-10 text-success border border-success">Mới thêm</span>
+
+                <!-- NÚT SỬA VÀ XÓA -->
+                <div class="d-flex flex-column gap-2 ms-3">
+                  <button type="button" class="btn btn-sm btn-outline-primary px-3" @click.stop="editAddress(addr)">Sửa</button>
+                  <button type="button" class="btn btn-sm btn-outline-danger px-3" @click.stop="removeAddress(addr.id)">Xóa</button>
                 </div>
-              </div>
-              <div class="text-secondary small ms-4" style="line-height: 1.5;">
-                {{ addr.fullAddress }}
               </div>
             </div>
           </label>
         </div>
 
-        <!-- FORM THÊM ĐỊA CHỈ MỚI -->
+        <!-- FORM THÊM / SỬA ĐỊA CHỈ MỚI -->
         <div v-if="isAddingNewAddress" class="address-editor">
-          <h6 class="mb-3 fw-bold" style="color: #06132b;">Thêm địa chỉ giao hàng mới</h6>
+          <h6 class="mb-3 fw-bold" style="color: #06132b;">{{ editingAddressId ? 'Sửa địa chỉ giao hàng' : 'Thêm địa chỉ giao hàng mới' }}</h6>
           
           <div class="form-row">
             <div class="form-group half">
@@ -98,10 +108,10 @@
             </div>
 
             <div class="form-group half">
-              <label>Phường / Xã / Đặc khu <span class="text-danger">*</span></label>
+              <label>Phường / Xã <span class="text-danger">*</span></label>
               <div class="select-box">
                 <select v-model="selectedWardCode" @change="syncFullAddress" :disabled="!selectedProvinceCode || loadingWards">
-                  <option value="">{{ !selectedProvinceCode ? "Chọn tỉnh/thành trước" : loadingWards ? "Đang tải phường / xã..." : "Chọn phường/xã/đặc khu" }}</option>
+                  <option value="">{{ !selectedProvinceCode ? "Chọn tỉnh/thành trước" : loadingWards ? "Đang tải phường / xã..." : "Chọn phường/xã" }}</option>
                   <option v-for="ward in wards" :key="ward.code" :value="ward.code">{{ ward.name }}</option>
                 </select>
               </div>
@@ -111,21 +121,22 @@
           <div class="form-group">
             <label>Địa chỉ cụ thể <span class="text-danger">*</span></label>
             <div class="input-box textarea-box">
-              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
-                <circle cx="12" cy="10" r="3" />
-              </svg>
-              <textarea v-model="specificAddress" @input="validateSpecificAddress" :maxlength="MAX_SHIPPING_ADDRESS_LENGTH"
-                placeholder="Ví dụ: Số 12/5, ngõ 36-A, đường Trần Phú" autocomplete="street-address"></textarea>
+              <textarea v-model="specificAddress" @input="validateSpecificAddress" maxlength="255"
+                placeholder="Ví dụ: Số 12/5, ngõ 36-A, đường Trần Phú"></textarea>
             </div>
-            <small class="field-hint">Nhập số nhà, ngõ, đường, tòa nhà. Tổng địa chỉ gửi hệ thống tối đa 200 ký tự.</small>
+            <small class="field-hint">Nhập số nhà, ngõ, đường, tòa nhà.</small>
+          </div>
+
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" v-model="isDefaultAddress" id="chkDefault" />
+            <label class="form-check-label" for="chkDefault">Đặt làm địa chỉ mặc định</label>
           </div>
 
           <div class="d-flex justify-content-end gap-2 mt-2">
-            <button v-if="parsedProfileAddresses.length > 0" type="button" class="btn btn-outline-secondary px-4 py-2 fw-bold rounded-3" @click="cancelAddNewAddress">
+            <button v-if="addressList.length > 0" type="button" class="btn btn-outline-secondary px-4 py-2 fw-bold rounded-3" @click="cancelAddMode">
               Hủy
             </button>
-            <button type="button" class="btn btn-primary px-4 py-2 fw-bold rounded-3" style="background-color: #06132b; border-color: #06132b;" @click="saveNewAddress">
+            <button type="button" class="btn btn-primary px-4 py-2 fw-bold rounded-3" style="background-color: #06132b;" @click="saveAddress">
               Lưu địa chỉ
             </button>
           </div>
@@ -136,12 +147,7 @@
       <div class="form-group">
         <label>Ghi chú đơn hàng</label>
         <div class="input-box textarea-box">
-          <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-          </svg>
-          <textarea v-model="form.note" @input="validateNote" maxlength="255"
-            placeholder="Ví dụ: Giao hàng trong giờ hành chính..."></textarea>
+          <textarea v-model="form.note" maxlength="255" placeholder="Ví dụ: Giao hàng trong giờ hành chính..."></textarea>
         </div>
         <small class="field-hint">Không bắt buộc, tối đa 255 ký tự.</small>
       </div>
@@ -150,6 +156,7 @@
 
     <div class="divider"></div>
 
+    <!-- BƯỚC 2: PHƯƠNG THỨC THANH TOÁN -->
     <div class="step-section">
       <div class="step-header">
         <span class="step-num">2</span>
@@ -210,142 +217,71 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
-import { useRouter, onBeforeRouteLeave } from "vue-router"; 
+import { computed, onMounted, ref, watch } from "vue";
+import Swal from "sweetalert2";
+import customerAddressService from "@/modules/customerAddress/services/customerAddress.service";
 
 interface Ward { code: number | string; name: string; }
 interface Province { code: number | string; name: string; wards?: Ward[] | null; }
 
 const props = defineProps<{
   form: {
-    customerName: string; customerPhone: string; shippingAddress: string; note: string; paymentMethod: string;
-    provinceName?: string; wardName?: string; specificAddress?: string;
-    profileLoaded?: boolean; profileAddress?: string;
+    customerName: string; 
+    customerPhone: string; 
+    shippingAddress: string; 
+    note: string; 
+    paymentMethod: string;
+    provinceName?: string; 
+    wardName?: string; 
+    specificAddress?: string;
+    profileLoaded?: boolean; 
+    customerId?: number | null;
   };
 }>();
 
 const provinces = ref<Province[]>([]);
 const wards = ref<Ward[]>([]);
-
 const selectedProvinceCode = ref<string>("");
 const selectedWardCode = ref<string>("");
 const specificAddress = ref("");
+const isDefaultAddress = ref(false);
 
 const loadingProvinces = ref(false);
 const loadingWards = ref(false);
 const addressLoadError = ref("");
 
-const parsedProfileAddresses = ref<any[]>([]);
-const selectedProfileAddressIndex = ref<string>("");
+const addressList = ref<any[]>([]);
+const selectedAddressId = ref<number | null>(null);
 const isAddingNewAddress = ref(false);
+const editingAddressId = ref<number | null>(null);
 
-const MIN_SHIPPING_ADDRESS_LENGTH = 5;
-const MAX_SHIPPING_ADDRESS_LENGTH = 200;
+const validCustomerId = computed(() => props.form.customerId ? Number(props.form.customerId) : 0);
 
 const selectedProvince = computed(() => provinces.value.find((item) => String(item.code) === String(selectedProvinceCode.value)));
 const selectedWard = computed(() => wards.value.find((item) => String(item.code) === String(selectedWardCode.value)));
 
-const extractArray = (data: any) => {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.data)) return data.data;
-  if (Array.isArray(data?.results)) return data.results;
-  if (Array.isArray(data?.wards)) return data.wards;
-  return [];
-};
-
-const normalizeProvince = (item: any): Province => {
-  return {
-    code: item.code ?? item.province_code ?? item.provinceCode ?? item.id,
-    name: item.name ?? item.province_name ?? item.provinceName ?? "",
-    wards: Array.isArray(item.wards) ? item.wards.map(normalizeWard) : null,
-  };
-};
-
-const normalizeWard = (item: any): Ward => {
-  return {
-    code: item.code ?? item.ward_code ?? item.wardCode ?? item.id,
-    name: item.name ?? item.ward_name ?? item.wardName ?? "",
-  };
-};
-
-const collapseSpaces = (value: string) => String(value || "").replace(/\s{2,}/g, " ");
-const cleanText = (value: string) => collapseSpaces(String(value || "").replace(/^\s+/, ""));
-const cleanAddressText = (value: string) => cleanText(value).replace(/[^\p{L}\d\s,./#()\-]/gu, "");
-
-const buildFullAddress = (addressDetail: string, wardName: string, provinceName: string) => {
-  return [addressDetail, wardName, provinceName]
-    .map((item) => String(item || "").trim())
-    .filter(Boolean)
-    .join(", ");
-};
-
-const getMaxSpecificAddressLength = (wardName: string, provinceName: string) => {
-  const locationAddress = buildFullAddress("", wardName, provinceName);
-  const separatorLength = locationAddress ? 2 : 0;
-
-  return Math.max(MAX_SHIPPING_ADDRESS_LENGTH - locationAddress.length - separatorLength, 0);
-};
-
-const isShippingAddressValid = (address: string) => {
-  const length = String(address || "").trim().length;
-
-  return length >= MIN_SHIPPING_ADDRESS_LENGTH && length <= MAX_SHIPPING_ADDRESS_LENGTH;
-};
-
-const validateShippingAddressLength = (address: string) => {
-  if (!isShippingAddressValid(address)) {
-    addressLoadError.value = `Địa chỉ nhận hàng phải từ ${MIN_SHIPPING_ADDRESS_LENGTH} đến ${MAX_SHIPPING_ADDRESS_LENGTH} ký tự.`;
-    return false;
-  }
-
-  return true;
-};
-
 const syncFullAddress = () => {
   const provinceName = selectedProvince.value?.name || "";
   const wardName = selectedWard.value?.name || "";
-  const maxSpecificAddressLength = getMaxSpecificAddressLength(wardName, provinceName);
-  const addressDetail = cleanAddressText(specificAddress.value).slice(0, maxSpecificAddressLength);
-
-  specificAddress.value = addressDetail;
+  const addressDetail = specificAddress.value || "";
 
   props.form.provinceName = provinceName;
   props.form.wardName = wardName;
   props.form.specificAddress = addressDetail;
-  props.form.shippingAddress = buildFullAddress(addressDetail, wardName, provinceName);
+
+  const parts = [addressDetail, wardName, provinceName].map((item) => String(item || "").trim()).filter(Boolean);
+  props.form.shippingAddress = parts.join(", ");
 };
 
-const validateName = () => { props.form.customerName = cleanText(String(props.form.customerName || "").replace(/[^\p{L}\s]/gu, "")).slice(0, 100); };
+const validateName = () => { props.form.customerName = String(props.form.customerName || "").slice(0, 100); };
 const validatePhone = () => { props.form.customerPhone = String(props.form.customerPhone || "").replace(/[^\d]/g, "").slice(0, 10); };
-const validateSpecificAddress = () => { syncFullAddress(); };
-const validateNote = () => { props.form.note = cleanText(props.form.note).slice(0, 255); };
+const validateSpecificAddress = () => { specificAddress.value = String(specificAddress.value || "").slice(0, 255); syncFullAddress(); };
 
-// XỬ LÝ CHỌN ĐỊA CHỈ TỪ DANH SÁCH
-const applySelectedProfileAddress = () => {
-  if (selectedProfileAddressIndex.value === "") return;
-
-  const addr = parsedProfileAddresses.value[Number(selectedProfileAddressIndex.value)];
-  if (addr) {
-    const fullAddress = String(addr.fullAddress || "").trim();
-
-    if (!validateShippingAddressLength(fullAddress)) return;
-
-    addressLoadError.value = "";
-
-    if (addr.name) props.form.customerName = addr.name;
-    if (addr.phone) props.form.customerPhone = addr.phone;
-    props.form.shippingAddress = fullAddress;
-    
-    // Xóa form nhập tay & xóa state Validation để form check coi đây là địa chỉ "đã lưu"
-    selectedProvinceCode.value = "";
-    selectedWardCode.value = "";
-    specificAddress.value = "";
-    wards.value = [];
-    
-    props.form.provinceName = "";
-    props.form.wardName = "";
-    props.form.specificAddress = "";
-  }
+const applySelectedAddress = (addr: any) => {
+  if (!addr) return;
+  if (addr.recipientName) props.form.customerName = addr.recipientName;
+  if (addr.phone) props.form.customerPhone = addr.phone;
+  props.form.shippingAddress = addr.fullAddress || "";
 };
 
 const handleProvinceChange = async () => {
@@ -355,58 +291,123 @@ const handleProvinceChange = async () => {
   if (selectedProvinceCode.value) await loadWardsByProvince(selectedProvinceCode.value);
 };
 
-// HỦY BỎ THÊM MỚI
-const cancelAddNewAddress = () => {
-  isAddingNewAddress.value = false;
-  addressLoadError.value = "";
-  if (parsedProfileAddresses.value.length > 0) {
-    if (!selectedProfileAddressIndex.value) {
-      selectedProfileAddressIndex.value = "0";
-    }
-    applySelectedProfileAddress();
-  }
-};
-
-// LƯU ĐỊA CHỈ VÀO DANH SÁCH CHỌN
-const saveNewAddress = () => {
-  if (!selectedProvinceCode.value || !selectedWardCode.value || !specificAddress.value) {
-    addressLoadError.value = "Vui lòng chọn đầy đủ Tỉnh/Thành, Phường/Xã và Địa chỉ cụ thể.";
+const openAddMode = () => {
+  // Check giới hạn tối đa 10 địa chỉ
+  if (addressList.value.length >= 10) {
+    Swal.fire({
+      icon: "warning",
+      title: "Vượt quá giới hạn",
+      text: "Bạn chỉ có thể lưu tối đa 10 địa chỉ nhận hàng. Vui lòng xóa bớt địa chỉ cũ để thêm mới!",
+      confirmButtonColor: "#06132b"
+    });
     return;
   }
 
-  syncFullAddress(); 
+  editingAddressId.value = null;
+  selectedProvinceCode.value = "";
+  selectedWardCode.value = "";
+  specificAddress.value = "";
+  isDefaultAddress.value = false;
+  isAddingNewAddress.value = true;
+};
 
-  if (!validateShippingAddressLength(props.form.shippingAddress)) return;
+const editAddress = async (addr: any) => {
+  editingAddressId.value = addr.id;
+  selectedProvinceCode.value = addr.provinceCode ? String(addr.provinceCode) : "";
+  if (selectedProvinceCode.value) {
+    await loadWardsByProvince(selectedProvinceCode.value);
+  }
+  selectedWardCode.value = addr.wardCode ? String(addr.wardCode) : "";
+  specificAddress.value = addr.specificAddress || "";
+  isDefaultAddress.value = Boolean(addr.isDefault);
+  isAddingNewAddress.value = true;
+};
 
-  addressLoadError.value = "";
-  
-  const newAddr = {
-    name: props.form.customerName,
-    phone: props.form.customerPhone,
-    fullAddress: props.form.shippingAddress,
-    isNew: true
-  };
-  
-  // Đẩy địa chỉ vừa nhập vào list để chọn luôn
-  parsedProfileAddresses.value.push(newAddr);
-  selectedProfileAddressIndex.value = String(parsedProfileAddresses.value.length - 1);
+const removeAddress = async (id: number) => {
+  const result = await Swal.fire({ title: "Xóa địa chỉ?", icon: "warning", showCancelButton: true, confirmButtonText: "Xác nhận", cancelButtonText: "Hủy" });
+  if (result.isConfirmed) {
+    try {
+      await customerAddressService.deleteAddress(validCustomerId.value, id);
+      addressList.value = addressList.value.filter(a => a.id !== id);
+      if (selectedAddressId.value === id && addressList.value.length > 0) {
+        selectedAddressId.value = addressList.value[0].id;
+        applySelectedAddress(addressList.value[0]);
+      } else if (addressList.value.length === 0) {
+        isAddingNewAddress.value = true;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+};
+
+const cancelAddMode = () => {
   isAddingNewAddress.value = false;
-  
-  // Xóa các biến nhập tay để trick cho CheckoutView hiểu đây là địa chỉ được chọn từ danh sách 
-  props.form.provinceName = "";
-  props.form.wardName = "";
-  props.form.specificAddress = "";
+  editingAddressId.value = null;
+  addressLoadError.value = "";
+  if (addressList.value.length > 0 && !selectedAddressId.value) {
+    selectedAddressId.value = addressList.value[0].id;
+    applySelectedAddress(addressList.value[0]);
+  }
+};
+
+const saveAddress = async () => {
+  if (!selectedProvinceCode.value || !selectedWardCode.value || !specificAddress.value.trim()) {
+    addressLoadError.value = "Vui lòng chọn đầy đủ Tỉnh/Thành, Phường/Xã và Địa chỉ cụ thể.";
+    return;
+  }
+  addressLoadError.value = "";
+  syncFullAddress();
+
+  const payload = {
+    customerId: validCustomerId.value,
+    recipientName: props.form.customerName,
+    phone: props.form.customerPhone,
+    provinceCode: selectedProvinceCode.value,
+    provinceName: selectedProvince.value?.name || "",
+    wardCode: selectedWardCode.value,
+    wardName: selectedWard.value?.name || "",
+    specificAddress: specificAddress.value.trim(),
+    fullAddress: props.form.shippingAddress,
+    isDefault: isDefaultAddress.value
+  };
+
+  try {
+    if (editingAddressId.value) {
+      await customerAddressService.updateAddress(validCustomerId.value, editingAddressId.value, payload);
+    } else {
+      await customerAddressService.addAddress(validCustomerId.value, payload);
+    }
+
+    const res = await customerAddressService.getAddresses(validCustomerId.value);
+    addressList.value = Array.isArray(res.data) ? res.data : [];
+    
+    if (addressList.value.length > 0) {
+      const target = editingAddressId.value 
+        ? addressList.value.find(a => a.id === editingAddressId.value) 
+        : (addressList.value.find(a => a.isDefault) || addressList.value[addressList.value.length - 1]);
+      
+      if (target) {
+        selectedAddressId.value = target.id;
+        applySelectedAddress(target);
+      }
+    }
+
+    isAddingNewAddress.value = false;
+    editingAddressId.value = null;
+    Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Đã lưu địa chỉ!', showConfirmButton: false, timer: 1500 });
+  } catch (error: any) {
+    addressLoadError.value = "Lỗi đồng bộ dữ liệu địa chỉ!";
+  }
 };
 
 const loadProvinces = async () => {
   try {
     loadingProvinces.value = true;
-    addressLoadError.value = "";
     const response = await fetch(`https://provinces.open-api.vn/api/p/`);
     const data = await response.json();
-    provinces.value = extractArray(data).map(normalizeProvince).filter((item: Province) => item.code && item.name);
+    provinces.value = data.map((item: any) => ({ code: item.code, name: item.name }));
   } catch (error) {
-    addressLoadError.value = "Không tải được dữ liệu tỉnh/thành. Vui lòng thử lại sau.";
     provinces.value = [];
   } finally {
     loadingProvinces.value = false;
@@ -416,83 +417,55 @@ const loadProvinces = async () => {
 const loadWardsByProvince = async (provinceCode: string) => {
   try {
     loadingWards.value = true;
-    addressLoadError.value = "";
     wards.value = [];
-
     const response = await fetch(`https://provinces.open-api.vn/api/p/${provinceCode}?depth=3`);
     const data = await response.json();
-
     let allWards: any[] = [];
-    if (data && data.districts && Array.isArray(data.districts)) {
-      data.districts.forEach((district: any) => {
-        if (district.wards && Array.isArray(district.wards)) {
-          district.wards.forEach((ward: any) => {
-            allWards.push({
-              code: ward.code,
-              name: `${ward.name}, ${district.name}`
-            });
+    if (data && data.districts) {
+      data.districts.forEach((d: any) => {
+        if (d.wards) {
+          d.wards.forEach((w: any) => {
+            allWards.push({ code: w.code, name: `${w.name}, ${d.name}` });
           });
         }
       });
     }
     wards.value = allWards;
   } catch (error) {
-    addressLoadError.value = "Không tải được dữ liệu phường/xã.";
     wards.value = [];
   } finally {
     loadingWards.value = false;
   }
 };
 
-onMounted(async () => {
-  specificAddress.value = props.form.specificAddress || "";
-
-  if (props.form.shippingAddress && props.form.shippingAddress.startsWith('[')) {
-    props.form.shippingAddress = "";
-  }
-
-  // Load danh sách địa chỉ từ Profile Backend bắn về
+const fetchCustomerAddresses = async () => {
+  if (!validCustomerId.value) return;
   try {
-    if (props.form.profileAddress && props.form.profileAddress.startsWith('[')) {
-      parsedProfileAddresses.value = JSON.parse(props.form.profileAddress);
-    } else if (props.form.profileAddress) {
-      parsedProfileAddresses.value = [{ fullAddress: props.form.profileAddress }];
-    }
-  } catch (e) {
-    console.error("Lỗi parse địa chỉ:", e);
-  }
-
-  await loadProvinces();
-
-  // FIX TRIỆT ĐỂ LỖI MẤT ĐỊA CHỈ:
-  if (props.form.shippingAddress) {
-    // Đi tìm xem địa chỉ draft có trong list DB trả về không
-    const matchIdx = parsedProfileAddresses.value.findIndex(
-      (a) => a.fullAddress === props.form.shippingAddress
-    );
-    
-    if (matchIdx !== -1) {
-      selectedProfileAddressIndex.value = String(matchIdx);
+    const res = await customerAddressService.getAddresses(validCustomerId.value);
+    addressList.value = Array.isArray(res.data) ? res.data : [];
+    if (addressList.value.length > 0) {
+      const def = addressList.value.find(a => a.isDefault) || addressList.value[0];
+      selectedAddressId.value = def.id;
+      applySelectedAddress(def);
       isAddingNewAddress.value = false;
     } else {
-      // Nếu không có (do vừa nhập tay xong), TỰ ĐỘNG ĐẨY VÀO LIST TRÊN GIAO DIỆN luôn
-      parsedProfileAddresses.value.push({
-        name: props.form.customerName,
-        phone: props.form.customerPhone,
-        fullAddress: props.form.shippingAddress,
-        isNew: true
-      });
-      selectedProfileAddressIndex.value = String(parsedProfileAddresses.value.length - 1);
-      isAddingNewAddress.value = false;
+      isAddingNewAddress.value = true;
     }
-  } else if (parsedProfileAddresses.value.length > 0) {
-    // Lần đầu vào trang, chọn mặc định cái đầu tiên
-    selectedProfileAddressIndex.value = "0";
-    applySelectedProfileAddress();
-    isAddingNewAddress.value = false;
-  } else {
-    // Chưa có địa chỉ nào bao giờ thì mở form thêm mới
+  } catch (e) {
     isAddingNewAddress.value = true;
+  }
+};
+
+watch(() => props.form.customerId, async (newId) => {
+  if (newId) {
+    await fetchCustomerAddresses();
+  }
+}, { immediate: true });
+
+onMounted(async () => {
+  await loadProvinces();
+  if (validCustomerId.value) {
+    await fetchCustomerAddresses();
   }
 });
 </script>
@@ -510,57 +483,26 @@ onMounted(async () => {
 .form-row { display: flex; gap: 20px; }
 .form-group { margin-bottom: 20px; width: 100%; }
 .form-group.half { flex: 1; }
-.form-group.mb-0 { margin-bottom: 0; }
 .form-group label { display: block; font-size: 14px; color: #333; margin-bottom: 8px; font-weight: 500; }
 .field-hint { display: block; margin-top: 6px; color: #718096; font-size: 12px; }
 .input-box, .select-box { display: flex; align-items: center; border: 1px solid #ddd; border-radius: 6px; padding: 0 15px; background: white; transition: 0.2s; }
 .input-box:focus-within, .select-box:focus-within { border-color: #06132b; }
-.select-box select { width: 100%; border: none; outline: none; padding: 14px 0; font-size: 14px; background: transparent; color: #333; cursor: pointer; }
-.select-box select:disabled { color: #a0aec0; cursor: not-allowed; }
+.select-box select { width: 100%; border: none; outline: none; padding: 14px 0; font-size: 14px; background: transparent; cursor: pointer; }
 .textarea-box { align-items: flex-start; padding-top: 12px; }
 .input-icon { width: 18px; height: 18px; color: #a0aec0; margin-right: 10px; flex-shrink: 0; }
-.input-box input { flex: 1; border: none; padding: 14px 0; outline: none; font-size: 14px; color: #333; }
-.input-box textarea { flex: 1; border: none; padding: 0 0 14px 0; outline: none; font-size: 14px; color: #333; min-height: 80px; resize: none; font-family: inherit; }
+.input-box input, .textarea-box textarea { flex: 1; border: none; outline: none; font-size: 14px; color: #333; }
+.textarea-box textarea { min-height: 80px; resize: none; font-family: inherit; width: 100%; padding: 0; }
 
 .address-box { border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 20px; background: #fcfcfd; }
 .address-title { display: flex; flex-direction: column; gap: 4px; margin-bottom: 18px; }
 .address-title strong { color: #06132b; font-size: 15px; }
 
-/* CSS MỚI CHO LIST ĐỊA CHỈ & THÊM MỚI */
-.btn-add-address {
-  background: transparent;
-  border: none;
-  color: #bd9a5f;
-  font-weight: 700;
-  font-size: 14px;
-  cursor: pointer;
-  transition: 0.2s;
-}
-.btn-add-address:hover {
-  color: #06132b;
-  text-decoration: underline;
-}
-.address-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.address-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: #ffffff;
-}
-.address-card:hover {
-  border-color: #bd9a5f;
-}
-.address-card.active {
-  border-color: #bd9a5f;
-  background: #fefaf4;
-  box-shadow: 0 0 0 1px #bd9a5f;
-}
+.btn-add-address { background: transparent; border: none; color: #bd9a5f; font-weight: 700; font-size: 14px; cursor: pointer; transition: 0.2s; }
+.btn-add-address:hover { color: #06132b; text-decoration: underline; }
+.address-list { display: flex; flex-direction: column; gap: 12px; }
+.address-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; cursor: pointer; transition: all 0.2s ease; background: #ffffff; display: block; margin-bottom: 0; }
+.address-card:hover { border-color: #bd9a5f; }
+.address-card.active { border-color: #bd9a5f; background: #fefaf4; box-shadow: 0 0 0 1px #bd9a5f; }
 .address-error { padding: 10px 12px; background: #fff1f2; color: #b91c1c; border: 1px solid #fecdd3; border-radius: 8px; font-size: 13px; }
 
 .divider { height: 1px; background: #f0f0f0; margin: 30px 0; }
@@ -577,13 +519,7 @@ onMounted(async () => {
 .option-info strong { color: #333; font-size: 15px; }
 .option-info span { color: #777; font-size: 13px; }
 
-.option-icon {
-  width: 32px !important;
-  height: 32px !important;
-  min-width: 32px !important;
-  color: #b78d52;
-  flex-shrink: 0 !important;
-}
+.option-icon { width: 32px !important; height: 32px !important; min-width: 32px !important; color: #b78d52; flex-shrink: 0 !important; }
 
 @media (max-width: 768px) {
   .checkout-left { padding: 24px; }
