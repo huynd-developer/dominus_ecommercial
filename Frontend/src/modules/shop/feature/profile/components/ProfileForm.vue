@@ -438,6 +438,17 @@ onMounted(async () => {
 });
 
 const openAddressModal = () => {
+  // Check giới hạn tối đa 10 địa chỉ
+  if (addressList.value.length >= 10) {
+    Swal.fire({
+      icon: "warning",
+      title: "Vượt quá giới hạn",
+      text: "Bạn chỉ có thể lưu tối đa 10 địa chỉ nhận hàng. Vui lòng xóa bớt địa chỉ cũ để thêm mới!",
+      confirmButtonColor: "#212529"
+    });
+    return;
+  }
+
   editingAddressId.value = null;
   selectedProvinceCode.value = "";
   selectedWardCode.value = "";

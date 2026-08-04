@@ -123,21 +123,23 @@ const toggleProductStatus = async (product: Product, newStatus: number) => {
     const payload = {
       name: product.name,
       description: product.description,
-      brandId: product.brandId,
-      categoryId: product.categoryId,
-      concentrationId: product.concentrationId,
+      // Lấy đúng ID từ object lồng nhau nếu có
+      brandId: product.brandId || (product as any).brand?.id,
+      categoryId: product.categoryId || (product as any).category?.id,
+      concentrationId: product.concentrationId || (product as any).concentration?.id,
       gender: product.gender,
       isNiche: product.isNiche,
       status: newStatus,
       fragranceFamilyIds: product.fragranceFamilies?.map((f: any) => f.id) || [],
       variants: product.variants?.map((v: any) => ({
         id: v.id,
-        capacityId: v.capacityId,
-        bottleTypeId: v.bottleTypeId,
+        // Ép lấy đúng ID dung tích và vỏ chai
+        capacityId: v.capacityId || v.capacity?.id || 0,
+        bottleTypeId: v.bottleTypeId || v.bottleType?.id || 0,
         price: v.price,
         stockQuantity: v.stockQuantity,
-        manufacturingDate: v.manufacturingDate ? v.manufacturingDate.substring(0, 10) : '',
-        expirationDate: v.expirationDate ? v.expirationDate.substring(0, 10) : '',
+        manufacturingDate: v.manufacturingDate ? String(v.manufacturingDate).substring(0, 10) : '',
+        expirationDate: v.expirationDate ? String(v.expirationDate).substring(0, 10) : '',
         status: v.status,
         sku: v.sku ? String(v.sku).trim() : undefined
       })) || []
@@ -175,22 +177,23 @@ const handleToggleVariantStatus = async (product: Product, variant: ProductVaria
     const payload = {
       name: product.name,
       description: product.description,
-      brandId: product.brandId,
-      categoryId: product.categoryId,
-      concentrationId: product.concentrationId,
+      brandId: product.brandId || (product as any).brand?.id,
+      categoryId: product.categoryId || (product as any).category?.id,
+      concentrationId: product.concentrationId || (product as any).concentration?.id,
       gender: product.gender,
       isNiche: product.isNiche,
       status: product.status,
       fragranceFamilyIds: product.fragranceFamilies?.map((f: any) => f.id) || [],
       variants: product.variants?.map((v: any) => ({
         id: v.id,
-        capacityId: v.capacityId,
-        bottleTypeId: v.bottleTypeId,
+        // Ép lấy đúng ID dung tích và vỏ chai
+        capacityId: v.capacityId || v.capacity?.id || 0,
+        bottleTypeId: v.bottleTypeId || v.bottleType?.id || 0,
         price: v.price,
         stockQuantity: v.stockQuantity,
-        manufacturingDate: v.manufacturingDate ? v.manufacturingDate.substring(0, 10) : '',
-        expirationDate: v.expirationDate ? v.expirationDate.substring(0, 10) : '',
-        // Chỉ đổi status của đúng biến thể được click
+        manufacturingDate: v.manufacturingDate ? String(v.manufacturingDate).substring(0, 10) : '',
+        expirationDate: v.expirationDate ? String(v.expirationDate).substring(0, 10) : '',
+        // Đổi trạng thái của biến thể đang click
         status: v.id === variant.id ? newStatus : v.status,
         sku: v.sku ? String(v.sku).trim() : undefined
       })) || []

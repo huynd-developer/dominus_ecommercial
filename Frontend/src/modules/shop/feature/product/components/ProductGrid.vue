@@ -81,20 +81,14 @@
           </div>
 
           <div class="card-actions">
+            <!-- ĐÃ SỬA: Đổi hàm handleBuyNow thành openVariantModal -->
             <button
               type="button"
               class="btn-buy-now-small"
-              :disabled="isBuyNowDisabled(item) || isBuyNowLoading(item)"
-              @click.stop="handleBuyNow(item)"
+              :disabled="isBuyNowDisabled(item)"
+              @click.stop="openVariantModal(item)"
             >
-              <span
-                v-if="isBuyNowLoading(item)"
-                class="spinner-border spinner-border-sm me-1"
-              ></span>
-
-              <span v-else>
-                Mua ngay
-              </span>
+              Mua ngay
             </button>
 
             <button
@@ -115,11 +109,99 @@
         </div>
       </div>
     </div>
+
+    <!-- MODAL MUA NHANH CHỌN BIẾN THỂ -->
+    <Teleport to="body">
+      <div v-if="showVariantModal" class="custom-modal-overlay" @click.self="showVariantModal = false">
+        <div class="variant-modal-box">
+          <div class="vm-header">
+            <h5>Chọn Phân Loại</h5>
+            <button class="vm-close" @click="showVariantModal = false">
+              <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+
+          <div class="vm-product-info">
+            <div class="vm-img-box">
+              <img :src="modalImage" alt="Product Image" @error="handleImageError" />
+            </div>
+            <div class="vm-details">
+              <h6>{{ modalProduct?.name }}</h6>
+              <div class="d-flex align-items-end gap-2 flex-wrap">
+                <p class="vm-price mb-0">
+                  {{ formatCurrency(selectedVariant ? (selectedVariant.salePrice || selectedVariant.price) : getVariantPrice(modalProduct)) }}
+                </p>
+                <span
+                  v-if="selectedVariant && selectedVariant.salePrice && selectedVariant.salePrice < selectedVariant.originalPrice"
+                  class="text-decoration-line-through text-muted small"
+                >
+                  {{ formatCurrency(selectedVariant.originalPrice) }}
+                </span>
+                
+                <!-- BỔ SUNG BADGE FLASH SALE -->
+                <span v-if="calculatedDiscountPercent > 0" class="flash-sale-badge">
+                  -{{ calculatedDiscountPercent }}%
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="vm-variants">
+            <p class="vm-label">TÙY CHỌN PHÂN LOẠI:</p>
+            <div v-if="isLoadingVariants" class="text-center py-4">
+              <span class="spinner-border spinner-border-sm me-2" style="color: #b78d52"></span>
+              <span style="color: #718096; font-size: 13px">Đang tải thông tin...</span>
+            </div>
+            <div v-else class="vm-grid">
+              <button
+                v-for="v in fullVariants"
+                :key="v.productVariantId || v.id"
+                class="vm-variant-btn"
+                :class="{
+                  selected: (selectedVariant?.productVariantId || selectedVariant?.id) === (v.productVariantId || v.id),
+                  disabled: Number(v.stockQuantity || v.stock || 0) <= 0,
+                }"
+                @click="selectedVariant = v; quantity = 1;"
+              >
+                <span class="vm-v-name">{{ v.displayCapacity }}</span>
+              </button>
+            </div>
+
+            <hr class="variant-divider" v-if="selectedVariant" />
+
+            <div class="quantity-section" v-if="selectedVariant">
+              <p class="vm-label mb-0">SỐ LƯỢNG:</p>
+              <div class="quantity-control">
+                <div class="qty-wrapper">
+                  <button type="button" @click="quantity > 1 ? quantity-- : null" :disabled="quantity <= 1">−</button>
+                  <input type="number" v-model="quantity" @input="validateQuantity" @blur="validateQuantity" @keyup.enter="validateQuantity" />
+                  <button type="button" @click="increaseQuantity">+</button>
+                </div>
+                <span class="stock-info"> Kho: {{ maxQuantity }} </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ĐÃ SỬA: CHIA 2 NÚT THÊM VÀO GIỎ VÀ MUA NGAY -->
+          <div class="vm-actions d-flex gap-2 mt-3">
+            <button class="vm-btn-cart flex-grow-1" :disabled="!selectedVariant || actionLoading || isLoadingVariants" @click="confirmAction('CART')">
+              <span v-if="actionLoading && actionType === 'CART'" class="spinner-border spinner-border-sm me-2"></span>
+              THÊM VÀO GIỎ
+            </button>
+            <button class="vm-btn-buy flex-grow-1" :disabled="!selectedVariant || actionLoading || isLoadingVariants" @click="confirmAction('BUY')">
+              <span v-if="actionLoading && actionType === 'BUY'" class="spinner-border spinner-border-sm me-2"></span>
+              MUA NGAY
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch, computed } from "vue";
 import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import api from "@/common/api";
@@ -137,7 +219,6 @@ const router = useRouter();
 
 const favoritedMap = ref<Record<number, boolean>>({});
 const favoriteLoadingMap = ref<Record<number, boolean>>({});
-const buyNowLoadingMap = ref<Record<number, boolean>>({});
 
 const BACKEND_URL = "http://localhost:8080";
 
@@ -168,22 +249,37 @@ const getBrandName = (item: any) => {
   return item?.brandName || item?.brand || "Premium";
 };
 
-/* ===== Hiển thị sao/đánh giá =====
-   Sao được tính động theo rating thay vì hardcode "★★★★★".
-   Khi sản phẩm chưa có đánh giá nào (hoặc API danh sách không trả về
-   rating), mặc định hiển thị 5 sao theo yêu cầu nghiệp vụ. */
 const DEFAULT_RATING = 5;
 
-const getRatingValue = (item: any) => {
-  const raw = Number(
-    item?.rating ?? item?.avgRating ?? item?.averageRating ?? 0
-  );
-
-  return raw > 0 ? raw : DEFAULT_RATING;
-};
+// Thêm 2 state để lưu data đồng bộ ngầm cho danh sách
+const syncedRatingsMap = ref<Record<number, number>>({});
+const syncedReviewsMap = ref<Record<number, number>>({});
 
 const getReviewCount = (item: any) => {
-  return Number(item?.reviewCount ?? item?.reviews ?? item?.totalReviews ?? 0);
+  const id = Number(item?.id || item?.productId || 0);
+  // Nếu đã kéo được data thật thì lấy ra dùng
+  if (id > 0 && syncedReviewsMap.value[id] !== undefined) {
+    return syncedReviewsMap.value[id];
+  }
+  return Number(item?.reviewCount || item?.reviews || item?.totalReviews || 0);
+};
+
+const getRatingValue = (item: any) => {
+  const id = Number(item?.id || item?.productId || 0);
+  let raw = 0;
+  
+  // Ưu tiên data đồng bộ ngầm
+  if (id > 0 && syncedRatingsMap.value[id] !== undefined) {
+    raw = syncedRatingsMap.value[id];
+  } else {
+    raw = Number(item?.averageRating || item?.avgRating || item?.rating || 0);
+  }
+  
+  const reviews = getReviewCount(item);
+  if (reviews > 0 || raw > 0) {
+    return Math.min(5, Math.max(0, raw));
+  }
+  return DEFAULT_RATING; // Mặc định 5 sao nếu trắng trơn
 };
 
 const getRatingScore = (item: any) => {
@@ -193,10 +289,31 @@ const getRatingScore = (item: any) => {
 const getStarsDisplay = (item: any) => {
   const rounded = Math.round(getRatingValue(item));
   const filled = Math.max(0, Math.min(5, rounded));
-
   return "★".repeat(filled) + "☆".repeat(5 - filled);
 };
-/* ===== Hết phần sao/đánh giá ===== */
+
+// Hàm chạy ngầm kéo data thật cho những ông nào bị báo 0 đánh giá
+const syncGridRatings = () => {
+  if (!props.productList || !Array.isArray(props.productList)) return;
+  
+  props.productList.forEach(async (item) => {
+    const id = Number(item?.id || item?.productId || 0);
+    const currentCount = Number(item?.reviewCount || item?.reviews || item?.totalReviews || 0);
+    
+    if (id > 0 && currentCount === 0 && syncedReviewsMap.value[id] === undefined) {
+      try {
+        const res = await api.get(`/v1/products/${id}`);
+        const data = res.data?.data || res.data;
+        if (data) {
+          syncedRatingsMap.value[id] = Number(data.averageRating || data.avgRating || data.rating || 0);
+          syncedReviewsMap.value[id] = Number(data.reviewCount || data.reviews || data.totalReviews || 0);
+        }
+      } catch (e) {
+        // Lỗi thì âm thầm bỏ qua
+      }
+    }
+  });
+};
 
 const getPlaceholderImage = () => {
   return (
@@ -438,26 +555,9 @@ const isFavoriteLoading = (item: any) => {
   return Boolean(favoriteLoadingMap.value[variantId]);
 };
 
-const isBuyNowLoading = (item: any) => {
-  const variantId = getPrimaryVariantId(item);
-
-  if (!variantId) {
-    return false;
-  }
-
-  return Boolean(buyNowLoadingMap.value[variantId]);
-};
-
 const setFavoriteLoading = (variantId: number, value: boolean) => {
   favoriteLoadingMap.value = {
     ...favoriteLoadingMap.value,
-    [variantId]: value,
-  };
-};
-
-const setBuyNowLoading = (variantId: number, value: boolean) => {
-  buyNowLoadingMap.value = {
-    ...buyNowLoadingMap.value,
     [variantId]: value,
   };
 };
@@ -593,81 +693,180 @@ const toggleFavorite = async (item: any) => {
   }
 };
 
-const handleBuyNow = async (item: any) => {
-  const variantId = getPrimaryVariantId(item);
+// --- LOGIC MODAL MUA NHANH ---
+const showVariantModal = ref(false);
+const modalProduct = ref<any>(null);
+const isLoadingVariants = ref(false);
+const selectedVariant = ref<any>(null);
+const fullVariants = ref<any[]>([]);
+const quantity = ref(1);
+const actionLoading = ref(false);
+const actionType = ref('');
 
-  if (!variantId || Number.isNaN(variantId)) {
-    await Swal.fire({
-      icon: "warning",
-      title: "Không xác định được biến thể",
-      text: "Sản phẩm này chưa có biến thể hợp lệ để mua ngay.",
-      confirmButtonColor: "#bd9a5f",
-    });
+const modalImage = computed(() => {
+  if (selectedVariant.value) {
+    const variantImages = getProductImages(selectedVariant.value);
+    if (variantImages[0]) return variantImages[0];
+  }
+  return modalProduct.value ? getProductImage(modalProduct.value) : getPlaceholderImage();
+});
+
+const maxQuantity = computed(() => {
+  return selectedVariant.value
+    ? Number(selectedVariant.value.stockQuantity || selectedVariant.value.stock || 0)
+    : 0;
+});
+
+const calculatedDiscountPercent = computed(() => {
+  if (selectedVariant.value) {
+    const original = selectedVariant.value.originalPrice || selectedVariant.value.oldPrice || selectedVariant.value.price;
+    const sale = selectedVariant.value.salePrice || selectedVariant.value.price;
+    if (original && sale && original > sale) {
+      return Math.round(((original - sale) / original) * 100);
+    }
+    return 0;
+  }
+  return modalProduct.value ? getDiscountPercent(modalProduct.value) : 0;
+});
+
+const validateQuantity = () => {
+  let val = Number(quantity.value);
+  if (Number.isNaN(val) || val < 1) {
+    quantity.value = 1;
+  } else if (val > 10) {
+    quantity.value = 10;
+    Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: 'Chỉ được mua tối đa 10 sản phẩm!', showConfirmButton: false, timer: 2000 });
+  } else if (val > maxQuantity.value) {
+    quantity.value = maxQuantity.value;
+    Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: `Chỉ còn ${maxQuantity.value} trong kho!`, showConfirmButton: false, timer: 2000 });
+  } else {
+    quantity.value = Math.floor(val);
+  }
+};
+
+const increaseQuantity = () => {
+  if (quantity.value >= 10) {
+    Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: 'Chỉ được mua tối đa 10 sản phẩm!', showConfirmButton: false, timer: 2000 });
     return;
   }
-
-  if (getVariantPrice(item) <= 0) {
-    await Swal.fire({
-      icon: "warning",
-      title: "Sản phẩm chưa có giá",
-      text: "Sản phẩm chưa có giá bán. Vui lòng xem chi tiết hoặc liên hệ cửa hàng.",
-      confirmButtonColor: "#bd9a5f",
-    });
+  if (quantity.value >= maxQuantity.value) {
+    Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: `Chỉ còn ${maxQuantity.value} trong kho!`, showConfirmButton: false, timer: 2000 });
     return;
   }
+  quantity.value++;
+};
 
-  if (getVariantStock(item) <= 0) {
-    await Swal.fire({
-      icon: "warning",
-      title: "Tạm hết hàng",
-      text: "Sản phẩm này hiện đã hết hàng.",
-      confirmButtonColor: "#bd9a5f",
-    });
-    return;
-  }
-
+const openVariantModal = async (item: any) => {
   if (!hasToken()) {
     await askLogin("Vui lòng đăng nhập để mua sản phẩm.");
     return;
   }
-
   if (!isCustomerLoggedIn()) {
-    await Swal.fire({
-      icon: "warning",
-      title: "Không thể mua hàng",
-      text: "Chỉ tài khoản khách hàng mới được mua hàng.",
-      confirmButtonColor: "#bd9a5f",
-    });
+    await Swal.fire({ icon: "warning", title: "Từ chối thao tác", text: "Chỉ tài khoản khách hàng mới được mua hàng.", confirmButtonColor: "#bd9a5f" });
     return;
   }
 
-  try {
-    setBuyNowLoading(variantId, true);
+  modalProduct.value = item;
+  selectedVariant.value = null;
+  fullVariants.value = [];
+  quantity.value = 1;
+  showVariantModal.value = true;
+  isLoadingVariants.value = true;
 
+  try {
+    // ÉP GIÁ FLASH SALE TỪ CARD VÀO MODAL
+    const flashSalePriceMap = new Map<number, number>();
+    const originalPriceMap = new Map<number, number>();
+    if (item?.variants && Array.isArray(item.variants)) {
+      item.variants.forEach((pv: any) => {
+        const vId = Number(pv.productVariantId || pv.variantId || pv.id);
+        if (vId) {
+          if (pv.salePrice != null) flashSalePriceMap.set(vId, Number(pv.salePrice));
+          if (pv.originalPrice != null || pv.oldPrice != null || pv.price != null) {
+            originalPriceMap.set(vId, Number(pv.originalPrice || pv.oldPrice || pv.price));
+          }
+        }
+      });
+    }
+
+    const res = await api.get(`/v1/products/${item.id || item.productId}`);
+    const data = res.data?.data || res.data;
+    let rawVariants = data?.variants || data?.productVariants || data?.productVariantList || item.variants || [item];
+
+    const processedVariants = rawVariants.map((v: any) => {
+      const vId = Number(v.productVariantId || v.variantId || v.id);
+      let cap = v.capacityName || v.capacityValue || v.volume || v.capacity;
+      if (typeof cap === "object") cap = cap?.value ?? cap?.name;
+
+      let numericCap = parseFloat(String(cap).replace("ml", "")) || 0;
+      let displayCap = numericCap > 0 ? `${numericCap}ml` : String(cap || "");
+
+      const bottle = v.bottleTypeName || v.bottleType;
+      const bottleName = typeof bottle === "object" ? bottle?.name : bottle;
+
+      if (displayCap && bottleName) displayCap = `${displayCap} - ${bottleName}`;
+      else if (bottleName) displayCap = bottleName;
+      else if (!displayCap) displayCap = "Loại " + (vId || "");
+
+      // Lấy giá trị đã map hoặc dự phòng lấy giá của v
+      const mappedSalePrice = flashSalePriceMap.get(vId) ?? v.salePrice ?? v.promotionPrice ?? v.price;
+      const mappedOriginalPrice = originalPriceMap.get(vId) ?? v.originalPrice ?? v.price;
+
+      return {
+        ...v,
+        productVariantId: vId,
+        id: vId,
+        originalPrice: mappedOriginalPrice,
+        salePrice: mappedSalePrice,
+        displayCapacity: displayCap,
+        numericCapacity: numericCap,
+      };
+    });
+
+    processedVariants.sort((a: any, b: any) => a.numericCapacity - b.numericCapacity);
+    fullVariants.value = processedVariants;
+
+    if (fullVariants.value.length > 0) {
+      const primaryId = getPrimaryVariantId(item);
+      selectedVariant.value = fullVariants.value.find((v: any) => v.productVariantId === primaryId) || fullVariants.value[0];
+    }
+  } catch (error) {
+    console.error("Lỗi lấy biến thể:", error);
+    fullVariants.value = (item.variants || [item]).map((v: any) => ({
+      ...v,
+      displayCapacity: "Phân loại",
+      numericCapacity: 0
+    }));
+    selectedVariant.value = fullVariants.value[0];
+  } finally {
+    isLoadingVariants.value = false;
+  }
+};
+
+const confirmAction = async (type: 'CART' | 'BUY') => {
+  if (!selectedVariant.value || !modalProduct.value) return;
+  const variantId = Number(selectedVariant.value.productVariantId || selectedVariant.value.variantId || selectedVariant.value.id || modalProduct.value.id);
+
+  try {
+    actionType.value = type;
+    actionLoading.value = true;
     await api.post("/v1/customer/cart/add", {
       productVariantId: variantId,
-      quantity: 1,
+      quantity: quantity.value,
     });
-
     window.dispatchEvent(new Event("cart-updated"));
-
-    router.push({
-      name: "Checkout",
-    });
+    showVariantModal.value = false;
+    
+    if (type === 'BUY') {
+      router.push({ name: "Checkout" });
+    } else {
+      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Thêm vào giỏ thành công', showConfirmButton: false, timer: 1500 });
+    }
   } catch (error: any) {
-    console.error("Lỗi mua ngay:", error);
-
-    await Swal.fire({
-      icon: "error",
-      title: "Không thể mua ngay",
-      text:
-        error?.response?.data?.message ||
-        error?.response?.data ||
-        "Không thể thêm sản phẩm vào giỏ. Vui lòng thử lại.",
-      confirmButtonColor: "#bd9a5f",
-    });
+    Swal.fire({ icon: 'error', title: 'Lỗi', text: error?.response?.data?.message || 'Không thể thực hiện.', confirmButtonColor: '#bd9a5f' });
   } finally {
-    setBuyNowLoading(variantId, false);
+    actionLoading.value = false;
+    actionType.value = '';
   }
 };
 
@@ -704,6 +903,7 @@ const formatPrice = (item: any) => {
 onMounted(() => {
   window.addEventListener("favorite-updated", handleFavoriteUpdated);
   loadMyFavorites();
+  syncGridRatings(); // <--- Bổ sung dòng này
 });
 
 onBeforeUnmount(() => {
@@ -714,6 +914,7 @@ watch(
   () => props.productList,
   () => {
     loadMyFavorites();
+    syncGridRatings(); // <--- Bổ sung thêm dòng này nữa
   },
   {
     deep: true,
@@ -758,7 +959,6 @@ watch(
   transform: translateY(-4px);
 }
 
-/* ĐÃ SỬA: Đồng bộ bo góc, khung vuông đầy đặn và object-fit cover giống trang chi tiết */
 .card-img-wrapper {
   position: relative;
   background: #f8f9fa;
@@ -955,5 +1155,59 @@ watch(
   .product-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* --- CSS MODAL MUA NHANH --- */
+.custom-modal-overlay { backdrop-filter: blur(5px); position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 999999; display: flex; align-items: center; justify-content: center; }
+.variant-modal-box { background: #ffffff; width: 100%; max-width: 440px; border-radius: 20px; padding: 28px; box-shadow: 0 24px 54px rgba(6, 19, 43, 0.25); animation: modalFadeIn 0.3s ease-out forwards; }
+@keyframes modalFadeIn { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.vm-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid rgba(189, 154, 95, 0.15); padding-bottom: 16px; }
+.vm-header h5 { margin: 0; font-family: "Playfair Display", serif; font-weight: 800; color: #06132b; font-size: 20px; letter-spacing: -0.5px; }
+.vm-close { background: transparent; border: none; padding: 4px; color: #a0aec0; cursor: pointer; transition: 0.2s; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.vm-close:hover { color: #e53e3e; background: #fff5f5; transform: rotate(90deg); }
+.vm-product-info { display: flex; gap: 18px; margin-bottom: 28px; align-items: center; }
+.vm-img-box { width: 82px; height: 82px; border-radius: 14px; background: #f8fafc; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgba(6, 19, 43, 0.08); flex-shrink: 0; padding: 6px; }
+.vm-img-box img { width: 100%; height: 100%; object-fit: contain; }
+.vm-details h6 { margin: 0 0 6px 0; font-weight: 800; font-size: 16px; color: #06132b; font-family: "Playfair Display", serif; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.vm-price { margin: 0; font-weight: 800; color: #b78d52; font-size: 18px; }
+.vm-label { font-weight: 700; font-size: 13px; color: #4a5568; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+.vm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 28px; }
+.vm-variant-btn { background: #ffffff; border: 1px solid #cbd5e0; border-radius: 12px; padding: 12px 6px; text-align: center; cursor: pointer; transition: all 0.25s ease; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.vm-variant-btn:hover:not(.disabled) { border-color: #b78d52; background: #fffcf7; transform: translateY(-2px); }
+.vm-variant-btn.selected { border-color: #b78d52; background: #fffcf7; border-width: 2px; box-shadow: 0 6px 14px rgba(183, 141, 82, 0.15); padding: 11px 5px; }
+.vm-v-name { font-size: 14px; font-weight: 800; color: #06132b; }
+.vm-variant-btn.disabled { opacity: 0.45; cursor: not-allowed; background: #f1f5f9; border-color: #e2e8f0; }
+.vm-variant-btn.disabled .vm-v-name { text-decoration: line-through; color: #a0aec0; }
+.variant-divider { border: 0; border-top: 1px dashed #cbd5e0; margin: 20px 0 16px 0; }
+.quantity-section { display: flex; align-items: center; gap: 24px; margin-bottom: 24px; }
+.quantity-control { display: flex; align-items: center; gap: 12px; }
+.qty-wrapper { display: inline-flex; border: 1px solid #cbd5e0; border-radius: 6px; overflow: hidden; }
+.qty-wrapper button { width: 32px; height: 32px; background: #ffffff; border: none; cursor: pointer; color: #06132b; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+.qty-wrapper button:hover:not(:disabled) { background: #f1f5f9; }
+.qty-wrapper button:disabled { color: #cbd5e0; cursor: not-allowed; }
+.qty-wrapper input { width: 44px; text-align: center; border: none; font-size: 15px; font-weight: 700; outline: none; border-left: 1px solid #cbd5e0; border-right: 1px solid #cbd5e0; color: #06132b; }
+.stock-info { font-size: 13px; color: #718096; }
+
+/* 2 NÚT THÊM VÀ MUA NGAY TRONG MODAL */
+.vm-btn-cart, .vm-btn-buy { border-radius: 12px; padding: 14px; font-size: 13px; font-weight: 800; letter-spacing: 0.5px; transition: all 0.25s ease; text-transform: uppercase; display: flex; justify-content: center; align-items: center; border: none; }
+.vm-btn-cart { background: #0a142f; color: #ffffff; }
+.vm-btn-cart:hover:not(:disabled) { background: #13275a; transform: translateY(-2px); box-shadow: 0 6px 14px rgba(10, 20, 47, 0.2); }
+.vm-btn-buy { background: #b78d52; color: #ffffff; }
+.vm-btn-buy:hover:not(:disabled) { background: #9b7541; transform: translateY(-2px); box-shadow: 0 6px 14px rgba(183, 141, 82, 0.25); }
+.vm-btn-cart:disabled, .vm-btn-buy:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* Ẩn mũi tên input */
+.qty-wrapper input[type="number"]::-webkit-inner-spin-button, .qty-wrapper input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.qty-wrapper input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+
+/* Badge cho phần trăm Sale */
+.flash-sale-badge { 
+  background: #b31320; 
+  color: #ffffff; 
+  border-radius: 999px; 
+  padding: 3px 10px; 
+  font-size: 12px; 
+  font-weight: 800; 
+  margin-bottom: 2px; 
 }
 </style>

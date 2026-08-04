@@ -159,7 +159,7 @@
                         ? selectedVariant.salePrice ||
                             selectedVariant.price ||
                             cardSalePrice
-                        : cardSalePrice
+                        : cardSalePrice,
                     )
                   }}
                 </p>
@@ -231,6 +231,7 @@
               <p class="vm-label mb-0">SỐ LƯỢNG:</p>
               <div class="quantity-control">
                 <div class="qty-wrapper">
+                  <!-- Nút trừ -->
                   <button
                     type="button"
                     @click="quantity > 1 ? quantity-- : null"
@@ -238,20 +239,18 @@
                   >
                     −
                   </button>
-                  <!-- Bỏ readonly, đổi type thành number và thêm sự kiện validate -->
+
+                  <!-- Ô nhập -->
                   <input
                     type="number"
                     v-model="quantity"
+                    @input="validateQuantity"
                     @blur="validateQuantity"
                     @keyup.enter="validateQuantity"
                   />
-                  <button
-                    type="button"
-                    @click="quantity < maxQuantity ? quantity++ : null"
-                    :disabled="quantity >= maxQuantity"
-                  >
-                    +
-                  </button>
+
+                  <!-- Nút cộng (Gọi hàm để bắn thông báo) -->
+                  <button type="button" @click="increaseQuantity">+</button>
                 </div>
                 <span class="stock-info"> Kho: {{ maxQuantity }} </span>
               </div>
@@ -434,11 +433,9 @@ const shortBrand = computed(
     brandMap[props.product.brand] ||
     String(props.product.brand || "AURA")
       .slice(0, 8)
-      .toUpperCase()
+      .toUpperCase(),
 );
 
-const DEFAULT_RATING = 5;
-const MAX_RATING = 5;
 
 const toFiniteNumber = (value: unknown, fallback = 0) => {
   const numberValue = Number(value);
@@ -449,14 +446,70 @@ const clampRating = (value: unknown) => {
   return Math.min(MAX_RATING, Math.max(0, toFiniteNumber(value, 0)));
 };
 
+const DEFAULT_RATING = 5;
+const MAX_RATING = 5;
+
+// Thêm 2 state để lưu data đồng bộ ngầm
+const syncedRating = ref<number | null>(null);
+const syncedReviews = ref<number | null>(null);
+
 const normalizedReviewCount = computed(() => {
-  const count = toFiniteNumber(props.product.reviewCount, 0);
+  // Ưu tiên data fetch bù nếu có
+  if (syncedReviews.value !== null && syncedReviews.value > 0) {
+    return syncedReviews.value;
+  }
+  const p = props.product as any;
+  const count = Number(p?.reviewCount || p?.reviews || p?.totalReviews || 0);
   return Math.max(0, Math.floor(count));
 });
 
 const rawAverageRating = computed(() => {
-  return clampRating(props.product.averageRating ?? props.product.rating ?? 0);
+  if (syncedRating.value !== null && syncedRating.value > 0) {
+    return syncedRating.value;
+  }
+  const p = props.product as any;
+  const raw = Number(p?.averageRating || p?.avgRating || p?.rating || 0);
+  return Math.min(MAX_RATING, Math.max(0, raw));
 });
+
+const ratingValue = computed(() => {
+  // Nếu có đánh giá thật hoặc điểm > 0 thì hiện điểm thật
+  if (normalizedReviewCount.value > 0 || rawAverageRating.value > 0) {
+    return rawAverageRating.value;
+  }
+  return DEFAULT_RATING;
+});
+
+const ratingDisplay = computed(() => {
+  return ratingValue.value.toFixed(1);
+});
+
+const starsDisplay = computed(() => {
+  const rounded = Math.round(ratingValue.value);
+  const filled = Math.max(0, Math.min(MAX_RATING, rounded));
+  return "★".repeat(filled) + "☆".repeat(MAX_RATING - filled);
+});
+
+// Hàm chạy ngầm kéo dữ liệu thật nếu thẻ đang bị mắc kẹt ở 0 đánh giá do backend cache
+const syncProductData = async () => {
+  const p = props.product as any;
+  const currentCount = Number(p?.reviewCount || p?.reviews || p?.totalReviews || 0);
+  const productId = Number(p?.productId || p?.id || 0);
+
+  // Chỉ gọi API ngầm nếu API trang chủ đang báo 0 đánh giá
+  if (currentCount === 0 && productId > 0) {
+    try {
+      const res = await api.get(`/v1/products/${productId}`);
+      const data = res.data?.data || res.data;
+      if (data) {
+        syncedRating.value = Number(data.averageRating || data.avgRating || data.rating || 0);
+        syncedReviews.value = Number(data.reviewCount || data.reviews || data.totalReviews || 0);
+      }
+    } catch (error) {
+      // Bỏ qua nếu lỗi
+    }
+  }
+};
 
 const hasReviewCountSource = computed(() => {
   return (
@@ -472,20 +525,6 @@ const hasActualReviews = computed(() => {
   return rawAverageRating.value > 0;
 });
 
-const ratingValue = computed(() => {
-  return hasActualReviews.value ? rawAverageRating.value : DEFAULT_RATING;
-});
-
-const ratingDisplay = computed(() => {
-  return ratingValue.value.toFixed(1);
-});
-
-const starsDisplay = computed(() => {
-  const rounded = Math.round(ratingValue.value);
-  const filled = Math.max(0, Math.min(MAX_RATING, rounded));
-  return "★".repeat(filled) + "☆".repeat(MAX_RATING - filled);
-});
-
 const getBottleStyle = (color?: string): Record<string, string> => ({
   "--bottle-color": color || "#0a192f",
 });
@@ -495,11 +534,7 @@ const formatCurrency = (value: number) =>
 
 const getVariantIdValue = (value: any) =>
   Number(
-    value?.productVariantId ??
-      value?.variantId ??
-      value?.id ??
-      value?.Id ??
-      0
+    value?.productVariantId ?? value?.variantId ?? value?.id ?? value?.Id ?? 0,
   );
 
 const getRawOriginalPrice = (value: any) =>
@@ -510,7 +545,7 @@ const getRawOriginalPrice = (value: any) =>
       value?.basePrice ??
       value?.Price ??
       value?.price,
-    0
+    0,
   );
 
 const getRawSalePrice = (value: any) =>
@@ -524,7 +559,7 @@ const getRawSalePrice = (value: any) =>
       value?.minPrice ??
       value?.price ??
       value?.Price,
-    0
+    0,
   );
 
 const getRawDiscountPercent = (value: any) =>
@@ -536,15 +571,18 @@ const getRawDiscountPercent = (value: any) =>
           value?.discount ??
           value?.salePercent ??
           value?.promotionPercent,
-        0
-      )
-    )
+        0,
+      ),
+    ),
   );
 
 const getStockValue = (value: any) =>
   toFiniteNumber(
-    value?.stockQuantity ?? value?.stock ?? value?.availableQuantity ?? value?.quantity,
-    -1
+    value?.stockQuantity ??
+      value?.stock ??
+      value?.availableQuantity ??
+      value?.quantity,
+    -1,
   );
 
 const getPriceInfo = (value: any) => {
@@ -574,19 +612,20 @@ const cardPriceInfo = computed(() => {
     .map((variant: any) => getPriceInfo(variant))
     .filter((info: any) => info.salePrice > 0);
 
-  const inStockVariantPrices = variantPrices.filter((info: any) => info.stock !== 0);
-  const candidates = inStockVariantPrices.length > 0 ? inStockVariantPrices : variantPrices;
+  const inStockVariantPrices = variantPrices.filter(
+    (info: any) => info.stock !== 0,
+  );
+  const candidates =
+    inStockVariantPrices.length > 0 ? inStockVariantPrices : variantPrices;
 
   if (candidates.length > 0) {
-    return candidates
-      .slice()
-      .sort((a: any, b: any) => {
-        if (a.salePrice !== b.salePrice) {
-          return a.salePrice - b.salePrice;
-        }
+    return candidates.slice().sort((a: any, b: any) => {
+      if (a.salePrice !== b.salePrice) {
+        return a.salePrice - b.salePrice;
+      }
 
-        return b.discountPercent - a.discountPercent;
-      })[0];
+      return b.discountPercent - a.discountPercent;
+    })[0];
   }
 
   return getPriceInfo(p);
@@ -595,15 +634,15 @@ const cardPriceInfo = computed(() => {
 const cardSalePrice = computed(() => cardPriceInfo.value.salePrice || 0);
 
 const cardOriginalPrice = computed(
-  () => cardPriceInfo.value.originalPrice || cardSalePrice.value
+  () => cardPriceInfo.value.originalPrice || cardSalePrice.value,
 );
 
 const cardDiscountPercent = computed(() =>
-  Math.max(0, Math.round(cardPriceInfo.value.discountPercent || 0))
+  Math.max(0, Math.round(cardPriceInfo.value.discountPercent || 0)),
 );
 
 const cardRepresentativeVariantId = computed(() =>
-  Number(cardPriceInfo.value.variantId || 0)
+  Number(cardPriceInfo.value.variantId || 0),
 );
 
 const hasVariantPriceRange = computed(() => {
@@ -621,7 +660,6 @@ const hasVariantPriceRange = computed(() => {
 
   return new Set(prices).size > 1;
 });
-
 
 const normalizeImageUrl = (url: unknown) => {
   const rawUrl = String(url || "").trim();
@@ -660,7 +698,7 @@ const getImageUrlFromObject = (value: any) => {
       value?.MainImageUrl ??
       value?.mainImage ??
       value?.MainImage ??
-      ""
+      "",
   );
 };
 
@@ -723,7 +761,7 @@ const productImages = computed(() => {
   for (const arr of imageArrays) {
     if (Array.isArray(arr)) {
       const primaryObj = arr.find((img: any) =>
-        Boolean(img?.isPrimary || img?.is_primary || img?.primary)
+        Boolean(img?.isPrimary || img?.is_primary || img?.primary),
       );
       if (primaryObj) {
         addUnique(primaryObj?.imageUrl || primaryObj?.url || primaryObj);
@@ -756,7 +794,7 @@ const productImages = computed(() => {
 
 const productImage = computed(() => productImages.value[0] || "");
 const hasProductImage = computed(
-  () => Boolean(productImage.value) && !imageLoadError.value
+  () => Boolean(productImage.value) && !imageLoadError.value,
 );
 
 const modalImage = computed(() => {
@@ -832,7 +870,7 @@ const showToast = (
   type: "success" | "warning" | "error",
   title: string,
   message: string,
-  showCartLink = false
+  showCartLink = false,
 ) => {
   toast.value = { show: true, type, title, message, showCartLink };
   if (toastTimer) window.clearTimeout(toastTimer);
@@ -851,7 +889,7 @@ const checkLoginBeforeAction = () => {
     showToast(
       "warning",
       "Yêu cầu đăng nhập",
-      "Vui lòng đăng nhập để tiếp tục trải nghiệm mua sắm tại Dominus."
+      "Vui lòng đăng nhập để tiếp tục trải nghiệm mua sắm tại Dominus.",
     );
     setTimeout(() => {
       router
@@ -868,7 +906,7 @@ const checkLoginBeforeAction = () => {
     showToast(
       "error",
       "Từ chối thao tác",
-      "Chức năng này chỉ dành cho tài khoản Khách hàng."
+      "Chức năng này chỉ dành cho tài khoản Khách hàng.",
     );
     return false;
   }
@@ -889,7 +927,11 @@ const openVariantModal = async (type: "CART" | "BUY") => {
     const flashSalePriceMap = new Map<number, number>();
     const flashSaleVariantIds = new Set<number>();
 
-    if (props.product?.isFlashSale && props.product?.variants && Array.isArray(props.product.variants)) {
+    if (
+      props.product?.isFlashSale &&
+      props.product?.variants &&
+      Array.isArray(props.product.variants)
+    ) {
       props.product.variants.forEach((pv: any) => {
         const vId = Number(pv.productVariantId || pv.variantId || pv.id);
         if (vId) {
@@ -909,7 +951,6 @@ const openVariantModal = async (type: "CART" | "BUY") => {
     if (!rawVariants || rawVariants.length === 0) {
       rawVariants = props.product.variants || [props.product];
     }
-
 
     const processedVariants = rawVariants.map((v: any) => {
       const vId = Number(v.productVariantId || v.variantId || v.id);
@@ -968,7 +1009,7 @@ const openVariantModal = async (type: "CART" | "BUY") => {
     });
 
     processedVariants.sort(
-      (a: any, b: any) => a.numericCapacity - b.numericCapacity
+      (a: any, b: any) => a.numericCapacity - b.numericCapacity,
     );
     fullVariants.value = processedVariants;
 
@@ -976,7 +1017,7 @@ const openVariantModal = async (type: "CART" | "BUY") => {
       selectedVariant.value =
         fullVariants.value.find((variant: any) => {
           const variantId = Number(
-            variant?.productVariantId || variant?.variantId || variant?.id || 0
+            variant?.productVariantId || variant?.variantId || variant?.id || 0,
           );
 
           return (
@@ -1008,7 +1049,7 @@ const confirmAction = async () => {
     selectedVariant.value.productVariantId ||
       selectedVariant.value.variantId ||
       selectedVariant.value.id ||
-      props.product.id
+      props.product.id,
   );
 
   if (actionType.value === "CART") {
@@ -1024,13 +1065,13 @@ const confirmAction = async () => {
         "success",
         "Thêm thành công",
         "Đã thêm sản phẩm vào giỏ.",
-        true
+        true,
       );
     } catch (error: any) {
       showToast(
         "error",
         "Lỗi",
-        error?.response?.data?.message || "Không thể thêm vào giỏ."
+        error?.response?.data?.message || "Không thể thêm vào giỏ.",
       );
     } finally {
       addCartLoading.value = false;
@@ -1049,7 +1090,7 @@ const confirmAction = async () => {
       showToast(
         "error",
         "Lỗi",
-        error?.response?.data?.message || "Không thể mua ngay lúc này."
+        error?.response?.data?.message || "Không thể mua ngay lúc này.",
       );
     } finally {
       buyNowLoading.value = false;
@@ -1071,7 +1112,7 @@ const getPrimaryVariantId = () => {
     props.product.productVariantId ||
       props.product.variantId ||
       props.product.id ||
-      0
+      0,
   );
 };
 
@@ -1142,13 +1183,13 @@ const handleToggleFavorite = async () => {
     window.dispatchEvent(
       new CustomEvent("favorite-updated", {
         detail: { productVariantId: variantId, favorited },
-      })
+      }),
     );
 
     showToast(
       favorited ? "success" : "warning",
       favorited ? "Đã thêm yêu thích" : "Đã bỏ yêu thích",
-      res.data?.message || ""
+      res.data?.message || "",
     );
   } catch (error: any) {
     showToast("error", "Lỗi", "Không thể xử lý yêu thích");
@@ -1228,31 +1269,63 @@ const calculatedDiscountPercent = computed(() => {
 const maxQuantity = computed(() => {
   return selectedVariant.value
     ? Number(
-        selectedVariant.value.stockQuantity || selectedVariant.value.stock || 0
+        selectedVariant.value.stockQuantity || selectedVariant.value.stock || 0,
       )
     : 0;
 });
 
+// Sửa hàm validate (khi khách nhập tay)
 const validateQuantity = () => {
   let val = Number(quantity.value);
 
-  // Nếu nhập linh tinh, để trống hoặc nhập số nhỏ hơn 1 -> Đưa về 1
   if (Number.isNaN(val) || val < 1) {
     quantity.value = 1;
   }
-  // Nếu nhập lớn hơn số lượng tồn kho -> Đưa về tối đa tồn kho
-  else if (val > maxQuantity.value) {
+  // Thêm cảnh báo nếu nhập > 10
+  else if (val > 10) {
+    quantity.value = 10;
+    showToast(
+      "warning",
+      "Giới hạn mua",
+      "Bạn chỉ được mua tối đa 10 sản phẩm cho mỗi phân loại.",
+    );
+  } else if (val > maxQuantity.value) {
     quantity.value = maxQuantity.value;
-  }
-  // Nếu nhập số thập phân -> Làm tròn thành số nguyên
-  else {
+    showToast(
+      "warning",
+      "Giới hạn tồn kho",
+      `Sản phẩm chỉ còn ${maxQuantity.value} trong kho.`,
+    );
+  } else {
     quantity.value = Math.floor(val);
   }
+};
+
+// Tạo thêm hàm này để xử lý nút bấm dấu +
+const increaseQuantity = () => {
+  if (quantity.value >= 10) {
+    showToast(
+      "warning",
+      "Giới hạn mua",
+      "Bạn chỉ được mua tối đa 10 sản phẩm cho mỗi phân loại.",
+    );
+    return;
+  }
+  if (quantity.value >= maxQuantity.value) {
+    showToast(
+      "warning",
+      "Giới hạn tồn kho",
+      `Sản phẩm chỉ còn ${maxQuantity.value} trong kho.`,
+    );
+    return;
+  }
+  quantity.value++;
 };
 
 onMounted(() => {
   window.addEventListener("favorite-updated", handleFavoriteUpdated);
   loadFavoriteStatus();
+  syncProductData(); // <-- Bổ sung thêm dòng này
 });
 
 onBeforeUnmount(() => {
@@ -1265,7 +1338,7 @@ watch(
   () => {
     loadFavoriteStatus();
   },
-  { deep: true }
+  { deep: true },
 );
 </script>
 
@@ -1390,11 +1463,8 @@ watch(
   width: 120px;
   height: 134px;
   border-radius: 16px 16px 24px 24px;
-  background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.32),
-      transparent 32%
-    ),
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.32), transparent 32%),
     linear-gradient(145deg, var(--bottle-color), #080808 86%);
   border: 2px solid rgba(255, 255, 255, 0.24);
   display: flex;
@@ -1540,7 +1610,7 @@ watch(
   display: flex;
   align-items: center;
   gap: 16px;
-  z-index: 99999;
+  z-index: 999999; /* ĐÃ SỬA: Thêm 1 số 9 vào đây để nó luôn nổi lên trên cùng */
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
   max-width: 520px;
 }
