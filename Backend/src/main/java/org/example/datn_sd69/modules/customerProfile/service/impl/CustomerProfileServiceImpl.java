@@ -43,7 +43,7 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
     private static final String PASSWORD_RULE_MESSAGE =
             "Mật khẩu mới phải từ 8 đến 50 ký tự, có chữ hoa, chữ thường, số, ít nhất 1 ký tự đặc biệt trong @$!%*?&.# và không chứa khoảng trắng";
 
-    private static final long MAX_AVATAR_SIZE = 5 * 1024 * 1024;
+    private static final long MAX_AVATAR_SIZE = 2 * 1024 * 1024;
 
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of(
             "image/jpeg",

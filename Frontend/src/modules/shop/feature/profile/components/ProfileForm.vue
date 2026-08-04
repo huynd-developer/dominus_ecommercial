@@ -19,7 +19,8 @@
         <div class="avatar-actions">
           <div class="fw-bold mb-2">Ảnh đại diện</div>
           <div class="text-muted small mb-3">
-            Chọn ảnh, kéo để căn vị trí, phóng to/thu nhỏ rồi bấm “Cập nhật ảnh”.
+            Chọn ảnh, kéo để căn vị trí, phóng to/thu nhỏ rồi bấm “Cập nhật
+            ảnh”.
           </div>
           <input
             ref="avatarInputRef"
@@ -59,37 +60,48 @@
           </div>
 
           <div v-if="sourceAvatarUrl" class="avatar-editor">
-            <div
-              ref="cropBoxRef"
-              class="crop-box"
-              @mousedown="startDrag"
-              @mousemove="onDrag"
-              @mouseup="stopDrag"
-              @mouseleave="stopDrag"
-              @touchstart.prevent="startTouchDrag"
-              @touchmove.prevent="onTouchDrag"
-              @touchend="stopDrag"
-            >
-              <img
-                :src="sourceAvatarUrl"
-                alt="Ảnh cần chỉnh"
-                class="crop-image"
-                :style="cropImageStyle"
-                draggable="false"
-              />
-              <div class="crop-mask"></div>
-              <div class="crop-circle"></div>
+            <div class="avatar-editor-help">
+              <i class="bi bi-arrows-move"></i>
+              <span>Kéo ảnh trong vòng tròn để chọn góc hiển thị đẹp nhất.</span>
             </div>
-            <div class="mt-3">
-              <label class="form-label small fw-semibold">Phóng to / thu nhỏ</label>
-              <input
-                v-model.number="zoom"
-                type="range"
-                class="form-range"
-                min="1"
-                max="3"
-                step="0.05"
-              />
+
+            <div class="avatar-crop-layout">
+              <div
+                ref="cropBoxRef"
+                class="crop-box"
+                :class="{ grabbing: isDragging }"
+                @mousedown="startDrag"
+                @mousemove="onDrag"
+                @mouseup="stopDrag"
+                @mouseleave="stopDrag"
+                @touchstart.prevent="startTouchDrag"
+                @touchmove.prevent="onTouchDrag"
+                @touchend="stopDrag"
+              >
+                <img
+                  :src="sourceAvatarUrl"
+                  alt="Ảnh cần chỉnh"
+                  class="crop-image"
+                  :style="cropImageStyle"
+                  draggable="false"
+                />
+                <div class="crop-mask"></div>
+                <div class="crop-circle"></div>
+              </div>
+
+              <div class="avatar-adjust-panel">
+                <label class="form-label small fw-semibold mb-2">
+                  Phóng to / thu nhỏ
+                </label>
+                <input
+                  v-model.number="zoom"
+                  type="range"
+                  class="form-range"
+                  min="1"
+                  max="3"
+                  step="0.05"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -169,7 +181,11 @@
         </div>
 
         <div v-else class="row g-3">
-          <div v-for="(addr, index) in addressList" :key="addr.id || index" class="col-12">
+          <div
+            v-for="(addr, index) in addressList"
+            :key="addr.id || index"
+            class="col-12"
+          >
             <div
               class="card border p-3 d-flex flex-row justify-content-between align-items-center"
             >
@@ -180,7 +196,9 @@
                 </p>
                 <div class="small text-muted">
                   Người nhận: {{ addr.recipientName }} | SĐT: {{ addr.phone }}
-                  <span v-if="addr.isDefault" class="badge bg-danger ms-2">Mặc định</span>
+                  <span v-if="addr.isDefault" class="badge bg-danger ms-2"
+                    >Mặc định</span
+                  >
                 </div>
               </div>
               <div>
@@ -279,8 +297,8 @@
                     !selectedProvinceCode
                       ? "Chọn tỉnh/thành trước"
                       : loadingWards
-                        ? "Đang tải..."
-                        : "Chọn phường/xã"
+                      ? "Đang tải..."
+                      : "Chọn phường/xã"
                   }}
                 </option>
                 <option v-for="w in wards" :key="w.code" :value="w.code">
@@ -303,7 +321,12 @@
           </div>
 
           <div class="form-check mb-3">
-            <input class="form-check-input" type="checkbox" v-model="isDefaultAddress" id="defaultAddressCheck" />
+            <input
+              class="form-check-input"
+              type="checkbox"
+              v-model="isDefaultAddress"
+              id="defaultAddressCheck"
+            />
             <label class="form-check-label" for="defaultAddressCheck">
               Đặt làm địa chỉ mặc định
             </label>
@@ -330,8 +353,15 @@ import customerAddressService from "@/modules/customerAddress/services/customerA
 import Swal from "sweetalert2";
 import api from "@/common/api";
 
-interface Ward { code: number | string; name: string; }
-interface Province { code: number | string; name: string; wards?: Ward[] | null; }
+interface Ward {
+  code: number | string;
+  name: string;
+}
+interface Province {
+  code: number | string;
+  name: string;
+  wards?: Ward[] | null;
+}
 
 const store = useCustomerProfileStore();
 
@@ -364,15 +394,22 @@ const loadingWards = ref(false);
 
 // Ép kiểu Number tường minh để tránh lỗi truyền ID dạng Proxy object lên BE
 const currentCustomerId = computed(() => {
-  const rawId = (store.profileForm as any).userId || (store.profileForm as any).id || (store.profileForm as any).customerId;
+  const rawId =
+    (store.profileForm as any).userId ||
+    (store.profileForm as any).id ||
+    (store.profileForm as any).customerId;
   return rawId ? Number(rawId) : 0;
 });
 
 const selectedProvince = computed(() =>
-  provinces.value.find((item) => String(item.code) === String(selectedProvinceCode.value))
+  provinces.value.find(
+    (item) => String(item.code) === String(selectedProvinceCode.value)
+  )
 );
 const selectedWard = computed(() =>
-  wards.value.find((item) => String(item.code) === String(selectedWardCode.value))
+  wards.value.find(
+    (item) => String(item.code) === String(selectedWardCode.value)
+  )
 );
 
 const loadProvinces = async () => {
@@ -380,7 +417,10 @@ const loadProvinces = async () => {
     loadingProvinces.value = true;
     const response = await fetch(`https://provinces.open-api.vn/api/p/`);
     const data = await response.json();
-    provinces.value = data.map((item: any) => ({ code: item.code, name: item.name }));
+    provinces.value = data.map((item: any) => ({
+      code: item.code,
+      name: item.name,
+    }));
   } catch (error) {
     console.error("Lỗi tải tỉnh/thành:", error);
   } finally {
@@ -392,7 +432,9 @@ const loadWardsByProvince = async (provinceCode: string) => {
   try {
     loadingWards.value = true;
     wards.value = [];
-    const response = await fetch(`https://provinces.open-api.vn/api/p/${provinceCode}?depth=3`);
+    const response = await fetch(
+      `https://provinces.open-api.vn/api/p/${provinceCode}?depth=3`
+    );
     const data = await response.json();
 
     let allWards: any[] = [];
@@ -400,7 +442,10 @@ const loadWardsByProvince = async (provinceCode: string) => {
       data.districts.forEach((district: any) => {
         if (district.wards && Array.isArray(district.wards)) {
           district.wards.forEach((ward: any) => {
-            allWards.push({ code: ward.code, name: `${ward.name}, ${district.name}` });
+            allWards.push({
+              code: ward.code,
+              name: `${ward.name}, ${district.name}`,
+            });
           });
         }
       });
@@ -417,7 +462,8 @@ const loadWardsByProvince = async (provinceCode: string) => {
 const handleProvinceChange = async () => {
   selectedWardCode.value = "";
   wards.value = [];
-  if (selectedProvinceCode.value) await loadWardsByProvince(selectedProvinceCode.value);
+  if (selectedProvinceCode.value)
+    await loadWardsByProvince(selectedProvinceCode.value);
 };
 
 onMounted(async () => {
@@ -427,7 +473,9 @@ onMounted(async () => {
     Object.assign(store.profileForm, profileData);
 
     if (currentCustomerId.value) {
-      const addrRes = await customerAddressService.getAddresses(currentCustomerId.value);
+      const addrRes = await customerAddressService.getAddresses(
+        currentCustomerId.value
+      );
       addressList.value = Array.isArray(addrRes.data) ? addrRes.data : [];
     }
   } catch (e) {
@@ -444,7 +492,7 @@ const openAddressModal = () => {
       icon: "warning",
       title: "Vượt quá giới hạn",
       text: "Bạn chỉ có thể lưu tối đa 10 địa chỉ nhận hàng. Vui lòng xóa bớt địa chỉ cũ để thêm mới!",
-      confirmButtonColor: "#212529"
+      confirmButtonColor: "#212529",
     });
     return;
   }
@@ -464,7 +512,9 @@ const closeAddressModal = () => {
 
 const editAddress = async (addr: any) => {
   editingAddressId.value = addr.id;
-  selectedProvinceCode.value = addr.provinceCode ? String(addr.provinceCode) : "";
+  selectedProvinceCode.value = addr.provinceCode
+    ? String(addr.provinceCode)
+    : "";
   if (selectedProvinceCode.value) {
     await loadWardsByProvince(selectedProvinceCode.value);
   }
@@ -475,8 +525,16 @@ const editAddress = async (addr: any) => {
 };
 
 const saveAddressNode = async () => {
-  if (!selectedProvinceCode.value || !selectedWardCode.value || !specificAddress.value.trim()) {
-    Swal.fire({ icon: "warning", title: "Thiếu thông tin", text: "Vui lòng chọn đầy đủ Tỉnh/Thành phố, Phường/Xã và nhập Địa chỉ cụ thể!" });
+  if (
+    !selectedProvinceCode.value ||
+    !selectedWardCode.value ||
+    !specificAddress.value.trim()
+  ) {
+    Swal.fire({
+      icon: "warning",
+      title: "Thiếu thông tin",
+      text: "Vui lòng chọn đầy đủ Tỉnh/Thành phố, Phường/Xã và nhập Địa chỉ cụ thể!",
+    });
     return;
   }
 
@@ -489,36 +547,77 @@ const saveAddressNode = async () => {
     wardCode: selectedWardCode.value,
     wardName: selectedWard.value?.name || "",
     specificAddress: specificAddress.value.trim(),
-    fullAddress: `${specificAddress.value.trim()}, ${selectedWard.value?.name}, ${selectedProvince.value?.name}`,
-    isDefault: isDefaultAddress.value
+    fullAddress: `${specificAddress.value.trim()}, ${
+      selectedWard.value?.name
+    }, ${selectedProvince.value?.name}`,
+    isDefault: isDefaultAddress.value,
   };
 
   try {
     if (editingAddressId.value) {
-      await customerAddressService.updateAddress(currentCustomerId.value, editingAddressId.value, payload);
+      await customerAddressService.updateAddress(
+        currentCustomerId.value,
+        editingAddressId.value,
+        payload
+      );
     } else {
       await customerAddressService.addAddress(currentCustomerId.value, payload);
     }
 
-    const addrRes = await customerAddressService.getAddresses(currentCustomerId.value);
+    const addrRes = await customerAddressService.getAddresses(
+      currentCustomerId.value
+    );
     addressList.value = Array.isArray(addrRes.data) ? addrRes.data : [];
 
     closeAddressModal();
-    Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Lưu địa chỉ thành công", showConfirmButton: false, timer: 1500 });
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "success",
+      title: "Lưu địa chỉ thành công",
+      showConfirmButton: false,
+      timer: 1500,
+    });
   } catch (e) {
-    Swal.fire({ toast: true, position: "top-end", icon: "error", title: "Lỗi lưu địa chỉ", showConfirmButton: false, timer: 1500 });
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "error",
+      title: "Lỗi lưu địa chỉ",
+      showConfirmButton: false,
+      timer: 1500,
+    });
   }
 };
 
 const removeAddress = async (id: number) => {
-  const result = await Swal.fire({ title: "Xóa địa chỉ?", icon: "warning", showCancelButton: true, confirmButtonText: "Xác nhận" });
+  const result = await Swal.fire({
+    title: "Xóa địa chỉ?",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Xác nhận",
+  });
   if (result.isConfirmed) {
     try {
       await customerAddressService.deleteAddress(currentCustomerId.value, id);
-      addressList.value = addressList.value.filter(a => a.id !== id);
-      Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Đã xóa địa chỉ", showConfirmButton: false, timer: 1500 });
+      addressList.value = addressList.value.filter((a) => a.id !== id);
+      Swal.fire({
+        toast: true,
+        position: "top-end",
+        icon: "success",
+        title: "Đã xóa địa chỉ",
+        showConfirmButton: false,
+        timer: 1500,
+      });
     } catch (e) {
-      Swal.fire({ toast: true, position: "top-end", icon: "error", title: "Lỗi xóa địa chỉ", showConfirmButton: false, timer: 1500 });
+      Swal.fire({
+        toast: true,
+        position: "top-end",
+        icon: "error",
+        title: "Lỗi xóa địa chỉ",
+        showConfirmButton: false,
+        timer: 1500,
+      });
     }
   }
 };
@@ -527,9 +626,23 @@ const saveProfileInfo = async () => {
   store.profileLoading = true;
   try {
     await api.put("/customer/profile", store.profileForm);
-    Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Cập nhật hồ sơ thành công!", showConfirmButton: false, timer: 1500 });
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "success",
+      title: "Cập nhật hồ sơ thành công!",
+      showConfirmButton: false,
+      timer: 1500,
+    });
   } catch (e) {
-    Swal.fire({ toast: true, position: "top-end", icon: "error", title: "Có lỗi xảy ra", showConfirmButton: false, timer: 1500 });
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "error",
+      title: "Có lỗi xảy ra",
+      showConfirmButton: false,
+      timer: 1500,
+    });
   } finally {
     store.profileLoading = false;
   }
@@ -540,11 +653,20 @@ const handlePhoneInput = () => {
 };
 
 // Avatar logic
-const avatarDisplayUrl = computed(() => store.avatarPreviewUrl || store.profileForm.avatarUrl || "");
-const userInitial = computed(() => store.profileForm.name?.charAt(0).toUpperCase() || "U");
-const cropImageStyle = computed(() => ({ transform: `translate(-50%, -50%) translate(${offsetX.value}px, ${offsetY.value}px) scale(${zoom.value})` }));
+const avatarDisplayUrl = computed(
+  () => store.avatarPreviewUrl || store.profileForm.avatarUrl || ""
+);
+const userInitial = computed(
+  () => store.profileForm.name?.charAt(0).toUpperCase() || "U"
+);
+const cropImageStyle = computed(() => ({
+  transform: `translate(-50%, -50%) translate(${offsetX.value}px, ${offsetY.value}px) scale(${zoom.value})`,
+}));
 
-const revokeSourceUrl = () => { if (sourceAvatarUrl.value) URL.revokeObjectURL(sourceAvatarUrl.value); sourceAvatarUrl.value = ""; };
+const revokeSourceUrl = () => {
+  if (sourceAvatarUrl.value) URL.revokeObjectURL(sourceAvatarUrl.value);
+  sourceAvatarUrl.value = "";
+};
 const handleAvatarChange = (event: Event) => {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0] || null;
@@ -552,28 +674,363 @@ const handleAvatarChange = (event: Event) => {
   if (!file) return;
   revokeSourceUrl();
   sourceAvatarFile.value = file;
+  resetImageAdjust();
   sourceAvatarUrl.value = URL.createObjectURL(file);
 };
-const resetImageAdjust = () => { zoom.value = 1; offsetX.value = 0; offsetY.value = 0; };
-const startDrag = (e: MouseEvent) => { isDragging.value = true; dragStartX.value = e.clientX; dragStartY.value = e.clientY; dragOriginX.value = offsetX.value; dragOriginY.value = offsetY.value; };
-const onDrag = (e: MouseEvent) => { if (!isDragging.value) return; offsetX.value = dragOriginX.value + e.clientX - dragStartX.value; offsetY.value = dragOriginY.value + e.clientY - dragStartY.value; };
-const startTouchDrag = (e: TouchEvent) => { const t = e.touches[0]; if (!t) return; isDragging.value = true; dragStartX.value = t.clientX; dragStartY.value = t.clientY; dragOriginX.value = offsetX.value; dragOriginY.value = offsetY.value; };
-const onTouchDrag = (e: TouchEvent) => { const t = e.touches[0]; if (!t || !isDragging.value) return; offsetX.value = dragOriginX.value + t.clientX - dragStartX.value; offsetY.value = dragOriginY.value + t.clientY - dragStartY.value; };
-const stopDrag = () => { isDragging.value = false; };
+const resetImageAdjust = () => {
+  zoom.value = 1;
+  offsetX.value = 0;
+  offsetY.value = 0;
+};
+const moveAvatar = (direction: "up" | "down" | "left" | "right") => {
+  const step = 18;
 
-const loadImage = (src: string): Promise<HTMLImageElement> => new Promise((res, rej) => { const img = new Image(); img.onload = () => res(img); img.onerror = rej; img.src = src; });
-const createCroppedAvatarFile = async () => { return { file: new File([], ""), previewUrl: "" }; };
-const cropAndUploadAvatar = async () => {};
+  if (direction === "up") {
+    offsetY.value -= step;
+    return;
+  }
+
+  if (direction === "down") {
+    offsetY.value += step;
+    return;
+  }
+
+  if (direction === "left") {
+    offsetX.value -= step;
+    return;
+  }
+
+  offsetX.value += step;
+};
+const startDrag = (e: MouseEvent) => {
+  isDragging.value = true;
+  dragStartX.value = e.clientX;
+  dragStartY.value = e.clientY;
+  dragOriginX.value = offsetX.value;
+  dragOriginY.value = offsetY.value;
+};
+const onDrag = (e: MouseEvent) => {
+  if (!isDragging.value) return;
+  offsetX.value = dragOriginX.value + e.clientX - dragStartX.value;
+  offsetY.value = dragOriginY.value + e.clientY - dragStartY.value;
+};
+const startTouchDrag = (e: TouchEvent) => {
+  const t = e.touches[0];
+  if (!t) return;
+  isDragging.value = true;
+  dragStartX.value = t.clientX;
+  dragStartY.value = t.clientY;
+  dragOriginX.value = offsetX.value;
+  dragOriginY.value = offsetY.value;
+};
+const onTouchDrag = (e: TouchEvent) => {
+  const t = e.touches[0];
+  if (!t || !isDragging.value) return;
+  offsetX.value = dragOriginX.value + t.clientX - dragStartX.value;
+  offsetY.value = dragOriginY.value + t.clientY - dragStartY.value;
+};
+const stopDrag = () => {
+  isDragging.value = false;
+};
+
+const loadImage = (src: string): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+
+const createCroppedAvatarFile = async () => {
+  if (!sourceAvatarFile.value || !sourceAvatarUrl.value) {
+    throw new Error("Vui lòng chọn ảnh đại diện");
+  }
+
+  const img = await loadImage(sourceAvatarUrl.value);
+
+  const box = cropBoxRef.value?.getBoundingClientRect();
+  const boxWidth = box?.width || 260;
+  const boxHeight = box?.height || 260;
+
+  const canvasSize = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvasSize;
+  canvas.height = canvasSize;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Trình duyệt không hỗ trợ xử lý ảnh");
+  }
+
+  ctx.clearRect(0, 0, canvasSize, canvasSize);
+
+  /**
+   * Vẽ ảnh theo kiểu cover để avatar luôn lấp đầy khung vuông.
+   */
+  const baseScale = Math.max(
+    boxWidth / img.naturalWidth,
+    boxHeight / img.naturalHeight
+  );
+
+  const finalScale = baseScale * zoom.value;
+
+  const displayWidth = img.naturalWidth * finalScale;
+  const displayHeight = img.naturalHeight * finalScale;
+
+  const displayX = boxWidth / 2 + offsetX.value - displayWidth / 2;
+  const displayY = boxHeight / 2 + offsetY.value - displayHeight / 2;
+
+  const ratio = canvasSize / boxWidth;
+
+  ctx.drawImage(
+    img,
+    displayX * ratio,
+    displayY * ratio,
+    displayWidth * ratio,
+    displayHeight * ratio
+  );
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (result) => {
+        if (result) resolve(result);
+        else reject(new Error("Không thể tạo file ảnh"));
+      },
+      "image/webp",
+      0.85
+    );
+  });
+
+  const fileName = `avatar-${Date.now()}.webp`;
+
+  const file = new File([blob], fileName, {
+    type: "image/webp",
+  });
+
+  const previewUrl = URL.createObjectURL(blob);
+
+  return { file, previewUrl };
+};
+
+const cropAndUploadAvatar = async () => {
+  if (!sourceAvatarFile.value || !sourceAvatarUrl.value) {
+    Swal.fire({
+      icon: "warning",
+      title: "Chưa chọn ảnh",
+      text: "Vui lòng chọn ảnh đại diện trước khi cập nhật.",
+      confirmButtonColor: "#212529",
+    });
+    return;
+  }
+
+  store.avatarLoading = true;
+
+  try {
+    const { file, previewUrl } = await createCroppedAvatarFile();
+
+    if (file.size > 5 * 1024 * 1024) {
+      Swal.fire({
+        icon: "warning",
+        title: "Ảnh quá lớn",
+        text: "Ảnh đại diện tối đa 5MB.",
+        confirmButtonColor: "#212529",
+      });
+      URL.revokeObjectURL(previewUrl);
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await api.put("/customer/profile/avatar", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+
+    const profileData =
+      response.data?.data || response.data?.result || response.data || {};
+
+    Object.assign(store.profileForm, profileData);
+    store.avatarPreviewUrl = profileData.avatarUrl || previewUrl;
+
+    revokeSourceUrl();
+    sourceAvatarFile.value = null;
+    resetImageAdjust();
+
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "success",
+      title: "Cập nhật ảnh đại diện thành công",
+      showConfirmButton: false,
+      timer: 1500,
+    });
+  } catch (error: any) {
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "error",
+      title:
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        "Upload ảnh thất bại",
+      showConfirmButton: false,
+      timer: 1800,
+    });
+  } finally {
+    store.avatarLoading = false;
+  }
+};
 onBeforeUnmount(() => revokeSourceUrl());
 </script>
 
 <style scoped>
-.profile-avatar-section { display: flex; gap: 22px; align-items: flex-start; padding: 18px; border-radius: 18px; background: #f9fafb; border: 1px solid #eef0f3; }
-.final-avatar-preview { width: 118px; height: 118px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: #111827; color: #ffffff; font-size: 42px; font-weight: 900; display: flex; align-items: center; justify-content: center; border: 4px solid #bd9a5f; }
-.final-avatar-img { width: 100%; height: 100%; object-fit: cover; }
-.avatar-actions { flex: 1; }
-.avatar-editor { margin-top: 12px; padding: 14px; border-radius: 18px; background: #ffffff; border: 1px solid #e5e7eb; }
-.crop-box { width: 260px; height: 260px; max-width: 100%; position: relative; overflow: hidden; border-radius: 18px; background: #111827; cursor: grab; user-select: none; touch-action: none; }
-.crop-image { position: absolute; top: 50%; left: 50%; width: 100%; height: auto; object-fit: contain; }
-.email-readonly { background: #f3f4f6; cursor: not-allowed; }
+.profile-avatar-section {
+  display: flex;
+  gap: 22px;
+  align-items: flex-start;
+  padding: 18px;
+  border-radius: 18px;
+  background: #f9fafb;
+  border: 1px solid #eef0f3;
+}
+.final-avatar-preview {
+  width: 118px;
+  height: 118px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #111827;
+  color: #ffffff;
+  font-size: 42px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 4px solid #bd9a5f;
+}
+.final-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.avatar-actions {
+  flex: 1;
+}
+.avatar-editor {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+}
+.avatar-editor-help {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #64748b;
+  font-size: 13px;
+}
+.avatar-editor-help i {
+  color: #0f766e;
+}
+.avatar-crop-layout {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.crop-box {
+  width: 260px;
+  height: 260px;
+  max-width: 100%;
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #111827;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+.crop-box.grabbing {
+  cursor: grabbing;
+}
+.crop-image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform-origin: center center;
+  will-change: transform;
+  pointer-events: none;
+}
+.crop-mask {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at center,
+    rgba(0, 0, 0, 0) 0 49%,
+    rgba(15, 23, 42, 0.55) 50% 100%
+  );
+}
+.crop-circle {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 999px rgba(15, 23, 42, 0.12);
+  pointer-events: none;
+}
+.avatar-adjust-panel {
+  flex: 1;
+  min-width: 240px;
+  max-width: 420px;
+}
+.quick-adjust-title {
+  margin-top: 14px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+}
+.quick-adjust-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 48px);
+  grid-template-areas:
+    ". up ."
+    "left center right"
+    ". down .";
+  gap: 8px;
+  align-items: center;
+}
+.quick-adjust-grid .btn {
+  min-height: 38px;
+  padding: 6px 8px;
+}
+.quick-adjust-grid .btn:nth-child(1) {
+  grid-area: up;
+}
+.quick-adjust-grid .btn:nth-child(2) {
+  grid-area: left;
+}
+.quick-adjust-grid .btn:nth-child(3) {
+  grid-area: center;
+  width: 58px;
+}
+.quick-adjust-grid .btn:nth-child(4) {
+  grid-area: right;
+}
+.quick-adjust-grid .btn:nth-child(5) {
+  grid-area: down;
+}
+.email-readonly {
+  background: #f3f4f6;
+  cursor: not-allowed;
+}
 </style>
