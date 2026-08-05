@@ -75,17 +75,9 @@
             </template>
           </div>
 
-          <div class="date-grid">
-            <span>
-              NSX:
-              <strong>{{ formatDate(item.manufacturingDate) }}</strong>
-            </span>
-            <span :class="{ 'text-danger': isExpired(item) }">
-              HSD: <strong>{{ formatDate(item.expirationDate) }}</strong>
-            </span>
-          </div>
+          <!-- ĐÃ GỠ BỎ DATE-GRID HIỂN THỊ NSX/HSD THEO YÊU CẦU -->
 
-          <p class="stock-line">
+          <p class="stock-line mt-2">
             Tồn kho: <strong>{{ Number(item.stockQuantity || 0) }}</strong>
           </p>
 
@@ -97,11 +89,6 @@
               ]"
             >
               {{ isItemAvailable(item) ? "Có thể mua" : "Không khả dụng" }}
-            </span>
-            
-            <!-- HIỂN THỊ CẢNH BÁO GẦN HẾT HẠN Ở GIỎ HÀNG -->
-            <span v-if="isNearExpiry(item.expirationDate)" class="expiry-warning-badge-cart">
-              <i class="bi bi-exclamation-triangle-fill me-1"></i> Gần hết hạn
             </span>
           </div>
 
@@ -367,27 +354,6 @@ const isAfterToday = (value?: string | null) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return !Number.isNaN(date.getTime()) && date.getTime() > today.getTime();
-};
-
-const formatDate = (value?: string | null) => {
-  const dateOnly = toDateOnly(value);
-  if (!dateOnly) return "-";
-  const date = new Date(`${dateOnly}T00:00:00`);
-  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString("vi-VN");
-};
-
-// Hàm mới: Kiểm tra gần hết hạn cho giỏ hàng
-const isNearExpiry = (value?: string | null) => {
-  const dateOnly = toDateOnly(value);
-  if (!dateOnly) return false;
-  const target = new Date(`${dateOnly}T00:00:00`).getTime();
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayTime = today.getTime();
-
-  if (Number.isNaN(target) || target < todayTime) return false; 
-  const diffDays = (target - todayTime) / (1000 * 60 * 60 * 24);
-  return diffDays >= 0 && diffDays <= 30;
 };
 
 const extractImageValue = (value: any, visited = new WeakSet<object>()): string => {
@@ -666,23 +632,6 @@ const formatDiscount = (value?: number | null) => {
   background-image: none;
 }
 
-.date-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  font-size: 13px;
-  color: #64748b;
-}
-
-.date-grid strong {
-  color: #06132b;
-}
-
-.text-danger strong,
-.text-danger {
-  color: #dc2626 !important;
-}
-
 .stock-line {
   margin: 0;
   color: #64748b;
@@ -717,18 +666,6 @@ const formatDiscount = (value?: number | null) => {
   background: #fee2e2;
   color: #991b1b;
   border: 1px solid #fecaca;
-}
-
-/* THÊM STYLE CHO HUY HIỆU CẢNH BÁO */
-.expiry-warning-badge-cart {
-  background: #d97706;
-  color: white;
-  font-size: 11px;
-  font-weight: 800;
-  padding: 4px 8px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
 }
 
 .unavailable-text {

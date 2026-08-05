@@ -301,12 +301,6 @@
           </div>
         </div>
 
-        <!-- CẢNH BÁO CẬN DATE TRONG TRANG CHI TIẾT -->
-<div v-if="isNearExpiry" class="alert alert-warning py-2 px-3 my-2 d-flex align-items-center gap-2" style="font-size: 13px; font-weight: 600; background: #fffbeb; border-color: #fde68a; color: #d97706; border-radius: 8px;">
-  <i class="bi bi-exclamation-triangle-fill fs-5"></i>
-  <span>Sản phẩm cận date (gần hết hạn sử dụng). Khách hàng lưu ý trước khi đặt mua!</span>
-</div>
-
         <div class="actions">
           <button
             class="btn-add-cart"
