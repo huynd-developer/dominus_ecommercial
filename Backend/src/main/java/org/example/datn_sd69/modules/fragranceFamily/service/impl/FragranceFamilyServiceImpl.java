@@ -27,10 +27,10 @@ public class FragranceFamilyServiceImpl implements FragranceFamilyService {
     @Override
     public FragranceFamily getById(Integer id) {
         FragranceFamily family = fragranceFamilyRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy nhóm hương có ID: " + id));
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy nhóm hương có ID: " + id));
 
         if (Boolean.TRUE.equals(family.getIsDeleted())) {
-            throw new RuntimeException("Nhóm hương này đã bị xóa khỏi hệ thống!");
+            throw new IllegalArgumentException("Nhóm hương này đã bị xóa khỏi hệ thống!");
         }
         return family;
     }
@@ -53,8 +53,8 @@ public class FragranceFamilyServiceImpl implements FragranceFamilyService {
                 existingFamily.setName(name);
                 return fragranceFamilyRepository.save(existingFamily);
             } else {
-                // Đang hoạt động mà tạo trùng -> Bắn lỗi ngay tại Java
-                throw new RuntimeException("Nhóm hương '" + name + "' đã tồn tại!");
+                // Đang hoạt động mà tạo trùng -> Bắn lỗi (Dùng IllegalArgumentException)
+                throw new IllegalArgumentException("Nhóm hương '" + name + "' đã tồn tại!");
             }
         }
 
@@ -77,9 +77,9 @@ public class FragranceFamilyServiceImpl implements FragranceFamilyService {
         if (checkDuplicateOpt.isPresent() && !checkDuplicateOpt.get().getId().equals(id)) {
             FragranceFamily duplicateFamily = checkDuplicateOpt.get();
             if (Boolean.TRUE.equals(duplicateFamily.getIsDeleted())) {
-                throw new RuntimeException("Tên nhóm hương '" + newName + "' đang nằm trong thùng rác!");
+                throw new IllegalArgumentException("Tên nhóm hương '" + newName + "' đang nằm trong thùng rác!");
             }
-            throw new RuntimeException("Nhóm hương '" + newName + "' đã được sử dụng ở một bản ghi khác!");
+            throw new IllegalArgumentException("Nhóm hương '" + newName + "' đã được sử dụng ở một bản ghi khác!");
         }
 
         existingFamily.setName(newName);
@@ -99,11 +99,9 @@ public class FragranceFamilyServiceImpl implements FragranceFamilyService {
 
     @Override
     public Page<FragranceFamily> getAll(String keyword, Pageable pageable) {
-        // Kiểm tra nếu có nhập từ khóa tìm kiếm
         if (keyword != null && !keyword.trim().isEmpty()) {
-            return fragranceFamilyRepository.searchByName(keyword.trim(), pageable);
+            return fragranceFamilyRepository.searchByName(keyword.trim().replaceAll("\\s+", " "), pageable);
         }
-        // Nếu để trống ô tìm kiếm thì lấy toàn bộ danh sách chưa xóa
         return fragranceFamilyRepository.findByIsDeletedFalse(pageable);
     }
 
