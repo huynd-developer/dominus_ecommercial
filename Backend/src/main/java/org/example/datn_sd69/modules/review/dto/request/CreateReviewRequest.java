@@ -20,7 +20,7 @@ public record CreateReviewRequest(
         @Max(value = 5, message = "Số sao đánh giá tối đa là 5")
         Integer rating,
 
-        @Size(max = 1000, message = "Bình luận tối đa 1000 ký tự")
+        @Size(max = 500, message = "Bình luận tối đa 500 ký tự")
         String comment,
 
         List<MultipartFile> mediaFiles

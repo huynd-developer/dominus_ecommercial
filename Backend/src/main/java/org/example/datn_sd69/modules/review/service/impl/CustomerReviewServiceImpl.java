@@ -43,7 +43,7 @@ import java.util.Set;
 public class CustomerReviewServiceImpl implements CustomerReviewService {
 
     private static final int ORDER_STATUS_COMPLETED = 3;
-    private static final int MAX_COMMENT_LENGTH = 1000;
+    private static final int MAX_COMMENT_LENGTH = 500;
     private static final int REVIEW_CREATE_DEADLINE_DAYS = 15;
     private static final int REVIEW_EDIT_DEADLINE_DAYS = 30;
     private static final int MAX_REVIEW_EDIT_COUNT = 1;
@@ -262,7 +262,7 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
         }
 
         if (request.comment() != null && request.comment().length() > MAX_COMMENT_LENGTH) {
-            throw badRequest("Bình luận tối đa 1000 ký tự");
+            throw badRequest("Bình luận tối đa 500 ký tự");
         }
     }
 
@@ -296,7 +296,7 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
         }
 
         if (trimmed.length() > MAX_COMMENT_LENGTH) {
-            throw badRequest("Bình luận tối đa 1000 ký tự");
+            throw badRequest("Bình luận tối đa 500 ký tự");
         }
 
         return trimmed;
@@ -555,7 +555,7 @@ public class CustomerReviewServiceImpl implements CustomerReviewService {
         }
 
         if (comment != null && comment.length() > MAX_COMMENT_LENGTH) {
-            throw badRequest("Bình luận tối đa 1000 ký tự");
+            throw badRequest("Bình luận tối đa 500 ký tự");
         }
     }
 
