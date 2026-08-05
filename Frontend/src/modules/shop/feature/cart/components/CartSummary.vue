@@ -287,10 +287,9 @@ const selectVoucher = async (voucher: any) => {
 
   const eligibility = getVoucherEligibility(voucher);
   if (!eligibility.usable) {
-    voucherCode.value = code;
+    // T SỬA Ở ĐÂY: Chỉ báo text đỏ, tuyệt đối KHÔNG gán code vào ô input và KHÔNG gọi API
     voucherMessage.value = eligibility.reason;
     messageType.value = "text-danger";
-    showDropdown.value = false;
     return;
   }
 

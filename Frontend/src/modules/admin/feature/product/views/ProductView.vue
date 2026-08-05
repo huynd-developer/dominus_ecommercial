@@ -86,11 +86,8 @@ const openEditModal = (item: Product) => {
 }
 
 const openCloneModal = (item: Product) => {
-  const cloned = JSON.parse(JSON.stringify(item))
-  cloned.id = undefined
-  cloned.name = `${cloned.name} (Bản sao)`
-  cloned.variants = cloned.variants.map((v: any) => ({ ...v, id: undefined }))
-  selectedProduct.value = cloned
+  // Chỉ truyền object gốc qua, việc gán lại ID, Tên, Biến thể để File Con lo cho an toàn!
+  selectedProduct.value = item
   isCloneMode.value = true
   showModal.value = true
 }
