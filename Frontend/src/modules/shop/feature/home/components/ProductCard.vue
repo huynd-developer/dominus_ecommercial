@@ -36,7 +36,7 @@
         -{{ cardDiscountPercent }}%
       </span>
 
-      <!-- HUY HIỆU CẢNH BÁO SẢN PHẨM GẦN HẾT HẠN -->
+      <!-- HUY HIỆU CẢNH BÁO SẢN PHẨM GẦN HẾT HẠN ĐÃ FIX LOGIC HIỂN THỊ -->
       <span v-if="isNearExpiry(activeProduct)" class="expiry-warning-badge" title="Sản phẩm cận date / gần hết hạn">
         <i class="bi bi-exclamation-triangle-fill me-1"></i> Gần hết hạn
       </span>
@@ -189,7 +189,7 @@
       </div>
     </Teleport>
 
-    <!-- FLOATING COMPARE BAR (THANH TRƯỢT SO SÁNH DƯỚI ĐÁY MÀN HÌNH) -->
+    <!-- FLOATING COMPARE BAR -->
     <Teleport to="body">
       <div class="compare-bar" :class="{ show: isCompareUIRenderer && sharedCompareList.length > 0 }">
         <div class="cb-container">
@@ -452,7 +452,9 @@ const activeProduct = computed(() => {
   return {
     ...full,
     ...p,
-    variants: p?.variants && p.variants.length > 0 ? p.variants : full.variants
+    expirationDate: p.expirationDate || p.expDate || full.expirationDate || full.expDate,
+    manufacturingDate: p.manufacturingDate || p.mfgDate || full.manufacturingDate || full.mfgDate,
+    variants: (p.variants && p.variants.length > 0) ? p.variants : full.variants
   };
 });
 
@@ -507,13 +509,12 @@ const starsDisplay = computed(() => {
   return "★".repeat(filled) + "☆".repeat(MAX_RATING - filled);
 });
 
+// FIX BẢN LỀ: LUÔN TẢI FULL DATA NẾU CHƯA CÓ ĐỂ TRÁNH MẤT THÔNG TIN NGÀY THÁNG TỪ TRANG CHỦ (HomeView)
 const syncProductData = async () => {
   const p = props.product as any;
   const productId = Number(p?.productId || p?.id || 0);
-  const currentCount = Number(p?.reviewCount || p?.reviews || p?.totalReviews || 0);
-  const needsSync = currentCount === 0 || !p.variants || p.expirationDate === undefined;
-
-  if (needsSync && productId > 0) {
+  
+  if (productId > 0 && !fullProductData.value) {
     try {
       const res = await api.get(`/v1/products/${productId}`);
       const data = res.data?.data || res.data;
@@ -536,16 +537,26 @@ const getStartOfDay = (time: number) => {
 
 const parseSafeDate = (dateString: any): number | null => {
   if (!dateString) return null;
+  if (typeof dateString === 'number') return dateString;
   const str = String(dateString).trim();
+  if (str.includes('T')) {
+     const d = new Date(str);
+     return isNaN(d.getTime()) ? null : d.getTime();
+  }
   if (str.includes('-') && str.split('-')[0]?.length === 4) {
     const d = new Date(str);
     return isNaN(d.getTime()) ? null : d.getTime();
   }
   const parts = str.split(/[\/\-]/);
   if (parts.length >= 3 && parts[0] && parts[1] && parts[2]) {
+    if (parts[0].length === 4) {
+      const d = new Date(str);
+      return isNaN(d.getTime()) ? null : d.getTime();
+    }
     const day = parseInt(parts[0] as string, 10);
     const month = parseInt(parts[1] as string, 10) - 1;
-    const year = parseInt(parts[2] as string, 10);
+    let year = parseInt(parts[2] as string, 10);
+    if (year < 100) year += 2000;
     const d = new Date(year, month, day);
     return isNaN(d.getTime()) ? null : d.getTime();
   }
@@ -569,51 +580,69 @@ const isExpiredDate = (dateStr: any): boolean => {
   return getStartOfDay(time) < getStartOfDay(Date.now()); 
 };
 
-const isFullyExpired = (item: any): boolean => {
-  if (!item) return false;
-  if (!item.variants || item.variants.length === 0) {
-    if (item.expirationDate && isExpiredDate(item.expirationDate)) return true;
-    return false;
-  }
-  const hasValidVariant = item.variants.some((v: any) => {
-    if (!v.expirationDate) return true; 
-    return !isExpiredDate(v.expirationDate); 
-  });
-  return !hasValidVariant;
-};
-
+// FIX TẬN GỐC: QUÉT SẠCH SẼ TỪ SẢN PHẨM, BIẾN THỂ CHO TỚI FULL DATA API TRẢ VỀ
 const isNearExpiry = (item: any): boolean => {
   if (!item) return false;
   
-  if (item.expirationDate !== undefined && item.variants === undefined) {
-      if (isExpiredDate(item.expirationDate)) return false;
-      const t = parseSafeDate(item.expirationDate);
-      if (t !== null) {
-          const diffDays = (getStartOfDay(t) - getStartOfDay(Date.now())) / (1000 * 60 * 60 * 24);
-          return diffDays >= 0 && diffDays <= 30;
-      }
-      return false;
+  const checkDate = (dateStr: any) => {
+    if (!dateStr || isExpiredDate(dateStr)) return false; 
+    const t = parseSafeDate(dateStr);
+    if (t === null) return false;
+    const diffDays = (getStartOfDay(t) - getStartOfDay(Date.now())) / (1000 * 60 * 60 * 24);
+    return diffDays >= 0 && diffDays <= 30;
+  };
+
+  // 1. Kiểm tra ngày trên card
+  if (checkDate(item.expirationDate) || checkDate(item.expDate)) return true;
+
+  // 2. Kiểm tra ngày trong mảng variants hiện tại
+  if (Array.isArray(item.variants) && item.variants.some((v: any) => checkDate(v.expirationDate) || checkDate(v.expDate))) {
+    return true;
   }
 
-  let validTimes: number[] = [];
-  if (item.expirationDate && !isExpiredDate(item.expirationDate)) {
-    const t = parseSafeDate(item.expirationDate);
-    if (t !== null) validTimes.push(getStartOfDay(t));
+  // 3. Quét luôn vào data thật từ API (fullProductData) để tránh việc HomeView truyền thiếu dữ liệu
+  if (fullProductData.value) {
+    const full = fullProductData.value;
+    if (checkDate(full.expirationDate) || checkDate(full.expDate)) return true;
+    const fullVariants = full.variants || full.productVariants || [];
+    if (Array.isArray(fullVariants) && fullVariants.some((v: any) => checkDate(v.expirationDate) || checkDate(v.expDate))) {
+      return true;
+    }
   }
-  if (Array.isArray(item.variants)) {
-    item.variants.forEach((v: any) => {
-      if (v?.expirationDate && !isExpiredDate(v.expirationDate)) {
-        const t = parseSafeDate(v.expirationDate);
-        if (t !== null) validTimes.push(getStartOfDay(t));
-      }
-    });
+
+  return false;
+};
+
+// FIX TẬN GỐC TƯƠNG TỰ CHO HÀM KIỂM TRA HẾT HẠN
+const isFullyExpired = (item: any): boolean => {
+  if (!item) return false;
+  
+  const isExpired = (dateStr: any) => {
+    if (!dateStr) return false;
+    return isExpiredDate(dateStr);
+  };
+
+  const rootExp = item.expirationDate || item.expDate || fullProductData.value?.expirationDate || fullProductData.value?.expDate;
+  
+  const allVariants = [
+    ...(item.variants || []),
+    ...(item.productVariants || []),
+    ...(fullProductData.value?.variants || []),
+    ...(fullProductData.value?.productVariants || [])
+  ];
+
+  if (allVariants.length === 0) {
+    if (rootExp) return isExpired(rootExp);
+    return false;
   }
-  if (validTimes.length === 0) return false;
-  validTimes.sort((a, b) => a - b);
-  const nearestExpTime = validTimes[0];
-  if (nearestExpTime === undefined) return false;
-  const diffDays = (nearestExpTime - getStartOfDay(Date.now())) / (1000 * 60 * 60 * 24);
-  return diffDays >= 0 && diffDays <= 30;
+
+  const hasValidVariant = allVariants.some((v: any) => {
+    const exp = v.expirationDate || v.expDate || rootExp;
+    if (!exp) return true; 
+    return !isExpired(exp); 
+  });
+
+  return !hasValidVariant;
 };
 
 const getSafeNumber = (val: any) => {
@@ -1410,7 +1439,7 @@ watch(() => props.product, () => {
 .buy-now-btn { border: none; background: var(--aura-gold); color: #ffffff; }
 .buy-now-btn:hover:not(:disabled) { background: #a3824d; color: #ffffff; }
 .add-cart-btn { border: 1px solid var(--aura-gold); color: var(--aura-gold); background: #ffffff; }
-.add-cart-btn:hover:not(:disabled) { background: --aura-gold; color: #ffffff; }
+.add-cart-btn:hover:not(:disabled) { background: var(--aura-gold); color: #ffffff; }
 .buy-now-btn:disabled, .add-cart-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
 /* COMPARE BAR */
@@ -1550,7 +1579,7 @@ watch(() => props.product, () => {
 .qty-wrapper input { width: 44px; text-align: center; border: none; font-size: 15px; font-weight: 700; outline: none; border-left: 1px solid #cbd5e0; border-right: 1px solid #cbd5e0; color: #06132b; }
 .stock-info { font-size: 13px; color: #718096; }
 .vm-actions { display: flex; gap: 10px; margin-top: 15px; }
-.vm-btn-cart, .vm-btn-buy { border-radius: 12px; padding: 14px; font-size: 13px; font-weight: 800; letter-spacing: 0.5px; transition: all 0.25s ease; text-transform: uppercase; themed-btn: true; display: flex; justify-content: center; align-items: center; border: none; flex-grow: 1; }
+.vm-btn-cart, .vm-btn-buy { border-radius: 12px; padding: 14px; font-size: 13px; font-weight: 800; letter-spacing: 0.5px; transition: all 0.25s ease; text-transform: uppercase; display: flex; justify-content: center; align-items: center; border: none; flex-grow: 1; }
 .vm-btn-cart { background: #0a142f; color: #ffffff; }
 .vm-btn-cart:hover:not(:disabled) { background: #13275a; transform: translateY(-2px); box-shadow: 0 6px 14px rgba(10, 20, 47, 0.2); }
 .vm-btn-buy { background: #b78d52; color: #ffffff; }
