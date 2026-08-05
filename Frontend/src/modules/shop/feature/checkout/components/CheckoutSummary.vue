@@ -591,9 +591,15 @@ const scheduleCloseDropdown = () => {
 
 const selectVoucher = async (voucher: any) => {
   const code = getVoucherCode(voucher);
-
   if (!code) {
     return;
+  }
+
+  // T CHẶN Ở ĐÂY: Nếu mã chưa đủ điều kiện thì báo lỗi nhẹ rồi cút luôn, KHÔNG gọi API
+  if (!canUseVoucherLocally(voucher)) {
+    voucherMessage.value = `Đơn hàng cần tối thiểu ${formatCurrency(getMinOrderValue(voucher))} để dùng voucher này.`;
+    voucherMessageClass.value = "text-danger";
+    return; 
   }
 
   voucherCode.value = code;
