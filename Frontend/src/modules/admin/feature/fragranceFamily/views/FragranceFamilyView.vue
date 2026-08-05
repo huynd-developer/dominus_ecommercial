@@ -148,7 +148,8 @@ const changePage = (page: number) => { if (page >= 0 && page < store.totalPages)
 
 const validateForm = () => {
   errors.value.name = ''; 
-  const nameValue = formData.value.name.trim();
+  // Bổ sung chuẩn hóa khoảng trắng để test
+  const nameValue = formData.value.name.trim().replace(/\s+/g, ' ');
   const nameRegex = /^[\p{L}\s\(\)]+$/u;
 
   if (!nameValue) {
@@ -163,6 +164,18 @@ const validateForm = () => {
     errors.value.name = 'Chỉ được chứa chữ cái, khoảng trắng và dấu ngoặc đơn';
     return false;
   }
+
+  // BỔ SUNG: Kiểm tra trùng lặp trên Local Frontend
+  const isDuplicate = store.fragranceFamilies.some((item) => {
+    if (isEdit.value && item.id === currentId.value) return false;
+    return item.name.trim().replace(/\s+/g, ' ').toLowerCase() === nameValue.toLowerCase();
+  });
+
+  if (isDuplicate) {
+    errors.value.name = 'Nhóm hương này đã tồn tại trong hệ thống!';
+    return false;
+  }
+
   return true;
 };
 
@@ -186,39 +199,54 @@ const handleSubmit = async () => {
 
   try {
     isSaving.value = true;
+    
+    // Ép chuẩn hóa dữ liệu gửi lên Backend tránh qua mặt bằng 2 dấu cách
+    const payload = {
+        ...formData.value,
+        name: formData.value.name.trim().replace(/\s+/g, ' ')
+    };
 
     if (isEdit.value && currentId.value) {
-      await store.updateFragranceFamily(currentId.value, formData.value);
+      await store.updateFragranceFamily(currentId.value, payload);
       Toast.fire({ icon: 'success', title: 'Cập nhật thành công!' });
     } else {
-      await store.createFragranceFamily(formData.value);
+      await store.createFragranceFamily(payload);
       Toast.fire({ icon: 'success', title: 'Thêm mới thành công!' });
     }
     showModal.value = false; 
+    store.fetchFragranceFamilies(searchKeyword.value, store.currentPage); // Load lại data cho chắc
 
   } catch (error: any) {
     console.error("Chi tiết lỗi API:", error);
 
-    let errorMsg = 'Có lỗi xảy ra!';
+    let errorMsg = '';
     
-    if (error.response?.data) {
-      if (typeof error.response.data === 'string') {
-        errorMsg = error.response.data;
-      } else if (error.response.data.message) {
-        errorMsg = error.response.data.message;
-      } else if (error.response.data.timestamp) {
-        errorMsg = 'Nhóm hương này đã tồn tại hoặc dữ liệu không hợp lệ!';
+    // Nâng cấp bộ bắt lỗi đồng bộ với các module khác
+    if (error.response && error.response.data) {
+      const responseData = error.response.data;
+      if (responseData.errors && responseData.errors.name) {
+        errors.value.name = responseData.errors.name;
+        return;
       }
-    } else if (error.message) {
-      errorMsg = error.message;
+      
+      if (typeof responseData === 'string') {
+        errorMsg = responseData;
+      } else if (responseData.message) {
+        errorMsg = responseData.message;
+      } else if (responseData.error) {
+        errorMsg = responseData.error;
+      }
     }
 
-    const lowerMsg = String(errorMsg).toLowerCase();
-
-    if (lowerMsg.includes('tồn tại') || lowerMsg.includes('exists') || lowerMsg.includes('duplicate')) {
-      errors.value.name = 'Nhóm hương này đã tồn tại trong hệ thống!'; 
+    if (errorMsg) {
+      const lowerMsg = errorMsg.toLowerCase();
+      if (lowerMsg.includes('tồn tại') || lowerMsg.includes('exists') || lowerMsg.includes('duplicate') || lowerMsg.includes('sử dụng')) {
+        errors.value.name = 'Nhóm hương này đã tồn tại trong hệ thống!'; 
+      } else {
+        Toast.fire({ icon: 'error', title: errorMsg });
+      }
     } else {
-      Toast.fire({ icon: 'error', title: errorMsg });
+      Toast.fire({ icon: 'error', title: 'Máy chủ không phản hồi!' });
     }
   } finally {
     isSaving.value = false;

@@ -28,22 +28,24 @@ public class BrandServiceImpl implements BrandService {
 
     @Override
     public List<Brand> getAllBrands() {
-        // Dùng hàm tự tạo thay cho findAll()
         return brandRepository.findByIsDeletedFalse();
     }
 
     @Override
     @Transactional
     public Brand createBrand(BrandRequest request) {
-        if (brandRepository.existsByNameIgnoreCaseAndIsDeletedFalse(request.getName().trim())) {
-            throw new RuntimeException("Thương hiệu '" + request.getName() + "' đã tồn tại trong hệ thống!");
+        // Chuẩn hóa khoảng trắng
+        String brandName = request.getName().trim().replaceAll("\\s+", " ");
+
+        if (brandRepository.existsByNameIgnoreCaseAndIsDeletedFalse(brandName)) {
+            throw new IllegalArgumentException("Thương hiệu '" + brandName + "' đã tồn tại trong hệ thống!");
         }
 
         Brand brand = new Brand();
-        brand.setName(request.getName().trim());
+        brand.setName(brandName);
         brand.setDescription(request.getDescription());
         brand.setStatus(request.getStatus() != null ? request.getStatus() : 1);
-        brand.setIsDeleted(false); // Set cứng luôn cho an tâm
+        brand.setIsDeleted(false);
         brand.setLogoUrl(request.getLogoUrl());
         return brandRepository.save(brand);
     }
@@ -51,15 +53,17 @@ public class BrandServiceImpl implements BrandService {
     @Override
     @Transactional
     public Brand updateBrand(Integer id, BrandRequest request) {
-        // Dùng hàm tự tạo thay cho findById()
         Brand brand = brandRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy thương hiệu!"));
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy thương hiệu!"));
 
-        if (brandRepository.existsByNameIgnoreCaseAndIdNotAndIsDeletedFalse(request.getName().trim(), id)) {
-            throw new RuntimeException("Tên thương hiệu đã bị trùng với một hãng khác!");
+        // Chuẩn hóa khoảng trắng
+        String newName = request.getName().trim().replaceAll("\\s+", " ");
+
+        if (brandRepository.existsByNameIgnoreCaseAndIdNotAndIsDeletedFalse(newName, id)) {
+            throw new IllegalArgumentException("Tên thương hiệu đã bị trùng với một hãng khác!");
         }
 
-        brand.setName(request.getName().trim());
+        brand.setName(newName);
         brand.setDescription(request.getDescription());
         brand.setStatus(request.getStatus());
         brand.setLogoUrl(request.getLogoUrl());
@@ -70,11 +74,10 @@ public class BrandServiceImpl implements BrandService {
     @Transactional
     public void deleteBrand(Integer id) {
         Brand brand = brandRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy thương hiệu!"));
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy thương hiệu!"));
 
-        // GỌI ĐÚNG HÀM VỪA TẠO BÊN PRODUCT REPOSITORY
         if (productRepository.existsByBrandIdAndIsDeletedFalse(id)) {
-            throw new RuntimeException("Không thể đưa vào thùng rác! Đang có sản phẩm thuộc thương hiệu này.");
+            throw new IllegalArgumentException("Không thể đưa vào thùng rác! Đang có sản phẩm thuộc thương hiệu này.");
         }
 
         brand.setIsDeleted(true);
@@ -89,17 +92,15 @@ public class BrandServiceImpl implements BrandService {
     @Override
     public Brand getBrandById(Integer id) {
         return brandRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy thương hiệu với ID: " + id));
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy thương hiệu với ID: " + id));
     }
-
-    // --- PHÂN TRANG & TÌM KIẾM ---
 
     @Override
     public Page<Brand> getBrandsWithPagination(String keyword, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
 
         if (keyword != null && !keyword.trim().isEmpty()) {
-            return brandRepository.findByNameContainingIgnoreCaseAndIsDeletedFalse(keyword.trim(), pageable);
+            return brandRepository.findByNameContainingIgnoreCaseAndIsDeletedFalse(keyword.trim().replaceAll("\\s+", " "), pageable);
         }
         return brandRepository.findByIsDeletedFalse(pageable);
     }
@@ -109,7 +110,7 @@ public class BrandServiceImpl implements BrandService {
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
 
         if (keyword != null && !keyword.trim().isEmpty()) {
-            return brandRepository.findByNameContainingIgnoreCaseAndStatusAndIsDeletedFalse(keyword.trim(), 1, pageable);
+            return brandRepository.findByNameContainingIgnoreCaseAndStatusAndIsDeletedFalse(keyword.trim().replaceAll("\\s+", " "), 1, pageable);
         }
         return brandRepository.findByStatusAndIsDeletedFalse(1, pageable);
     }

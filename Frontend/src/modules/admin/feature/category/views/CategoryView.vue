@@ -182,7 +182,8 @@ const changePage = (page: number) => {
 
 const validateForm = () => {
   errors.value.name = ''; 
-  const nameValue = formData.value.name.trim();
+  // Chuẩn hóa khoảng trắng để test local (loại bỏ trường hợp qua mặt bằng nhiều dấu cách)
+  const nameValue = formData.value.name.trim().replace(/\s+/g, ' ');
   const nameRegex = /^[\p{L}\s]+$/u; 
 
   if (!nameValue) {
@@ -200,9 +201,10 @@ const validateForm = () => {
     return false;
   }
 
+  // Check trùng trên Frontend (Chỉ hoạt động tốt trong nội bộ trang hiện tại)
   const isDuplicate = categoryStore.categories.some((category) => {
     if (isEdit.value && category.id === currentId.value) return false;
-    return category.name.toLowerCase() === nameValue.toLowerCase();
+    return category.name.trim().replace(/\s+/g, ' ').toLowerCase() === nameValue.toLowerCase();
   });
 
   if (isDuplicate) {
@@ -232,12 +234,18 @@ const handleSubmit = async () => {
   if (!validateForm()) return;
 
   try {
+    // Ép payload gửi đi được chuẩn hóa để tránh lỗi không mong muốn
+    const payload = {
+        ...formData.value,
+        name: formData.value.name.trim().replace(/\s+/g, ' ')
+    };
+
     if (isEdit.value && currentId.value) {
-      await categoryStore.updateCategory(currentId.value, formData.value);
+      await categoryStore.updateCategory(currentId.value, payload);
       await categoryStore.fetchCategories(searchKeyword.value, categoryStore.currentPage);
       Toast.fire({ icon: 'success', title: 'Cập nhật thành công!' });
     } else {
-      await categoryStore.createCategory(formData.value);
+      await categoryStore.createCategory(payload);
       searchKeyword.value = '';
       await categoryStore.fetchCategories('', 0);
       Toast.fire({ icon: 'success', title: 'Thêm mới thành công!' });
@@ -245,23 +253,40 @@ const handleSubmit = async () => {
     showModal.value = false; 
   } catch (error: any) {
     console.error("Chi tiết lỗi Axios:", error);
+    
+    // Tối ưu hóa bộ bắt lỗi để không bị miss Exception từ backend
+    let errorMsg = '';
+    
     if (error.response && error.response.data) {
       const responseData = error.response.data;
+      
+      // Lỗi validation @Valid từ SpringBoot
       if (responseData.errors && responseData.errors.name) {
         errors.value.name = responseData.errors.name;
         return; 
       }
-      if (responseData.message) {
-        const lowerMsg = responseData.message.toLowerCase();
-        if (lowerMsg.includes('tồn tại') || lowerMsg.includes('exists') || lowerMsg.includes('duplicate')) {
-          errors.value.name = 'Danh mục này đã tồn tại trong hệ thống!';
-        } else {
-          Toast.fire({ icon: 'error', title: responseData.message });
-        }
-        return;
+      
+      // Trích xuất chuỗi message thông minh hơn từ SpringBoot Default Errors
+      if (typeof responseData === 'string') {
+          errorMsg = responseData;
+      } else if (responseData.message) {
+          errorMsg = responseData.message;
+      } else if (responseData.error) {
+          errorMsg = responseData.error;
       }
     }
-    Toast.fire({ icon: 'error', title: 'Máy chủ không phản hồi!' });
+
+    if (errorMsg) {
+      const lowerMsg = errorMsg.toLowerCase();
+      // Bắt các keyword lỗi trùng lặp từ exception
+      if (lowerMsg.includes('tồn tại') || lowerMsg.includes('exists') || lowerMsg.includes('duplicate') || lowerMsg.includes('sử dụng')) {
+        errors.value.name = 'Danh mục này đã tồn tại trong hệ thống!';
+      } else {
+        Toast.fire({ icon: 'error', title: errorMsg });
+      }
+    } else {
+      Toast.fire({ icon: 'error', title: 'Máy chủ không phản hồi hoặc đã xảy ra lỗi!' });
+    }
   }
 };
 
