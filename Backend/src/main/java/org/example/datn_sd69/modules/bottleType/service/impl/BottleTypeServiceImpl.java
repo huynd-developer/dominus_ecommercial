@@ -26,12 +26,13 @@ public class BottleTypeServiceImpl implements BottleTypeService {
     @Override
     public BottleType getById(Integer id) {
         return bottleTypeRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy loại chai có ID: " + id));
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy loại chai có ID: " + id));
     }
 
     @Override
     public BottleType create(BottleTypeRequest request) {
-        String name = request.getName().trim();
+        // Chuẩn hóa khoảng trắng
+        String name = request.getName().trim().replaceAll("\\s+", " ");
 
         Optional<BottleType> existingOpt = bottleTypeRepository.findByNameIgnoreCase(name);
 
@@ -43,7 +44,7 @@ public class BottleTypeServiceImpl implements BottleTypeService {
                 existingType.setName(name);
                 return bottleTypeRepository.save(existingType);
             } else {
-                throw new RuntimeException("Loại chai '" + name + "' đã tồn tại!");
+                throw new IllegalArgumentException("Loại chai '" + name + "' đã tồn tại!");
             }
         }
 
@@ -56,12 +57,13 @@ public class BottleTypeServiceImpl implements BottleTypeService {
     @Override
     public BottleType update(Integer id, BottleTypeRequest request) {
         BottleType existingType = getById(id);
-        String newName = request.getName().trim();
+        // Chuẩn hóa khoảng trắng
+        String newName = request.getName().trim().replaceAll("\\s+", " ");
 
         Optional<BottleType> checkDuplicateOpt = bottleTypeRepository.findByNameIgnoreCase(newName);
 
         if (checkDuplicateOpt.isPresent() && !checkDuplicateOpt.get().getId().equals(id)) {
-            throw new RuntimeException("Loại chai '" + newName + "' đã được sử dụng ở một bản ghi khác!");
+            throw new IllegalArgumentException("Loại chai '" + newName + "' đã được sử dụng ở một bản ghi khác!");
         }
 
         existingType.setName(newName);
@@ -79,12 +81,10 @@ public class BottleTypeServiceImpl implements BottleTypeService {
         bottleTypeRepository.save(bottleType);
     }
 
-    // ĐÃ CHỈNH SỬA: Thêm keyword vào hàm lấy danh sách phân trang (Dùng cho Admin)
     @Override
     public Page<BottleType> getAll(String keyword, Pageable pageable) {
-        String searchKeyword = (keyword == null) ? "" : keyword.trim();
-        // Cần đảm bảo trong BottleTypeRepository đã có hàm này:
-        // Page<BottleType> findByNameContainingIgnoreCaseAndIsDeletedFalse(String name, Pageable pageable);
+        // Bổ sung chuẩn hóa khoảng trắng cho từ khóa tìm kiếm
+        String searchKeyword = (keyword == null) ? "" : keyword.trim().replaceAll("\\s+", " ");
         return bottleTypeRepository.findByNameContainingIgnoreCaseAndIsDeletedFalse(searchKeyword, pageable);
     }
 
