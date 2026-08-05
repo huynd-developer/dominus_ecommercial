@@ -143,8 +143,11 @@ const changePage = (page: number) => { if (page >= 0 && page < bottleTypeStore.t
 
 const validateForm = () => {
   errors.value.name = ''; 
-  const nameValue = formData.value.name.trim();
-  const nameRegex = /^[\p{L}\s()]+$/u; 
+  // Chuẩn hóa khoảng trắng
+  const nameValue = formData.value.name.trim().replace(/\s+/g, ' ');
+  
+  // Đã cập nhật Regex đồng bộ với Backend (Cho phép chữ, số, khoảng trắng, dấu trừ, dấu ngoặc)
+  const nameRegex = /^[\p{L}\d\s\-()]+$/u; 
 
   if (!nameValue) {
     errors.value.name = 'Tên loại chai không được để trống';
@@ -155,9 +158,21 @@ const validateForm = () => {
     return false;
   }
   if (!nameRegex.test(nameValue)) {
-    errors.value.name = 'Tên loại chai chỉ được chứa chữ cái, khoảng trắng và dấu ngoặc đơn ()';
+    errors.value.name = 'Tên loại chai chỉ được chứa chữ cái, số, khoảng trắng và các ký tự: -, ()';
     return false;
   }
+
+  // Kiểm tra trùng lặp trên Local Frontend
+  const isDuplicate = bottleTypeStore.bottleTypes.some((item) => {
+    if (isEdit.value && item.id === currentId.value) return false;
+    return item.name.trim().replace(/\s+/g, ' ').toLowerCase() === nameValue.toLowerCase();
+  });
+
+  if (isDuplicate) {
+    errors.value.name = 'Loại chai này đã tồn tại trong hệ thống!';
+    return false;
+  }
+
   return true;
 };
 
@@ -182,12 +197,18 @@ const handleSubmit = async () => {
   try {
     isSaving.value = true;
 
+    // Ép chuẩn hóa dữ liệu gửi lên Backend tránh lỗi khoảng trắng
+    const payload = {
+        ...formData.value,
+        name: formData.value.name.trim().replace(/\s+/g, ' ')
+    };
+
     if (isEdit.value && currentId.value) {
-      await bottleTypeStore.updateBottleType(currentId.value, formData.value);
+      await bottleTypeStore.updateBottleType(currentId.value, payload);
       await bottleTypeStore.fetchBottleTypes(searchKeyword.value, bottleTypeStore.currentPage);
       Toast.fire({ icon: 'success', title: 'Cập nhật thành công!' });
     } else {
-      await bottleTypeStore.createBottleType(formData.value);
+      await bottleTypeStore.createBottleType(payload);
       searchKeyword.value = '';
       await bottleTypeStore.fetchBottleTypes('', 0);
       Toast.fire({ icon: 'success', title: 'Thêm mới thành công!' });
@@ -195,6 +216,10 @@ const handleSubmit = async () => {
     showModal.value = false; 
   } catch (error: any) {
     console.error("Chi tiết lỗi Axios:", error);
+    
+    let errorMsg = '';
+    
+    // Nâng cấp bộ bắt lỗi đồng bộ
     if (error.response && error.response.data) {
       const responseData = error.response.data;
 
@@ -203,17 +228,25 @@ const handleSubmit = async () => {
         return; 
       }
 
-      if (responseData.message) {
-        const lowerMsg = responseData.message.toLowerCase();
-        if (lowerMsg.includes('tồn tại') || lowerMsg.includes('exists') || lowerMsg.includes('duplicate')) {
-          errors.value.name = 'Loại chai này đã tồn tại trong hệ thống!';
-        } else {
-          Toast.fire({ icon: 'error', title: responseData.message });
-        }
-        return;
+      if (typeof responseData === 'string') {
+        errorMsg = responseData;
+      } else if (responseData.message) {
+        errorMsg = responseData.message;
+      } else if (responseData.error) {
+        errorMsg = responseData.error;
       }
     }
-    Toast.fire({ icon: 'error', title: 'Máy chủ không phản hồi!' });
+
+    if (errorMsg) {
+      const lowerMsg = errorMsg.toLowerCase();
+      if (lowerMsg.includes('tồn tại') || lowerMsg.includes('exists') || lowerMsg.includes('duplicate') || lowerMsg.includes('sử dụng')) {
+        errors.value.name = 'Loại chai này đã tồn tại trong hệ thống!';
+      } else {
+        Toast.fire({ icon: 'error', title: errorMsg });
+      }
+    } else {
+      Toast.fire({ icon: 'error', title: 'Máy chủ không phản hồi!' });
+    }
   } finally {
     isSaving.value = false;
   }

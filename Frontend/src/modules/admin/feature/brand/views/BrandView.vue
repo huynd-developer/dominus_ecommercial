@@ -186,42 +186,25 @@ onMounted(() => {
 const handleSearch = () => { brandStore.fetchBrands(searchKeyword.value, 0); };
 const changePage = (page: number) => { if (page >= 0 && page < brandStore.totalPages) brandStore.fetchBrands(searchKeyword.value, page); };
 
-// const handleFileChange = (event: Event) => {
-//   const target = event.target as HTMLInputElement;
-//   const file = target.files?.[0];
-//   if (!file) return; 
-
-//   if (file.size > 5 * 1024 * 1024) {
-//     Toast.fire({ icon: 'error', title: 'Dung lượng ảnh quá lớn (> 5MB)' });
-//     target.value = ''; 
-//     return;
-//   }
-  
-//   selectedFile.value = file;
-//   previewImageUrl.value = URL.createObjectURL(file); 
-// };
 const handleFileChange = (event: Event) => {
   const target = event.target as HTMLInputElement;
   const file = target.files?.[0];
   
   if (!file) return; 
 
-  // 1. KIỂM TRA ĐỊNH DẠNG FILE (Chặn triệt để docx, pdf, mp4...)
   const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
   if (!allowedTypes.includes(file.type)) {
     Toast.fire({ icon: 'error', title: 'Chỉ hỗ trợ tải lên file ảnh (JPG, PNG, WEBP)!' });
-    target.value = ''; // Reset input
+    target.value = ''; 
     return;
   }
 
-  // 2. KIỂM TRA DUNG LƯỢNG (Tối đa 5MB)
   if (file.size > 5 * 1024 * 1024) {
     Toast.fire({ icon: 'error', title: 'Dung lượng ảnh quá lớn (> 5MB)' });
-    target.value = ''; // Reset input
+    target.value = ''; 
     return;
   }
   
-  // 3. NẾU HỢP LỆ THÌ LƯU VÀ HIỂN THỊ PREVIEW
   selectedFile.value = file;
   previewImageUrl.value = URL.createObjectURL(file); 
 };
@@ -236,7 +219,8 @@ const validateForm = () => {
   errors.value = { name: '', description: '' };
   let isValid = true;
   
-  const nameValue = formData.value.name.trim();
+  // Chuẩn hóa khoảng trắng 
+  const nameValue = formData.value.name.trim().replace(/\s+/g, ' ');
   const descValue = formData.value.description?.trim() || '';
   
   const nameRegex = /^[\p{L}\d\s&'.\-]+$/u; 
@@ -250,6 +234,19 @@ const validateForm = () => {
   } else if (!nameRegex.test(nameValue)) {
     errors.value.name = "Tên thương hiệu chỉ được chứa chữ cái, số, khoảng trắng và các ký tự: &, -, ., '";
     isValid = false;
+  }
+
+  // Thêm kiểm tra trùng lặp trên Frontend (Local validation)
+  if (isValid) {
+    const isDuplicate = brandStore.brands.some((brand) => {
+      if (isEdit.value && brand.id === currentId.value) return false;
+      return brand.name.trim().replace(/\s+/g, ' ').toLowerCase() === nameValue.toLowerCase();
+    });
+
+    if (isDuplicate) {
+      errors.value.name = 'Thương hiệu này đã tồn tại trong hệ thống!';
+      isValid = false;
+    }
   }
 
   if (descValue.length > 1000) {
@@ -291,12 +288,18 @@ const handleSubmit = async () => {
       formData.value.logoUrl = uploadRes.data.url; 
     }
 
+    // Ép chuẩn hóa dữ liệu gửi lên Backend
+    const payload = {
+        ...formData.value,
+        name: formData.value.name.trim().replace(/\s+/g, ' ')
+    };
+
     if (isEdit.value && currentId.value) {
-      await brandStore.updateBrand(currentId.value, formData.value);
+      await brandStore.updateBrand(currentId.value, payload);
       await brandStore.fetchBrands(searchKeyword.value, brandStore.currentPage); 
       Toast.fire({ icon: 'success', title: 'Cập nhật thành công!' });
     } else {
-      await brandStore.createBrand(formData.value);
+      await brandStore.createBrand(payload);
       searchKeyword.value = '';
       await brandStore.fetchBrands('', 0); 
       Toast.fire({ icon: 'success', title: 'Thêm mới thành công!' });
@@ -304,6 +307,9 @@ const handleSubmit = async () => {
     showModal.value = false; 
   } catch (error: any) {
     console.error("Lỗi từ backend:", error);
+    
+    // Tối ưu bộ bắt lỗi tương tự Category
+    let errorMsg = '';
     
     if (error.response && error.response.data) {
       const responseData = error.response.data;
@@ -314,17 +320,25 @@ const handleSubmit = async () => {
         return; 
       }
 
-      if (responseData.message) {
-        const lowerMsg = responseData.message.toLowerCase();
-        if (lowerMsg.includes('tồn tại') || lowerMsg.includes('exists') || lowerMsg.includes('duplicate')) {
-          errors.value.name = 'Thương hiệu này đã tồn tại trong hệ thống!';
-        } else {
-          Toast.fire({ icon: 'error', title: responseData.message });
-        }
-        return;
+      if (typeof responseData === 'string') {
+        errorMsg = responseData;
+      } else if (responseData.message) {
+        errorMsg = responseData.message;
+      } else if (responseData.error) {
+        errorMsg = responseData.error;
       }
     }
-    Toast.fire({ icon: 'error', title: 'Máy chủ không phản hồi!' });
+
+    if (errorMsg) {
+      const lowerMsg = errorMsg.toLowerCase();
+      if (lowerMsg.includes('tồn tại') || lowerMsg.includes('exists') || lowerMsg.includes('duplicate') || lowerMsg.includes('trùng')) {
+        errors.value.name = 'Thương hiệu này đã tồn tại trong hệ thống!';
+      } else {
+        Toast.fire({ icon: 'error', title: errorMsg });
+      }
+    } else {
+      Toast.fire({ icon: 'error', title: 'Máy chủ không phản hồi!' });
+    }
   } finally {
     isUploading.value = false;
   }
