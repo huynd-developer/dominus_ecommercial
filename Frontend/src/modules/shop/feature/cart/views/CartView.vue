@@ -137,8 +137,9 @@ const isItemAvailable = (item: CartItem) => {
 const totalAmount = computed(() => cartItems.value.reduce((sum, item) => isItemAvailable(item) ? sum + getItemPrice(item) * getItemQuantity(item) : sum, 0));
 const canCheckout = computed(() => cartItems.value.length > 0 && cartItems.value.every((item) => isItemAvailable(item)));
 
-const showToast = async (icon: "success" | "error" | "warning" | "info", title: string) => {
-  await Swal.fire({ toast: true, position: "top-end", icon, title, showConfirmButton: false, timer: 1800, timerProgressBar: true });
+// Hàm Toast hiển thị chạy ngầm không có await để tránh chặn UI
+const showToast = (icon: "success" | "error" | "warning" | "info", title: string) => {
+  Swal.fire({ toast: true, position: "top-end", icon, title, showConfirmButton: false, timer: 1800, timerProgressBar: true });
 };
 const showError = async (title: string, text: string) => {
   await Swal.fire({ icon: "error", title, text, confirmButtonText: "Đóng", confirmButtonColor: "#bd9a5f" });
@@ -167,15 +168,8 @@ const extractCartItems = (payload: any): CartItem[] => {
   return [];
 };
 
-// ==========================================
-// T FIX LẠI HÀM LẤY ID: QUÉT CẠN KIỆT MỌI NGÓC NGÁCH
-// Dùng TOÁN TỬ || để nếu cái trước trả về 0 thì nó vẫn tìm tiếp
-// ==========================================
-// ==========================================
-// FIX TYPESCRIPT LỖI GẠCH ĐỎ (DÙNG AS ANY ĐỂ BỎ QUA CHECK TYPE)
-// ==========================================
 const getItemProductId = (item: CartItem) => {
-  const i = item as any; // Ép kiểu về any để TS không bắt bẻ các biến viết hoa
+  const i = item as any; 
   return Number(
     i?.productId || i?.ProductId ||
     i?.product?.id || i?.product?.productId || i?.Product?.id || i?.Product?.productId ||
@@ -192,6 +186,7 @@ const getItemVariantId = (item: CartItem) => {
     i?.productVariantId || i?.ProductVariantId ||
     i?.variantId || i?.VariantId ||
     i?.productVariant?.id || i?.ProductVariant?.Id ||
+    i?.productVariant?.productVariantId ||
     i?.variant?.id || i?.Variant?.Id ||
     0
   );
@@ -249,10 +244,7 @@ const fetchProductDetail = async (productId: number) => {
   if (productDetailCache.has(productId)) return productDetailCache.get(productId);
   try {
     let res = await api.get(`/v1/products/${productId}`).catch(() => null);
-    if (!res) {
-      // Đề phòng endpoint là /customer/products
-      res = await api.get(`/customer/products/${productId}`).catch(() => null);
-    }
+    if (!res) res = await api.get(`/customer/products/${productId}`).catch(() => null);
     if (!res) return null;
 
     const data = res.data?.data ?? res.data?.result ?? res.data;
@@ -311,20 +303,13 @@ const loadCart = async (options: { preserveOrder?: boolean } = {}) => {
   try {
     isLoading.value = true;
     const res = await api.get("/v1/customer/cart/my-cart");
-    
-    // --- THÊM 2 DÒNG NÀY ĐỂ BẮT SỐNG DATA ---
-    console.log("📦 DỮ LIỆU GIỎ HÀNG GỐC:", res.data);
     const items = extractCartItems(res.data);
-    console.log("🛒 TỪNG ITEM TRONG GIỎ:", items);
-    // ----------------------------------------
-
     const enrichedItems = await enrichCartItemsWithImages(items);
-    cartItems.value = options.preserveOrder
-      ? preserveCartOrder(enrichedItems)
-      : enrichedItems;
+    
+    cartItems.value = options.preserveOrder ? preserveCartOrder(enrichedItems) : enrichedItems;
     if (!canCheckout.value) resetVoucher();
   } catch (err: any) {
-    await showError("Lỗi", "Không tải được giỏ hàng");
+    showError("Lỗi", "Không tải được giỏ hàng");
     if (err?.response?.status === 401 || err?.response?.status === 403) router.push("/login");
   } finally {
     isLoading.value = false;
@@ -335,8 +320,14 @@ const updateQty = async (item: CartItem, newQty: number) => {
   if (!item?.cartItemId || newQty < 1) return;
   const stockQuantity = Number(item?.stockQuantity || 0);
 
-  if (stockQuantity <= 0) return showToast("warning", "Sản phẩm đã hết hàng");
-  if (newQty > stockQuantity) return showToast("warning", `Sản phẩm chỉ còn ${stockQuantity} trong kho`);
+  if (stockQuantity <= 0) {
+    showToast("warning", "Sản phẩm đã hết hàng");
+    return;
+  }
+  if (newQty > stockQuantity) {
+    showToast("warning", `Sản phẩm chỉ còn ${stockQuantity} trong kho`);
+    return;
+  }
 
   try {
     isUpdating.value = true;
@@ -347,20 +338,18 @@ const updateQty = async (item: CartItem, newQty: number) => {
     });
     item.quantity = newQty;
     resetVoucher();
-    await showToast("success", "Đã cập nhật số lượng");
   } catch (err: any) {
-    await showError("Lỗi", "Không thể cập nhật giỏ hàng");
-    await loadCart();
+    showError("Lỗi", "Không thể cập nhật giỏ hàng");
+    loadCart();
   } finally {
     isUpdating.value = false;
   }
 };
 
-// ==========================================
-// ĐỔI BIẾN THỂ: UPDATE TRỰC TIẾP CART ITEM HIỆN TẠI
-// Không dùng add mới -> delete cũ vì cách đó tạo cartItemId mới,
-// backend trả lại giỏ theo id/thời gian sẽ làm sản phẩm nhảy vị trí.
-// ==========================================
+// ==============================================
+// FIX: ĐỔI PHÂN LOẠI BẰNG THÊM MỚI -> XÓA CŨ
+// (Vì PUT API chỉ cho phép cập nhật số lượng)
+// ==============================================
 const updateVariant = async (item: CartItem, newVariantId: number) => {
   if (!item?.cartItemId || !newVariantId) return;
   if (getItemVariantId(item) === newVariantId) return;
@@ -368,27 +357,27 @@ const updateVariant = async (item: CartItem, newVariantId: number) => {
   try {
     isUpdating.value = true;
 
-    await api.put("/v1/customer/cart/update", {
-      cartItemId: item.cartItemId,
+    // Thêm phân loại mới vào giỏ
+    await api.post("/v1/customer/cart/add", {
       productVariantId: newVariantId,
-      quantity: Number(item.quantity || 1),
-      note: item.note || "",
+      quantity: Number(item.quantity || 1)
     });
 
-    resetVoucher();
-    await showToast("success", "Đã đổi phân loại sản phẩm");
+    // Xóa phân loại cũ khỏi giỏ
+    await api.delete(`/v1/customer/cart/remove/${item.cartItemId}`);
 
-    // Reload lại để lấy đúng giá, tồn kho, NSX/HSD, ảnh... từ backend,
-    // nhưng giữ nguyên thứ tự các dòng đang hiển thị trên màn hình.
-    await loadCart({ preserveOrder: true });
+    resetVoucher();
+    showToast("success", "Đã đổi phân loại sản phẩm");
+    
+    // Tải lại dữ liệu (Bỏ preserveOrder vì cartItemId đã bị thay đổi)
+    await loadCart();
   } catch (err: any) {
     console.error("Lỗi đổi biến thể:", err);
-    await showError(
+    showError(
       "Lỗi",
-      err?.response?.data?.message ||
-        "Không thể đổi loại sản phẩm. Vui lòng thử lại!",
+      err?.response?.data?.message || "Không thể đổi loại sản phẩm. Vui lòng thử lại!"
     );
-    await loadCart({ preserveOrder: true });
+    await loadCart();
   } finally {
     isUpdating.value = false;
   }
@@ -401,18 +390,19 @@ const removeItem = async (cartItemId: number) => {
     await api.delete(`/v1/customer/cart/remove/${cartItemId}`);
     cartItems.value = cartItems.value.filter((item) => item.cartItemId !== cartItemId);
     resetVoucher();
-    await showToast("success", "Đã xóa sản phẩm khỏi giỏ");
   } catch (err: any) {
-    await showError("Lỗi", "Không thể xóa sản phẩm");
-    await loadCart();
+    showError("Lỗi", "Không thể xóa sản phẩm");
+    loadCart();
   } finally {
     isUpdating.value = false;
   }
 };
 
-
 const goToCheckout = async () => {
-  if (cartItems.value.length === 0) return showToast("warning", "Giỏ hàng đang trống");
+  if (cartItems.value.length === 0) {
+    showToast("warning", "Giỏ hàng đang trống");
+    return;
+  }
   const invalidItem = cartItems.value.find((item) => !isItemAvailable(item));
   if (invalidItem) {
     await Swal.fire({ icon: "warning", title: "Cảnh báo", text: getUnavailableReason(invalidItem) });
@@ -421,13 +411,10 @@ const goToCheckout = async () => {
   router.push("/checkout");
 };
 
-// Thêm biến phí ship (fix cứng 30k theo đúng DB của m)
 const shippingFee = ref(30000);
 
-// Tìm biến finalTotal cũ và chép đè đoạn này vào để nó cộng thêm phí ship
 const finalTotal = computed(() => {
   if (cartItems.value.length === 0) return 0;
-  // Tổng tiền = (Tạm tính - Giảm giá) + Phí ship
   return Math.max(0, totalAmount.value - discountAmount.value) + shippingFee.value;
 });
 

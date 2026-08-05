@@ -262,6 +262,8 @@
           </span>
         </div>
 
+        
+
         <div
           class="quantity-section"
           v-if="selectedVariant"
@@ -298,6 +300,12 @@
             <button type="button" @click="increaseQty">+</button>
           </div>
         </div>
+
+        <!-- CẢNH BÁO CẬN DATE TRONG TRANG CHI TIẾT -->
+<div v-if="isNearExpiry" class="alert alert-warning py-2 px-3 my-2 d-flex align-items-center gap-2" style="font-size: 13px; font-weight: 600; background: #fffbeb; border-color: #fde68a; color: #d97706; border-radius: 8px;">
+  <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+  <span>Sản phẩm cận date (gần hết hạn sử dụng). Khách hàng lưu ý trước khi đặt mua!</span>
+</div>
 
         <div class="actions">
           <button
@@ -975,6 +983,31 @@ const getBottleTypeText = (variant: any) => {
 
   return "Đang cập nhật";
 };
+
+// Thêm logic kiểm tra hạn sử dụng cho trang chi tiết
+const nearestExpirationDate = computed(() => {
+  const p = props.product;
+  if (!p) return null;
+  let dates: string[] = [];
+  if (p.expirationDate) dates.push(p.expirationDate);
+  if (Array.isArray(p.variants)) {
+    p.variants.forEach((v: any) => {
+      if (v.expirationDate) dates.push(v.expirationDate);
+    });
+  }
+  if (dates.length === 0) return null;
+  dates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+  return dates[0];
+});
+
+const isNearExpiry = computed(() => {
+  const targetDate = selectedVariant.value?.expirationDate || nearestExpirationDate.value;
+  if (!targetDate) return false;
+  const expDate = new Date(targetDate).getTime();
+  const now = new Date().getTime();
+  const diffDays = (expDate - now) / (1000 * 60 * 60 * 24);
+  return diffDays >= 0 && diffDays <= 30;
+});
 
 const getVariantId = () => {
   return getVariantIdFromVariant(selectedVariant.value);

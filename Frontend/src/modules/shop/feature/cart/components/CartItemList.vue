@@ -38,10 +38,7 @@
         <div class="item-info">
           <div class="name-row">
             <h4 class="item-name">{{ item.productName || "Sản phẩm" }}</h4>
-            <!-- ĐÃ ẨN TAG FLASH SALE THEO YÊU CẦU -->
           </div>
-
-          <!-- ĐÃ ẨN TAG TÊN CHƯƠNG TRÌNH TRI ÂN THEO YÊU CẦU -->
 
           <div class="variant-grid">
             <template v-if="getVariantsList(item).length > 0">
@@ -101,6 +98,11 @@
             >
               {{ isItemAvailable(item) ? "Có thể mua" : "Không khả dụng" }}
             </span>
+            
+            <!-- HIỂN THỊ CẢNH BÁO GẦN HẾT HẠN Ở GIỎ HÀNG -->
+            <span v-if="isNearExpiry(item.expirationDate)" class="expiry-warning-badge-cart">
+              <i class="bi bi-exclamation-triangle-fill me-1"></i> Gần hết hạn
+            </span>
           </div>
 
           <p v-if="!isItemAvailable(item)" class="unavailable-text">
@@ -111,7 +113,7 @@
             <button
               type="button"
               @click="changeQuantity(item, -1)"
-              :disabled="Number(item.quantity || 0) <= 1"
+              :disabled="Number(item.quantity || 0) <= 1 || isUpdating"
             >
               −
             </button>
@@ -121,12 +123,13 @@
               :value="Number(item.quantity || 0)"
               @input="handleManualQuantity(item, $event)"
               @blur="handleBlurQuantity(item, $event)"
+              :disabled="isUpdating"
             />
 
             <button
               type="button"
               @click="changeQuantity(item, 1)"
-              :disabled="!isItemAvailable(item)"
+              :disabled="!isItemAvailable(item) || isUpdating"
             >
               +
             </button>
@@ -134,7 +137,6 @@
         </div>
 
         <div class="item-action">
-          <!-- ĐÃ SỬA LẠI KHỐI GIÁ: ẨN GIÁ GỐC, GOM % XUỐNG CÙNG DÒNG -->
           <template v-if="item.hasPromotion">
             <span
               class="unit-price text-muted"
@@ -167,6 +169,7 @@
             type="button"
             @click="$emit('remove-item', item.cartItemId)"
             title="Xóa sản phẩm"
+            :disabled="isUpdating"
           >
             <svg
               viewBox="0 0 24 24"
@@ -190,7 +193,7 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
-import Swal from "sweetalert2"; // Nhớ import cái này
+import Swal from "sweetalert2"; 
 
 interface CartItem {
   cartItemId: number;
@@ -245,7 +248,6 @@ const emit = defineEmits<{
 
 let updateTimeout: ReturnType<typeof setTimeout> | null = null;
 
-// Tìm hàm changeQuantity và chép đè đoạn này vào
 const changeQuantity = (item: CartItem, delta: number) => {
   let currentQty = Number(item.quantity || 0);
   let newQty = currentQty + delta;
@@ -284,16 +286,13 @@ const changeQuantity = (item: CartItem, delta: number) => {
   }, 400);
 };
 
-// Hàm xử lý tức thì khi khách đang gõ phím
 const handleManualQuantity = (item: CartItem, event: Event) => {
   const target = event.target as HTMLInputElement;
-  
-  // Nếu đang gõ mà khách xóa trắng (để nhập số mới) thì tạm thời cho qua, @blur sẽ xử lý sau
   if (target.value === "") return;
 
   let val = Number(target.value);
   const stock = Number(item.stockQuantity || 0);
-  const maxAllow = Math.min(stock > 0 ? stock : 10, 10); // Lấy giới hạn: Tồn kho thực tế hoặc tối đa là 10
+  const maxAllow = Math.min(stock > 0 ? stock : 10, 10); 
 
   if (val > maxAllow) {
     Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: `Chỉ được mua tối đa ${maxAllow} sản phẩm!`, showConfirmButton: false, timer: 2000 });
@@ -304,10 +303,8 @@ const handleManualQuantity = (item: CartItem, event: Event) => {
     val = Math.floor(val);
   }
 
-  // Ép giá trị hợp lệ ngược lại ngay trên ô input (Chặn khách thấy số lố)
   target.value = String(val);
 
-  // Gọi API cập nhật nếu số lượng thực sự thay đổi
   if (Number(item.quantity) !== val) {
     item.quantity = val;
     if (updateTimeout) clearTimeout(updateTimeout);
@@ -317,47 +314,30 @@ const handleManualQuantity = (item: CartItem, event: Event) => {
   }
 };
 
-// Hàm dọn dẹp: Đề phòng khách xóa trắng ô input rồi click chuột ra ngoài
 const handleBlurQuantity = (item: CartItem, event: Event) => {
   const target = event.target as HTMLInputElement;
   if (target.value === "" || Number(target.value) < 1) {
     target.value = "1";
-    handleManualQuantity(item, event); // Gọi lại hàm trên để ép về 1 và lưu API
+    handleManualQuantity(item, event); 
   }
 };
 
-const getVariantId = (item: CartItem) =>
-  Number(item?.productVariantId || item?.variantId || item?.id || 0);
+const getVariantId = (item: CartItem) => Number(item?.productVariantId || item?.variantId || item?.id || 0);
 
 const getVariantsList = (item: CartItem) => {
   const i = item as any;
   const possibleProducts = [
-    i?.product,
-    i?.Product,
-    i?.productVariant?.product,
-    i?.ProductVariant?.Product,
-    i?.variant?.product,
-    i?.Variant?.Product,
-    i,
+    i?.product, i?.Product, i?.productVariant?.product, i?.ProductVariant?.Product,
+    i?.variant?.product, i?.Variant?.Product, i,
   ];
 
   for (const p of possibleProducts) {
     if (!p) continue;
     const lists = [
-      p.variants,
-      p.Variants,
-      p.productVariants,
-      p.ProductVariants,
-      p.productVariantList,
-      p.ProductVariantList,
-      p.productVariantResponses,
-      p.ProductVariantResponses,
-      p.productVariantDTOs,
-      p.ProductVariantDTOs,
-      p.lstProductVariant,
-      p.LstProductVariant,
-      p.items,
-      p.Items,
+      p.variants, p.Variants, p.productVariants, p.ProductVariants,
+      p.productVariantList, p.ProductVariantList, p.productVariantResponses,
+      p.ProductVariantResponses, p.productVariantDTOs, p.ProductVariantDTOs,
+      p.lstProductVariant, p.LstProductVariant, p.items, p.Items,
     ];
     for (const list of lists) {
       if (Array.isArray(list) && list.length > 0) return list;
@@ -367,14 +347,9 @@ const getVariantsList = (item: CartItem) => {
 };
 
 const BACKEND_URL = "http://localhost:8080";
-const FALLBACK_IMAGE =
-  "data:image/svg+xml;utf8," +
-  encodeURIComponent(
-    `<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><rect width='100%' height='100%' fill='#f3f4f6'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='#9ca3af' font-family='Arial' font-size='20'>Không có ảnh</text></svg>`,
-  );
+const FALLBACK_IMAGE = "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><rect width='100%' height='100%' fill='#f3f4f6'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='#9ca3af' font-family='Arial' font-size='20'>Không có ảnh</text></svg>`);
 
-const toDateOnly = (value?: string | null) =>
-  value ? String(value).substring(0, 10) : null;
+const toDateOnly = (value?: string | null) => value ? String(value).substring(0, 10) : null;
 
 const isBeforeToday = (value?: string | null) => {
   const dateOnly = toDateOnly(value);
@@ -401,21 +376,23 @@ const formatDate = (value?: string | null) => {
   return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString("vi-VN");
 };
 
-const formatDateTime = (value?: string | null) => {
-  if (!value) return "";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? ""
-    : date.toLocaleString("vi-VN", { hour12: false });
+// Hàm mới: Kiểm tra gần hết hạn cho giỏ hàng
+const isNearExpiry = (value?: string | null) => {
+  const dateOnly = toDateOnly(value);
+  if (!dateOnly) return false;
+  const target = new Date(`${dateOnly}T00:00:00`).getTime();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayTime = today.getTime();
+
+  if (Number.isNaN(target) || target < todayTime) return false; 
+  const diffDays = (target - todayTime) / (1000 * 60 * 60 * 24);
+  return diffDays >= 0 && diffDays <= 30;
 };
 
-const extractImageValue = (
-  value: any,
-  visited = new WeakSet<object>(),
-): string => {
+const extractImageValue = (value: any, visited = new WeakSet<object>()): string => {
   if (!value) return "";
-  if (typeof value === "string" || typeof value === "number")
-    return String(value).trim();
+  if (typeof value === "string" || typeof value === "number") return String(value).trim();
   if (Array.isArray(value)) {
     for (const item of value) {
       const image = extractImageValue(item, visited);
@@ -427,14 +404,8 @@ const extractImageValue = (
     if (visited.has(value)) return "";
     visited.add(value);
     const candidates = [
-      value?.image,
-      value?.imageUrl,
-      value?.mainImage,
-      value?.thumbnailUrl,
-      value?.productImage,
-      value?.variantImage,
-      value?.product,
-      value?.productVariant,
+      value?.image, value?.imageUrl, value?.mainImage, value?.thumbnailUrl,
+      value?.productImage, value?.variantImage, value?.product, value?.productVariant,
     ];
     for (const candidate of candidates) {
       const image = extractImageValue(candidate, visited);
@@ -446,20 +417,13 @@ const extractImageValue = (
 
 const getItemImage = (item: CartItem) => {
   const candidates = [
-    item?.image,
-    item?.imageUrl,
-    item?.thumbnailUrl,
-    item?.mainImage,
-    item?.productImage,
-    item?.variantImage,
-    item?.product,
-    item?.productVariant,
+    item?.image, item?.imageUrl, item?.thumbnailUrl, item?.mainImage,
+    item?.productImage, item?.variantImage, item?.product, item?.productVariant,
   ];
   for (const candidate of candidates) {
     const imageUrl = extractImageValue(candidate);
     if (imageUrl) {
-      if (imageUrl.startsWith("http") || imageUrl.startsWith("data:"))
-        return imageUrl;
+      if (imageUrl.startsWith("http") || imageUrl.startsWith("data:")) return imageUrl;
       return `${BACKEND_URL}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
     }
   }
@@ -474,22 +438,17 @@ const handleImageError = (event: Event) => {
   }
 };
 
-const isExpired = (item: CartItem) =>
-  Boolean(item?.expired) || isBeforeToday(item?.expirationDate);
+const isExpired = (item: CartItem) => Boolean(item?.expired) || isBeforeToday(item?.expirationDate);
 
 const getUnavailableReason = (item: CartItem) => {
   if (!item) return "Sản phẩm không hợp lệ";
   if (item.unavailableReason) return item.unavailableReason;
-  if (item.available === false || item.sellable === false)
-    return "Sản phẩm hiện không khả dụng";
-  if (item.variantStatus != null && Number(item.variantStatus) !== 1)
-    return "Sản phẩm đang ngừng bán";
+  if (item.available === false || item.sellable === false) return "Sản phẩm hiện không khả dụng";
+  if (item.variantStatus != null && Number(item.variantStatus) !== 1) return "Sản phẩm đang ngừng bán";
   if (Number(item.quantity || 0) <= 0) return "Số lượng sản phẩm không hợp lệ";
   if (Number(item.stockQuantity || 0) <= 0) return "Sản phẩm đã hết hàng";
-  if (Number(item.quantity || 0) > Number(item.stockQuantity || 0))
-    return "Số lượng vượt quá tồn kho";
-  if (isAfterToday(item.manufacturingDate))
-    return "Sản phẩm chưa tới ngày được bán";
+  if (Number(item.quantity || 0) > Number(item.stockQuantity || 0)) return "Số lượng vượt quá tồn kho";
+  if (isAfterToday(item.manufacturingDate)) return "Sản phẩm chưa tới ngày được bán";
   if (isExpired(item)) return "Sản phẩm đã hết hạn sử dụng";
   return "Sản phẩm hiện không khả dụng";
 };
@@ -497,12 +456,10 @@ const getUnavailableReason = (item: CartItem) => {
 const isItemAvailable = (item: CartItem) => {
   if (!item) return false;
   if (item.available === false || item.sellable === false) return false;
-  if (item.variantStatus != null && Number(item.variantStatus) !== 1)
-    return false;
+  if (item.variantStatus != null && Number(item.variantStatus) !== 1) return false;
   const quantity = Number(item.quantity || 0);
   const stockQuantity = Number(item.stockQuantity || 0);
-  if (quantity <= 0 || stockQuantity <= 0 || quantity > stockQuantity)
-    return false;
+  if (quantity <= 0 || stockQuantity <= 0 || quantity > stockQuantity) return false;
   if (isAfterToday(item.manufacturingDate)) return false;
   if (isExpired(item)) return false;
   return true;
@@ -510,19 +467,8 @@ const isItemAvailable = (item: CartItem) => {
 
 const formatVariantLabel = (v: any) => {
   if (!v) return "";
-  let cap =
-    v.capacityName ||
-    v.capacity?.name ||
-    v.capacity?.value ||
-    v.capacity ||
-    v.volume ||
-    "";
-  let bot =
-    v.bottleTypeName ||
-    v.bottleType?.name ||
-    v.bottleType?.value ||
-    v.bottleType ||
-    "";
+  let cap = v.capacityName || v.capacity?.name || v.capacity?.value || v.capacity || v.volume || "";
+  let bot = v.bottleTypeName || v.bottleType?.name || v.bottleType?.value || v.bottleType || "";
   cap = String(cap).replace(/ml/i, "").trim();
 
   let label = "";
@@ -533,19 +479,11 @@ const formatVariantLabel = (v: any) => {
   return label || "Biến thể";
 };
 
-const getLineTotal = (item: CartItem) =>
-  Number(item?.price || 0) * Number(item?.quantity || 0);
-
-const formatCurrency = (val?: number | null) =>
-  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(
-    Number(val || 0),
-  );
-
+const getLineTotal = (item: CartItem) => Number(item?.price || 0) * Number(item?.quantity || 0);
+const formatCurrency = (val?: number | null) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(val || 0));
 const formatDiscount = (value?: number | null) => {
   const num = Number(value || 0);
-  return Number.isInteger(num)
-    ? String(num)
-    : num.toFixed(2).replace(/\.?0+$/, "");
+  return Number.isInteger(num) ? String(num) : num.toFixed(2).replace(/\.?0+$/, "");
 };
 </script>
 
@@ -781,6 +719,18 @@ const formatDiscount = (value?: number | null) => {
   border: 1px solid #fecaca;
 }
 
+/* THÊM STYLE CHO HUY HIỆU CẢNH BÁO */
+.expiry-warning-badge-cart {
+  background: #d97706;
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+}
+
 .unavailable-text {
   margin: 0;
   color: #dc2626;
@@ -851,7 +801,6 @@ const formatDiscount = (value?: number | null) => {
   white-space: nowrap;
 }
 
-/* CSS MỚI CHO HIỂN THỊ GIÁ NGANG HÀNG NHAU */
 .promotion-price-box {
   display: flex;
   align-items: center;
@@ -895,11 +844,15 @@ const formatDiscount = (value?: number | null) => {
   height: 22px;
 }
 
-.btn-delete:hover {
+.btn-delete:hover:not(:disabled) {
   background: #e53e3e;
   color: white;
   border-color: #e53e3e;
   box-shadow: 0 4px 10px rgba(229, 62, 62, 0.2);
+}
+.btn-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 @media (max-width: 768px) {
@@ -925,7 +878,6 @@ const formatDiscount = (value?: number | null) => {
     font-size: 17px;
   }
 
-  /* Ẩn mũi tên tăng giảm mặc định của trình duyệt */
   .qty-wrapper input[type="number"]::-webkit-inner-spin-button,
   .qty-wrapper input[type="number"]::-webkit-outer-spin-button {
     -webkit-appearance: none;

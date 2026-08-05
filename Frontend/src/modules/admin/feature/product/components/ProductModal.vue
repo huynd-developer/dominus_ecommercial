@@ -480,10 +480,10 @@
             <button
               type="submit"
               class="btn btn-primary px-5"
-              :disabled="appStore.globalLoading"
+              :disabled="appStore.globalLoading || isCloningImages"
             >
               <span
-                v-if="appStore.globalLoading"
+                v-if="appStore.globalLoading || isCloningImages"
                 class="spinner-border spinner-border-sm me-2"
               ></span>
               <i
@@ -491,7 +491,13 @@
                 class="bi"
                 :class="isEdit ? 'bi-pencil-square' : 'bi-plus-circle'"
               ></i>
-              {{ isEdit ? " Cập nhật" : " Thêm sản phẩm" }}
+              {{
+                isCloningImages
+                  ? " Đang xử lý ảnh..."
+                  : isEdit
+                    ? " Cập nhật"
+                    : " Thêm sản phẩm"
+              }}
             </button>
           </div>
         </form>
@@ -537,6 +543,7 @@ const appStore = useAppStore();
 const isEdit = ref(false);
 const API_URL = import.meta.env.VITE_API_URL || "";
 const today = computed(() => new Date().toISOString().split("T")[0]);
+const isCloningImages = ref(false); // Thêm cờ khóa nút khi đang tải ảnh
 
 interface ProductImageItem {
   id?: number;
@@ -582,16 +589,20 @@ const resetForm = () => {
   const defaultCapacities = [10, 50, 100];
   defaultCapacities.forEach((targetVal) => {
     const foundCap = props.capacityList?.find(
-      (c: any) => Number(c.value) === targetVal || Number(c.name) === targetVal
+      (c: any) => Number(c.value) === targetVal || Number(c.name) === targetVal,
     );
     formData.value.variants.push({
       capacityId: foundCap ? foundCap.id : 0,
       // Dùng ?. và ?? để an toàn tuyệt đối với TypeScript
-      bottleTypeId: props.bottleTypeList?.[0]?.id ?? 0, 
+      bottleTypeId: props.bottleTypeList?.[0]?.id ?? 0,
       price: 100, // Mặc định 100 VNĐ
       stockQuantity: 10,
       manufacturingDate: today.value,
-      expirationDate: new Date(new Date().setFullYear(new Date().getFullYear() + 3)).toISOString().split("T")[0],
+      expirationDate: new Date(
+        new Date().setFullYear(new Date().getFullYear() + 3),
+      )
+        .toISOString()
+        .split("T")[0],
       status: 1,
     });
   });
@@ -653,9 +664,15 @@ const formatDateForInput = (dateString?: string) => {
   return dateString.substring(0, 10);
 };
 
-const fillForm = (product: Product, isClone = false) => {
+const fillForm = async (product: Product, isClone = false) => {
+  // 1. Chặn lặp chữ "(Bản sao)"
+  let newName = product.name;
+  if (isClone && !newName.endsWith("(Bản sao)")) {
+    newName = `${newName} (Bản sao)`;
+  }
+
   formData.value = {
-    name: isClone ? `${product.name} (Bản sao)` : product.name,
+    name: newName,
     description: product.description ?? "",
     brandId: product.brandId,
     categoryId: product.categoryId,
@@ -680,18 +697,68 @@ const fillForm = (product: Product, isClone = false) => {
 
   if (formData.value.variants.length === 0) addVariant();
 
-  imageList.value = (
-    product.images?.map((img) => ({
+  // 2. HIỂN THỊ ẢNH NGAY LẬP TỨC ĐỂ KHÔNG BỊ ĐƠ GIAO DIỆN
+  const initialImages = (product.images || []).map((img) => {
+    const url = img.imageUrl
+      ? img.imageUrl.startsWith("http")
+        ? img.imageUrl
+        : `${API_URL}${img.imageUrl}`
+      : "";
+    return {
       id: isClone ? undefined : img.id,
-      preview: img.imageUrl
-        ? img.imageUrl.startsWith("http")
-          ? img.imageUrl
-          : `${API_URL}${img.imageUrl}`
-        : "",
+      preview: url,
       isPrimary: img.isPrimary,
-    })) ?? []
-  ).sort((a, b) => (a.isPrimary === b.isPrimary ? 0 : a.isPrimary ? -1 : 1));
+      file: undefined, // Chưa có file thật, chờ tải ngầm
+    };
+  });
+
+  // Vẽ ảnh lên màn hình luôn cho nóng
+  imageList.value = initialImages.sort((a, b) =>
+    a.isPrimary === b.isPrimary ? 0 : a.isPrimary ? -1 : 1
+  );
+
+  // 3. TẢI NGẦM FILE ẢNH (BACKGROUND FETCH) CHỈ DÀNH CHO CLONE
+  if (isClone) {
+    isCloningImages.value = true; // Khóa nút Submit lại
+    
+    // Lưu ý: Không dùng await ở đây để hàm fillForm kết thúc ngay lập tức
+    Promise.all(
+      imageList.value.map(async (img, idx) => {
+        if (img.preview) {
+          try {
+            const res = await fetch(img.preview);
+            if (res.ok) {
+              const blob = await res.blob();
+              const fileType = blob.type || "image/jpeg";
+              img.file = new File([blob], `clone_${Date.now()}_${idx}.jpg`, { type: fileType });
+            }
+          } catch (error) {
+            console.error("Lỗi tải ngầm ảnh clone:", error);
+          }
+        }
+      })
+    ).then(() => {
+      // Khi nào tải ngầm xong xuôi hết, lọc bỏ những ảnh mạng lag không lấy được
+      imageList.value = imageList.value.filter(img => img.file);
+      isCloningImages.value = false; // Nhả nút Submit ra cho m bấm
+    });
+  }
 };
+
+// Sửa lại watch thành async để đợi lấy ảnh xong mới bung Form
+watch(
+  () => props.productSelected,
+  async (product) => {
+    if (product) {
+      isEdit.value = !props.isClone;
+      await fillForm(product, props.isClone);
+    } else {
+      isEdit.value = false;
+      resetForm();
+    }
+  },
+  { immediate: true },
+);
 
 watch(
   () => props.productSelected,
@@ -789,11 +856,19 @@ const validateForm = () => {
     return false;
   }
   if (formData.value.fragranceFamilyIds.length === 0) {
-    Swal.fire("Thiếu dữ liệu", "Vui lòng chọn ít nhất 1 Nhóm hương.", "warning");
+    Swal.fire(
+      "Thiếu dữ liệu",
+      "Vui lòng chọn ít nhất 1 Nhóm hương.",
+      "warning",
+    );
     return false;
   }
   if (formData.value.variants.length === 0) {
-    Swal.fire("Thiếu dữ liệu", "Phải có ít nhất 1 biến thể sản phẩm.", "warning");
+    Swal.fire(
+      "Thiếu dữ liệu",
+      "Phải có ít nhất 1 biến thể sản phẩm.",
+      "warning",
+    );
     return false;
   }
 
@@ -801,18 +876,30 @@ const validateForm = () => {
   for (let i = 0; i < formData.value.variants.length; i++) {
     const variant = formData.value.variants[i];
     if (variant.capacityId === 0 || variant.bottleTypeId === 0) {
-      Swal.fire("Thiếu dữ liệu", `Biến thể dòng ${i + 1}: Vui lòng chọn Dung tích và Loại chai.`, "warning");
+      Swal.fire(
+        "Thiếu dữ liệu",
+        `Biến thể dòng ${i + 1}: Vui lòng chọn Dung tích và Loại chai.`,
+        "warning",
+      );
       return false;
     }
     const capacityId = Number(variant.capacityId || 0);
     if (capacityIdSet.has(capacityId)) {
-      Swal.fire("Trùng dung tích", `Biến thể dòng ${i + 1}: Dung tích này đã tồn tại trong sản phẩm.`, "warning");
+      Swal.fire(
+        "Trùng dung tích",
+        `Biến thể dòng ${i + 1}: Dung tích này đã tồn tại trong sản phẩm.`,
+        "warning",
+      );
       return false;
     }
     capacityIdSet.add(capacityId);
 
     if (variant.price <= 0 || isNaN(variant.price)) {
-      Swal.fire("Lỗi dữ liệu", `Biến thể dòng ${i + 1}: Giá bán phải lớn hơn 0.`, "warning");
+      Swal.fire(
+        "Lỗi dữ liệu",
+        `Biến thể dòng ${i + 1}: Giá bán phải lớn hơn 0.`,
+        "warning",
+      );
       return false;
     }
   }
@@ -825,7 +912,9 @@ const saveData = async () => {
   try {
     const payload = {
       name: formData.value.name.trim(),
-      description: formData.value.description ? formData.value.description.trim() : "",
+      description: formData.value.description
+        ? formData.value.description.trim()
+        : "",
       brandId: Number(formData.value.brandId),
       categoryId: Number(formData.value.categoryId),
       concentrationId: Number(formData.value.concentrationId),
@@ -833,17 +922,23 @@ const saveData = async () => {
       isNiche: Boolean(formData.value.isNiche),
       status: Number(formData.value.status ?? 1),
       variants: (formData.value.variants || []).map((v: any) => ({
-        id: props.isClone ? undefined : (v.id ? Number(v.id) : undefined),
+        id: props.isClone ? undefined : v.id ? Number(v.id) : undefined,
         capacityId: Number(v.capacityId),
         bottleTypeId: Number(v.bottleTypeId),
         price: Number(v.price),
         stockQuantity: Number(v.stockQuantity),
-        manufacturingDate: v.manufacturingDate ? String(v.manufacturingDate).substring(0, 10) : "",
-        expirationDate: v.expirationDate ? String(v.expirationDate).substring(0, 10) : "",
+        manufacturingDate: v.manufacturingDate
+          ? String(v.manufacturingDate).substring(0, 10)
+          : "",
+        expirationDate: v.expirationDate
+          ? String(v.expirationDate).substring(0, 10)
+          : "",
         status: Number(v.status ?? 1),
         sku: v.sku ? String(v.sku).trim() : undefined,
       })),
-      fragranceFamilyIds: [...new Set((formData.value.fragranceFamilyIds || []).map(Number))],
+      fragranceFamilyIds: [
+        ...new Set((formData.value.fragranceFamilyIds || []).map(Number)),
+      ],
     } as any;
 
     appStore.startLoading();
@@ -878,12 +973,22 @@ const saveData = async () => {
 
       const primaryImage = imageList.value.find((img) => img.isPrimary);
       if (primaryImage?.id) {
-        await productService.setPrimaryImage(props.productSelected.id, primaryImage.id);
+        await productService.setPrimaryImage(
+          props.productSelected.id,
+          primaryImage.id,
+        );
       }
 
       emit("refresh");
       emit("close");
-      Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Cập nhật sản phẩm thành công", showConfirmButton: false, timer: 2000 });
+      Swal.fire({
+        toast: true,
+        position: "top-end",
+        icon: "success",
+        title: "Cập nhật sản phẩm thành công",
+        showConfirmButton: false,
+        timer: 2000,
+      });
     } else {
       // Thêm mới hoặc Nhân bản sản phẩm
       const created = await productService.createProduct(payload);
@@ -894,20 +999,38 @@ const saveData = async () => {
         }
       }
 
-      const uploadedImages = await productService.getImagesByProduct(created.id);
+      const uploadedImages = await productService.getImagesByProduct(
+        created.id,
+      );
       const primaryIndex = imageList.value.findIndex((img) => img.isPrimary);
 
       if (primaryIndex >= 0 && uploadedImages?.[primaryIndex]?.id) {
-        await productService.setPrimaryImage(created.id, uploadedImages[primaryIndex].id);
+        await productService.setPrimaryImage(
+          created.id,
+          uploadedImages[primaryIndex].id,
+        );
       }
 
       emit("refresh");
       emit("close");
-      Swal.fire({ toast: true, position: "top-end", icon: "success", title: props.isClone ? "Nhân bản sản phẩm thành công" : "Thêm sản phẩm thành công", showConfirmButton: false, timer: 2000 });
+      Swal.fire({
+        toast: true,
+        position: "top-end",
+        icon: "success",
+        title: props.isClone
+          ? "Nhân bản sản phẩm thành công"
+          : "Thêm sản phẩm thành công",
+        showConfirmButton: false,
+        timer: 2000,
+      });
     }
   } catch (e: any) {
     console.error(e);
-    Swal.fire({ icon: "error", title: "Lỗi", text: e?.response?.data?.message ?? "Không thể lưu sản phẩm" });
+    Swal.fire({
+      icon: "error",
+      title: "Lỗi",
+      text: e?.response?.data?.message ?? "Không thể lưu sản phẩm",
+    });
   } finally {
     appStore.stopLoading();
   }
