@@ -36,10 +36,7 @@
         -{{ cardDiscountPercent }}%
       </span>
 
-      <!-- HUY HIỆU CẢNH BÁO SẢN PHẨM GẦN HẾT HẠN ĐÃ FIX LOGIC HIỂN THỊ -->
-      <span v-if="isNearExpiry(activeProduct)" class="expiry-warning-badge" title="Sản phẩm cận date / gần hết hạn">
-        <i class="bi bi-exclamation-triangle-fill me-1"></i> Gần hết hạn
-      </span>
+      <!-- ĐÃ GỠ BỎ HUY HIỆU CẢNH BÁO SẢN PHẨM GẦN HẾT HẠN THEO YÊU CẦU -->
 
       <img
         v-if="hasProductImage"
@@ -115,19 +112,6 @@
                   {{ formatCurrency(selectedVariant.originalPrice) }}
                 </span>
                 <span v-if="calculatedDiscountPercent > 0" class="flash-sale-badge ms-2">-{{ calculatedDiscountPercent }}%</span>
-              </div>
-
-              <!-- HIỂN THỊ NSX & HSD BÊN TRONG MODAL -->
-              <div class="date-info-box mt-2" v-if="getExpDate(selectedVariant || currentTargetProduct || activeProduct)">
-                <p v-if="getMfgDate(selectedVariant || currentTargetProduct || activeProduct)" class="mb-1 text-muted" style="font-size: 13px;">
-                  <i class="bi bi-calendar-check me-1"></i> NSX: <strong class="text-dark">{{ getMfgDate(selectedVariant || currentTargetProduct || activeProduct) }}</strong>
-                </p>
-                <p class="mb-0 text-muted" style="font-size: 13px;">
-                  <i class="bi bi-calendar-x me-1"></i> HSD: <strong class="text-dark">{{ getExpDate(selectedVariant || currentTargetProduct || activeProduct) }}</strong>
-                </p>
-                <div v-if="isNearExpiry(selectedVariant || currentTargetProduct || activeProduct)" class="mt-2 text-warning fw-bold" style="font-size: 13px;">
-                  <i class="bi bi-exclamation-triangle-fill me-1"></i> Sản phẩm này cận date / gần hết hạn!
-                </div>
               </div>
             </div>
           </div>
@@ -509,7 +493,6 @@ const starsDisplay = computed(() => {
   return "★".repeat(filled) + "☆".repeat(MAX_RATING - filled);
 });
 
-// FIX BẢN LỀ: LUÔN TẢI FULL DATA NẾU CHƯA CÓ ĐỂ TRÁNH MẤT THÔNG TIN NGÀY THÁNG TỪ TRANG CHỦ (HomeView)
 const syncProductData = async () => {
   const p = props.product as any;
   const productId = Number(p?.productId || p?.id || 0);
@@ -564,56 +547,12 @@ const parseSafeDate = (dateString: any): number | null => {
   return isNaN(fallback.getTime()) ? null : fallback.getTime();
 };
 
-const formatSafeDateDisplay = (dateStr: any) => {
-  const ts = parseSafeDate(dateStr);
-  if (ts === null) return dateStr || "";
-  const d = new Date(ts);
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-};
-
-const getMfgDate = (item: any) => formatSafeDateDisplay(item?.manufacturingDate || item?.mfgDate || item?.productionDate);
-const getExpDate = (item: any) => formatSafeDateDisplay(item?.expirationDate || item?.expDate);
-
 const isExpiredDate = (dateStr: any): boolean => {
   const time = parseSafeDate(dateStr);
   if (time === null) return false;
   return getStartOfDay(time) < getStartOfDay(Date.now()); 
 };
 
-// FIX TẬN GỐC: QUÉT SẠCH SẼ TỪ SẢN PHẨM, BIẾN THỂ CHO TỚI FULL DATA API TRẢ VỀ
-const isNearExpiry = (item: any): boolean => {
-  if (!item) return false;
-  
-  const checkDate = (dateStr: any) => {
-    if (!dateStr || isExpiredDate(dateStr)) return false; 
-    const t = parseSafeDate(dateStr);
-    if (t === null) return false;
-    const diffDays = (getStartOfDay(t) - getStartOfDay(Date.now())) / (1000 * 60 * 60 * 24);
-    return diffDays >= 0 && diffDays <= 30;
-  };
-
-  // 1. Kiểm tra ngày trên card
-  if (checkDate(item.expirationDate) || checkDate(item.expDate)) return true;
-
-  // 2. Kiểm tra ngày trong mảng variants hiện tại
-  if (Array.isArray(item.variants) && item.variants.some((v: any) => checkDate(v.expirationDate) || checkDate(v.expDate))) {
-    return true;
-  }
-
-  // 3. Quét luôn vào data thật từ API (fullProductData) để tránh việc HomeView truyền thiếu dữ liệu
-  if (fullProductData.value) {
-    const full = fullProductData.value;
-    if (checkDate(full.expirationDate) || checkDate(full.expDate)) return true;
-    const fullVariants = full.variants || full.productVariants || [];
-    if (Array.isArray(fullVariants) && fullVariants.some((v: any) => checkDate(v.expirationDate) || checkDate(v.expDate))) {
-      return true;
-    }
-  }
-
-  return false;
-};
-
-// FIX TẬN GỐC TƯƠNG TỰ CHO HÀM KIỂM TRA HẾT HẠN
 const isFullyExpired = (item: any): boolean => {
   if (!item) return false;
   
@@ -870,8 +809,23 @@ const handleModalImageError = (event: Event) => {
 };
 const getBottleStyle = (color?: string): Record<string, string> => ({ "--bottle-color": color || "#0a192f" });
 
+// ĐÃ THÊM customClass ĐỂ ÉP TOAST LUÔN NỔI LÊN TRÊN CÙNG
 const showToast = (type: "success" | "warning" | "error", title: string, message: string) => {
-  Swal.fire({ toast: true, position: 'top-end', icon: type, title: title, text: message, showConfirmButton: false, timer: 2000 });
+  Swal.fire({ 
+    toast: true, 
+    position: 'top-end', 
+    icon: type, 
+    title: title, 
+    text: message, 
+    showConfirmButton: false, 
+    timer: 2000,
+    didOpen: () => {
+      const container = Swal.getContainer();
+      if (container) {
+        container.style.zIndex = '9999999';
+      }
+    }
+  });
 };
 
 const checkLoginBeforeAction = () => {
@@ -883,14 +837,27 @@ const checkLoginBeforeAction = () => {
     Swal.fire({
       icon: "info", title: "Bạn chưa đăng nhập", text: "Vui lòng đăng nhập để tiếp tục trải nghiệm mua sắm tại Dominus.",
       showCancelButton: true, confirmButtonText: "Đăng nhập ngay", cancelButtonText: "Ở lại xem tiếp",
-      confirmButtonColor: "#bd9a5f", cancelButtonColor: "#6b7280"
+      confirmButtonColor: "#bd9a5f", cancelButtonColor: "#6b7280",
+      didOpen: () => {
+        const container = Swal.getContainer();
+        if (container) container.style.zIndex = '9999999';
+      }
     }).then((result) => {
       if (result.isConfirmed) router.push({ name: "Login", query: { redirect: router.currentRoute.value.fullPath } });
     });
     return false;
   }
   if (role !== "USER" && role !== "CUSTOMER") {
-    Swal.fire({ icon: "warning", title: "Từ chối thao tác", text: "Chức năng này chỉ dành cho tài khoản Khách hàng.", confirmButtonColor: "#bd9a5f" });
+    Swal.fire({ 
+      icon: "warning", 
+      title: "Từ chối thao tác", 
+      text: "Chức năng này chỉ dành cho tài khoản Khách hàng.", 
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const container = Swal.getContainer();
+        if (container) container.style.zIndex = '9999999';
+      }
+    });
     return false;
   }
   return true;
@@ -1249,24 +1216,54 @@ const confirmAction = async () => {
   const targetIdToUse = currentTargetProduct.value ? getProductIdNum(currentTargetProduct.value) : getProductIdNum(activeProduct.value);
   const variantId = Number(selectedVariant.value.productVariantId || selectedVariant.value.variantId || selectedVariant.value.id || targetIdToUse);
 
-  if (actionType.value === "CART") {
-    try {
-      actionLoading.value = true;
+  try {
+    actionLoading.value = true;
+    
+    // === BẮT ĐẦU FIX: CHECK SỐ LƯỢNG GIỎ HÀNG THỰC TẾ TRƯỚC KHI THÊM ===
+    const cartRes = await api.get("/v1/customer/cart/my-cart").catch(() => null);
+    let currentQty = 0;
+    
+    if (cartRes && cartRes.data) {
+      const payload = cartRes.data;
+      const candidates = [payload, payload?.data, payload?.content, payload?.items, payload?.cartItems, payload?.data?.content, payload?.data?.items, payload?.data?.cartItems];
+      let currentCartItems = [];
+      for (const c of candidates) {
+        if (Array.isArray(c)) { currentCartItems = c; break; }
+      }
+      const existingItem = currentCartItems.find((i: any) => 
+        Number(i?.productVariantId || i?.variantId || i?.id) === variantId
+      );
+      if (existingItem) currentQty = Number(existingItem.quantity || 0);
+    }
+    
+    const stock = Number(selectedVariant.value.stockQuantity || selectedVariant.value.stock || 0);
+    const maxAllow = Math.min(stock > 0 ? stock : 10, 10);
+    
+    if (currentQty + quantity.value > maxAllow) {
+      if (currentQty >= maxAllow) {
+          showToast("warning", "Giới hạn mua", `Giỏ hàng đã đạt giới hạn ${maxAllow} sản phẩm này!`);
+      } else {
+          showToast("warning", "Giới hạn mua", `Giỏ hàng đang có sẵn ${currentQty} cái. Chỉ được thêm tối đa ${maxAllow - currentQty} cái nữa!`);
+      }
+      return; 
+    }
+    // === KẾT THÚC FIX ===
+
+    if (actionType.value === "CART") {
       await api.post("/v1/customer/cart/add", { productVariantId: variantId, quantity: quantity.value });
       window.dispatchEvent(new Event("cart-updated"));
       showVariantModal.value = false;
       showToast("success", "Thành công", "Đã thêm sản phẩm vào giỏ hàng.");
-    } catch (error: any) { showToast("error", "Lỗi", error?.response?.data?.message || "Không thể thêm vào giỏ."); } 
-    finally { actionLoading.value = false; }
-  } else {
-    try {
-      actionLoading.value = true;
+    } else {
       await api.post("/v1/customer/cart/add", { productVariantId: variantId, quantity: quantity.value });
       window.dispatchEvent(new Event("cart-updated"));
       showVariantModal.value = false;
       router.push({ name: "Checkout" });
-    } catch (error: any) { showToast("error", "Lỗi", error?.response?.data?.message || "Không thể mua ngay lúc này."); } 
-    finally { actionLoading.value = false; }
+    }
+  } catch (error: any) { 
+    showToast("error", "Lỗi", error?.response?.data?.message || "Không thể thực hiện yêu cầu."); 
+  } finally { 
+    actionLoading.value = false; 
   }
 };
 

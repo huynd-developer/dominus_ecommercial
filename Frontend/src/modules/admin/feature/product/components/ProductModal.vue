@@ -327,7 +327,6 @@
                         <td>
                           <div class="input-group">
                             <span class="input-group-text">₫</span>
-                            <!-- SỬ DỤNG HÀM formatDisplayPrice THAY VÌ VIẾT Intl TRỰC TIẾP -->
                             <input
                               :value="formatDisplayPrice(variant.price)"
                               @input="onPriceInput(index, $event)"
@@ -337,12 +336,14 @@
                             />
                           </div>
                         </td>
+                        <!-- CẬP NHẬT PHẦN INPUT TỒN KHO Ở ĐÂY -->
                         <td>
                           <input
-                            v-model.number="variant.stockQuantity"
-                            type="number"
-                            min="0"
+                            :value="variant.stockQuantity"
+                            @input="onStockInput(index, $event)"
+                            type="text"
                             class="form-control text-center"
+                            placeholder="0"
                           />
                         </td>
                         <td>
@@ -392,22 +393,23 @@
               <div class="section-header">
                 <div>
                   <h4>Hình ảnh sản phẩm</h4>
-                  <span>Chọn ảnh hiển thị của sản phẩm</span>
+                  <span>Chọn ảnh hiển thị của sản phẩm (Tối đa 6 ảnh, mỗi ảnh không quá 10MB)</span>
                 </div>
-                <div class="section-badge">{{ imageList.length }} ảnh</div>
+                <div class="section-badge">{{ imageList.length }}/6 ảnh</div>
               </div>
               <div class="section-body">
-                <label class="upload-area">
+                <label class="upload-area" :class="{ 'opacity-50 pointer-events-none': imageList.length >= 6 }">
                   <input
                     type="file"
                     multiple
                     accept="image/jpeg, image/png, image/webp, image/gif, image/jpg"
                     hidden
+                    :disabled="imageList.length >= 6"
                     @change="handleImages"
                   />
                   <i class="bi bi-cloud-arrow-up"></i>
-                  <h6>Kéo ảnh vào đây</h6>
-                  <p>
+                  <h6>{{ imageList.length >= 6 ? 'Đã đạt giới hạn 6 ảnh' : 'Kéo ảnh vào đây' }}</h6>
+                  <p v-if="imageList.length < 6">
                     hoặc nhấn để chọn ảnh (chỉ chấp nhận file ảnh JPG, PNG,
                     WEBP...)
                   </p>
@@ -506,12 +508,12 @@
   </div>
 </template>
 
-<!-- (Giữ nguyên toàn bộ template và style hiện tại của ProductModal.vue, chỉ cập nhật lại phần script dưới đây) -->
 <script setup lang="ts">
 import { ref, watch, computed } from "vue";
 import Swal from "sweetalert2";
 import { productService } from "../services/productService";
 import { useAppStore } from "@/common/store/app.store";
+import { useProductStore } from "../stores/productStore"; 
 
 import type {
   Product,
@@ -540,10 +542,11 @@ const emit = defineEmits<{
 }>();
 
 const appStore = useAppStore();
+const productStore = useProductStore();
 const isEdit = ref(false);
 const API_URL = import.meta.env.VITE_API_URL || "";
 const today = computed(() => new Date().toISOString().split("T")[0]);
-const isCloningImages = ref(false); // Thêm cờ khóa nút khi đang tải ảnh
+const isCloningImages = ref(false); 
 
 interface ProductImageItem {
   id?: number;
@@ -568,7 +571,6 @@ const formData = ref<any>({
   variants: [],
 });
 
-// Thêm đoạn code này thay thế cho hàm resetForm cũ trong script của ProductModal.vue
 const resetForm = () => {
   formData.value = {
     name: "",
@@ -585,7 +587,6 @@ const resetForm = () => {
   imageList.value = [];
   deletedImageIds.value = [];
 
-  // TỰ ĐỘNG FILL SẴN 3 BIẾN THỂ (10ml, 50ml, 100ml) VỚI GIÁ 100 VNĐ KHI THÊM MỚI
   const defaultCapacities = [10, 50, 100];
   defaultCapacities.forEach((targetVal) => {
     const foundCap = props.capacityList?.find(
@@ -593,9 +594,8 @@ const resetForm = () => {
     );
     formData.value.variants.push({
       capacityId: foundCap ? foundCap.id : 0,
-      // Dùng ?. và ?? để an toàn tuyệt đối với TypeScript
       bottleTypeId: props.bottleTypeList?.[0]?.id ?? 0,
-      price: 100, // Mặc định 100 VNĐ
+      price: 100,
       stockQuantity: 10,
       manufacturingDate: today.value,
       expirationDate: new Date(
@@ -659,13 +659,27 @@ const onPriceInput = (index: any, event: Event) => {
     : "";
 };
 
+// Hàm xử lý chặn nhập tồn kho
+const onStockInput = (index: any, event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const rawValue = input.value.replace(/\D/g, ""); // Xóa bỏ chữ, dấu thập phân, dấu âm
+  let numericValue = rawValue ? parseInt(rawValue, 10) : 0;
+
+  // Giới hạn max là 1000
+  if (numericValue > 1000) {
+    numericValue = 1000;
+  }
+
+  formData.value.variants[index].stockQuantity = numericValue;
+  input.value = rawValue ? String(numericValue) : "";
+};
+
 const formatDateForInput = (dateString?: string) => {
   if (!dateString) return "";
   return dateString.substring(0, 10);
 };
 
 const fillForm = async (product: Product, isClone = false) => {
-  // 1. Chặn lặp chữ "(Bản sao)"
   let newName = product.name;
   if (isClone && !newName.endsWith("(Bản sao)")) {
     newName = `${newName} (Bản sao)`;
@@ -697,7 +711,6 @@ const fillForm = async (product: Product, isClone = false) => {
 
   if (formData.value.variants.length === 0) addVariant();
 
-  // 2. HIỂN THỊ ẢNH NGAY LẬP TỨC ĐỂ KHÔNG BỊ ĐƠ GIAO DIỆN
   const initialImages = (product.images || []).map((img) => {
     const url = img.imageUrl
       ? img.imageUrl.startsWith("http")
@@ -708,20 +721,17 @@ const fillForm = async (product: Product, isClone = false) => {
       id: isClone ? undefined : img.id,
       preview: url,
       isPrimary: img.isPrimary,
-      file: undefined, // Chưa có file thật, chờ tải ngầm
+      file: undefined,
     };
   });
 
-  // Vẽ ảnh lên màn hình luôn cho nóng
   imageList.value = initialImages.sort((a, b) =>
     a.isPrimary === b.isPrimary ? 0 : a.isPrimary ? -1 : 1
-  );
+  ).slice(0, 6);
 
-  // 3. TẢI NGẦM FILE ẢNH (BACKGROUND FETCH) CHỈ DÀNH CHO CLONE
   if (isClone) {
-    isCloningImages.value = true; // Khóa nút Submit lại
+    isCloningImages.value = true; 
     
-    // Lưu ý: Không dùng await ở đây để hàm fillForm kết thúc ngay lập tức
     Promise.all(
       imageList.value.map(async (img, idx) => {
         if (img.preview) {
@@ -738,34 +748,18 @@ const fillForm = async (product: Product, isClone = false) => {
         }
       })
     ).then(() => {
-      // Khi nào tải ngầm xong xuôi hết, lọc bỏ những ảnh mạng lag không lấy được
       imageList.value = imageList.value.filter(img => img.file);
-      isCloningImages.value = false; // Nhả nút Submit ra cho m bấm
+      isCloningImages.value = false;
     });
   }
 };
 
-// Sửa lại watch thành async để đợi lấy ảnh xong mới bung Form
 watch(
   () => props.productSelected,
   async (product) => {
     if (product) {
       isEdit.value = !props.isClone;
       await fillForm(product, props.isClone);
-    } else {
-      isEdit.value = false;
-      resetForm();
-    }
-  },
-  { immediate: true },
-);
-
-watch(
-  () => props.productSelected,
-  (product) => {
-    if (product) {
-      isEdit.value = !props.isClone;
-      fillForm(product, props.isClone);
     } else {
       isEdit.value = false;
       resetForm();
@@ -791,28 +785,48 @@ const handleImages = (event: Event) => {
     "image/webp",
     "image/gif",
   ];
-  let hasInvalidFile = false;
+  
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+  let hasInvalidType = false;
+  let hasOversizedFile = false;
+  let skippedLimit = 0;
 
   Array.from(files).forEach((file) => {
-    if (validTypes.includes(file.type.toLowerCase())) {
-      imageList.value.push({
-        file,
-        preview: URL.createObjectURL(file),
-        isPrimary: imageList.value.length === 0,
-      });
-    } else {
-      hasInvalidFile = true;
+    if (imageList.value.length >= 6) {
+      skippedLimit++;
+      return;
     }
+
+    if (!validTypes.includes(file.type.toLowerCase())) {
+      hasInvalidType = true;
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      hasOversizedFile = true;
+      return;
+    }
+
+    imageList.value.push({
+      file,
+      preview: URL.createObjectURL(file),
+      isPrimary: imageList.value.length === 0,
+    });
   });
 
   input.value = "";
 
-  if (hasInvalidFile) {
-    Swal.fire(
-      "Định dạng không hỗ trợ",
-      "Một số file không đúng định dạng hình ảnh đã bị bỏ qua!",
-      "warning",
-    );
+  if (skippedLimit > 0 || hasInvalidType || hasOversizedFile) {
+    let errorMsg = "";
+    if (skippedLimit > 0) errorMsg += `<p>• Chỉ được tải lên tối đa 6 ảnh.</p>`;
+    if (hasOversizedFile) errorMsg += `<p>• Một số ảnh vượt quá dung lượng 10MB.</p>`;
+    if (hasInvalidType) errorMsg += `<p>• Một số file sai định dạng hình ảnh.</p>`;
+    
+    Swal.fire({
+      title: "Lỗi tải ảnh",
+      html: `<div style="text-align: left;">${errorMsg}</div>`,
+      icon: "warning",
+    });
   }
 };
 
@@ -839,10 +853,24 @@ const removeImage = (index: number) => {
 };
 
 const validateForm = () => {
-  if (!formData.value.name.trim()) {
+  const name = formData.value.name.trim();
+  if (!name) {
     Swal.fire("Thiếu dữ liệu", "Vui lòng nhập Tên sản phẩm.", "warning");
     return false;
   }
+
+  const isNameChanged = isEdit.value ? name.toLowerCase() !== props.productSelected?.name.toLowerCase() : true;
+  
+  if (isNameChanged) {
+    const isDuplicate = productStore.products.some(
+      (p) => p.name.toLowerCase() === name.toLowerCase()
+    );
+    if (isDuplicate) {
+      Swal.fire("Trùng lặp", `Tên sản phẩm "${name}" đã tồn tại trong hệ thống. Vui lòng chọn tên khác!`, "error");
+      return false;
+    }
+  }
+
   if (formData.value.brandId === 0) {
     Swal.fire("Thiếu dữ liệu", "Vui lòng chọn Thương hiệu.", "warning");
     return false;

@@ -201,7 +201,7 @@
                 </div>
               </div>
               <div class="small text-muted mt-2">
-                Tối đa 5 file mới. Giới hạn dung lượng: 5MB/file.
+                Tối đa 5 file mới. Giới hạn dung lượng: 10MB/file.
               </div>
               <div v-if="isEditMode" class="small text-muted mt-1">
                 Ảnh/video cũ được giữ nguyên nếu không bấm X. Ảnh/video mới sẽ
@@ -536,7 +536,7 @@ const handleFileSelect = (event: Event) => {
   const files = input.files;
   if (!files) return;
 
-  const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+  const MAX_SIZE = 10 * 1024 * 1024; // 10MB
   let hasOversizedFile = false;
   let hasInvalidTypeFile = false;
 
@@ -553,7 +553,7 @@ const handleFileSelect = (event: Event) => {
       return; // Bỏ qua file sai định dạng
     }
 
-    // Chặn file > 5MB
+    // Chặn file > 10MB
     if (file.size > MAX_SIZE) {
       hasOversizedFile = true;
       return;
@@ -580,7 +580,7 @@ const handleFileSelect = (event: Event) => {
     Swal.fire({
       icon: "warning",
       title: "File quá lớn",
-      text: "Một số file đã bị loại bỏ vì vượt quá dung lượng 5MB.",
+      text: "Một số file đã bị loại bỏ vì vượt quá dung lượng 10MB.",
       confirmButtonColor: "#bd9a5f",
     });
   }

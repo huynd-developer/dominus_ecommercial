@@ -15,9 +15,9 @@
           <div v-if="getDiscountPercent(item) > 0" class="sale-badge">
             -{{ getDiscountPercent(item) }}%
           </div>
-          <span v-if="isNearExpiry(item)" class="expiry-warning-badge">
-            <i class="bi bi-exclamation-triangle-fill me-1"></i> Gần hết hạn
-          </span>
+
+          <!-- ĐÃ GỠ BỎ HUY HIỆU CẢNH BÁO SẢN PHẨM GẦN HẾT HẠN THEO YÊU CẦU -->
+
           <img :src="getProductImage(item)" :alt="item?.name || 'Sản phẩm'" @error="handleImageError" />
           <button class="btn-heart-small" type="button" :class="{ active: isFavorited(item) }" :disabled="isFavoriteLoading(item)" @click.stop="toggleFavorite(item)" :title="isFavorited(item) ? 'Bỏ yêu thích' : 'Thêm vào yêu thích'">
             <span v-if="isFavoriteLoading(item)" class="spinner-border spinner-border-sm"></span>
@@ -263,17 +263,8 @@
                 <span v-if="calculatedDiscountPercent > 0" class="flash-sale-badge ms-2">-{{ calculatedDiscountPercent }}%</span>
               </div>
               
-              <div class="date-info-box mt-2" v-if="getExpDate(selectedVariant || modalProduct)">
-                <p v-if="getMfgDate(selectedVariant || modalProduct)" class="mb-1 text-muted" style="font-size: 13px;">
-                  <i class="bi bi-calendar-check me-1"></i> NSX: <strong class="text-dark">{{ getMfgDate(selectedVariant || modalProduct) }}</strong>
-                </p>
-                <p class="mb-0 text-muted" style="font-size: 13px;">
-                  <i class="bi bi-calendar-x me-1"></i> HSD: <strong class="text-dark">{{ getExpDate(selectedVariant || modalProduct) }}</strong>
-                </p>
-                <div v-if="isNearExpiry(selectedVariant || modalProduct)" class="mt-2 text-warning fw-bold" style="font-size: 13px;">
-                  <i class="bi bi-exclamation-triangle-fill me-1"></i> Sản phẩm này cận date / gần hết hạn!
-                </div>
-              </div>
+              <!-- ĐÃ GỠ BỎ HIỂN THỊ NSX & HSD BÊN TRONG MODAL THEO YÊU CẦU -->
+
             </div>
           </div>
 
@@ -335,7 +326,21 @@ const hasToken = () => Boolean(getToken());
 const isCustomerLoggedIn = () => hasToken() && getCurrentRole() === "USER";
 
 const showToast = (type: "success" | "warning" | "error", title: string, message: string) => {
-  Swal.fire({ toast: true, position: 'top-end', icon: type, title: title, text: message, showConfirmButton: false, timer: 2000 });
+  Swal.fire({ 
+    toast: true, 
+    position: 'top-end', 
+    icon: type, 
+    title: title, 
+    text: message, 
+    showConfirmButton: false, 
+    timer: 2000,
+    didOpen: () => {
+      const container = Swal.getContainer();
+      if (container) {
+        container.style.zIndex = '9999999';
+      }
+    }
+  });
 };
 
 const getStartOfDay = (time: number) => {
@@ -363,22 +368,13 @@ const parseSafeDate = (dateString: any): number | null => {
   return isNaN(fallback.getTime()) ? null : fallback.getTime();
 };
 
-const formatSafeDateDisplay = (dateStr: any) => {
-  const ts = parseSafeDate(dateStr);
-  if (ts === null) return dateStr || "";
-  const d = new Date(ts);
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-};
-
-const getMfgDate = (item: any) => formatSafeDateDisplay(item?.manufacturingDate || item?.mfgDate || item?.productionDate);
-const getExpDate = (item: any) => formatSafeDateDisplay(item?.expirationDate || item?.expDate);
-
 const isExpiredDate = (dateStr: any): boolean => {
   const time = parseSafeDate(dateStr);
   if (time === null) return false;
   return getStartOfDay(time) < getStartOfDay(Date.now()); 
 };
 
+// VẪN GIỮ HÀM KIỂM TRA ĐỂ LOẠI BỎ CÁC SẢN PHẨM ĐÃ QUÁ HẠN SỬ DỤNG KHỎI LƯỚI
 const isFullyExpired = (item: any): boolean => {
   if (!item) return false;
   if (!item.variants || item.variants.length === 0) {
@@ -392,39 +388,7 @@ const isFullyExpired = (item: any): boolean => {
   return !hasValidVariant;
 };
 
-const isNearExpiry = (item: any): boolean => {
-  if (!item) return false;
-  
-  if (item.expirationDate !== undefined && item.variants === undefined) {
-      if (isExpiredDate(item.expirationDate)) return false;
-      const t = parseSafeDate(item.expirationDate);
-      if (t !== null) {
-          const diffDays = (getStartOfDay(t) - getStartOfDay(Date.now())) / (1000 * 60 * 60 * 24);
-          return diffDays >= 0 && diffDays <= 30;
-      }
-      return false;
-  }
-
-  let validTimes: number[] = [];
-  if (item.expirationDate && !isExpiredDate(item.expirationDate)) {
-    const t = parseSafeDate(item.expirationDate);
-    if (t !== null) validTimes.push(getStartOfDay(t));
-  }
-  if (Array.isArray(item.variants)) {
-    item.variants.forEach((v: any) => {
-      if (v?.expirationDate && !isExpiredDate(v.expirationDate)) {
-        const t = parseSafeDate(v.expirationDate);
-        if (t !== null) validTimes.push(getStartOfDay(t));
-      }
-    });
-  }
-  if (validTimes.length === 0) return false;
-  validTimes.sort((a, b) => a - b);
-  const nearestExpTime = validTimes[0];
-  if (nearestExpTime === undefined) return false;
-  const diffDays = (nearestExpTime - getStartOfDay(Date.now())) / (1000 * 60 * 60 * 24);
-  return diffDays >= 0 && diffDays <= 30;
-};
+// ĐÃ GỠ BỎ HÀM isNearExpiry Ở ĐÂY VÌ KHÔNG CẦN DÙNG TỚI NỮA
 
 const validProductList = computed(() => {
   if (!props.productList) return [];
@@ -753,12 +717,34 @@ const checkLoginBeforeAction = () => {
   const rawRole = localStorage.getItem("role") || localStorage.getItem("userRole") || "";
   const role = rawRole.replace("ROLE_", "").toUpperCase().trim();
   if (!token) {
-    Swal.fire({ icon: "info", title: "Bạn chưa đăng nhập", text: "Vui lòng đăng nhập để tiếp tục trải nghiệm mua sắm tại Dominus.", showCancelButton: true, confirmButtonText: "Đăng nhập ngay", cancelButtonText: "Ở lại xem tiếp", confirmButtonColor: "#bd9a5f", cancelButtonColor: "#6b7280" })
+    Swal.fire({ 
+      icon: "info", 
+      title: "Bạn chưa đăng nhập", 
+      text: "Vui lòng đăng nhập để tiếp tục trải nghiệm mua sắm tại Dominus.", 
+      showCancelButton: true, 
+      confirmButtonText: "Đăng nhập ngay", 
+      cancelButtonText: "Ở lại xem tiếp", 
+      confirmButtonColor: "#bd9a5f", 
+      cancelButtonColor: "#6b7280",
+      didOpen: () => {
+        const container = Swal.getContainer();
+        if (container) container.style.zIndex = '9999999';
+      }
+    })
       .then((result) => { if (result.isConfirmed) router.push({ name: "Login", query: { redirect: router.currentRoute.value.fullPath } }); });
     return false;
   }
   if (role !== "USER" && role !== "CUSTOMER") {
-    Swal.fire({ icon: "error", title: "Từ chối thao tác", text: "Chức năng này chỉ dành cho tài khoản Khách hàng.", confirmButtonColor: "#bd9a5f" });
+    Swal.fire({ 
+      icon: "error", 
+      title: "Từ chối thao tác", 
+      text: "Chức năng này chỉ dành cho tài khoản Khách hàng.", 
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const container = Swal.getContainer();
+        if (container) container.style.zIndex = '9999999';
+      }
+    });
     return false;
   }
   return true;
@@ -886,12 +872,51 @@ const confirmAction = async (type: 'CART' | 'BUY') => {
 
   try {
     actionType.value = type; actionLoading.value = true;
-    await api.post("/v1/customer/cart/add", { productVariantId: variantId, quantity: quantity.value });
-    window.dispatchEvent(new Event("cart-updated")); showVariantModal.value = false;
-    if (type === 'BUY') router.push({ name: "Checkout" });
-    else showToast('success', 'Thành công', 'Đã thêm sản phẩm vào giỏ hàng.');
-  } catch (error: any) { showToast('error', 'Lỗi', error?.response?.data?.message || 'Không thể thực hiện.'); } 
-  finally { actionLoading.value = false; actionType.value = ''; }
+    
+    // === BẮT ĐẦU FIX: CHECK SỐ LƯỢNG GIỎ HÀNG THỰC TẾ TRƯỚC KHI THÊM ===
+    const cartRes = await api.get("/v1/customer/cart/my-cart").catch(() => null);
+    let currentQty = 0;
+    
+    if (cartRes && cartRes.data) {
+      const payload = cartRes.data;
+      const candidates = [payload, payload?.data, payload?.content, payload?.items, payload?.cartItems, payload?.data?.content, payload?.data?.items, payload?.data?.cartItems];
+      let currentCartItems = [];
+      for (const c of candidates) {
+        if (Array.isArray(c)) { currentCartItems = c; break; }
+      }
+      const existingItem = currentCartItems.find((i: any) => 
+        Number(i?.productVariantId || i?.variantId || i?.id) === variantId
+      );
+      if (existingItem) currentQty = Number(existingItem.quantity || 0);
+    }
+    
+    const stock = Number(selectedVariant.value.stockQuantity || selectedVariant.value.stock || 0);
+    const maxAllow = Math.min(stock > 0 ? stock : 10, 10);
+    
+    if (currentQty + quantity.value > maxAllow) {
+      if (currentQty >= maxAllow) {
+          showToast("warning", "Giới hạn mua", `Giỏ hàng đã đạt giới hạn ${maxAllow} sản phẩm này!`);
+      } else {
+          showToast("warning", "Giới hạn mua", `Giỏ hàng đang có sẵn ${currentQty} cái. Chỉ được thêm tối đa ${maxAllow - currentQty} cái nữa!`);
+      }
+      return; 
+    }
+    // === KẾT THÚC FIX ===
+
+    if (type === 'BUY') {
+      await api.post("/v1/customer/cart/add", { productVariantId: variantId, quantity: quantity.value });
+      window.dispatchEvent(new Event("cart-updated")); showVariantModal.value = false;
+      router.push({ name: "Checkout" });
+    } else {
+      await api.post("/v1/customer/cart/add", { productVariantId: variantId, quantity: quantity.value });
+      window.dispatchEvent(new Event("cart-updated")); showVariantModal.value = false;
+      showToast('success', 'Thành công', 'Đã thêm sản phẩm vào giỏ hàng.');
+    }
+  } catch (error: any) { 
+    showToast('error', 'Lỗi', error?.response?.data?.message || 'Không thể thực hiện.'); 
+  } finally { 
+    actionLoading.value = false; actionType.value = ''; 
+  }
 };
 
 const handleFavoriteUpdated = (event: Event) => {
@@ -986,6 +1011,7 @@ watch(() => props.productList, () => { loadMyFavorites(); syncGridRatings(); }, 
 .cb-btn-compare:disabled { opacity: 0.5; cursor: not-allowed; }
 .cb-btn-compare:hover:not(:disabled) { background: #bd9a5f; box-shadow: 0 4px 12px rgba(189,154,95,0.3); }
 
+/* COMPARE MODAL */
 .compare-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 999999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); }
 .compare-modal-box { background: white; width: 95%; max-width: 1100px; max-height: 90vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; animation: modalFadeIn 0.3s ease; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
 .cm-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid #eaeaea; background: #fdfaf6; }
