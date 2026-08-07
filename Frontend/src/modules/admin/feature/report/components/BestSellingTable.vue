@@ -28,7 +28,14 @@
               <th>Sản phẩm</th>
               <th>Thương hiệu</th>
               <th class="text-end">Đã bán</th>
-              <th class="text-end">Doanh thu</th>
+              <th class="text-end">
+                Doanh thu
+                <i 
+                  class="bi bi-info-circle ms-1 text-muted" 
+                  style="cursor: help; font-size: 14px;" 
+                  title="Doanh thu của từng sản phẩm, chưa bao gồm các khuyến mãi giảm giá trên toàn đơn hàng.">
+                </i>
+              </th>
             </tr>
           </thead>
 
@@ -79,18 +86,6 @@
               </td>
             </tr>
           </tbody>
-
-          <tfoot class="table-light">
-            <tr>
-              <td colspan="3" class="fw-semibold">Tổng trong bảng</td>
-              <td class="text-end fw-bold">
-                {{ formatNumber(totalSold) }}
-              </td>
-              <td class="text-end fw-bold">
-                {{ formatMoney(totalRevenue) }}
-              </td>
-            </tr>
-          </tfoot>
         </table>
       </div>
     </div>
@@ -112,18 +107,6 @@ const toNumber = (value: unknown) => {
 
 const safeItems = computed(() => {
   return Array.isArray(props.items) ? props.items : [];
-});
-
-const totalSold = computed(() => {
-  return safeItems.value.reduce((sum, item) => {
-    return sum + toNumber(item.totalSold);
-  }, 0);
-});
-
-const totalRevenue = computed(() => {
-  return safeItems.value.reduce((sum, item) => {
-    return sum + toNumber(item.revenue);
-  }, 0);
 });
 
 const formatMoney = (value: unknown) => {

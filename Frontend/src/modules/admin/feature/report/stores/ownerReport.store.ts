@@ -88,7 +88,9 @@ function getTodayDateOnly(): Date {
 }
 
 function normalizeLimit(value: string): string {
-  const cleanValue = String(value || "").replace(/[^\d]/g, "").slice(0, 2);
+  const cleanValue = String(value || "")
+    .replace(/[^\d]/g, "")
+    .slice(0, 2);
 
   return cleanValue || "10";
 }
@@ -140,6 +142,10 @@ function normalizeSummary(data: any): ReportSummaryResponse | null {
     totalRevenue: toNumber(data.totalRevenue),
     totalOrders: toNumber(data.totalOrders),
     totalProductsSold: toNumber(data.totalProductsSold),
+    onlineRevenue: toNumber(data.onlineRevenue),
+    offlineRevenue: toNumber(data.offlineRevenue),
+    onlineOrders: toNumber(data.onlineOrders),
+    offlineOrders: toNumber(data.offlineOrders),
   };
 }
 

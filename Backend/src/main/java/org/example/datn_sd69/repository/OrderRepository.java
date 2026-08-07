@@ -257,46 +257,6 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
             @Param("toDate") LocalDateTime toDate
     );
 
-    @Query(value = """
-        SELECT COALESCE(SUM(o.FinalAmount), 0)
-        FROM [Orders] o
-        WHERE o.Status = :status
-          AND o.CreatedAt >= :fromDate
-          AND o.CreatedAt < :toDate
-    """, nativeQuery = true)
-    BigDecimal sumFinalAmountByStatusAndCreatedAtBetween(
-            @Param("status") Integer status,
-            @Param("fromDate") LocalDateTime fromDate,
-            @Param("toDate") LocalDateTime toDate
-    );
-
-    @Query(value = """
-        SELECT COUNT(o.Id)
-        FROM [Orders] o
-        WHERE o.Status = :status
-          AND o.CreatedAt >= :fromDate
-          AND o.CreatedAt < :toDate
-    """, nativeQuery = true)
-    Long countOrdersByStatusAndCreatedAtBetween(
-            @Param("status") Integer status,
-            @Param("fromDate") LocalDateTime fromDate,
-            @Param("toDate") LocalDateTime toDate
-    );
-
-    @Query(value = """
-        SELECT *
-        FROM [Orders] o
-        WHERE o.Status = :status
-          AND o.CreatedAt >= :fromDate
-          AND o.CreatedAt < :toDate
-        ORDER BY o.CreatedAt ASC
-    """, nativeQuery = true)
-    List<Order> findCompletedOrdersForChart(
-            @Param("status") Integer status,
-            @Param("fromDate") LocalDateTime fromDate,
-            @Param("toDate") LocalDateTime toDate
-    );
-
     List<Order> findByCustomer_UserIdOrderByCreatedAtDesc(Integer customerId);
 
     Optional<Order> findByIdAndCustomer_UserId(Integer orderId, Integer customerId);
@@ -424,4 +384,59 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
           )
     """)
     Optional<Order> findPendingPaymentOrderById(@Param("orderId") Integer orderId);
+
+    @Query(value = """
+        SELECT COALESCE(SUM(o.FinalAmount - ISNULL(o.Shippingfee, 0)), 0)
+        FROM [Orders] o
+        WHERE o.Status = :status
+          AND o.CompletedAt >= :fromDate
+          AND o.CompletedAt < :toDate
+    """, nativeQuery = true)
+    BigDecimal sumFinalAmountByStatusAndCompletedAtBetween(
+            @Param("status") Integer status,
+            @Param("fromDate") LocalDateTime fromDate,
+            @Param("toDate") LocalDateTime toDate
+    );
+
+    @Query(value = """
+        SELECT COUNT(o.Id)
+        FROM [Orders] o
+        WHERE o.Status = :status
+          AND o.CompletedAt >= :fromDate
+          AND o.CompletedAt < :toDate
+    """, nativeQuery = true)
+    Long countOrdersByStatusAndCompletedAtBetween(
+            @Param("status") Integer status,
+            @Param("fromDate") LocalDateTime fromDate,
+            @Param("toDate") LocalDateTime toDate
+    );
+
+    @Query(value = """
+        SELECT *
+        FROM [Orders] o
+        WHERE o.Status = :status
+          AND o.CompletedAt >= :fromDate
+          AND o.CompletedAt < :toDate
+        ORDER BY o.CompletedAt ASC
+    """, nativeQuery = true)
+    List<Order> findCompletedOrdersForChart(
+            @Param("status") Integer status,
+            @Param("fromDate") LocalDateTime fromDate,
+            @Param("toDate") LocalDateTime toDate
+    );
+
+    // --- HÀM MỚI BỔ SUNG ĐỂ TÁCH ONLINE / OFFLINE ---
+    @Query("""
+        SELECT o.orderType, COALESCE(SUM(o.finalAmount - COALESCE(o.shippingFee, 0)), 0), COUNT(o)
+        FROM Order o
+        WHERE o.status = :status
+          AND o.completedAt >= :fromDate
+          AND o.completedAt < :toDate
+        GROUP BY o.orderType
+    """)
+    List<Object[]> getSummaryBreakdownByOrderType(
+            @Param("status") Integer status,
+            @Param("fromDate") LocalDateTime fromDate,
+            @Param("toDate") LocalDateTime toDate
+    );
 }

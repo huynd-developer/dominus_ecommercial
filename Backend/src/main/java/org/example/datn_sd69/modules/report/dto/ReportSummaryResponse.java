@@ -11,6 +11,11 @@ public record ReportSummaryResponse(
         LocalDate toDate,
         BigDecimal totalRevenue,
         Long totalOrders,
-        Long totalProductsSold
+        Long totalProductsSold,
+
+        BigDecimal onlineRevenue,
+        BigDecimal offlineRevenue,
+        Long onlineOrders,
+        Long offlineOrders
 ) {
 }
