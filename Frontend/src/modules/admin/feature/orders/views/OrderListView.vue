@@ -117,6 +117,7 @@
       @reject-return="confirmRejectReturn"
       @mark-return-refunded="confirmMarkReturnRefunded"
       @mark-delivery-refunded="confirmMarkDeliveryRefunded"
+      @mark-cancel-refunded="confirmMarkCancelRefunded"
     />
   </div>
 </template>
@@ -158,6 +159,7 @@ const statusTabs = [
   { label: "Đang giao", value: 2 },
   { label: "Hoàn thành", value: 3 },
   { label: "Đã hủy", value: 4 },
+  { label: "Chờ hoàn tiền (Hủy)", value: 8 }, // THÊM DÒNG NÀY ĐỂ MỞ TAB CHO ADMIN
   { label: "Giao thất bại", value: 5 },
   { label: "Yêu cầu hoàn", value: 6 },
   { label: "Hoàn hàng hoàn tất", value: 7 },
@@ -1890,6 +1892,65 @@ async function confirmMarkDeliveryRefunded(order: AdminOrderResponse) {
   }
 }
 
+async function confirmMarkCancelRefunded(order: AdminOrderResponse) {
+  if (!order || !order.orderId) return;
+
+  if (Number(order.status) !== 8 || !order.deliveryRefundBankName) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Chưa thể hoàn tiền",
+      text: "Đơn hàng chưa có thông tin ngân hàng do khách gửi, hoặc không ở trạng thái chờ hoàn tiền.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  const result = await Swal.fire({
+    icon: "question",
+    title: "Xác nhận đã chuyển khoản?",
+    html: `
+      <div style="text-align:left">
+        <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
+        <p><b>Số tiền hoàn:</b> ${formatMoneyForAlert(getDeliveryRefundAmount(order))}</p>
+        <p><b>Ngân hàng:</b> ${escapeAlertHtml(order.deliveryRefundBankName || "-")}</p>
+        <p><b>Số tài khoản:</b> <span class="text-danger fw-bold">${escapeAlertHtml(order.deliveryRefundBankAccountNumber || "-")}</span></p>
+        <p><b>Chủ tài khoản:</b> ${escapeAlertHtml(order.deliveryRefundBankAccountHolder || "-")}</p>
+        <p class="mb-0 text-danger mt-2"><b>Lưu ý:</b> Chỉ bấm xác nhận khi shop đã thực sự chuyển khoản trả lại tiền cho khách.</p>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Đã chuyển tiền",
+    cancelButtonText: "Hủy",
+    confirmButtonColor: "#16a34a",
+    cancelButtonColor: "#6b7280",
+  });
+
+  if (!result.isConfirmed) return;
+
+  loading.value = true;
+  try {
+    await orderService.markCancelRefunded(order.orderId);
+    
+    await Swal.fire({
+      icon: "success",
+      title: "Hoàn tất",
+      text: "Đã ghi nhận hoàn tiền thành công. Đơn hàng chuyển về trạng thái Đã hủy.",
+      confirmButtonColor: "#bd9a5f",
+    });
+
+    await refreshOrderAfterWorkflow(order.orderId);
+  } catch (error: any) {
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể xác nhận hoàn tiền",
+      text: error?.response?.data?.message || "Vui lòng thử lại sau.",
+      confirmButtonColor: "#bd9a5f",
+    });
+  } finally {
+    loading.value = false;
+  }
+}
+
 async function confirmMarkReturnRefunded(order: AdminOrderResponse) {
   if (!order || !order.orderId) {
     return;
@@ -2180,9 +2241,11 @@ function getStatusText(status: number) {
     case 5:
       return "Giao hàng thất bại";
     case 6:
-      return "Yêu cầu hoàn hàng";
+      return "Yêu cầu hoàn hàng / đổi trả";
     case 7:
-      return "Hoàn hàng hoàn tất";
+      return "Hoàn hàng / đổi trả hoàn tất";
+    case 8:
+      return "Đã hủy / Chờ hoàn tiền"; // THÊM DÒNG NÀY ĐỂ ÁP DỤNG TRẠNG THÁI MỚI
     default:
       return "Không xác định";
   }

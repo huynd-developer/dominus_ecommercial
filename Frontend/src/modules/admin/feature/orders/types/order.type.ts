@@ -1,6 +1,7 @@
 export type OrderType = "ONLINE" | "IN_STORE";
 
-export type OrderStatus = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+// BỔ SUNG SỐ 8 VÀO ORDER STATUS
+export type OrderStatus = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8; 
 
 export type ReturnProcessStatus = 0 | 1 | 2 | 3;
 

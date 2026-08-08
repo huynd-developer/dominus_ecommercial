@@ -44,7 +44,6 @@ import org.springframework.web.server.ResponseStatusException;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.math.BigDecimal;
@@ -71,6 +70,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private static final int STATUS_DELIVERY_FAILED = 5;
     private static final int STATUS_RETURN_REQUESTED = 6;
     private static final int STATUS_RETURN_COMPLETED = 7;
+    private static final int STATUS_AWAITING_REFUND = 8;
 
     private static final int RETURN_ITEM_STATUS_PENDING = 0;
     private static final int RETURN_ITEM_STATUS_ACCEPTED = 1;
@@ -128,7 +128,8 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             STATUS_CANCELLED,
             STATUS_DELIVERY_FAILED,
             STATUS_RETURN_REQUESTED,
-            STATUS_RETURN_COMPLETED
+            STATUS_RETURN_COMPLETED,
+            STATUS_AWAITING_REFUND
     );
 
     private static final Set<String> SUPPORTED_ORDER_TYPES = Set.of(
@@ -232,7 +233,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         Order order = findOrderOrThrow(orderId);
         return mapOrderToResponse(order, true);
     }
-
 
     @Override
     @Transactional
@@ -399,16 +399,55 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         String cancelReason = normalizeAdminCancelReason(request);
 
         /*
-         * Đơn Chờ xác nhận chưa trừ kho, nên hủy ở trạng thái này không cộng lại kho.
-         * Kho chỉ được cộng lại ở các luồng hoàn/hoàn tiền khi trước đó đơn đã được xác nhận và đã trừ kho.
+         * LUỒNG NGHIỆP VỤ: Đơn Chờ xác nhận chưa trừ kho -> Hủy TUYỆT ĐỐI KHÔNG CỘNG KHO
          */
-        order.setStatus(STATUS_CANCELLED);
+        if (isPrepaidPaymentMethod(order.getPaymentMethod())) {
+            order.setStatus(STATUS_AWAITING_REFUND);
+            order.setDeliveryRefundAmount(defaultMoney(order.getFinalAmount()));
+        } else {
+            order.setStatus(STATUS_CANCELLED);
+            order.setDeliveryRefundAmount(null);
+        }
+
         order.setCancelReason(cancelReason);
         order.setCancelledAt(LocalDateTime.now());
 
         Order savedOrder = orderRepository.save(order);
 
         orderMailService.sendOrderCancelled(savedOrder, cancelReason);
+
+        return mapOrderToResponse(savedOrder, true);
+    }
+
+    @Override
+    @Transactional
+    public AdminOrderResponse markCancelRefunded(Integer orderId) {
+        Order order = findOrderOrThrow(orderId);
+
+        if (safeStatus(order) != STATUS_AWAITING_REFUND) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ được xác nhận hoàn tiền cho đơn đã hủy đang chờ hoàn tiền"
+            );
+        }
+
+        // Ép buộc Admin chỉ được bấm xác nhận hoàn tiền khi khách đã điền Bank Info
+        if (!hasDeliveryRefundBankInfo(order)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Khách chưa cung cấp đủ thông tin tài khoản hoàn tiền"
+            );
+        }
+
+        /*
+         * Xác nhận tiền đã chuyển xong -> Đẩy từ 8 về 4, ghi dấu vết.
+         * Tuyệt đối KHÔNG CỘNG KHO.
+         */
+        order.setStatus(STATUS_CANCELLED);
+        order.setDeliveryRefundedAt(LocalDateTime.now());
+        order.setDeliveryRefundedByName(getCurrentAdminDisplayName());
+
+        Order savedOrder = orderRepository.save(order);
 
         return mapOrderToResponse(savedOrder, true);
     }
@@ -463,11 +502,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         returnRequestItemRepository.saveAll(returnItems);
 
-        /*
-         * Khi từ chối hoàn hàng, đơn không còn ở luồng hoàn tiền nữa.
-         * Đơn quay lại Hoàn thành, còn lý do từ chối lưu trong ReturnRequestItem
-         * để khách/admin vẫn xem được lịch sử xử lý.
-         */
         order.setStatus(STATUS_COMPLETED);
         Order savedOrder = orderRepository.save(order);
 
@@ -580,14 +614,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                 && Integer.valueOf(status).equals(item.getStatus()));
     }
 
-    /**
-     * FE sẽ hỏi riêng sau khi admin xác nhận đã hoàn tiền:
-     * - Có nhập kho: gửi restoreStock=true
-     * - Không nhập kho: gửi restoreStock=false
-     *
-     * Method vẫn đọc được cả query param restoreStock và header X-Restore-Stock
-     * để không bắt buộc sửa chữ ký service/controller hiện tại.
-     */
     private boolean shouldRestoreStockAfterRefund() {
         try {
             if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes)) {
@@ -1076,12 +1102,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         return resolveUserDisplayNameByEmail(email);
     }
 
-    /**
-     * Lấy tên thật của nhân viên/admin theo email đăng nhập.
-     * Giá trị trả về được lưu vào các cột Delivery...ByName theo dạng:
-     * Dòng 1: Tên người thao tác
-     * Dòng 2: Email đăng nhập
-     */
     private String resolveUserDisplayNameByEmail(String email) {
         String cleanEmail = normalizeOptionalText(email);
 
@@ -1109,7 +1129,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                 );
             }
         } catch (Exception ignored) {
-            // Không để lỗi lấy entity người dùng làm hỏng luồng xử lý đơn.
         }
 
         try {
@@ -1129,7 +1148,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                 }
             }
         } catch (Exception ignored) {
-            // Không để lỗi truy vấn thông tin người dùng làm hỏng luồng xử lý đơn.
         }
 
         if (isEmailLike(cleanPrincipalName)) {
@@ -1147,10 +1165,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         return normalizeOptionalText(value.toString());
     }
 
-    /**
-     * Chuẩn hóa lại dữ liệu người xác nhận trước khi trả ra FE.
-     * Nếu dữ liệu cũ trong DB chỉ là email, service sẽ lookup Users để bổ sung tên thật.
-     */
     private String normalizeActorDisplayName(String value) {
         String cleanValue = normalizeActorText(value);
 
@@ -1433,7 +1447,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         response.setCancelReason(normalizeOptionalText(order.getCancelReason()));
         response.setCancelledAt(order.getCancelledAt());
 
-        // BỔ SUNG TRƯỜNG NÀY ĐỂ TRẢ VỀ CHO VUE
         response.setIsPaymentReported(order.getIsPaymentReported() != null && order.getIsPaymentReported());
 
         applyLatestReturnRequestInfo(response, order, includeItems);
@@ -1595,11 +1608,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         );
 
         if (includeItems) {
-            /*
-             * ReturnRequestItem chỉ giữ OrderItem. Với dữ liệu cũ hoặc khi OrderItem
-             * bị lazy/proxy thiếu ProductVariant, cần lấy lại danh sách OrderItem detail
-             * của đơn để map đúng tên sản phẩm, SKU, dung tích, loại chai và ảnh.
-             */
             List<OrderItem> detailOrderItems = orderItemRepository.findDetailByOrderId(order.getId());
 
             response.setReturnItems(
@@ -1864,11 +1872,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                 continue;
             }
 
-            /*
-             * Ưu tiên bản detail vì repository findDetailByOrderId thường fetch sẵn
-             * ProductVariant/Product/Capacity/BottleType để tránh return item bị mất
-             * tên sản phẩm, SKU, dung tích, loại chai.
-             */
             return detailOrderItem;
         }
 
@@ -1954,7 +1957,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                 .orElse(null);
     }
 
-    // --- HÀM HỖ TRỢ PARSE CHUỖI ẢNH/VIDEO THÀNH LIST ---
     private List<String> parseMediaString(String mediaStr) {
         if (mediaStr == null || mediaStr.trim().isEmpty()) {
             return new ArrayList<>();
@@ -2047,7 +2049,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                     .findFirst()
                     .orElse(null);
         } catch (Exception e) {
-            System.out.println("=== LỖI QUERY ẢNH CHI TIẾT ĐƠN HÀNG: " + e.getMessage());
             return null;
         }
     }
@@ -2276,6 +2277,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             case STATUS_DELIVERY_FAILED -> "Giao hàng thất bại";
             case STATUS_RETURN_REQUESTED -> "Yêu cầu hoàn hàng / đổi trả";
             case STATUS_RETURN_COMPLETED -> "Hoàn hàng / đổi trả hoàn tất";
+            case STATUS_AWAITING_REFUND -> "Đã hủy / Chờ hoàn tiền";
             default -> "Không xác định";
         };
     }
@@ -2326,7 +2328,8 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                 countOrderByStatus(normalizedKeyword, STATUS_CONFIRMED, normalizedOrderType, fromDateTime, toDateTime),
                 countOrderByStatus(normalizedKeyword, STATUS_SHIPPING, normalizedOrderType, fromDateTime, toDateTime),
                 countOrderByStatus(normalizedKeyword, STATUS_COMPLETED, normalizedOrderType, fromDateTime, toDateTime),
-                countOrderByStatus(normalizedKeyword, STATUS_CANCELLED, normalizedOrderType, fromDateTime, toDateTime),
+                countOrderByStatus(normalizedKeyword, STATUS_CANCELLED, normalizedOrderType, fromDateTime, toDateTime)
+                        + countOrderByStatus(normalizedKeyword, STATUS_AWAITING_REFUND, normalizedOrderType, fromDateTime, toDateTime),
                 countOrderByStatus(normalizedKeyword, STATUS_DELIVERY_FAILED, normalizedOrderType, fromDateTime, toDateTime),
                 countOrderByStatus(normalizedKeyword, STATUS_RETURN_REQUESTED, normalizedOrderType, fromDateTime, toDateTime),
                 countOrderByStatus(normalizedKeyword, STATUS_RETURN_COMPLETED, normalizedOrderType, fromDateTime, toDateTime)

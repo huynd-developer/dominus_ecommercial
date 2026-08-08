@@ -67,7 +67,10 @@
                     {{ formatDate(order.createdAt) }}
                   </p>
 
-                  <div v-if="isCancelledOrder(order)" class="cancel-reason-box mt-3">
+                  <div
+                    v-if="isCancelledOrder(order)"
+                    class="cancel-reason-box mt-3"
+                  >
                     <div class="cancel-reason-title">
                       <i class="bi bi-x-circle me-1"></i>
                       Lý do hủy đơn
@@ -88,12 +91,18 @@
               </div>
             </div>
 
-            <div v-if="hasDeliveryInfo(order)" class="delivery-section border rounded p-3 mb-3">
-              <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+            <div
+              v-if="hasDeliveryInfo(order)"
+              class="delivery-section border rounded p-3 mb-3"
+            >
+              <div
+                class="d-flex align-items-center justify-content-between gap-2 mb-3"
+              >
                 <div>
                   <h6 class="fw-bold mb-1">Thông tin giao hàng</h6>
                   <small class="text-muted">
-                    Kết quả giao hàng và minh chứng do cửa hàng tự vận chuyển cập nhật.
+                    Kết quả giao hàng và minh chứng do cửa hàng tự vận chuyển
+                    cập nhật.
                   </small>
                 </div>
               </div>
@@ -117,9 +126,17 @@
                     >
                       <span>Người xác nhận:</span>
                       <div class="delivery-actor-value">
-                        <strong>{{ getDeliveryActorName(order.deliveryCompletedByName) }}</strong>
-                        <small v-if="getDeliveryActorEmail(order.deliveryCompletedByName)">
-                          {{ getDeliveryActorEmail(order.deliveryCompletedByName) }}
+                        <strong>{{
+                          getDeliveryActorName(order.deliveryCompletedByName)
+                        }}</strong>
+                        <small
+                          v-if="
+                            getDeliveryActorEmail(order.deliveryCompletedByName)
+                          "
+                        >
+                          {{
+                            getDeliveryActorEmail(order.deliveryCompletedByName)
+                          }}
                         </small>
                       </div>
                     </div>
@@ -128,10 +145,14 @@
                       v-if="getDeliverySuccessMediaList(order).length > 0"
                       class="mt-2"
                     >
-                      <div class="delivery-media-label">Minh chứng giao hàng:</div>
+                      <div class="delivery-media-label">
+                        Minh chứng giao hàng:
+                      </div>
                       <div class="return-media-list">
                         <button
-                          v-for="(mediaUrl, index) in getDeliverySuccessMediaList(order)"
+                          v-for="(
+                            mediaUrl, index
+                          ) in getDeliverySuccessMediaList(order)"
                           :key="`delivery-success-${mediaUrl}-${index}`"
                           type="button"
                           class="return-media-item"
@@ -171,7 +192,9 @@
 
                     <div class="delivery-info-row">
                       <span>Mô tả:</span>
-                      <strong>{{ order.deliveryFailedDescription || "-" }}</strong>
+                      <strong>{{
+                        order.deliveryFailedDescription || "-"
+                      }}</strong>
                     </div>
 
                     <div class="delivery-info-row">
@@ -185,9 +208,17 @@
                     >
                       <span>Người xác nhận:</span>
                       <div class="delivery-actor-value">
-                        <strong>{{ getDeliveryActorName(order.deliveryFailedByName) }}</strong>
-                        <small v-if="getDeliveryActorEmail(order.deliveryFailedByName)">
-                          {{ getDeliveryActorEmail(order.deliveryFailedByName) }}
+                        <strong>{{
+                          getDeliveryActorName(order.deliveryFailedByName)
+                        }}</strong>
+                        <small
+                          v-if="
+                            getDeliveryActorEmail(order.deliveryFailedByName)
+                          "
+                        >
+                          {{
+                            getDeliveryActorEmail(order.deliveryFailedByName)
+                          }}
                         </small>
                       </div>
                     </div>
@@ -196,10 +227,14 @@
                       v-if="getDeliveryFailedMediaList(order).length > 0"
                       class="mt-2"
                     >
-                      <div class="delivery-media-label">Minh chứng giao thất bại:</div>
+                      <div class="delivery-media-label">
+                        Minh chứng giao thất bại:
+                      </div>
                       <div class="return-media-list">
                         <button
-                          v-for="(mediaUrl, index) in getDeliveryFailedMediaList(order)"
+                          v-for="(
+                            mediaUrl, index
+                          ) in getDeliveryFailedMediaList(order)"
                           :key="`delivery-failed-${mediaUrl}-${index}`"
                           type="button"
                           class="return-media-item"
@@ -231,14 +266,21 @@
               v-if="hasDeliveryRefundInfo(order)"
               class="delivery-refund-section border rounded p-3 mb-3"
             >
-              <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+              <div
+                class="d-flex align-items-center justify-content-between gap-2 mb-3"
+              >
                 <div>
                   <h6 class="fw-bold mb-1">
                     <i class="bi bi-cash-coin me-1"></i>
-                    Hoàn tiền giao hàng thất bại
+                    {{
+                      order.status === 8 || order.status === 4
+                        ? "Thông tin hoàn tiền (Hủy)"
+                        : "Hoàn tiền giao hàng thất bại"
+                    }}
                   </h6>
                   <small class="text-muted">
-                    Chỉ áp dụng cho đơn đã thanh toán trước nhưng giao hàng thất bại.
+                    Chỉ áp dụng cho đơn đã thanh toán trước nhưng giao hàng thất
+                    bại hoặc hủy đơn.
                   </small>
                 </div>
 
@@ -255,12 +297,16 @@
                   <div class="delivery-refund-card h-100">
                     <div class="delivery-refund-row refund-money-row">
                       <span>Số tiền cần hoàn:</span>
-                      <strong>{{ formatMoney(getDeliveryRefundAmount(order)) }}</strong>
+                      <strong>{{
+                        formatMoney(getDeliveryRefundAmount(order))
+                      }}</strong>
                     </div>
 
                     <div class="delivery-refund-row">
                       <span>Phương thức thanh toán:</span>
-                      <strong>{{ formatPaymentMethod(order.paymentMethod) }}</strong>
+                      <strong>{{
+                        formatPaymentMethod(order.paymentMethod)
+                      }}</strong>
                     </div>
 
                     <div
@@ -268,7 +314,9 @@
                       class="delivery-refund-row"
                     >
                       <span>Thời gian hoàn:</span>
-                      <strong>{{ formatDate(order.deliveryRefundedAt) }}</strong>
+                      <strong>{{
+                        formatDate(order.deliveryRefundedAt)
+                      }}</strong>
                     </div>
 
                     <div
@@ -277,9 +325,17 @@
                     >
                       <span>Người xác nhận:</span>
                       <div class="delivery-actor-value">
-                        <strong>{{ getDeliveryActorName(order.deliveryRefundedByName) }}</strong>
-                        <small v-if="getDeliveryActorEmail(order.deliveryRefundedByName)">
-                          {{ getDeliveryActorEmail(order.deliveryRefundedByName) }}
+                        <strong>{{
+                          getDeliveryActorName(order.deliveryRefundedByName)
+                        }}</strong>
+                        <small
+                          v-if="
+                            getDeliveryActorEmail(order.deliveryRefundedByName)
+                          "
+                        >
+                          {{
+                            getDeliveryActorEmail(order.deliveryRefundedByName)
+                          }}
                         </small>
                       </div>
                     </div>
@@ -293,17 +349,23 @@
                     <template v-if="hasDeliveryRefundBankInfo(order)">
                       <div class="delivery-refund-row">
                         <span>Ngân hàng:</span>
-                        <strong>{{ order.deliveryRefundBankName || "-" }}</strong>
+                        <strong>{{
+                          order.deliveryRefundBankName || "-"
+                        }}</strong>
                       </div>
 
                       <div class="delivery-refund-row">
                         <span>Số tài khoản:</span>
-                        <strong>{{ order.deliveryRefundBankAccountNumber || "-" }}</strong>
+                        <strong>{{
+                          order.deliveryRefundBankAccountNumber || "-"
+                        }}</strong>
                       </div>
 
                       <div class="delivery-refund-row">
                         <span>Chủ tài khoản:</span>
-                        <strong>{{ order.deliveryRefundBankAccountHolder || "-" }}</strong>
+                        <strong>{{
+                          order.deliveryRefundBankAccountHolder || "-"
+                        }}</strong>
                       </div>
                     </template>
 
@@ -395,13 +457,20 @@
                   </small>
                 </div>
 
-                <span class="return-badge" :class="getReturnProcessBadgeClass(order)">
+                <span
+                  class="return-badge"
+                  :class="getReturnProcessBadgeClass(order)"
+                >
                   {{ getReturnProcessStatusText(order) }}
                 </span>
               </div>
 
               <div class="row g-3 mb-3">
-                <div :class="shouldShowBankRefundInfo(order) ? 'col-md-7' : 'col-12'">
+                <div
+                  :class="
+                    shouldShowBankRefundInfo(order) ? 'col-md-7' : 'col-12'
+                  "
+                >
                   <div class="return-info-card h-100">
                     <div class="return-info-row">
                       <span>Lý do hoàn:</span>
@@ -440,7 +509,9 @@
                       class="return-info-row"
                     >
                       <span>Tiền hàng hoàn:</span>
-                      <strong>{{ formatMoney(getReturnProductRefundAmount(order)) }}</strong>
+                      <strong>{{
+                        formatMoney(getReturnProductRefundAmount(order))
+                      }}</strong>
                     </div>
 
                     <div
@@ -448,7 +519,9 @@
                       class="return-info-row"
                     >
                       <span>Phí vận chuyển hoàn:</span>
-                      <strong>{{ formatMoney(getReturnShippingFee(order)) }}</strong>
+                      <strong>{{
+                        formatMoney(getReturnShippingFee(order))
+                      }}</strong>
                     </div>
 
                     <div class="return-info-row return-money-row">
@@ -635,7 +708,9 @@
                     class="d-flex justify-content-between mb-2"
                   >
                     <span>Phí vận chuyển:</span>
-                    <strong>{{ formatMoney(getOrderShippingFee(order)) }}</strong>
+                    <strong>{{
+                      formatMoney(getOrderShippingFee(order))
+                    }}</strong>
                   </div>
 
                   <div class="d-flex justify-content-between mb-2">
@@ -649,7 +724,6 @@
                       {{ formatMoney(order.finalAmount) }}
                     </strong>
                   </div>
-
                 </div>
               </div>
             </div>
@@ -677,7 +751,6 @@
             Từ chối
           </button>
 
-
           <button
             v-if="order && canMarkDeliveryRefunded(order)"
             class="btn btn-success"
@@ -687,6 +760,18 @@
             <i class="bi bi-cash-coin me-1"></i>
             Đã chuyển tiền
           </button>
+
+          <!-- NÚT MỚI: XÁC NHẬN HOÀN TIỀN KHI HỦY -->
+          <button
+            v-if="order && order.status === 8"
+            class="btn btn-success"
+            type="button"
+            @click="$emit('mark-cancel-refunded', order)"
+          >
+            <i class="bi bi-check-circle me-1"></i>
+            Đã hoàn tiền (Hủy)
+          </button>
+
           <button
             v-if="order && canMarkReturnRefunded(order)"
             class="btn btn-success"
@@ -743,12 +828,13 @@ const props = defineProps<{
   order: AdminOrderResponse | null;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   close: [];
   "accept-return": [order: AdminOrderResponse];
   "reject-return": [order: AdminOrderResponse];
   "mark-return-refunded": [order: AdminOrderResponse];
   "mark-delivery-refunded": [order: AdminOrderResponse];
+  "mark-cancel-refunded": [order: AdminOrderResponse]; // BỔ SUNG KHAI BÁO EVENT
 }>();
 
 void props;
@@ -995,7 +1081,10 @@ function getReturnShippingFee(order?: AdminOrderResponse | null) {
 }
 
 function getReturnProductRefundAmount(order: AdminOrderResponse) {
-  return Math.max(0, getReturnRefundAmount(order) - getReturnShippingFee(order));
+  return Math.max(
+    0,
+    getReturnRefundAmount(order) - getReturnShippingFee(order)
+  );
 }
 
 function getOrderItemOriginalPrice(item: AdminOrderItemResponse) {
@@ -1047,8 +1136,8 @@ function getDeliverySuccessMediaList(order?: AdminOrderResponse | null) {
 }
 
 function getDeliveryFailedMediaList(order?: AdminOrderResponse | null) {
-  return ((order as any)?.deliveryFailedMediaUrls || []).filter(
-    (url: string) => Boolean(url && String(url).trim())
+  return ((order as any)?.deliveryFailedMediaUrls || []).filter((url: string) =>
+    Boolean(url && String(url).trim())
   );
 }
 
@@ -1138,9 +1227,7 @@ function shouldShowBankRefundInfo(order: AdminOrderResponse | null) {
   }
 
   return Boolean(
-    order.bankName ||
-      order.bankAccountNumber ||
-      order.bankAccountHolder
+    order.bankName || order.bankAccountNumber || order.bankAccountHolder
   );
 }
 
@@ -1246,8 +1333,9 @@ function isDeliveryRefundCompleted(order?: AdminOrderResponse | null) {
 }
 
 function hasDeliveryRefundInfo(order?: AdminOrderResponse | null) {
+  const status = Number(order?.status);
   return Boolean(
-    Number(order?.status) === 5 &&
+    (status === 5 || status === 8 || status === 4) &&
       (getDeliveryRefundAmount(order) > 0 ||
         (order as any)?.deliveryRefundBankName ||
         (order as any)?.deliveryRefundBankAccountNumber ||
@@ -1268,6 +1356,7 @@ function canMarkDeliveryRefunded(order?: AdminOrderResponse | null) {
     return order.canMarkDeliveryRefunded === true;
   }
 
+  // Nút Đã chuyển tiền ở box hoàn hàng chỉ bật nếu trạng thái là 5
   return (
     Number(order.status) === 5 &&
     getDeliveryRefundAmount(order) > 0 &&
@@ -1294,8 +1383,12 @@ function getDeliveryRefundStatusText(order?: AdminOrderResponse | null) {
 
 function getDeliveryRefundBadgeClass(order?: AdminOrderResponse | null) {
   return {
-    "is-waiting-bank": hasDeliveryRefundInfo(order) && !hasDeliveryRefundBankInfo(order),
-    "is-ready-refund": hasDeliveryRefundInfo(order) && hasDeliveryRefundBankInfo(order) && !isDeliveryRefundCompleted(order),
+    "is-waiting-bank":
+      hasDeliveryRefundInfo(order) && !hasDeliveryRefundBankInfo(order),
+    "is-ready-refund":
+      hasDeliveryRefundInfo(order) &&
+      hasDeliveryRefundBankInfo(order) &&
+      !isDeliveryRefundCompleted(order),
     "is-refunded": isDeliveryRefundCompleted(order),
   };
 }
@@ -1366,7 +1459,7 @@ function formatDate(value?: string | null) {
 }
 
 function isCancelledOrder(order?: AdminOrderResponse | null) {
-  return Number(order?.status) === 4;
+  return Number(order?.status) === 4 || Number(order?.status) === 8;
 }
 
 function getOrderCancelReason(order?: AdminOrderResponse | null) {
@@ -1507,13 +1600,11 @@ function formatPaymentMethod(method?: string | null) {
   line-height: 1.2;
 }
 
-
 .old-price {
   color: #9ca3af;
   font-size: 12px;
   text-decoration: line-through;
 }
-
 
 .final-price {
   color: #111827;
