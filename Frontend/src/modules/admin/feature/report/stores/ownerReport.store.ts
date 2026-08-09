@@ -140,6 +140,10 @@ function normalizeSummary(data: any): ReportSummaryResponse | null {
     totalRevenue: toNumber(data.totalRevenue),
     totalOrders: toNumber(data.totalOrders),
     totalProductsSold: toNumber(data.totalProductsSold),
+    onlineRevenue: toNumber(data.onlineRevenue),
+    offlineRevenue: toNumber(data.offlineRevenue),
+    onlineOrders: toNumber(data.onlineOrders),
+    offlineOrders: toNumber(data.offlineOrders),
   };
 }
 
@@ -174,6 +178,7 @@ export const useOwnerReportStore = defineStore("ownerReport", {
   state: () => ({
     filter: {
       filterType: "MONTH" as ReportFilterType,
+      orderType: "", // Khai báo biến orderType ở đây để hết lỗi gạch đỏ
       fromDate: "",
       toDate: "",
       limit: "10",
@@ -296,6 +301,7 @@ export const useOwnerReportStore = defineStore("ownerReport", {
       const params: ReportFilterParams = {
         filterType: this.filter.filterType || "MONTH",
         limit: normalizeLimit(this.filter.limit),
+        orderType: this.filter.orderType || undefined, // Nhét orderType vào params để gọi Backend
       };
 
       if (this.filter.filterType === "CUSTOM") {

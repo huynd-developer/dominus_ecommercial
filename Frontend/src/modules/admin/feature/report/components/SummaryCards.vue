@@ -6,8 +6,14 @@
         <div class="report-card-value">
           {{ formatMoney(summary?.totalRevenue || 0) }}
         </div>
-        <div class="report-card-desc">
-          Doanh thu từ đơn đã hoàn thành
+        <div class="report-card-desc d-flex align-items-center gap-2 mt-2">
+          <div class="online-stat">
+            <i class="bi bi-globe"></i> Online: <span class="fw-bold">{{ formatMoney(summary?.onlineRevenue || 0) }}</span>
+          </div>
+          <span class="text-muted">|</span>
+          <div class="offline-stat">
+            <i class="bi bi-shop"></i> Tại quầy: <span class="fw-bold">{{ formatMoney(summary?.offlineRevenue || 0) }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -18,8 +24,14 @@
         <div class="report-card-value">
           {{ formatNumber(summary?.totalOrders || 0) }}
         </div>
-        <div class="report-card-desc">
-          Không tính đơn chờ xác nhận, đang giao hoặc đã hủy
+        <div class="report-card-desc d-flex align-items-center gap-2 mt-2">
+          <div class="online-stat">
+            <i class="bi bi-globe"></i> Online: <span class="fw-bold">{{ formatNumber(summary?.onlineOrders || 0) }}</span>
+          </div>
+          <span class="text-muted">|</span>
+          <div class="offline-stat">
+            <i class="bi bi-shop"></i> Tại quầy: <span class="fw-bold">{{ formatNumber(summary?.offlineOrders || 0) }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -30,7 +42,7 @@
         <div class="report-card-value">
           {{ formatNumber(summary?.totalProductsSold || 0) }}
         </div>
-        <div class="report-card-desc">
+        <div class="report-card-desc mt-2">
           Tổng số lượng sản phẩm trong đơn hoàn thành
         </div>
       </div>
@@ -112,6 +124,14 @@ const formatDate = (value?: string | null) => {
   font-size: 13px;
   color: #9ca3af;
   margin-top: 8px;
+}
+
+.online-stat {
+  color: #059669;
+}
+
+.offline-stat {
+  color: #2563eb;
 }
 
 .range-box {

@@ -54,4 +54,12 @@ public class OrderRequest {
     private String vatEmail;
     private String companyName;
     private String companyAddress;
+
+    // SỬA Ở ĐÂY: Thêm @Data và keyword 'static' để Spring Boot parse được JSON
+    @Data
+    public static class CancelRefundBankRequest {
+        private String bankName;
+        private String bankAccountNumber;
+        private String bankAccountHolder;
+    }
 }

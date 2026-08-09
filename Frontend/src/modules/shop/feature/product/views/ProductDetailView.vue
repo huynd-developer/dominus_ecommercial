@@ -27,7 +27,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import api from "@/common/api";
 
@@ -1232,8 +1232,18 @@ const handleOpenDetail = (item: any) => {
   });
 };
 
+// BẮT SỰ KIỆN CLICK CHUỘT QUAY LẠI CỬA SỔ ĐỂ TỰ ĐỘNG CẬP NHẬT DANH SÁCH & FLASH SALE MỚI NHẤT
+const handleFocus = async () => {
+  await fetchProducts();
+};
+
 onMounted(() => {
   fetchProducts();
+  window.addEventListener("focus", handleFocus);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("focus", handleFocus);
 });
 
 watch(

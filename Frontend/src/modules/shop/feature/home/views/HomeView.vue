@@ -907,13 +907,20 @@ const stopFlashSaleRealtimeRefresh = () => {
   }
 };
 
+// BẮT SỰ KIỆN CLICK CHUỘT QUAY LẠI CỬA SỔ ĐỂ TỰ ĐỘNG CẬP NHẬT FLASH SALE MỚI NHẤT
+const handleFocus = async () => {
+  await Promise.all([fetchFlashSaleProducts(), fetchNormalProducts()]);
+};
+
 onMounted(async () => {
   await Promise.all([fetchFlashSaleProducts(), fetchNormalProducts()]);
   startFlashSaleRealtimeRefresh();
+  window.addEventListener("focus", handleFocus);
 });
 
 onBeforeUnmount(() => {
   stopFlashSaleRealtimeRefresh();
+  window.removeEventListener("focus", handleFocus);
 });
 </script>
 

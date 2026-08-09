@@ -29,7 +29,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import api from "@/common/api";
@@ -237,25 +237,24 @@ const findMatchingVariant = (productData: any, variantId: number) => {
   }) || null;
 };
 
-const productDetailCache = new Map<number, any>();
 
 const fetchProductDetail = async (productId: number) => {
   if (!productId) return null;
-  if (productDetailCache.has(productId)) return productDetailCache.get(productId);
+  
   try {
-    let res = await api.get(`/v1/products/${productId}`).catch(() => null);
-    if (!res) res = await api.get(`/customer/products/${productId}`).catch(() => null);
+    // THÊM CHỐNG CACHE VÀO ĐÂY ĐỂ TRÌNH DUYỆT KHÔNG LƯU GIÁ CŨ
+    const t = Date.now();
+    let res = await api.get(`/v1/products/${productId}?t=${t}`).catch(() => null);
+    if (!res) res = await api.get(`/customer/products/${productId}?t=${t}`).catch(() => null);
     if (!res) return null;
 
-    const data = res.data?.data ?? res.data?.result ?? res.data;
-    productDetailCache.set(productId, data);
-    return data;
+    return res.data?.data ?? res.data?.result ?? res.data;
   } catch (error) {
-    productDetailCache.set(productId, null);
     return null;
   }
 };
 
+// TRẢ LẠI NGUYÊN BẢN: Chỉ ghép ảnh, KHÔNG ĐƯỢC ghi đè giá (price, discount) của Backend
 const enrichCartItemImage = async (item: CartItem): Promise<CartItem> => {
   if (!item) return item;
   
@@ -302,8 +301,11 @@ const preserveCartOrder = (items: CartItem[]) => {
 const loadCart = async (options: { preserveOrder?: boolean } = {}) => {
   try {
     isLoading.value = true;
-    const res = await api.get("/v1/customer/cart/my-cart");
+    
+    // Thêm ?t=Date.now() để ép trình duyệt luôn hỏi Backend, Backend sẽ tự tính Flash Sale
+    const res = await api.get(`/v1/customer/cart/my-cart?t=${Date.now()}`);
     const items = extractCartItems(res.data);
+    
     const enrichedItems = await enrichCartItemsWithImages(items);
     
     cartItems.value = options.preserveOrder ? preserveCartOrder(enrichedItems) : enrichedItems;
@@ -418,7 +420,48 @@ const finalTotal = computed(() => {
   return Math.max(0, totalAmount.value - discountAmount.value) + shippingFee.value;
 });
 
-onMounted(() => loadCart());
+// THÊM HÀM CHECK LẠI VOUCHER TỪ LOCALSTORAGE
+const loadSavedVoucher = async () => {
+  const savedCode = localStorage.getItem("applied_voucher");
+  if (!savedCode || totalAmount.value <= 0) {
+    if (discountAmount.value > 0) {
+      discountAmount.value = 0;
+      appliedVoucherCode.value = "";
+    }
+    return;
+  }
+
+  try {
+    const res = await api.get("/v1/customer/vouchers/apply", {
+      params: { code: savedCode, orderTotal: totalAmount.value },
+    });
+    const discount = Number(res.data?.discountAmount ?? res.data?.discount ?? res.data?.amount ?? 0);
+    discountAmount.value = Math.min(Math.max(discount, 0), Number(totalAmount.value || 0));
+    appliedVoucherCode.value = savedCode;
+  } catch (error) {
+    // Voucher bị tắt hoặc hết hạn -> Xóa bỏ khỏi giỏ hàng
+    discountAmount.value = 0;
+    appliedVoucherCode.value = "";
+    localStorage.removeItem("applied_voucher");
+    showToast("info", "Mã giảm giá đã hết hạn hoặc bị vô hiệu hóa!");
+  }
+};
+
+// BẮT SỰ KIỆN CLICK CHUỘT VÀO CỬA SỔ ĐỂ TỰ ĐỘNG LOAD LẠI FLASH SALE & VOUCHER
+const handleFocus = async () => {
+  await loadCart({ preserveOrder: true });
+  await loadSavedVoucher();
+};
+
+onMounted(async () => {
+  await loadCart();
+  await loadSavedVoucher();
+  window.addEventListener("focus", handleFocus);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("focus", handleFocus);
+});
 </script>
 
 <style scoped>

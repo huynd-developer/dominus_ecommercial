@@ -87,13 +87,41 @@ public class OwnerReportServiceImpl implements OwnerReportService {
                 range.endDateTimeExclusive()
         );
 
+        // --- TÍNH TOÁN BÓC TÁCH DOANH THU ONLINE VÀ TẠI QUẦY ---
+        List<Order> orders = orderRepository.findCompletedOrdersForChart(
+                COMPLETED_STATUS,
+                range.startDateTime(),
+                range.endDateTimeExclusive()
+        );
+
+        BigDecimal onlineRevenue = BigDecimal.ZERO;
+        BigDecimal offlineRevenue = BigDecimal.ZERO;
+        long onlineOrders = 0L;
+        long offlineOrders = 0L;
+
+        for (Order order : orders) {
+            BigDecimal amount = moneyOrZero(order.getFinalAmount());
+            if ("ONLINE".equalsIgnoreCase(order.getOrderType())) {
+                onlineRevenue = onlineRevenue.add(amount);
+                onlineOrders++;
+            } else {
+                offlineRevenue = offlineRevenue.add(amount);
+                offlineOrders++;
+            }
+        }
+        // -------------------------------------------------------
+
         return new ReportSummaryResponse(
                 range.filterType(),
                 range.fromDate(),
                 range.toDate(),
                 moneyOrZero(totalRevenue),
                 longOrZero(totalOrders),
-                longOrZero(totalProductsSold)
+                longOrZero(totalProductsSold),
+                onlineRevenue,   // Đưa giá trị Online vào
+                offlineRevenue,  // Đưa giá trị Tại quầy vào
+                onlineOrders,    // Đưa số đơn Online vào
+                offlineOrders    // Đưa số đơn Tại quầy vào
         );
     }
 

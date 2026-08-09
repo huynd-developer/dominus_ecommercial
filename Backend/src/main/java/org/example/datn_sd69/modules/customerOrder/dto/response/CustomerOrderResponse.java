@@ -41,10 +41,6 @@ public record CustomerOrderResponse(
         LocalDateTime deliveryFailedAt,
         String deliveryFailedByName,
 
-        /**
-         * Thông tin hoàn tiền riêng cho đơn giao hàng thất bại đã thanh toán trước.
-         * Không dùng DeliveryRefundStatus, FE tự suy ra bằng amount/bank/refundedAt.
-         */
         BigDecimal deliveryRefundAmount,
         String deliveryRefundBankName,
         String deliveryRefundBankAccountNumber,
@@ -56,10 +52,6 @@ public record CustomerOrderResponse(
         Boolean deliveryRefundCompleted,
         Boolean canSubmitDeliveryRefundBank,
 
-        /**
-         * Ảnh minh chứng giao hàng.
-         * Giữ tên MediaUrls để không làm vỡ FE đang dùng field cũ.
-         */
         List<String> deliverySuccessMediaUrls,
         List<String> deliveryFailedMediaUrls,
 
@@ -70,17 +62,10 @@ public record CustomerOrderResponse(
         List<String> returnMediaUrls,
         List<CustomerReturnItemResponse> returnItems,
 
-        /**
-         * PENDING / ACCEPTED / REJECTED / REFUNDED / PARTIAL / UNKNOWN.
-         * Trả ra cho FE để hiển thị timeline hoàn hàng kiểu sàn TMĐT.
-         */
         String returnProcessStatus,
         String returnProcessStatusText,
         String returnRejectReason,
 
-        /**
-         * Các field này optional. Nếu service chưa set thì FE vẫn fallback được.
-         */
         String refundMethod,
         String bankName,
         String bankAccountNumber,
@@ -89,6 +74,12 @@ public record CustomerOrderResponse(
         LocalDateTime returnAcceptedAt,
         LocalDateTime returnRejectedAt,
         LocalDateTime returnRefundedAt,
+
+        // --- THÔNG TIN HOÀN TIỀN ĐƠN HỦY ---
+        String cancelRefundBankName,
+        String cancelRefundBankAccount,
+        String cancelRefundAccountName,
+        LocalDateTime cancelRefundedAt,
 
         List<CustomerOrderItemResponse> items
 ) {
@@ -165,6 +156,10 @@ public record CustomerOrderResponse(
                 resolveReturnProcessStatus(status, returnItems),
                 resolveReturnProcessStatusText(resolveReturnProcessStatus(status, returnItems)),
                 resolveReturnRejectReason(returnItems),
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,

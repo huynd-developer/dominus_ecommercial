@@ -187,4 +187,15 @@ public class AdminOrderResponse {
         private String voucherCode;
         private String voucherName;
     }
+
+    /**
+     * Hoàn tiền khách hàng khi hủy đơn
+     */
+    // Trong class AdminOrderResponse (DTO):
+    // Sửa lại 2 dòng cuối trong file AdminOrderResponse.java thành thế này:
+    private String cancelRefundBankName;
+    private String cancelRefundBankAccountNumber; // Đổi từ cancelRefundBankAccount thành cái này
+    private String cancelRefundBankAccountHolder; // Đổi từ cancelRefundAccountName thành cái này
+    private LocalDateTime cancelRefundedAt;
+    private String cancelRefundStatus;
 }

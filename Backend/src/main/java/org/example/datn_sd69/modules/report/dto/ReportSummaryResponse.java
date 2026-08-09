@@ -11,6 +11,11 @@ public record ReportSummaryResponse(
         LocalDate toDate,
         BigDecimal totalRevenue,
         Long totalOrders,
-        Long totalProductsSold
+        Long totalProductsSold,
+        // Bổ sung các trường bóc tách Online / Tại quầy
+        BigDecimal onlineRevenue,
+        BigDecimal offlineRevenue,
+        Long onlineOrders,
+        Long offlineOrders
 ) {
 }

@@ -6,6 +6,7 @@ import org.example.datn_sd69.modules.order.dto.request.AdminCancelOrderRequest;
 import org.example.datn_sd69.modules.order.dto.request.MarkDeliveryCompletedRequest;
 import org.example.datn_sd69.modules.order.dto.request.MarkDeliveryFailedRequest;
 import org.example.datn_sd69.modules.order.dto.request.RejectReturnRequest;
+import org.example.datn_sd69.modules.order.dto.response.AdminOrderResponse;
 import org.example.datn_sd69.modules.order.service.AdminOrderService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -217,5 +218,17 @@ public class AdminOrderController {
         return ResponseEntity.ok(
                 adminOrderService.markReturnRefunded(orderId)
         );
+    }
+
+    /**
+     * API ADMIN XÁC NHẬN ĐÃ CHUYỂN KHOẢN ĐƠN HỦY
+     */
+    @RequestMapping(value = "/{id}/cancel-refund/confirm", method = {RequestMethod.POST, RequestMethod.PATCH})
+    public ResponseEntity<?> confirmCancelRefund(
+            @PathVariable("id") Integer orderId,
+            @RequestParam(name = "restoreStock", defaultValue = "false") boolean restoreStock) {
+
+        AdminOrderResponse response = adminOrderService.confirmCancelRefund(orderId, restoreStock);
+        return ResponseEntity.ok(response);
     }
 }

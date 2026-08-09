@@ -117,6 +117,7 @@
       @reject-return="confirmRejectReturn"
       @mark-return-refunded="confirmMarkReturnRefunded"
       @mark-delivery-refunded="confirmMarkDeliveryRefunded"
+      @mark-cancel-refunded="confirmMarkCancelRefunded"
     />
   </div>
 </template>
@@ -1596,7 +1597,7 @@ function normalizeRejectReasonDetail(value: string) {
     .replace(/\s{2,}/g, " ");
 }
 
-type RefundRestockMode = "DELIVERY_FAILED" | "RETURN_REQUEST";
+type RefundRestockMode = "DELIVERY_FAILED" | "RETURN_REQUEST" | "CANCEL";
 
 type RefundRestockItemView = {
   productName: string;
@@ -1699,6 +1700,16 @@ function getReturnRefundRestockItems(order: AdminOrderResponse) {
     .filter((item): item is RefundRestockItemView => item !== null);
 }
 
+function getCancelRefundRestockItems(order: AdminOrderResponse) {
+  const rawItems = Array.isArray((order as any)?.items)
+    ? ((order as any).items as any[])
+    : [];
+
+  return rawItems
+    .map(mapOrderItemToRestockItem)
+    .filter((item): item is RefundRestockItemView => item !== null);
+}
+
 function buildRefundRestockItemsHtml(items: RefundRestockItemView[]) {
   if (items.length === 0) {
     return `
@@ -1745,15 +1756,19 @@ async function askRestoreStockAfterRefund(
   order: AdminOrderResponse,
   mode: RefundRestockMode
 ) {
-  const items =
-    mode === "DELIVERY_FAILED"
-      ? getDeliveryRefundRestockItems(order)
-      : getReturnRefundRestockItems(order);
+  let items: RefundRestockItemView[] = [];
+  let modeText = "";
 
-  const modeText =
-    mode === "DELIVERY_FAILED"
-      ? "đơn giao hàng thất bại"
-      : "yêu cầu hoàn hàng";
+  if (mode === "DELIVERY_FAILED") {
+    items = getDeliveryRefundRestockItems(order);
+    modeText = "đơn giao hàng thất bại";
+  } else if (mode === "RETURN_REQUEST") {
+    items = getReturnRefundRestockItems(order);
+    modeText = "yêu cầu hoàn hàng";
+  } else if (mode === "CANCEL") {
+    items = getCancelRefundRestockItems(order);
+    modeText = "đơn hàng đã hủy";
+  }
 
   const result = await Swal.fire({
     icon: "question",
@@ -1808,6 +1823,63 @@ async function runRefundActionWithRestockParam<T>(
   }
 }
 
+// CẬP NHẬT: ĐỔI TỪ FORM GÕ TRỰC TIẾP SANG CONFIRM TƯƠNG TỰ markDeliveryRefunded
+async function confirmMarkCancelRefunded(order: AdminOrderResponse) {
+  if (!order || !order.orderId) return;
+
+  const result = await Swal.fire({
+    icon: "question",
+    title: "Xác nhận đã chuyển tiền?",
+    html: `
+      <div style="text-align:left; font-size: 14px;">
+        <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
+        <p><b>Số tiền hoàn:</b> <span class="text-danger fw-bold">${formatMoneyForAlert(order.finalAmount)}</span></p>
+        <p><b>Ngân hàng:</b> ${escapeAlertHtml((order as any).cancelRefundBankName || "-")}</p>
+        <p><b>Số tài khoản:</b> ${escapeAlertHtml((order as any).cancelRefundBankAccount || "-")}</p>
+        <p><b>Chủ tài khoản:</b> ${escapeAlertHtml((order as any).cancelRefundAccountName || "-")}</p>
+        <div class="mt-3 p-2 rounded" style="background: #fff5f5; border: 1px solid #fecaca; color: #dc2626; font-size: 13px;">
+          <i class="bi bi-exclamation-triangle me-1"></i> <b>Lưu ý:</b> Chỉ xác nhận khi shop đã chuyển khoản thành công số tiền trên cho khách hàng.
+        </div>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Đã chuyển tiền",
+    cancelButtonText: "Hủy",
+    confirmButtonColor: "#dc2626",
+    cancelButtonColor: "#6b7280",
+  });
+
+  if (!result.isConfirmed) return;
+
+  const shouldRestoreStock = await askRestoreStockAfterRefund(order, "CANCEL");
+  if (shouldRestoreStock === null) return;
+
+  loading.value = true;
+  try {
+    // SỬA THÀNH GỌI QUA orderService VÀ DÙNG PATCH CHO KHỚP VỚI BE
+    await orderService.confirmCancelRefund(order.orderId, shouldRestoreStock);
+
+    await Swal.fire({
+      icon: "success",
+      title: "Hoàn tiền thành công",
+      text: shouldRestoreStock 
+        ? "Đã xác nhận hoàn tiền cho đơn hủy và cộng sản phẩm về kho."
+        : "Đã ghi nhận hoàn tiền cho đơn hủy (không cộng tồn kho).",
+      confirmButtonColor: "#bd9a5f",
+    });
+
+    await refreshOrderAfterWorkflow(order.orderId);
+  } catch (error: any) {
+    await Swal.fire({
+      icon: "error",
+      title: "Lỗi hoàn tiền",
+      text: error?.response?.data?.message || "Không thể xử lý hoàn tiền lúc này.",
+      confirmButtonColor: "#bd9a5f",
+    });
+  } finally {
+    loading.value = false;
+  }
+}
 
 async function confirmMarkDeliveryRefunded(order: AdminOrderResponse) {
   if (!order || !order.orderId) {

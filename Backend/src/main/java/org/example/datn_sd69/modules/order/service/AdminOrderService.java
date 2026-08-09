@@ -56,4 +56,6 @@ public interface AdminOrderService {
     AdminOrderResponse rejectReturnRequest(Integer orderId, RejectReturnRequest request);
 
     AdminOrderResponse markReturnRefunded(Integer orderId);
+
+    AdminOrderResponse confirmCancelRefund(Integer orderId, boolean restoreStock);
 }

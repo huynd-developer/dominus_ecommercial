@@ -5,13 +5,7 @@ import com.cloudinary.utils.ObjectUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
-import org.example.datn_sd69.entity.Order;
-import org.example.datn_sd69.entity.OrderDeliveryEvidence;
-import org.example.datn_sd69.entity.OrderItem;
-import org.example.datn_sd69.entity.ProductVariant;
-import org.example.datn_sd69.entity.ReturnRequest;
-import org.example.datn_sd69.entity.ReturnRequestItem;
-import org.example.datn_sd69.entity.ReturnRequestMedia;
+import org.example.datn_sd69.entity.*;
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderItemResponse;
 import org.example.datn_sd69.modules.order.dto.response.AdminReturnItemResponse;
 import org.example.datn_sd69.modules.order.dto.response.AdminOrderResponse;
@@ -22,12 +16,7 @@ import org.example.datn_sd69.modules.order.dto.request.MarkDeliveryFailedRequest
 import org.example.datn_sd69.modules.order.dto.request.RejectReturnRequest;
 import org.example.datn_sd69.modules.order.service.AdminOrderService;
 import org.example.datn_sd69.modules.order.service.OrderMailService;
-import org.example.datn_sd69.repository.OrderDeliveryEvidenceRepository;
-import org.example.datn_sd69.repository.OrderItemRepository;
-import org.example.datn_sd69.repository.OrderRepository;
-import org.example.datn_sd69.repository.ReturnRequestItemRepository;
-import org.example.datn_sd69.repository.ReturnRequestMediaRepository;
-import org.example.datn_sd69.repository.ReturnRequestRepository;
+import org.example.datn_sd69.repository.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -55,9 +44,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-
-import org.example.datn_sd69.entity.User;
-import org.example.datn_sd69.repository.UserRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -157,6 +143,8 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private final Cloudinary cloudinary;
     private final EntityManager entityManager;
     private final OrderMailService orderMailService;
+    private final OrderRefundRepository orderRefundRepo;
+
 
     private record KeywordDateRange(
             String keyword,
@@ -1432,9 +1420,17 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         response.setDeliveryFailedMediaUrls(getDeliveryEvidenceUrls(order, DELIVERY_EVIDENCE_TYPE_FAILED));
         response.setCancelReason(normalizeOptionalText(order.getCancelReason()));
         response.setCancelledAt(order.getCancelledAt());
-
-        // BỔ SUNG TRƯỜNG NÀY ĐỂ TRẢ VỀ CHO VUE
         response.setIsPaymentReported(order.getIsPaymentReported() != null && order.getIsPaymentReported());
+
+        // ---> BẮT ĐẦU ĐOẠN CODE MAP THÔNG TIN HOÀN TIỀN ĐƠN HỦY <---
+        // --- SỬA LẠI ĐOẠN MAP NÀY TRONG AdminOrderServiceImpl.java ---
+        orderRefundRepo.findByOrderIdAndRefundType(order.getId(), "CANCEL").ifPresent(refund -> {
+            response.setCancelRefundBankName(refund.getBankName());
+            response.setCancelRefundBankAccountNumber(refund.getBankAccountNumber()); // Sửa đúng tên setter trong AdminOrderResponse
+            response.setCancelRefundBankAccountHolder(refund.getBankAccountHolder()); // Sửa đúng tên setter trong AdminOrderResponse
+            response.setCancelRefundedAt(refund.getRefundedAt());
+        });
+        // ---> KẾT THÚC ĐOẠN CODE MAP THÔNG TIN HOÀN TIỀN ĐƠN HỦY <---
 
         applyLatestReturnRequestInfo(response, order, includeItems);
 
@@ -2349,5 +2345,49 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         );
 
         return count == null ? 0L : count;
+    }
+
+    // Kéo xuống dưới cùng của file AdminOrderServiceImpl.java
+    @Override
+    @Transactional
+    public AdminOrderResponse confirmCancelRefund(Integer orderId, boolean restoreStock) {
+        Order order = findOrderOrThrow(orderId);
+
+        if (safeStatus(order) != STATUS_CANCELLED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chỉ được xác nhận hoàn tiền cho đơn đã hủy");
+        }
+
+        OrderRefund refund = orderRefundRepo.findByOrderIdAndRefundType(orderId, "CANCEL")
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không tìm thấy yêu cầu hoàn tiền của đơn này"));
+
+        if (refund.getStatus() != null && refund.getStatus() == 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Đơn hàng này đã được xác nhận hoàn tiền");
+        }
+
+        // 1. Đánh dấu đã hoàn tiền
+        refund.setStatus(1);
+        refund.setRefundedAt(LocalDateTime.now());
+
+        // Lấy ID admin đang đăng nhập để lưu vào DB (Tránh lỗi DB không cho phép null)
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getName() != null) {
+            userRepository.findByEmailIgnoreCase(authentication.getName()).ifPresent(user -> {
+                refund.setRefundedBy(user.getId());
+            });
+        }
+        orderRefundRepo.save(refund);
+
+        // 2. Khôi phục số lượng kho an toàn (chống lỗi NullPointerException)
+        if (restoreStock) {
+            List<OrderItem> items = orderItemRepository.findDetailByOrderId(order.getId());
+            for (OrderItem item : items) {
+                restoreStockByOrderItemQuantity(item); // Hàm an toàn có sẵn trong class
+                if (item.getProductVariant() != null) {
+                    entityManager.merge(item.getProductVariant());
+                }
+            }
+        }
+
+        return mapOrderToResponse(order, true);
     }
 }
