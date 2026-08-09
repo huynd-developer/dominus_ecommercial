@@ -35,9 +35,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class CustomerOrderServiceImpl implements CustomerOrderService {
@@ -50,6 +52,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     private static final int STATUS_DELIVERY_FAILED = 5;
     private static final int STATUS_RETURN_REQUESTED = 6;
     private static final int STATUS_RETURN_COMPLETED = 7;
+    private static final int STATUS_AWAITING_REFUND = 8;
 
     private static final int RETURN_ITEM_STATUS_PENDING = 0;
     private static final int RETURN_ITEM_STATUS_ACCEPTED = 1;
@@ -214,12 +217,13 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                         "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn"
                 ));
 
-        if (order.getStatus() == null || order.getStatus() != STATUS_DELIVERY_FAILED) {
-            throw badRequest("Chỉ được nhập thông tin hoàn tiền cho đơn giao hàng thất bại");
+        // MỞ CHECK: CHOP PHÉP ĐIỀN FORM TÀI KHOẢN KHI STATUS = 5 HOẶC STATUS = 8
+        if (order.getStatus() == null || (order.getStatus() != STATUS_DELIVERY_FAILED && order.getStatus() != STATUS_AWAITING_REFUND)) {
+            throw badRequest("Chỉ được nhập thông tin hoàn tiền cho đơn giao hàng thất bại hoặc đơn đã hủy chờ hoàn tiền");
         }
 
         if (!isDeliveryRefundRequired(order)) {
-            throw badRequest("Đơn hàng này không phát sinh hoàn tiền giao thất bại");
+            throw badRequest("Đơn hàng này không phát sinh hoàn tiền");
         }
 
         if (order.getDeliveryRefundedAt() != null) {
@@ -281,7 +285,14 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
          * Đơn Chờ xác nhận chưa trừ kho, nên khách hủy ở trạng thái này không cộng lại kho.
          * Kho chỉ được trừ khi admin xác nhận đơn và chỉ được cộng lại ở các luồng hoàn/hoàn tiền phù hợp.
          */
-        order.setStatus(STATUS_CANCELLED);
+        if (isPrepaidPaymentMethod(order.getPaymentMethod())) {
+            order.setStatus(STATUS_AWAITING_REFUND);
+            order.setDeliveryRefundAmount(moneyOrZero(order.getFinalAmount()));
+        } else {
+            order.setStatus(STATUS_CANCELLED);
+            order.setDeliveryRefundAmount(null);
+        }
+
         order.setCancelReason(cancelReason);
         order.setCancelledAt(LocalDateTime.now());
 
@@ -496,6 +507,19 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         orderMailService.sendReturnRequestCancelled(savedOrder);
     }
 
+    private boolean isPrepaidPaymentMethod(String paymentMethod) {
+        String method = normalizeOptional(paymentMethod);
+        if (method == null) return false;
+        String upperMethod = method.toUpperCase(Locale.ROOT);
+        if (upperMethod.contains("COD")) return false;
+        return upperMethod.contains("VNPAY")
+                || upperMethod.contains("VIETQR")
+                || upperMethod.contains("QR")
+                || upperMethod.contains("BANK")
+                || upperMethod.contains("TRANSFER")
+                || upperMethod.contains("MOMO");
+    }
+
     private void validatePreviousReturnRequestBeforeCreate(Order order) {
         if (order == null || order.getId() == null) {
             return;
@@ -707,13 +731,6 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             return returnRequest;
         }
 
-        /*
-         * Khi admin từ chối hoàn hàng, AdminOrderServiceImpl đưa đơn về trạng thái
-         * Hoàn thành để đơn không còn nằm trong luồng hoàn tiền. Tuy nhiên khách vẫn
-         * cần xem được lịch sử yêu cầu hoàn và lý do từ chối giống các sàn TMĐT.
-         * Vì vậy không chỉ dựa vào Orders.Status, mà còn kiểm tra ReturnRequestItem
-         * mới nhất có còn trạng thái hiển thị hay không.
-         */
         List<ReturnRequestItem> returnItems = getReturnRequestItemsForCustomerView(returnRequest);
 
         boolean hasRejectedItem = returnItems.stream()
@@ -969,10 +986,6 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             return order.getCompletedAt();
         }
 
-        /*
-         * Fallback cho dữ liệu cũ chưa có CompletedAt.
-         * Dữ liệu mới vẫn phải set CompletedAt khi đơn chuyển sang Hoàn thành.
-         */
         return order.getCreatedAt();
     }
 
@@ -995,6 +1008,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             case STATUS_SHIPPING -> "Đang giao hàng";
             case STATUS_COMPLETED -> "Hoàn thành";
             case STATUS_CANCELLED -> "Đã hủy";
+            case STATUS_AWAITING_REFUND -> "Đã hủy / Chờ hoàn tiền";
             case STATUS_DELIVERY_FAILED -> "Giao hàng thất bại";
             case STATUS_RETURN_REQUESTED -> "Yêu cầu hoàn hàng / đổi trả";
             case STATUS_RETURN_COMPLETED -> "Hoàn hàng / đổi trả hoàn tất";
@@ -1188,9 +1202,10 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 || normalizeOptional(order.getDeliveryRefundBankAccountHolder()) != null;
     }
 
+    // MỞ RỘNG CHECK CHO PHÉP STATUS = 8 CŨNG TRẢ VỀ TRUE
     private boolean canSubmitDeliveryRefundBank(Order order) {
         return order != null
-                && Integer.valueOf(STATUS_DELIVERY_FAILED).equals(order.getStatus())
+                && (Integer.valueOf(STATUS_DELIVERY_FAILED).equals(order.getStatus()) || Integer.valueOf(STATUS_AWAITING_REFUND).equals(order.getStatus()))
                 && isDeliveryRefundRequired(order)
                 && order.getDeliveryRefundedAt() == null
                 && !hasAnyDeliveryRefundBankInfo(order);
@@ -1203,10 +1218,6 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             return null;
         }
 
-        /*
-         * Cho phép khách nhập khoảng trắng để dễ đọc STK,
-         * nhưng khi lưu DB chỉ lưu dãy số.
-         */
         return cleanValue.replaceAll("\\s+", "");
     }
 

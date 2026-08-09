@@ -98,12 +98,6 @@ public class AdminOrderController {
         );
     }
 
-    /**
-     * Admin xác nhận đơn hàng.
-     * Khi chuyển từ Chờ xác nhận sang Đã xác nhận thì mới trừ tồn kho.
-     *
-     * PATCH /api/admin/orders/{orderId}/confirm
-     */
     @PatchMapping({"/{orderId}/confirm", "/{orderId}/confirm/"})
     public ResponseEntity<?> confirmOrder(@PathVariable Integer orderId) {
         return ResponseEntity.ok(
@@ -111,12 +105,6 @@ public class AdminOrderController {
         );
     }
 
-    /**
-     * Admin hủy đơn khi đơn còn ở trạng thái chờ xác nhận.
-     * Bắt buộc có lý do hủy để admin/khách xem lại lịch sử.
-     *
-     * PATCH /api/admin/orders/{orderId}/cancel
-     */
     @PatchMapping({"/{orderId}/cancel", "/{orderId}/cancel/"})
     public ResponseEntity<?> cancelOrder(
             @PathVariable Integer orderId,
@@ -127,12 +115,6 @@ public class AdminOrderController {
         );
     }
 
-    /**
-     * Giao hàng thành công.
-     * Chỉ áp dụng cho đơn đang giao hàng và bắt buộc có ảnh minh chứng.
-     *
-     * PATCH /api/admin/orders/{orderId}/delivery-completed
-     */
     @PatchMapping(
             value = {"/{orderId}/delivery-completed", "/{orderId}/delivery-completed/"},
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE
@@ -146,12 +128,6 @@ public class AdminOrderController {
         );
     }
 
-    /**
-     * Giao hàng thất bại.
-     * Bắt buộc có lý do. Nếu chọn Khác thì bắt buộc mô tả.
-     *
-     * PATCH /api/admin/orders/{orderId}/delivery-failed
-     */
     @PatchMapping(
             value = {"/{orderId}/delivery-failed", "/{orderId}/delivery-failed/"},
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE
@@ -165,12 +141,6 @@ public class AdminOrderController {
         );
     }
 
-    /**
-     * Admin xác nhận đã hoàn tiền thực tế cho đơn giao thất bại.
-     * Chỉ dùng cho đơn giao thất bại đã thanh toán trước và đã có thông tin ngân hàng của khách.
-     *
-     * PATCH /api/admin/orders/{orderId}/delivery-refunded
-     */
     @PatchMapping({"/{orderId}/delivery-refunded", "/{orderId}/delivery-refunded/"})
     public ResponseEntity<?> markDeliveryRefunded(@PathVariable Integer orderId) {
         return ResponseEntity.ok(
@@ -178,12 +148,13 @@ public class AdminOrderController {
         );
     }
 
-    /**
-     * Admin chấp nhận yêu cầu hoàn hàng.
-     * Sau bước này mới được xác nhận đã hoàn tiền.
-     *
-     * PATCH /api/admin/orders/{orderId}/return-accepted
-     */
+    @PatchMapping({"/{orderId}/cancel-refunded", "/{orderId}/cancel-refunded/"})
+    public ResponseEntity<?> markCancelRefunded(@PathVariable Integer orderId) {
+        return ResponseEntity.ok(
+                adminOrderService.markCancelRefunded(orderId)
+        );
+    }
+
     @PatchMapping({"/{orderId}/return-accepted", "/{orderId}/return-accepted/"})
     public ResponseEntity<?> acceptReturnRequest(@PathVariable Integer orderId) {
         return ResponseEntity.ok(
@@ -191,12 +162,6 @@ public class AdminOrderController {
         );
     }
 
-    /**
-     * Admin từ chối yêu cầu hoàn hàng.
-     * Bắt buộc truyền lý do để khách có thể xem vì sao bị từ chối.
-     *
-     * PATCH /api/admin/orders/{orderId}/return-rejected
-     */
     @PatchMapping({"/{orderId}/return-rejected", "/{orderId}/return-rejected/"})
     public ResponseEntity<?> rejectReturnRequest(
             @PathVariable Integer orderId,
@@ -207,12 +172,6 @@ public class AdminOrderController {
         );
     }
 
-    /**
-     * Chuyển đơn hoàn hàng sang trạng thái đã hoàn tiền.
-     * Chỉ được gọi sau khi yêu cầu hoàn hàng đã được chấp nhận.
-     *
-     * PATCH /api/admin/orders/{orderId}/return-refunded
-     */
     @PatchMapping({"/{orderId}/return-refunded", "/{orderId}/return-refunded/"})
     public ResponseEntity<?> markReturnRefunded(@PathVariable Integer orderId) {
         return ResponseEntity.ok(

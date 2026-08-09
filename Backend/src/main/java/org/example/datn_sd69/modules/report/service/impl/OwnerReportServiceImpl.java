@@ -69,13 +69,14 @@ public class OwnerReportServiceImpl implements OwnerReportService {
     ) {
         DateRange range = resolveDateRange(filterType, fromDate, toDate);
 
-        BigDecimal totalRevenue = orderRepository.sumFinalAmountByStatusAndCreatedAtBetween(
+        // 1. Tính Tổng (Đã đổi tên hàm Repository sang CompletedAt)
+        BigDecimal totalRevenue = orderRepository.sumFinalAmountByStatusAndCompletedAtBetween(
                 COMPLETED_STATUS,
                 range.startDateTime(),
                 range.endDateTimeExclusive()
         );
 
-        Long totalOrders = orderRepository.countOrdersByStatusAndCreatedAtBetween(
+        Long totalOrders = orderRepository.countOrdersByStatusAndCompletedAtBetween(
                 COMPLETED_STATUS,
                 range.startDateTime(),
                 range.endDateTimeExclusive()
@@ -87,8 +88,8 @@ public class OwnerReportServiceImpl implements OwnerReportService {
                 range.endDateTimeExclusive()
         );
 
-        // --- TÍNH TOÁN BÓC TÁCH DOANH THU ONLINE VÀ TẠI QUẦY ---
-        List<Order> orders = orderRepository.findCompletedOrdersForChart(
+        // 2. Tính Tách biệt Online / Offline
+        List<Object[]> breakdown = orderRepository.getSummaryBreakdownByOrderType(
                 COMPLETED_STATUS,
                 range.startDateTime(),
                 range.endDateTimeExclusive()
@@ -96,20 +97,23 @@ public class OwnerReportServiceImpl implements OwnerReportService {
 
         BigDecimal onlineRevenue = BigDecimal.ZERO;
         BigDecimal offlineRevenue = BigDecimal.ZERO;
-        long onlineOrders = 0L;
-        long offlineOrders = 0L;
+        Long onlineOrders = 0L;
+        Long offlineOrders = 0L;
 
-        for (Order order : orders) {
-            BigDecimal amount = moneyOrZero(order.getFinalAmount());
-            if ("ONLINE".equalsIgnoreCase(order.getOrderType())) {
-                onlineRevenue = onlineRevenue.add(amount);
-                onlineOrders++;
+        for (Object[] row : breakdown) {
+            String type = (String) row[0];
+            BigDecimal rev = (row[1] != null) ? (BigDecimal) row[1] : BigDecimal.ZERO;
+            Long count = (row[2] != null) ? (Long) row[2] : 0L;
+
+            if (type != null && type.toUpperCase(Locale.ROOT).equals("ONLINE")) {
+                onlineRevenue = onlineRevenue.add(rev);
+                onlineOrders += count;
             } else {
-                offlineRevenue = offlineRevenue.add(amount);
-                offlineOrders++;
+                // Áp dụng cho IN_STORE hoặc POS
+                offlineRevenue = offlineRevenue.add(rev);
+                offlineOrders += count;
             }
         }
-        // -------------------------------------------------------
 
         return new ReportSummaryResponse(
                 range.filterType(),
@@ -118,11 +122,47 @@ public class OwnerReportServiceImpl implements OwnerReportService {
                 moneyOrZero(totalRevenue),
                 longOrZero(totalOrders),
                 longOrZero(totalProductsSold),
-                onlineRevenue,   // Đưa giá trị Online vào
-                offlineRevenue,  // Đưa giá trị Tại quầy vào
-                onlineOrders,    // Đưa số đơn Online vào
-                offlineOrders    // Đưa số đơn Tại quầy vào
+                onlineRevenue,      // Truyền data mới vào
+                offlineRevenue,
+                onlineOrders,
+                offlineOrders
         );
+    }
+
+    private List<RevenueChartResponse> buildRevenueChart(DateRange range) {
+        List<Order> orders = orderRepository.findCompletedOrdersForChart(
+                COMPLETED_STATUS,
+                range.startDateTime(),
+                range.endDateTimeExclusive()
+        );
+
+        LinkedHashMap<String, RevenueBucket> buckets = initChartBuckets(range);
+
+        for (Order order : orders) {
+            // Đổi điều kiện kiểm tra từ createdAt sang completedAt
+            if (order == null || order.getCompletedAt() == null) {
+                continue;
+            }
+
+            // Đổi từ getCreatedAt() sang getCompletedAt() để biểu đồ khớp đúng với Tổng doanh thu
+            String label = buildChartLabel(order.getCompletedAt(), range.chartGroupType());
+
+            // Lưu ý: Biểu đồ hiện tại mình chỉ tính FinalAmount (chưa trừ Ship).
+            // Nếu bạn muốn biểu đồ cũng trừ Ship thì sửa order.getFinalAmount()
+            // thành order.getFinalAmount().subtract(moneyOrZero(order.getShippingFee())) nhé.
+            buckets
+                    .computeIfAbsent(label, key -> new RevenueBucket())
+                    .add(order.getFinalAmount().subtract(moneyOrZero(order.getShippingFee())));
+        }
+
+        return buckets.entrySet()
+                .stream()
+                .map(entry -> new RevenueChartResponse(
+                        entry.getKey(),
+                        entry.getValue().revenue(),
+                        entry.getValue().totalOrders()
+                ))
+                .toList();
     }
 
     @Override
@@ -192,36 +232,7 @@ public class OwnerReportServiceImpl implements OwnerReportService {
                 .toList();
     }
 
-    private List<RevenueChartResponse> buildRevenueChart(DateRange range) {
-        List<Order> orders = orderRepository.findCompletedOrdersForChart(
-                COMPLETED_STATUS,
-                range.startDateTime(),
-                range.endDateTimeExclusive()
-        );
 
-        LinkedHashMap<String, RevenueBucket> buckets = initChartBuckets(range);
-
-        for (Order order : orders) {
-            if (order == null || order.getCreatedAt() == null) {
-                continue;
-            }
-
-            String label = buildChartLabel(order.getCreatedAt(), range.chartGroupType());
-
-            buckets
-                    .computeIfAbsent(label, key -> new RevenueBucket())
-                    .add(order.getFinalAmount());
-        }
-
-        return buckets.entrySet()
-                .stream()
-                .map(entry -> new RevenueChartResponse(
-                        entry.getKey(),
-                        entry.getValue().revenue(),
-                        entry.getValue().totalOrders()
-                ))
-                .toList();
-    }
 
     private DateRange resolveDateRange(
             String rawFilterType,

@@ -88,7 +88,9 @@ function getTodayDateOnly(): Date {
 }
 
 function normalizeLimit(value: string): string {
-  const cleanValue = String(value || "").replace(/[^\d]/g, "").slice(0, 2);
+  const cleanValue = String(value || "")
+    .replace(/[^\d]/g, "")
+    .slice(0, 2);
 
   return cleanValue || "10";
 }

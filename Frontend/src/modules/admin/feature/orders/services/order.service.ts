@@ -183,6 +183,18 @@ export const orderService = {
   },
 
   /**
+   * Admin xác nhận đã hoàn tiền thực tế cho đơn hủy có thanh toán trước.
+   * Chuyển từ Status 8 (Chờ hoàn tiền) -> 4 (Đã hủy). Tuyệt đối không cộng kho.
+   */
+  async markCancelRefunded(orderId: number) {
+    const response = await api.patch<AdminOrderResponse>(
+      `${ORDER_ADMIN_API}/${orderId}/cancel-refunded`
+    );
+
+    return response.data;
+  },
+
+  /**
    * Admin chấp nhận yêu cầu hoàn hàng.
    * Sau bước này mới được bấm "Đã hoàn tiền".
    */

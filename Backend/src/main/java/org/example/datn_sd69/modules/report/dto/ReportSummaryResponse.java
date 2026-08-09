@@ -12,7 +12,7 @@ public record ReportSummaryResponse(
         BigDecimal totalRevenue,
         Long totalOrders,
         Long totalProductsSold,
-        // Bổ sung các trường bóc tách Online / Tại quầy
+
         BigDecimal onlineRevenue,
         BigDecimal offlineRevenue,
         Long onlineOrders,

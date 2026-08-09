@@ -21,7 +21,10 @@ export interface ReportSummaryResponse {
   totalRevenue: number;
   totalOrders: number;
   totalProductsSold: number;
+<<<<<<< HEAD
   // Bổ sung các trường bóc tách Online / Tại quầy
+=======
+>>>>>>> 9d167f0ed4c026eca4c2ba188b0c8fa4199145de
   onlineRevenue: number;
   offlineRevenue: number;
   onlineOrders: number;
