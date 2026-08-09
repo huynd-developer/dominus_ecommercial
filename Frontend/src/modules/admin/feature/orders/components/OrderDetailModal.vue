@@ -769,7 +769,7 @@
             @click="$emit('mark-cancel-refunded', order)"
           >
             <i class="bi bi-check-circle me-1"></i>
-            Đã hoàn tiền (Hủy)
+            Đã hoàn tiền
           </button>
 
           <button
