@@ -734,21 +734,6 @@
                 </div>
 
                 <div class="order-summary-row">
-<<<<<<< HEAD
-                  <!-- KHU VỰC THAY ĐỔI: GỘP LÝ DO HỦY ĐƠN VÀ FORM HOÀN TIỀN ĐƠN HỦY -->
-                  <div v-if="order.status === 4" class="d-flex flex-column gap-3 w-100" style="min-width: 0;">
-                    <div class="order-cancel-info w-100 mb-0">
-                      <div class="cancel-info-title">
-                        <i class="bi bi-x-circle me-1"></i>
-                        Lý do hủy:
-                      </div>
-                      <div class="cancel-info-text">
-                        {{ getOrderCancelReason(order) }}
-                      </div>
-                      <div v-if="getOrderCancelledAt(order)" class="cancel-info-time">
-                        Thời gian hủy: {{ formatDate(getOrderCancelledAt(order)) }}
-                      </div>
-=======
                   <div
                     v-if="order.status === 4 || order.status === 8"
                     class="order-cancel-info"
@@ -760,7 +745,6 @@
 
                     <div class="cancel-info-text">
                       {{ getOrderCancelReason(order) }}
->>>>>>> 9d167f0ed4c026eca4c2ba188b0c8fa4199145de
                     </div>
 
                     <div
@@ -7123,9 +7107,4 @@ input.delivery-refund-modal-control {
   font-size: 13px;
   text-align: center;
 }
-<<<<<<< HEAD
-
 </style>
-=======
-</style>
->>>>>>> 9d167f0ed4c026eca4c2ba188b0c8fa4199145de

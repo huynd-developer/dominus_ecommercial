@@ -79,6 +79,9 @@ public class ProductServiceImpl implements ProductService {
 
         List<ProductVariant> variants = new ArrayList<>();
 
+        // ĐÃ SỬA: Dùng Set để kiểm tra trùng cặp (CapacityId + BottleTypeId) thay vì chỉ check Capacity
+        Set<String> variantPairSet = new HashSet<>();
+
         for (ProductRequest.VariantRequestDTO dto : request.getVariants()) {
 
             Capacity capacity =
@@ -90,6 +93,12 @@ public class ProductServiceImpl implements ProductService {
                     bottleTypeRepository.findById(dto.getBottleTypeId())
                             .orElseThrow(() ->
                                     new RuntimeException("Không tìm thấy BottleType"));
+
+            // Kiểm tra trùng lặp cặp Dung tích + Loại chai
+            String pairKey = capacity.getId() + "-" + bottleType.getId();
+            if (!variantPairSet.add(pairKey)) {
+                throw new RuntimeException("Không được phép có 2 biến thể trùng cả Dung tích và Loại chai giống nhau!");
+            }
 
             ProductVariant variant = new ProductVariant();
 
@@ -180,6 +189,9 @@ public class ProductServiceImpl implements ProductService {
 
         List<ProductVariant> variants = new ArrayList<>();
 
+        // ĐÃ SỬA: Dùng Set để kiểm tra trùng cặp (CapacityId + BottleTypeId) khi cập nhật
+        Set<String> variantPairSet = new HashSet<>();
+
         for (ProductRequest.VariantRequestDTO dto : request.getVariants()) {
 
             Capacity capacity =
@@ -191,6 +203,12 @@ public class ProductServiceImpl implements ProductService {
                     bottleTypeRepository.findById(dto.getBottleTypeId())
                             .orElseThrow(() ->
                                     new RuntimeException("Không tìm thấy BottleType"));
+
+            // Kiểm tra trùng lặp cặp Dung tích + Loại chai
+            String pairKey = capacity.getId() + "-" + bottleType.getId();
+            if (!variantPairSet.add(pairKey)) {
+                throw new RuntimeException("Không được phép có 2 biến thể trùng cả Dung tích và Loại chai giống nhau!");
+            }
 
             ProductVariant variant = new ProductVariant();
 
