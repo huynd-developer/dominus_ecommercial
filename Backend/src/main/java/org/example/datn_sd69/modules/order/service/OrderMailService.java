@@ -103,13 +103,23 @@ public class OrderMailService {
     }
 
     public void sendOrderCancelled(Order order, String reason) {
+        boolean isAwaitingRefund = order != null && Integer.valueOf(8).equals(order.getStatus());
+
+        String subject = isAwaitingRefund ? "Đã hủy & Chờ hoàn tiền - " : "Đơn hàng đã bị hủy - ";
+        String title = isAwaitingRefund ? "Đã hủy & Chờ hoàn tiền" : "Đơn hàng đã bị hủy";
+        String mainMessage = isAwaitingRefund
+                ? "Đơn hàng của bạn đã bị hủy. Vui lòng cập nhật số tài khoản ngân hàng trong lịch sử đơn hàng để shop tiến hành hoàn tiền."
+                : "Đơn hàng của bạn đã được cập nhật sang trạng thái Đã hủy.";
+        String badgeText = isAwaitingRefund ? "Chờ hoàn tiền" : "Đã hủy";
+        String tone = isAwaitingRefund ? TONE_WARNING : TONE_DANGER;
+
         sendOrderMail(
                 order,
-                "Đơn hàng đã bị hủy - " + resolveOrderCode(order),
-                "Đơn hàng đã bị hủy",
-                "Đơn hàng của bạn đã được cập nhật sang trạng thái Đã hủy.",
-                "Đã hủy",
-                TONE_DANGER,
+                subject + resolveOrderCode(order),
+                title,
+                mainMessage,
+                badgeText,
+                tone,
                 "Lý do hủy: " + normalizeFallback(reason, "Không có"),
                 false
         );
@@ -174,12 +184,26 @@ public class OrderMailService {
         );
     }
 
+    // Gửi mail khi admin đã xác nhận hoàn tiền cho đơn hủy Online
+    public void sendCancelRefunded(Order order) {
+        sendOrderMail(
+                order,
+                "Đã hoàn tiền đơn hủy - " + resolveOrderCode(order),
+                "Đã hoàn tiền",
+                "Shop đã xác nhận hoàn tiền thành công cho đơn hàng bị hủy của bạn. Tiền sẽ sớm về tài khoản ngân hàng.",
+                "Đã hoàn tiền",
+                TONE_SUCCESS,
+                "Số tiền hoàn: " + formatMoney(order == null ? null : order.getDeliveryRefundAmount()),
+                false
+        );
+    }
+
     public void sendDeliveryRefundBankSubmitted(Order order) {
         sendOrderMail(
                 order,
                 "Đã nhận thông tin hoàn tiền - " + resolveOrderCode(order),
                 "Đã nhận thông tin hoàn tiền",
-                "Shop đã nhận thông tin tài khoản ngân hàng của bạn cho đơn giao hàng thất bại. Shop sẽ kiểm tra và hoàn tiền thủ công trong thời gian sớm nhất.",
+                "Shop đã nhận thông tin tài khoản ngân hàng của bạn. Shop sẽ kiểm tra và hoàn tiền thủ công trong thời gian sớm nhất.",
                 "Đã tiếp nhận",
                 TONE_INFO,
                 null,
@@ -301,10 +325,6 @@ public class OrderMailService {
             helper.setText(htmlContent, true);
             javaMailSender.send(mimeMessage);
         } catch (Exception exception) {
-            /*
-             * Không làm fail nghiệp vụ đặt hàng/đổi trạng thái chỉ vì lỗi gửi mail.
-             * Lỗi được log để dev kiểm tra lại SMTP/template.
-             */
             log.warn("Không gửi được mail đơn hàng {} đến {}: {}", resolveOrderCode(order), recipient, exception.getMessage());
         }
     }
@@ -603,6 +623,7 @@ public class OrderMailService {
             case 5 -> "Giao hàng thất bại";
             case 6 -> "Yêu cầu hoàn hàng / đổi trả";
             case 7 -> "Hoàn hàng / đổi trả hoàn tất";
+            case 8 -> "Đã hủy / Chờ hoàn tiền";
             default -> "Không xác định";
         };
     }

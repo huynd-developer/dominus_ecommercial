@@ -223,11 +223,18 @@
                         >
                           <div class="return-media-list">
                             <button
-                              v-for="(media, mediaIndex) in getDeliverySuccessMedia(order)"
+                              v-for="(
+                                media, mediaIndex
+                              ) in getDeliverySuccessMedia(order)"
                               :key="`delivery-success-${media.url}-${mediaIndex}`"
                               type="button"
                               class="return-media-button"
-                              @click.stop="openDeliverySuccessMediaPreview(order, mediaIndex)"
+                              @click.stop="
+                                openDeliverySuccessMediaPreview(
+                                  order,
+                                  mediaIndex
+                                )
+                              "
                             >
                               <img
                                 :src="media.url"
@@ -247,10 +254,8 @@
                           v-if="
                             track.title === 'Giao hàng thất bại' &&
                             Number(order.status) === 5 &&
-                            (
-                              order.deliveryFailedDescription ||
-                              getDeliveryFailedMedia(order).length > 0
-                            )
+                            (order.deliveryFailedDescription ||
+                              getDeliveryFailedMedia(order).length > 0)
                           "
                           class="tracking-delivery-media is-failed"
                         >
@@ -259,25 +264,36 @@
                             class="tracking-delivery-note"
                           >
                             <span>Mô tả:</span>
-                            <strong>{{ order.deliveryFailedDescription }}</strong>
+                            <strong>{{
+                              order.deliveryFailedDescription
+                            }}</strong>
                           </div>
 
                           <div
                             v-if="getDeliveryFailedMedia(order).length > 0"
                             class="tracking-delivery-proof"
                           >
-                            <div class="tracking-delivery-media-label text-danger">
+                            <div
+                              class="tracking-delivery-media-label text-danger"
+                            >
                               <i class="bi bi-x-circle me-1"></i>
                               Ảnh minh chứng giao thất bại:
                             </div>
 
                             <div class="return-media-list">
                               <button
-                                v-for="(media, mediaIndex) in getDeliveryFailedMedia(order)"
+                                v-for="(
+                                  media, mediaIndex
+                                ) in getDeliveryFailedMedia(order)"
                                 :key="`delivery-failed-${media.url}-${mediaIndex}`"
                                 type="button"
                                 class="return-media-button"
-                                @click.stop="openDeliveryFailedMediaPreview(order, mediaIndex)"
+                                @click.stop="
+                                  openDeliveryFailedMediaPreview(
+                                    order,
+                                    mediaIndex
+                                  )
+                                "
                               >
                                 <img
                                   :src="media.url"
@@ -308,7 +324,11 @@
                     <div>
                       <div class="delivery-refund-title">
                         <i class="bi bi-cash-coin me-1"></i>
-                        Hoàn tiền giao hàng thất bại
+                        {{
+                          order.status === 8
+                            ? "Thông tin tài khoản hoàn tiền"
+                            : "Hoàn tiền giao hàng thất bại"
+                        }}
                       </div>
                       <div class="delivery-refund-desc">
                         {{ getDeliveryRefundDescription(order) }}
@@ -323,23 +343,31 @@
                   <div class="delivery-refund-grid">
                     <div class="delivery-refund-line delivery-refund-money">
                       <span>Số tiền cần hoàn:</span>
-                      <strong>{{ formatMoney(getDeliveryRefundAmount(order)) }}</strong>
+                      <strong>{{
+                        formatMoney(getDeliveryRefundAmount(order))
+                      }}</strong>
                     </div>
 
                     <template v-if="hasDeliveryRefundBankInfo(order)">
                       <div class="delivery-refund-line">
                         <span>Ngân hàng:</span>
-                        <strong>{{ order.deliveryRefundBankName || '-' }}</strong>
+                        <strong>{{
+                          order.deliveryRefundBankName || "-"
+                        }}</strong>
                       </div>
 
                       <div class="delivery-refund-line">
                         <span>Số tài khoản:</span>
-                        <strong>{{ order.deliveryRefundBankAccountNumber || '-' }}</strong>
+                        <strong>{{
+                          order.deliveryRefundBankAccountNumber || "-"
+                        }}</strong>
                       </div>
 
                       <div class="delivery-refund-line">
                         <span>Chủ tài khoản:</span>
-                        <strong>{{ order.deliveryRefundBankAccountHolder || '-' }}</strong>
+                        <strong>{{
+                          order.deliveryRefundBankAccountHolder || "-"
+                        }}</strong>
                       </div>
                     </template>
 
@@ -348,7 +376,9 @@
                       class="delivery-refund-line"
                     >
                       <span>Hoàn lúc:</span>
-                      <strong>{{ formatDate(order.deliveryRefundedAt) }}</strong>
+                      <strong>{{
+                        formatDate(order.deliveryRefundedAt)
+                      }}</strong>
                     </div>
 
                     <div
@@ -383,7 +413,9 @@
                     class="delivery-refund-once-note"
                   >
                     <i class="bi bi-info-circle me-1"></i>
-                    Thông tin tài khoản hoàn tiền đã được gửi một lần. Nếu thông tin chưa chính xác, vui lòng liên hệ shop trước khi shop chuyển tiền.
+                    Thông tin tài khoản hoàn tiền đã được gửi một lần. Nếu thông
+                    tin chưa chính xác, vui lòng liên hệ shop trước khi shop
+                    chuyển tiền.
                   </div>
                 </div>
 
@@ -495,7 +527,7 @@
                             {{
                               formatDate(
                                 getMyReviewByOrderItemId(item.orderItemId)
-                                  ?.createdAt,
+                                  ?.createdAt
                               )
                             }}
                           </div>
@@ -702,7 +734,10 @@
                 </div>
 
                 <div class="order-summary-row">
-                  <div v-if="order.status === 4" class="order-cancel-info">
+                  <div
+                    v-if="order.status === 4 || order.status === 8"
+                    class="order-cancel-info"
+                  >
                     <div class="cancel-info-title">
                       <i class="bi bi-x-circle me-1"></i>
                       Lý do hủy:
@@ -1025,7 +1060,9 @@
 
                     <div v-if="getOrderShippingFee(order) > 0">
                       <span>Phí vận chuyển:</span>
-                      <strong>{{ formatMoney(getOrderShippingFee(order)) }}</strong>
+                      <strong>{{
+                        formatMoney(getOrderShippingFee(order))
+                      }}</strong>
                     </div>
 
                     <div>
@@ -1107,7 +1144,11 @@
                   </button>
 
                   <button
-                    v-if="order.status === 4 || order.status === 3"
+                    v-if="
+                      order.status === 4 ||
+                      order.status === 8 ||
+                      order.status === 3
+                    "
                     class="btn btn-primary btn-sm px-3 text-white"
                     style="background-color: #bd9a5f; border-color: #bd9a5f"
                     @click="handleReorder(order)"
@@ -1148,6 +1189,7 @@
                       !order.canCancel &&
                       order.status !== 3 &&
                       order.status !== 4 &&
+                      order.status !== 8 &&
                       order.status !== 0
                     "
                     class="text-muted small align-self-center"
@@ -1218,7 +1260,7 @@ const selectedReturnOrder = ref<CustomerOrderResponse | null>(null);
 const submittingReturn = ref(false);
 
 const reviewableMap = reactive<Record<number, ReviewableOrderItemResponse[]>>(
-  {},
+  {}
 );
 const reviewLoadingByOrder = reactive<Record<number, boolean>>({});
 
@@ -1925,7 +1967,7 @@ const handleReorder = async (order: any) => {
     } catch (error) {
       showError(
         error,
-        "Không thể thêm sản phẩm vào giỏ hàng lúc này. Vui lòng thử lại.",
+        "Không thể thêm sản phẩm vào giỏ hàng lúc này. Vui lòng thử lại."
       );
     } finally {
       store.orderLoading = false;
@@ -1993,7 +2035,7 @@ const goToProductDetail = async (item: any) => {
     if (productDetailRoute?.name) {
       const params: Record<string, string> = {};
       const paramNames = Array.from(
-        String(productDetailRoute.path || "").matchAll(/:([A-Za-z0-9_]+)/g),
+        String(productDetailRoute.path || "").matchAll(/:([A-Za-z0-9_]+)/g)
       )
         .map((match) => match[1])
         .filter((paramName): paramName is string => Boolean(paramName));
@@ -2010,7 +2052,7 @@ const goToProductDetail = async (item: any) => {
     if (productDetailRoute?.path) {
       const productPath = buildProductDetailPathFromRoute(
         productDetailRoute.path,
-        item,
+        item
       );
       if (productPath) {
         await router.push({ path: productPath, query });
@@ -2071,7 +2113,9 @@ const getTrackingHistory = (order: any) => {
         ? new Date(order.completedAt)
         : new Date(baseDate + 48 * 60 * 60 * 1000),
       title: "Đã giao",
-      desc: `Kiện hàng của bạn đã được giao. Người nhận: ${order.customerName || "Bạn"}`,
+      desc: `Kiện hàng của bạn đã được giao. Người nhận: ${
+        order.customerName || "Bạn"
+      }`,
       active: true,
     });
   if (order.status === 4)
@@ -2091,6 +2135,16 @@ const getTrackingHistory = (order: any) => {
         : new Date(baseDate + 48 * 60 * 60 * 1000),
       title: "Giao hàng thất bại",
       desc: order.deliveryFailedReason || "Đơn hàng giao không thành công.",
+      active: true,
+      isCancel: true,
+    });
+  if (order.status === 8)
+    history.push({
+      time: getOrderCancelledAt(order)
+        ? new Date(getOrderCancelledAt(order))
+        : new Date(baseDate + 15 * 60 * 1000),
+      title: "Đã hủy / Chờ hoàn tiền",
+      desc: "Đơn hàng đã hủy, vui lòng cập nhật số tài khoản để nhận lại tiền.",
       active: true,
       isCancel: true,
     });
@@ -2176,7 +2230,7 @@ const getItemUnitDiscount = (item: any) =>
     item?.unitDiscountAmount,
     item?.unitDiscount,
     item?.flashSaleDiscount,
-    item?.itemDiscount,
+    item?.itemDiscount
   );
 const getItemFinalUnitPrice = (item: any) =>
   pickMoneyValue(
@@ -2188,7 +2242,7 @@ const getItemFinalUnitPrice = (item: any) =>
     item?.sellingPrice,
     item?.unitPrice,
     item?.price,
-    item?.originalPrice,
+    item?.originalPrice
   );
 const getItemOriginalUnitPrice = (item: any) => {
   const originalPrice = pickMoneyValue(
@@ -2199,7 +2253,7 @@ const getItemOriginalUnitPrice = (item: any) => {
     item?.priceBeforeDiscount,
     item?.regularPrice,
     item?.unitPrice,
-    item?.price,
+    item?.price
   );
   const finalPrice = getItemFinalUnitPrice(item);
   const discountAmount = getItemUnitDiscount(item);
@@ -2216,7 +2270,7 @@ const getItemLineTotal = (item: any) => {
     item?.lineTotal,
     item?.totalPrice,
     item?.itemTotal,
-    item?.subtotal,
+    item?.subtotal
   );
   if (lineTotal > 0) return lineTotal;
   return getItemFinalUnitPrice(item) * Number(item?.quantity || 0);
@@ -2958,14 +3012,19 @@ const getDeliveryRefundAmount = (order: any) =>
   toMoneyNumber(order?.deliveryRefundAmount);
 
 const isDeliveryRefundInfoVisible = (order: any) => {
-  return Number(order?.status) === 5 && getDeliveryRefundAmount(order) > 0;
+  const status = Number(order?.status);
+  // Mở box cho Status 5 (Giao thất bại), 8 (Chờ hoàn tiền), HOẶC 4 (Đã hủy nhưng có tiền hoàn)
+  return (
+    (status === 5 || status === 8 || status === 4) &&
+    getDeliveryRefundAmount(order) > 0
+  );
 };
 
 const hasDeliveryRefundBankInfo = (order: any) => {
   return Boolean(
     String(order?.deliveryRefundBankName || "").trim() &&
       String(order?.deliveryRefundBankAccountNumber || "").trim() &&
-      String(order?.deliveryRefundBankAccountHolder || "").trim(),
+      String(order?.deliveryRefundBankAccountHolder || "").trim()
   );
 };
 
@@ -2973,7 +3032,7 @@ const hasAnyDeliveryRefundBankInfo = (order: any) => {
   return Boolean(
     String(order?.deliveryRefundBankName || "").trim() ||
       String(order?.deliveryRefundBankAccountNumber || "").trim() ||
-      String(order?.deliveryRefundBankAccountHolder || "").trim(),
+      String(order?.deliveryRefundBankAccountHolder || "").trim()
   );
 };
 
@@ -3017,7 +3076,7 @@ const getDeliveryRefundDescription = (order: any) => {
   const amount = formatMoney(getDeliveryRefundAmount(order));
 
   if (isDeliveryRefundCompleted(order)) {
-    return `Shop đã xác nhận hoàn ${amount} cho đơn giao thất bại.`;
+    return `Shop đã xác nhận hoàn ${amount} cho bạn.`;
   }
 
   if (hasDeliveryRefundBankInfo(order)) {
@@ -3026,6 +3085,11 @@ const getDeliveryRefundDescription = (order: any) => {
 
   if (hasAnyDeliveryRefundBankInfo(order)) {
     return "Thông tin tài khoản hoàn tiền chưa đầy đủ. Vui lòng liên hệ shop để được hỗ trợ.";
+  }
+
+  // THÊM ĐOẠN NÀY CHO STATUS 8
+  if (Number(order?.status) === 8) {
+    return `Đơn hàng đã được hủy. Vui lòng nhập thông tin tài khoản ngân hàng để shop hoàn lại ${amount}.`;
   }
 
   return `Đơn đã thanh toán trước nhưng giao thất bại. Vui lòng nhập thông tin tài khoản ngân hàng để shop hoàn ${amount}.`;
@@ -3064,7 +3128,9 @@ const normalizeDeliveryRefundInput = (value: unknown) =>
     .replace(/\s{2,}/g, " ");
 
 const normalizeDeliveryRefundAccountNumber = (value: unknown) =>
-  String(value ?? "").replace(/\s+/g, "").trim();
+  String(value ?? "")
+    .replace(/\s+/g, "")
+    .trim();
 
 const normalizeBankSearchText = (value: unknown) =>
   normalizeDeliveryRefundInput(value)
@@ -3096,7 +3162,8 @@ const mapVietQrBank = (rawBank: unknown): VietQrBank | null => {
   }
 
   return {
-    id: normalizeDeliveryRefundInput(bank.id) || `${code}-${bin}-${displayName}`,
+    id:
+      normalizeDeliveryRefundInput(bank.id) || `${code}-${bin}-${displayName}`,
     name,
     code,
     bin,
@@ -3179,13 +3246,15 @@ const getDeliveryRefundBankSubtitle = (bank: VietQrBank) => {
 
 const buildDeliveryRefundBankOptionsHtml = (
   keyword = "",
-  selectedBank?: string | null,
+  selectedBank?: string | null
 ) => {
   const cleanKeyword = normalizeBankSearchText(keyword);
   const selected = normalizeDeliveryRefundInput(selectedBank);
 
   const banks = cleanKeyword
-    ? deliveryRefundBanks.value.filter((bank) => bank.searchText.includes(cleanKeyword))
+    ? deliveryRefundBanks.value.filter((bank) =>
+        bank.searchText.includes(cleanKeyword)
+      )
     : deliveryRefundBanks.value;
 
   if (banks.length === 0) {
@@ -3199,15 +3268,21 @@ const buildDeliveryRefundBankOptionsHtml = (
   return banks
     .map((bank) => {
       const isSelected =
-        normalizeBankSearchText(bank.displayName) === normalizeBankSearchText(selected) ||
-        normalizeBankSearchText(bank.name) === normalizeBankSearchText(selected) ||
-        normalizeBankSearchText(bank.shortName) === normalizeBankSearchText(selected) ||
-        normalizeBankSearchText(bank.code) === normalizeBankSearchText(selected);
+        normalizeBankSearchText(bank.displayName) ===
+          normalizeBankSearchText(selected) ||
+        normalizeBankSearchText(bank.name) ===
+          normalizeBankSearchText(selected) ||
+        normalizeBankSearchText(bank.shortName) ===
+          normalizeBankSearchText(selected) ||
+        normalizeBankSearchText(bank.code) ===
+          normalizeBankSearchText(selected);
 
       const selectedClass = isSelected ? " is-selected" : "";
       const selectedIcon = isSelected ? '<i class="bi bi-check-lg"></i>' : "";
       const logoHtml = bank.logo
-        ? `<img src="${escapeHtml(bank.logo)}" alt="${escapeHtml(bank.displayName)}" class="delivery-refund-bank-logo" />`
+        ? `<img src="${escapeHtml(bank.logo)}" alt="${escapeHtml(
+            bank.displayName
+          )}" class="delivery-refund-bank-logo" />`
         : `<span class="delivery-refund-bank-logo is-empty"><i class="bi bi-bank"></i></span>`;
 
       return `
@@ -3230,7 +3305,7 @@ const buildDeliveryRefundBankOptionsHtml = (
 
 const setDeliveryRefundBankListHtml = (
   keyword = "",
-  selectedBank?: string | null,
+  selectedBank?: string | null
 ) => {
   const bankListElement = document.getElementById("delivery-refund-bank-list");
 
@@ -3238,7 +3313,10 @@ const setDeliveryRefundBankListHtml = (
     return;
   }
 
-  bankListElement.innerHTML = buildDeliveryRefundBankOptionsHtml(keyword, selectedBank);
+  bankListElement.innerHTML = buildDeliveryRefundBankOptionsHtml(
+    keyword,
+    selectedBank
+  );
 
   bankListElement
     .querySelectorAll<HTMLButtonElement>(".delivery-refund-bank-option")
@@ -3246,10 +3324,10 @@ const setDeliveryRefundBankListHtml = (
       button.addEventListener("click", () => {
         const bankName = normalizeDeliveryRefundInput(button.dataset.bankValue);
         const hiddenInput = document.getElementById(
-          "delivery-refund-bank-name",
+          "delivery-refund-bank-name"
         ) as HTMLInputElement | null;
         const searchInput = document.getElementById(
-          "delivery-refund-bank-search",
+          "delivery-refund-bank-search"
         ) as HTMLInputElement | null;
 
         if (hiddenInput) {
@@ -3268,7 +3346,7 @@ const setDeliveryRefundBankListHtml = (
 const validateDeliveryRefundBankForm = (
   bankName: string,
   bankAccountNumber: string,
-  bankAccountHolder: string,
+  bankAccountHolder: string
 ) => {
   if (!bankName) {
     return "Vui lòng chọn ngân hàng.";
@@ -3344,7 +3422,9 @@ const openDeliveryRefundBankModal = async (order: CustomerOrderResponse) => {
     return;
   }
 
-  const currentBank = findDeliveryRefundBank(order.deliveryRefundBankName || "");
+  const currentBank = findDeliveryRefundBank(
+    order.deliveryRefundBankName || ""
+  );
   const currentBankName = currentBank?.displayName || "";
 
   const result = await Swal.fire<{
@@ -3358,8 +3438,10 @@ const openDeliveryRefundBankModal = async (order: CustomerOrderResponse) => {
         <div class="delivery-refund-modal-alert">
           <i class="bi bi-info-circle"></i>
           <span>Shop sẽ hoàn <strong>${escapeHtml(
-            formatMoney(getDeliveryRefundAmount(order)),
-          )}</strong> cho đơn ${escapeHtml(generateOrderCode(order.orderId))}. Thông tin này chỉ gửi được 1 lần và không thể tự chỉnh sửa.</span>
+            formatMoney(getDeliveryRefundAmount(order))
+          )}</strong> cho đơn ${escapeHtml(
+      generateOrderCode(order.orderId)
+    )}. Thông tin này chỉ gửi được 1 lần và không thể tự chỉnh sửa.</span>
         </div>
 
         <label for="delivery-refund-bank-search" class="delivery-refund-modal-label">
@@ -3427,16 +3509,16 @@ const openDeliveryRefundBankModal = async (order: CustomerOrderResponse) => {
     },
     didOpen: () => {
       const bankSearchInput = document.getElementById(
-        "delivery-refund-bank-search",
+        "delivery-refund-bank-search"
       ) as HTMLInputElement | null;
       const bankHiddenInput = document.getElementById(
-        "delivery-refund-bank-name",
+        "delivery-refund-bank-name"
       ) as HTMLInputElement | null;
       const accountInput = document.getElementById(
-        "delivery-refund-account-number",
+        "delivery-refund-account-number"
       ) as HTMLInputElement | null;
       const accountHolderInput = document.getElementById(
-        "delivery-refund-account-holder",
+        "delivery-refund-account-holder"
       ) as HTMLInputElement | null;
 
       setDeliveryRefundBankListHtml("", currentBankName);
@@ -3460,7 +3542,7 @@ const openDeliveryRefundBankModal = async (order: CustomerOrderResponse) => {
       bankSearchInput?.addEventListener("focus", () => {
         setDeliveryRefundBankListHtml(
           normalizeDeliveryRefundInput(bankSearchInput.value),
-          bankHiddenInput?.value || "",
+          bankHiddenInput?.value || ""
         );
       });
 
@@ -3479,27 +3561,27 @@ const openDeliveryRefundBankModal = async (order: CustomerOrderResponse) => {
     },
     preConfirm: () => {
       const bankElement = document.getElementById(
-        "delivery-refund-bank-name",
+        "delivery-refund-bank-name"
       ) as HTMLInputElement | null;
       const accountNumberElement = document.getElementById(
-        "delivery-refund-account-number",
+        "delivery-refund-account-number"
       ) as HTMLInputElement | null;
       const accountHolderElement = document.getElementById(
-        "delivery-refund-account-holder",
+        "delivery-refund-account-holder"
       ) as HTMLInputElement | null;
 
       const bankName = normalizeDeliveryRefundInput(bankElement?.value);
       const bankAccountNumber = normalizeDeliveryRefundAccountNumber(
-        accountNumberElement?.value,
+        accountNumberElement?.value
       );
       const bankAccountHolder = normalizeDeliveryRefundInput(
-        accountHolderElement?.value,
+        accountHolderElement?.value
       ).toUpperCase();
 
       const validationMessage = validateDeliveryRefundBankForm(
         bankName,
         bankAccountNumber,
-        bankAccountHolder,
+        bankAccountHolder
       );
 
       if (validationMessage) {
@@ -3525,9 +3607,15 @@ const openDeliveryRefundBankModal = async (order: CustomerOrderResponse) => {
     html: `
       <div style="text-align:left;line-height:1.6">
         <p style="margin-bottom:8px">Thông tin tài khoản hoàn tiền <b>chỉ gửi được 1 lần</b>. Sau khi gửi, bạn không thể tự chỉnh sửa trên hệ thống. Vui lòng kiểm tra thật kĩ</p>
-        <p style="margin-bottom:4px"><b>Ngân hàng:</b> ${escapeHtml(result.value.bankName)}</p>
-        <p style="margin-bottom:4px"><b>Số tài khoản:</b> ${escapeHtml(result.value.bankAccountNumber)}</p>
-        <p style="margin-bottom:0"><b>Chủ tài khoản:</b> ${escapeHtml(result.value.bankAccountHolder)}</p>
+        <p style="margin-bottom:4px"><b>Ngân hàng:</b> ${escapeHtml(
+          result.value.bankName
+        )}</p>
+        <p style="margin-bottom:4px"><b>Số tài khoản:</b> ${escapeHtml(
+          result.value.bankAccountNumber
+        )}</p>
+        <p style="margin-bottom:0"><b>Chủ tài khoản:</b> ${escapeHtml(
+          result.value.bankAccountHolder
+        )}</p>
       </div>
     `,
     showCancelButton: true,
@@ -3550,7 +3638,7 @@ const openDeliveryRefundBankModal = async (order: CustomerOrderResponse) => {
     store.orderLoading = true;
     await customerProfileService.submitDeliveryRefundBank(
       order.orderId,
-      result.value,
+      result.value
     );
     await fetchOrdersAndReviews();
     openedOrderId.value = order.orderId;
@@ -4050,13 +4138,13 @@ const getReturnMediaUrl = (media: any) => {
   const rawUrl =
     typeof media === "string"
       ? media
-      : (media?.mediaUrl ??
+      : media?.mediaUrl ??
         media?.url ??
         media?.imageUrl ??
         media?.fileUrl ??
         media?.src ??
         media?.path ??
-        "");
+        "";
   return normalizeReturnMediaUrl(String(rawUrl || ""));
 };
 
@@ -4066,7 +4154,7 @@ const isReturnMediaVideo = (media: any, url: string) => {
       media?.type ??
       media?.contentType ??
       media?.mimeType ??
-      url,
+      url
   ).toLowerCase();
   return (
     rawType.includes("video") ||
@@ -4159,7 +4247,7 @@ const DELIVERY_FAILED_MEDIA_PREVIEW_OPTIONS: MediaPreviewOptions = {
 
 const buildReturnPreviewMainHtml = (
   media: ReturnMediaView,
-  options: MediaPreviewOptions,
+  options: MediaPreviewOptions
 ) => {
   const safeUrl = escapeHtml(media.url);
   const safeAlt = escapeHtml(options.imageAlt);
@@ -4173,13 +4261,13 @@ const buildReturnPreviewThumbHtml = (
   media: ReturnMediaView,
   index: number,
   activeIndex: number,
-  options: MediaPreviewOptions,
+  options: MediaPreviewOptions
 ) => {
   const safeUrl = escapeHtml(media.url);
   const activeClass = index === activeIndex ? " active" : "";
   const mediaLabel = media.isVideo ? "Video" : "Ảnh";
   const safeAriaLabel = escapeHtml(
-    `Xem ${mediaLabel.toLowerCase()} ${options.counterLabel} ${index + 1}`,
+    `Xem ${mediaLabel.toLowerCase()} ${options.counterLabel} ${index + 1}`
   );
   const thumb = media.isVideo
     ? `
@@ -4224,26 +4312,55 @@ const buildReturnPreviewThumbHtml = (
 const buildReturnPreviewHtml = (
   mediaList: ReturnMediaView[],
   activeIndex: number,
-  options: MediaPreviewOptions,
+  options: MediaPreviewOptions
 ) => {
   if (mediaList.length === 0)
-    return `<div class="return-preview-modal"><div class="return-preview-empty">${escapeHtml(options.emptyText)}</div></div>`;
+    return `<div class="return-preview-modal"><div class="return-preview-empty">${escapeHtml(
+      options.emptyText
+    )}</div></div>`;
   const safeActiveIndex = Math.min(
     Math.max(Number.isFinite(activeIndex) ? activeIndex : 0, 0),
-    mediaList.length - 1,
+    mediaList.length - 1
   );
   const activeMedia = mediaList[safeActiveIndex];
   if (!activeMedia)
-    return `<div class="return-preview-modal"><div class="return-preview-empty">${escapeHtml(options.emptyText)}</div></div>`;
+    return `<div class="return-preview-modal"><div class="return-preview-empty">${escapeHtml(
+      options.emptyText
+    )}</div></div>`;
   const hasMultipleMedia = mediaList.length > 1;
   const activeMediaLabel = activeMedia.isVideo ? "Video" : "Ảnh";
-  return `<div class="return-preview-modal"><div class="return-preview-counter">${activeMediaLabel} ${escapeHtml(options.counterLabel)}<strong>${safeActiveIndex + 1}/${mediaList.length}</strong></div><div class="return-preview-stage">${hasMultipleMedia ? `<button type="button" class="return-preview-nav is-prev" data-preview-direction="-1" aria-label="Xem ảnh/video trước"><i class="bi bi-chevron-left"></i></button>` : ""}<div class="return-preview-main">${buildReturnPreviewMainHtml(activeMedia, options)}</div>${hasMultipleMedia ? `<button type="button" class="return-preview-nav is-next" data-preview-direction="1" aria-label="Xem ảnh/video tiếp theo"><i class="bi bi-chevron-right"></i></button>` : ""}</div>${hasMultipleMedia ? `<div class="return-preview-thumb-title">${escapeHtml(options.thumbTitle)}</div><div class="return-preview-thumb-list">${mediaList.map((media, index) => buildReturnPreviewThumbHtml(media, index, safeActiveIndex, options)).join("")}</div>` : ""}</div>`;
+  return `<div class="return-preview-modal"><div class="return-preview-counter">${activeMediaLabel} ${escapeHtml(
+    options.counterLabel
+  )}<strong>${safeActiveIndex + 1}/${
+    mediaList.length
+  }</strong></div><div class="return-preview-stage">${
+    hasMultipleMedia
+      ? `<button type="button" class="return-preview-nav is-prev" data-preview-direction="-1" aria-label="Xem ảnh/video trước"><i class="bi bi-chevron-left"></i></button>`
+      : ""
+  }<div class="return-preview-main">${buildReturnPreviewMainHtml(
+    activeMedia,
+    options
+  )}</div>${
+    hasMultipleMedia
+      ? `<button type="button" class="return-preview-nav is-next" data-preview-direction="1" aria-label="Xem ảnh/video tiếp theo"><i class="bi bi-chevron-right"></i></button>`
+      : ""
+  }</div>${
+    hasMultipleMedia
+      ? `<div class="return-preview-thumb-title">${escapeHtml(
+          options.thumbTitle
+        )}</div><div class="return-preview-thumb-list">${mediaList
+          .map((media, index) =>
+            buildReturnPreviewThumbHtml(media, index, safeActiveIndex, options)
+          )
+          .join("")}</div>`
+      : ""
+  }</div>`;
 };
 
 const openMediaPreview = async (
   mediaList: ReturnMediaView[],
   index: number,
-  options: MediaPreviewOptions,
+  options: MediaPreviewOptions
 ) => {
   if (mediaList.length === 0) return;
   let activeIndex = Number.isInteger(index) ? index : 0;
@@ -4254,7 +4371,7 @@ const openMediaPreview = async (
     htmlContainer.innerHTML = buildReturnPreviewHtml(
       mediaList,
       activeIndex,
-      options,
+      options
     );
     bindPreviewEvents();
   };
@@ -4302,12 +4419,16 @@ const openReturnMediaPreview = async (order: any, index: number) => {
   await openMediaPreview(
     getOrderReturnMedia(order),
     index,
-    RETURN_MEDIA_PREVIEW_OPTIONS,
+    RETURN_MEDIA_PREVIEW_OPTIONS
   );
 };
 
 const getDeliveryMedia = (rawMedia: any): ReturnMediaView[] => {
-  const mediaList = Array.isArray(rawMedia) ? rawMedia : rawMedia ? [rawMedia] : [];
+  const mediaList = Array.isArray(rawMedia)
+    ? rawMedia
+    : rawMedia
+    ? [rawMedia]
+    : [];
 
   return mediaList
     .map((media: any) => {
@@ -4323,15 +4444,13 @@ const getDeliverySuccessMedia = (order: any): ReturnMediaView[] => {
     order?.deliverySuccessMediaUrls ??
       order?.deliveryCompletedMediaUrls ??
       order?.deliveryProofUrls ??
-      [],
+      []
   );
 };
 
 const getDeliveryFailedMedia = (order: any): ReturnMediaView[] => {
   return getDeliveryMedia(
-    order?.deliveryFailedMediaUrls ??
-      order?.deliveryFailedProofUrls ??
-      [],
+    order?.deliveryFailedMediaUrls ?? order?.deliveryFailedProofUrls ?? []
   );
 };
 
@@ -4339,7 +4458,7 @@ const openDeliverySuccessMediaPreview = async (order: any, index: number) => {
   await openMediaPreview(
     getDeliverySuccessMedia(order),
     index,
-    DELIVERY_SUCCESS_MEDIA_PREVIEW_OPTIONS,
+    DELIVERY_SUCCESS_MEDIA_PREVIEW_OPTIONS
   );
 };
 
@@ -4347,7 +4466,7 @@ const openDeliveryFailedMediaPreview = async (order: any, index: number) => {
   await openMediaPreview(
     getDeliveryFailedMedia(order),
     index,
-    DELIVERY_FAILED_MEDIA_PREVIEW_OPTIONS,
+    DELIVERY_FAILED_MEDIA_PREVIEW_OPTIONS
   );
 };
 
@@ -4378,7 +4497,7 @@ const openReviewMediaPreview = async (orderItemId: number, index: number) => {
   await openMediaPreview(
     getReviewMediaByOrderItemId(orderItemId),
     index,
-    REVIEW_MEDIA_PREVIEW_OPTIONS,
+    REVIEW_MEDIA_PREVIEW_OPTIONS
   );
 };
 
@@ -4400,6 +4519,8 @@ const getStatusText = (status: number) => {
       return "Yêu cầu hoàn hàng / đổi trả";
     case 7:
       return "Hoàn hàng / đổi trả hoàn tất";
+    case 8:
+      return "Đã hủy / Chờ hoàn tiền"; // THÊM DÒNG NÀY
     default:
       return "Không xác định";
   }
@@ -4423,6 +4544,8 @@ const getStatusClass = (status: number) => {
       return "bg-secondary";
     case 7:
       return "bg-success";
+    case 8:
+      return "bg-warning text-dark"; // THÊM DÒNG NÀY
     default:
       return "bg-secondary";
   }
@@ -4481,7 +4604,7 @@ const showError = (error: any, fallback: string) => {
 
 const toast = (
   icon: "success" | "error" | "warning" | "info",
-  title: string,
+  title: string
 ) => {
   Swal.fire({
     toast: true,
@@ -4582,7 +4705,7 @@ const getDefaultReturnEmail = () => {
       currentUser.email ||
         currentUser.Email ||
         localStorage.getItem("email") ||
-        "",
+        ""
     ).trim();
   } catch {
     return String(localStorage.getItem("email") || "").trim();
@@ -4656,7 +4779,7 @@ const cancelReturnRequest = async (order: CustomerOrderResponse) => {
 const FALLBACK_IMAGE =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#9ca3af" font-family="Arial" font-size="20">Không có ảnh</text></svg>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#9ca3af" font-family="Arial" font-size="20">Không có ảnh</text></svg>`
   );
 
 const handleImageError = (event: Event) => {
@@ -4878,9 +5001,7 @@ const getItemImage = (item: any) => {
   border-radius: 14px;
   overflow: hidden;
   background: #ffffff;
-  transition:
-    border-color 0.25s ease,
-    box-shadow 0.25s ease,
+  transition: border-color 0.25s ease, box-shadow 0.25s ease,
     transform 0.25s ease;
 }
 
@@ -4897,9 +5018,7 @@ const getItemImage = (item: any) => {
   padding: 16px 20px;
   text-align: left;
   cursor: pointer;
-  transition:
-    background 0.25s ease,
-    color 0.25s ease;
+  transition: background 0.25s ease, color 0.25s ease;
 }
 
 .order-card.opened .order-header-button {
@@ -4996,9 +5115,7 @@ const getItemImage = (item: any) => {
   flex: 1;
   cursor: pointer;
   border-radius: 12px;
-  transition:
-    background-color 0.18s ease,
-    box-shadow 0.18s ease;
+  transition: background-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .product-block:focus-visible {
@@ -5088,7 +5205,6 @@ const getItemImage = (item: any) => {
   justify-content: flex-end;
   flex-shrink: 0;
 }
-
 
 .order-delivery-refund-info {
   width: 100%;
@@ -5207,7 +5323,6 @@ const getItemImage = (item: any) => {
   border-radius: 10px;
   padding: 9px 10px;
 }
-
 
 .order-summary-row {
   display: grid;
@@ -6022,8 +6137,7 @@ const getItemImage = (item: any) => {
   padding: 0 0 24px 0 !important;
   overflow: hidden !important;
   border: 1px solid #e2e8f0 !important;
-  box-shadow:
-    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
     0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
 }
 
@@ -6506,7 +6620,6 @@ const getItemImage = (item: any) => {
   }
 }
 
-
 .delivery-refund-swal {
   width: min(620px, calc(100vw - 28px)) !important;
 }
@@ -6567,7 +6680,6 @@ input.delivery-refund-modal-control {
   font-size: 12px;
   line-height: 1.4;
 }
-
 
 .delivery-refund-bank-picker {
   border: 1px solid #cbd5e1;
@@ -6680,5 +6792,4 @@ input.delivery-refund-modal-control {
   font-size: 13px;
   text-align: center;
 }
-
 </style>

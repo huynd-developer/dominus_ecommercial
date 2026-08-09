@@ -20,6 +20,10 @@ export interface ReportSummaryResponse {
   totalRevenue: number;
   totalOrders: number;
   totalProductsSold: number;
+  onlineRevenue: number;
+  offlineRevenue: number;
+  onlineOrders: number;
+  offlineOrders: number;
 }
 
 export interface RevenueChartResponse {

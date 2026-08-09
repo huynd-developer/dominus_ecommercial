@@ -49,15 +49,15 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
     /**
      * Tổng số lượng sản phẩm đã bán.
      *
-     * Chỉ tính đơn hoàn thành.
+     * Chỉ tính đơn hoàn thành. (ĐÃ SỬA THÀNH CompletedAt)
      */
     @Query(value = """
         SELECT COALESCE(SUM(oi.Quantity), 0)
         FROM [OrderItem] oi
         INNER JOIN [Orders] o ON o.Id = oi.OrderId
         WHERE o.Status = :status
-          AND o.CreatedAt >= :fromDate
-          AND o.CreatedAt < :toDate
+          AND o.CompletedAt >= :fromDate
+          AND o.CompletedAt < :toDate
     """, nativeQuery = true)
     Long sumSoldQuantityByCompletedOrders(
             @Param("status") Integer status,
@@ -67,14 +67,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
 
     /**
      * Top sản phẩm bán chạy.
-     *
-     * Lưu ý:
-     * Sau khi sửa checkout, OrderItem.FinalPrice là giá cuối / 1 sản phẩm.
-     * Vì vậy doanh thu dòng phải tính:
-     *
-     * FinalPrice * Quantity
-     *
-     * Không được SUM(FinalPrice) vì sẽ sai khi quantity > 1.
+     * (ĐÃ SỬA THÀNH CompletedAt)
      */
     @Query(value = """
         SELECT
@@ -90,8 +83,8 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
         INNER JOIN [Product] p ON p.Id = pv.ProductId
         LEFT JOIN [Brand] b ON b.Id = p.BrandId
         WHERE o.Status = :status
-          AND o.CreatedAt >= :fromDate
-          AND o.CreatedAt < :toDate
+          AND o.CompletedAt >= :fromDate
+          AND o.CompletedAt < :toDate
         GROUP BY p.Id, p.Name, b.Name
         ORDER BY COALESCE(SUM(oi.Quantity), 0) DESC,
                  COALESCE(SUM(oi.FinalPrice * oi.Quantity), 0) DESC
