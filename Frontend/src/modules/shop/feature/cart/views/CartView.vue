@@ -302,9 +302,46 @@ const loadCart = async (options: { preserveOrder?: boolean } = {}) => {
   try {
     isLoading.value = true;
     
-    // Thêm ?t=Date.now() để ép trình duyệt luôn hỏi Backend, Backend sẽ tự tính Flash Sale
+    // Lấy giỏ hàng mới nhất từ Backend
     const res = await api.get(`/v1/customer/cart/my-cart?t=${Date.now()}`);
-    const items = extractCartItems(res.data);
+    let items = extractCartItems(res.data);
+    
+    // ÉP ĐỒNG BỘ: Kiểm tra trực tiếp với dữ liệu thật từ Product Detail
+    if (items.length > 0) {
+      items = await Promise.all(items.map(async (item: any) => {
+        try {
+          const productId = getItemProductId(item);
+          const variantId = getItemVariantId(item);
+          
+          if (!productId) return item;
+          
+          // Gọi API lấy dữ liệu thật của sản phẩm để so sánh
+          const productData = await fetchProductDetail(productId);
+          if (!productData) return item;
+          
+          const matchedVariant = findMatchingVariant(productData, variantId);
+          
+          if (matchedVariant) {
+             // Cập nhật đè dữ liệu mới nhất (Giá, Tồn kho, Trạng thái) từ Admin vào Item trong giỏ
+             return {
+                ...item,
+                price: Number(matchedVariant.salePrice ?? matchedVariant.price ?? item.price),
+                originalPrice: Number(matchedVariant.originalPrice ?? matchedVariant.oldPrice ?? item.originalPrice),
+                stockQuantity: Number(matchedVariant.stockQuantity ?? matchedVariant.stock ?? item.stockQuantity),
+                variantStatus: Number(matchedVariant.status ?? item.variantStatus),
+                expirationDate: matchedVariant.expirationDate ?? item.expirationDate,
+                product: productData,
+                productVariant: matchedVariant
+             };
+          }
+          
+          // Nếu biến thể đã bị xóa hẳn bên Admin
+          return { ...item, variantStatus: 0, stockQuantity: 0 };
+        } catch (e) {
+          return item;
+        }
+      }));
+    }
     
     const enrichedItems = await enrichCartItemsWithImages(items);
     

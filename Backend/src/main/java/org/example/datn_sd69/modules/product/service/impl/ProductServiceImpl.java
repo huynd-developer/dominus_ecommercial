@@ -79,7 +79,6 @@ public class ProductServiceImpl implements ProductService {
 
         List<ProductVariant> variants = new ArrayList<>();
 
-        // ĐÃ SỬA: Dùng Set để kiểm tra trùng cặp (CapacityId + BottleTypeId) thay vì chỉ check Capacity
         Set<String> variantPairSet = new HashSet<>();
 
         for (ProductRequest.VariantRequestDTO dto : request.getVariants()) {
@@ -94,7 +93,6 @@ public class ProductServiceImpl implements ProductService {
                             .orElseThrow(() ->
                                     new RuntimeException("Không tìm thấy BottleType"));
 
-            // Kiểm tra trùng lặp cặp Dung tích + Loại chai
             String pairKey = capacity.getId() + "-" + bottleType.getId();
             if (!variantPairSet.add(pairKey)) {
                 throw new RuntimeException("Không được phép có 2 biến thể trùng cả Dung tích và Loại chai giống nhau!");
@@ -106,13 +104,11 @@ public class ProductServiceImpl implements ProductService {
             variant.setCapacity(capacity);
             variant.setBottleType(bottleType);
 
-            // ĐÃ SỬA: Kiểm tra xem có SKU gửi lên không, không có mới tạo mới
             String sku = (dto.getSku() != null && !dto.getSku().trim().isEmpty())
                     ? dto.getSku()
                     : generateSku(savedProduct, capacity, bottleType);
             variant.setSku(sku);
 
-            // ĐÃ SỬA: Xóa bỏ một dòng setPrice bị lặp thừa
             variant.setPrice(dto.getPrice());
             variant.setStockQuantity(dto.getStockQuantity());
 
@@ -183,13 +179,12 @@ public class ProductServiceImpl implements ProductService {
 
         productRepository.save(product);
 
-        productVariantRepository.deleteByProduct_Id(id);
+        // ĐÃ SỬA: Lấy danh sách biến thể cũ để cập nhật thay vì xóa trắng
+        List<ProductVariant> existingVariants = productVariantRepository.findByProduct_Id(id);
+        Map<Integer, ProductVariant> existingVariantMap = existingVariants.stream()
+                .collect(Collectors.toMap(ProductVariant::getId, v -> v));
 
-        productVariantRepository.flush();
-
-        List<ProductVariant> variants = new ArrayList<>();
-
-        // ĐÃ SỬA: Dùng Set để kiểm tra trùng cặp (CapacityId + BottleTypeId) khi cập nhật
+        List<ProductVariant> variantsToSave = new ArrayList<>();
         Set<String> variantPairSet = new HashSet<>();
 
         for (ProductRequest.VariantRequestDTO dto : request.getVariants()) {
@@ -204,19 +199,26 @@ public class ProductServiceImpl implements ProductService {
                             .orElseThrow(() ->
                                     new RuntimeException("Không tìm thấy BottleType"));
 
-            // Kiểm tra trùng lặp cặp Dung tích + Loại chai
             String pairKey = capacity.getId() + "-" + bottleType.getId();
             if (!variantPairSet.add(pairKey)) {
                 throw new RuntimeException("Không được phép có 2 biến thể trùng cả Dung tích và Loại chai giống nhau!");
             }
 
-            ProductVariant variant = new ProductVariant();
+            ProductVariant variant;
 
-            variant.setProduct(product);
+            // NẾU CÓ ID TỨC LÀ BIẾN THỂ CŨ -> CẬP NHẬT (Giữ nguyên ID để không bị mất trong Giỏ hàng)
+            if (dto.getId() != null && existingVariantMap.containsKey(dto.getId())) {
+                variant = existingVariantMap.get(dto.getId());
+                existingVariantMap.remove(dto.getId()); // Đánh dấu đã xử lý
+            } else {
+                // NẾU KHÔNG CÓ ID TỨC LÀ ADMIN VỪA BẤM NÚT "THÊM BIẾN THỂ" MỚI
+                variant = new ProductVariant();
+                variant.setProduct(product);
+            }
+
             variant.setCapacity(capacity);
             variant.setBottleType(bottleType);
 
-            // ĐÃ SỬA: Giữ nguyên mã SKU cũ nếu cập nhật, tránh sinh mới làm loạn database
             String sku = (dto.getSku() != null && !dto.getSku().trim().isEmpty())
                     ? dto.getSku()
                     : generateSku(product, capacity, bottleType);
@@ -243,10 +245,13 @@ public class ProductServiceImpl implements ProductService {
             variant.setStatus(dto.getStatus());
             variant.setIsDeleted(false);
 
-            variants.add(variant);
+            variantsToSave.add(variant);
         }
 
-        productVariantRepository.saveAll(variants);
+        // Xóa cứng các biến thể mà Admin đã bấm thùng rác xóa đi
+        productVariantRepository.deleteAll(existingVariantMap.values());
+
+        productVariantRepository.saveAll(variantsToSave);
 
         return getProductById(id);
     }
@@ -266,7 +271,6 @@ public class ProductServiceImpl implements ProductService {
     @Transactional(readOnly = true)
     public Map<String, Object> getAllProducts(int page, int size) {
 
-        // ĐÃ SỬA: Thêm Sort.by(Sort.Direction.DESC, "id") để đưa sp mới lên đầu
         Page<Product> productPage =
                 productRepository.findByStatusAndIsDeletedFalse(
                         1,
@@ -289,7 +293,6 @@ public class ProductServiceImpl implements ProductService {
     @Transactional(readOnly = true)
     public Map<String, Object> getAllProductsAdmin(int page, int size) {
 
-        // ĐÃ SỬA: Thêm Sort.by(Sort.Direction.DESC, "id") để đưa sp mới lên đầu
         Page<Product> productPage =
                 productRepository.findByIsDeletedFalse(
                         PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"))

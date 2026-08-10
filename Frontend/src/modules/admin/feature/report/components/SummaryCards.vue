@@ -7,15 +7,6 @@
         <div class="report-card-value text-primary-gradient">
           {{ formatMoney(summary?.totalRevenue || 0) }}
         </div>
-<<<<<<< HEAD
-        <div class="report-card-desc d-flex align-items-center gap-2 mt-2">
-          <div class="online-stat">
-            <i class="bi bi-globe"></i> Online: <span class="fw-bold">{{ formatMoney(summary?.onlineRevenue || 0) }}</span>
-          </div>
-          <span class="text-muted">|</span>
-          <div class="offline-stat">
-            <i class="bi bi-shop"></i> Tại quầy: <span class="fw-bold">{{ formatMoney(summary?.offlineRevenue || 0) }}</span>
-=======
 
         <div class="split-stats">
           <div class="stat-row">
@@ -25,7 +16,6 @@
           <div class="stat-row">
             <span class="stat-label">🏪 Tại quầy (POS):</span>
             <span class="stat-number">{{ formatMoney(summary?.offlineRevenue || 0) }}</span>
->>>>>>> 9d167f0ed4c026eca4c2ba188b0c8fa4199145de
           </div>
         </div>
       </div>
@@ -38,15 +28,6 @@
         <div class="report-card-value">
           {{ formatNumber(summary?.totalOrders || 0) }} <span style="font-size: 16px; color: #6b7280; font-weight: 500;">đơn</span>
         </div>
-<<<<<<< HEAD
-        <div class="report-card-desc d-flex align-items-center gap-2 mt-2">
-          <div class="online-stat">
-            <i class="bi bi-globe"></i> Online: <span class="fw-bold">{{ formatNumber(summary?.onlineOrders || 0) }}</span>
-          </div>
-          <span class="text-muted">|</span>
-          <div class="offline-stat">
-            <i class="bi bi-shop"></i> Tại quầy: <span class="fw-bold">{{ formatNumber(summary?.offlineOrders || 0) }}</span>
-=======
 
         <div class="split-stats">
           <div class="stat-row">
@@ -56,7 +37,6 @@
           <div class="stat-row">
             <span class="stat-label">🏪 Tại quầy (POS):</span>
             <span class="stat-number">{{ formatNumber(summary?.offlineOrders || 0) }}</span>
->>>>>>> 9d167f0ed4c026eca4c2ba188b0c8fa4199145de
           </div>
         </div>
       </div>
@@ -69,13 +49,8 @@
         <div class="report-card-value">
           {{ formatNumber(summary?.totalProductsSold || 0) }} <span style="font-size: 16px; color: #6b7280; font-weight: 500;">sản phẩm</span>
         </div>
-<<<<<<< HEAD
-        <div class="report-card-desc mt-2">
-          Tổng số lượng sản phẩm trong đơn hoàn thành
-=======
         <div class="report-card-desc mt-3" style="font-size: 13.5px; color: #6b7280;">
            Tổng số lượng các sản phẩm nằm trong những đơn hàng đã hoàn thành thành công.
->>>>>>> 9d167f0ed4c026eca4c2ba188b0c8fa4199145de
         </div>
       </div>
     </div>
@@ -226,14 +201,6 @@ const formatDate = (value?: string | null) => {
   background: #f3f4f6;
   padding: 4px 10px;
   border-radius: 6px;
-}
-
-.online-stat {
-  color: #059669;
-}
-
-.offline-stat {
-  color: #2563eb;
 }
 
 .range-box {

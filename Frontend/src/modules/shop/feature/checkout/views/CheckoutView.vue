@@ -425,12 +425,22 @@ const loadCartSummary = async () => {
 
         const matchedVariant = variants.find((v: any) => Number(v?.productVariantId || v?.id || v?.Id || 0) === variantId);
 
-        // TRẢ LẠI NGUYÊN BẢN: Giữ nguyên dữ liệu item từ backend (đã có sẵn giá Sale chuẩn)
-        return {
-          ...item,
-          product: productData,
-          productVariant: matchedVariant || item.productVariant
-        };
+        if (matchedVariant) {
+          // Gán đè dữ liệu thật (Giá, Tồn kho) từ Admin vào Item thanh toán
+          return {
+             ...item,
+             price: Number(matchedVariant.salePrice ?? matchedVariant.price ?? item.price),
+             originalPrice: Number(matchedVariant.originalPrice ?? matchedVariant.oldPrice ?? item.originalPrice),
+             stockQuantity: Number(matchedVariant.stockQuantity ?? matchedVariant.stock ?? item.stockQuantity),
+             variantStatus: Number(matchedVariant.status ?? item.variantStatus),
+             expirationDate: matchedVariant.expirationDate ?? item.expirationDate,
+             product: productData,
+             productVariant: matchedVariant
+          };
+        }
+
+        // Nếu biến thể đã bị xóa hẳn bên Admin
+        return { ...item, variantStatus: 0, stockQuantity: 0 };
       } catch (e) {
         return item;
       }
