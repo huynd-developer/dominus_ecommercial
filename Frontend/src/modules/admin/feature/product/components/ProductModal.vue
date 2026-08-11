@@ -336,7 +336,6 @@
                             />
                           </div>
                         </td>
-                        <!-- CẬP NHẬT PHẦN INPUT TỒN KHO Ở ĐÂY -->
                         <td>
                           <input
                             :value="variant.stockQuantity"
@@ -392,17 +391,22 @@
             <section class="content-card mb-5">
               <div class="section-header">
                 <div>
-                  <h4>Hình ảnh sản phẩm</h4>
+                  <h4>Hình ảnh sản phẩm <span class="text-danger">*</span></h4>
                   <span>Chọn ảnh hiển thị của sản phẩm (Tối đa 6 ảnh, mỗi ảnh không quá 10MB)</span>
                 </div>
                 <div class="section-badge">{{ imageList.length }}/6 ảnh</div>
               </div>
               <div class="section-body">
-                <label class="upload-area" :class="{ 'opacity-50 pointer-events-none': imageList.length >= 6 }">
+                <label 
+                  class="upload-area" 
+                  :class="{ 'opacity-50 pointer-events-none': imageList.length >= 6 }"
+                  @dragover.prevent
+                  @drop.prevent="handleDrop"
+                >
                   <input
                     type="file"
                     multiple
-                    accept="image/jpeg, image/png, image/webp, image/gif, image/jpg"
+                    accept="image/*"
                     hidden
                     :disabled="imageList.length >= 6"
                     @change="handleImages"
@@ -733,6 +737,11 @@ const fillForm = async (product: Product, isClone = false) => {
     a.isPrimary === b.isPrimary ? 0 : a.isPrimary ? -1 : 1
   ).slice(0, 6);
 
+  // Đảm bảo luôn có 1 ảnh chính ngay khi load form (Thêm dấu ! để fix lỗi TS)
+  if (imageList.value.length > 0 && !imageList.value.some(img => img.isPrimary)) {
+    imageList.value[0]!.isPrimary = true;
+  }
+
   if (isClone) {
     isCloningImages.value = true; 
     
@@ -753,6 +762,10 @@ const fillForm = async (product: Product, isClone = false) => {
       })
     ).then(() => {
       imageList.value = imageList.value.filter(img => img.file);
+      // Đảm bảo lại lần nữa sau khi lọc ảnh lỗi (Thêm dấu ! để fix lỗi TS)
+      if (imageList.value.length > 0 && !imageList.value.some(img => img.isPrimary)) {
+        imageList.value[0]!.isPrimary = true;
+      }
       isCloningImages.value = false;
     });
   }
@@ -777,19 +790,7 @@ const removeVariant = (index: any) => {
   if (formData.value.variants.length === 0) addVariant();
 };
 
-const handleImages = (event: Event) => {
-  const input = event.target as HTMLInputElement;
-  const files = input.files;
-  if (!files || files.length === 0) return;
-
-  const validTypes = [
-    "image/jpeg",
-    "image/jpg",
-    "image/png",
-    "image/webp",
-    "image/gif",
-  ];
-  
+const processFiles = (files: FileList | File[]) => {
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
   let hasInvalidType = false;
   let hasOversizedFile = false;
@@ -801,7 +802,7 @@ const handleImages = (event: Event) => {
       return;
     }
 
-    if (!validTypes.includes(file.type.toLowerCase())) {
+    if (!file.type.toLowerCase().startsWith("image/")) {
       hasInvalidType = true;
       return;
     }
@@ -814,17 +815,20 @@ const handleImages = (event: Event) => {
     imageList.value.push({
       file,
       preview: URL.createObjectURL(file),
-      isPrimary: imageList.value.length === 0,
+      isPrimary: false, // Tạm gán false, sẽ tự bật xanh nếu là ảnh đầu tiên
     });
   });
 
-  input.value = "";
+  // Tự động gán ảnh đầu tiên làm ảnh chính nếu chưa có (Thêm dấu ! để fix lỗi TS)
+  if (imageList.value.length > 0 && !imageList.value.some(img => img.isPrimary)) {
+    imageList.value[0]!.isPrimary = true;
+  }
 
   if (skippedLimit > 0 || hasInvalidType || hasOversizedFile) {
     let errorMsg = "";
     if (skippedLimit > 0) errorMsg += `<p>• Chỉ được tải lên tối đa 6 ảnh.</p>`;
     if (hasOversizedFile) errorMsg += `<p>• Một số ảnh vượt quá dung lượng 10MB.</p>`;
-    if (hasInvalidType) errorMsg += `<p>• Một số file sai định dạng hình ảnh.</p>`;
+    if (hasInvalidType) errorMsg += `<p>• Chỉ chấp nhận các file định dạng hình ảnh.</p>`;
     
     Swal.fire({
       title: "Lỗi tải ảnh",
@@ -834,16 +838,32 @@ const handleImages = (event: Event) => {
   }
 };
 
+const handleImages = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  if (input.files && input.files.length > 0) {
+    processFiles(input.files);
+  }
+  input.value = ""; // Clear để có thể chọn lại cùng 1 file
+};
+
+const handleDrop = (event: DragEvent) => {
+  if (imageList.value.length >= 6) return;
+  if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+    processFiles(event.dataTransfer.files);
+  }
+};
+
 const setPrimaryImage = (index: number) => {
-  if (index === 0) return;
   const selectedImage = imageList.value[index];
   if (!selectedImage) return;
 
   imageList.value.forEach((img) => (img.isPrimary = false));
   selectedImage.isPrimary = true;
 
-  imageList.value.splice(index, 1);
-  imageList.value.unshift(selectedImage);
+  if (index !== 0) {
+    imageList.value.splice(index, 1);
+    imageList.value.unshift(selectedImage);
+  }
 };
 
 const removeImage = (index: number) => {
@@ -860,6 +880,11 @@ const validateForm = () => {
   const name = formData.value.name.trim();
   if (!name) {
     Swal.fire("Thiếu dữ liệu", "Vui lòng nhập Tên sản phẩm.", "warning");
+    return false;
+  }
+
+  if (imageList.value.length === 0) {
+    Swal.fire("Thiếu dữ liệu", "Vui lòng tải lên ít nhất 1 hình ảnh cho sản phẩm.", "warning");
     return false;
   }
 

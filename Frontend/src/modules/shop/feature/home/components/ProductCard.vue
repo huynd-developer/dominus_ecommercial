@@ -1136,48 +1136,66 @@ const openVariantModal = async (type: "CART" | "BUY", customProduct: any = null,
   isLoadingVariants.value = true;
 
   try {
-    const tId = getProductIdNum(currentTargetProduct.value);
+    const tp = currentTargetProduct.value;
+    const tId = getProductIdNum(tp);
+
+    const salePriceMap = new Map<number, number>();
+    const origPriceMap = new Map<number, number>();
+    const discountMap = new Map<number, number>(); // Thêm Map giữ % giảm
+    
+    if (tp?.variants && Array.isArray(tp.variants)) {
+      tp.variants.forEach((v: any) => {
+        const vId = Number(v.productVariantId || v.variantId || v.id);
+        if (vId) {
+          const sale = Number(v.salePrice ?? v.promotionPrice ?? v.flashSalePrice ?? v.price ?? 0);
+          const orig = Number(v.originalPrice ?? v.oldPrice ?? v.price ?? sale);
+          const disc = Number(v.discountPercent ?? v.discount ?? 0);
+          if (sale > 0) salePriceMap.set(vId, sale);
+          if (orig > 0) origPriceMap.set(vId, orig);
+          if (disc > 0) discountMap.set(vId, disc);
+        }
+      });
+    }
+
     const res = await api.get(`/v1/products/${tId}`);
     const data = res.data?.data || res.data;
-    let rawVariants = data?.variants || data?.productVariants || data?.productVariantList;
-    if (!rawVariants || rawVariants.length === 0) rawVariants = currentTargetProduct.value.variants || [currentTargetProduct.value];
+    let rawVariants = data?.variants || data?.productVariants || data?.productVariantList || [];
+    
+    if (!rawVariants || rawVariants.length === 0) {
+        rawVariants = tp.variants || [tp];
+    }
 
     const processedVariants = rawVariants.map((v: any) => {
       const vId = Number(v.productVariantId || v.variantId || v.id);
-      let cap = null;
-      if (v.capacityName != null) cap = v.capacityName;
-      else if (v.capacity && typeof v.capacity === "object") cap = v.capacity.value ?? v.capacity.name;
-      else if (v.capacityValue != null) cap = v.capacityValue;
-      else if (v.volume != null) cap = v.volume;
-      else if (typeof v.capacity === "string" || typeof v.capacity === "number") cap = v.capacity;
+      const displayCap = formatVariantName(v);
+      
+      let capObj = v.capacityName || v.capacityValue || v.volume || v.capacity;
+      if (typeof capObj === "object") capObj = capObj?.value ?? capObj?.name;
+      const numericCap = parseFloat(String(capObj || "").replace("ml", "")) || 0;
 
-      let displayCap = "";
-      let numericCap = 0;
-      if (cap != null && cap !== "") {
-        numericCap = parseFloat(String(cap).replace("ml", "")) || 0;
-        displayCap = numericCap > 0 ? `${numericCap}ml` : String(cap);
+      const apiSale = Number(v.salePrice ?? v.promotionPrice ?? v.flashSalePrice ?? v.price ?? 0);
+      const apiOrig = Number(v.originalPrice ?? v.oldPrice ?? v.price ?? apiSale);
+      
+      const finalSale = salePriceMap.get(vId) ?? apiSale;
+      const finalOrig = origPriceMap.get(vId) ?? apiOrig;
+      let finalDisc = discountMap.get(vId) ?? Number(v.discountPercent ?? 0);
+      
+      if (finalDisc === 0 && finalOrig > finalSale && finalSale > 0) {
+         finalDisc = Math.round(((finalOrig - finalSale) / finalOrig) * 100);
       }
-      const bottle = v.bottleTypeName || v.bottleType;
-      const bottleName = typeof bottle === "object" ? bottle?.name : bottle;
-      if (displayCap && bottleName) displayCap = `${displayCap} - ${bottleName}`;
-      else if (bottleName) displayCap = bottleName;
-      else if (!displayCap) displayCap = "Loại " + (vId || "");
-
-      // Lấy trực tiếp giá chuẩn từ dữ liệu trả về của biến thể
-      const sale = Number(v.salePrice ?? v.promotionPrice ?? v.flashSalePrice ?? v.price ?? 0);
-      const orig = Number(v.originalPrice ?? v.oldPrice ?? v.price ?? sale);
 
       return {
         ...v,
         productVariantId: vId,
         id: vId,
-        salePrice: sale,
-        originalPrice: orig,
-        price: sale > 0 ? sale : orig,
+        salePrice: finalSale,
+        originalPrice: finalOrig,
+        price: finalSale > 0 ? finalSale : finalOrig,
+        discountPercent: finalDisc, // Lưu lại % giảm
         displayCapacity: displayCap,
         numericCapacity: numericCap,
-        manufacturingDate: v.manufacturingDate || v.mfgDate || currentTargetProduct.value.manufacturingDate,
-        expirationDate: v.expirationDate || v.expDate || currentTargetProduct.value.expirationDate,
+        manufacturingDate: v.manufacturingDate || v.mfgDate || tp.manufacturingDate,
+        expirationDate: v.expirationDate || v.expDate || tp.expirationDate,
       };
     }).filter((v: any) => !isExpiredDate(v.expirationDate));
 
@@ -1189,6 +1207,7 @@ const openVariantModal = async (type: "CART" | "BUY", customProduct: any = null,
       selectedVariant.value = fullVariants.value.find((v: any) => v.productVariantId === targetVId) || fullVariants.value[0];
     }
   } catch (error) {
+    console.error("Lỗi lấy chi tiết biến thể:", error);
     const fallbackVariants = currentTargetProduct.value.variants || [currentTargetProduct.value];
     fullVariants.value = fallbackVariants.map((v: any) => ({ ...v, displayCapacity: formatVariantName(v), numericCapacity: 0 }));
     if (fullVariants.value.length > 0) selectedVariant.value = fullVariants.value[0];
@@ -1333,8 +1352,9 @@ const maxQuantity = computed(() => selectedVariant.value ? getSafeNumber(selecte
 
 const calculatedDiscountPercent = computed(() => {
   if (selectedVariant.value) {
-    const original = getSafeNumber(selectedVariant.value.originalPrice || selectedVariant.value.oldPrice || selectedVariant.value.price || cardOriginalPrice.value);
-    const sale = getSafeNumber(selectedVariant.value.salePrice || selectedVariant.value.promotionPrice || selectedVariant.value.flashSalePrice || selectedVariant.value.price || cardSalePrice.value);
+    if (selectedVariant.value.discountPercent) return selectedVariant.value.discountPercent;
+    const original = getSafeNumber(selectedVariant.value.originalPrice || selectedVariant.value.oldPrice || cardOriginalPrice.value);
+    const sale = getSafeNumber(selectedVariant.value.salePrice || selectedVariant.value.price || cardSalePrice.value);
     if (original && sale && original > sale) return Math.round(((original - sale) / original) * 100);
     return 0;
   }

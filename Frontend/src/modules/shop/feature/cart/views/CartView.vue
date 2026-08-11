@@ -302,31 +302,27 @@ const loadCart = async (options: { preserveOrder?: boolean } = {}) => {
   try {
     isLoading.value = true;
     
-    // Lấy giỏ hàng mới nhất từ Backend
+    // Lấy giỏ hàng mới nhất
     const res = await api.get(`/v1/customer/cart/my-cart?t=${Date.now()}`);
     let items = extractCartItems(res.data);
     
-    // ÉP ĐỒNG BỘ: Kiểm tra trực tiếp với dữ liệu thật từ Product Detail
+    // Lấy thông tin mới nhất từ Admin để cập nhật hiển thị
     if (items.length > 0) {
       items = await Promise.all(items.map(async (item: any) => {
         try {
           const productId = getItemProductId(item);
           const variantId = getItemVariantId(item);
-          
           if (!productId) return item;
           
-          // Gọi API lấy dữ liệu thật của sản phẩm để so sánh
           const productData = await fetchProductDetail(productId);
-          if (!productData) return item;
+          if (!productData) return { ...item, variantStatus: 0, stockQuantity: 0, sellable: false };
           
           const matchedVariant = findMatchingVariant(productData, variantId);
           
           if (matchedVariant) {
-             // Cập nhật đè dữ liệu mới nhất (Giá, Tồn kho, Trạng thái) từ Admin vào Item trong giỏ
+             // ĐÃ SỬA: KHÔNG ghi đè giá nữa! Giữ nguyên item.price, item.originalPrice từ giỏ hàng (vì backend đã tính sẵn Flash Sale)
              return {
                 ...item,
-                price: Number(matchedVariant.salePrice ?? matchedVariant.price ?? item.price),
-                originalPrice: Number(matchedVariant.originalPrice ?? matchedVariant.oldPrice ?? item.originalPrice),
                 stockQuantity: Number(matchedVariant.stockQuantity ?? matchedVariant.stock ?? item.stockQuantity),
                 variantStatus: Number(matchedVariant.status ?? item.variantStatus),
                 expirationDate: matchedVariant.expirationDate ?? item.expirationDate,
@@ -335,8 +331,7 @@ const loadCart = async (options: { preserveOrder?: boolean } = {}) => {
              };
           }
           
-          // Nếu biến thể đã bị xóa hẳn bên Admin
-          return { ...item, variantStatus: 0, stockQuantity: 0 };
+          return { ...item, variantStatus: 0, stockQuantity: 0, sellable: false };
         } catch (e) {
           return item;
         }
@@ -344,7 +339,6 @@ const loadCart = async (options: { preserveOrder?: boolean } = {}) => {
     }
     
     const enrichedItems = await enrichCartItemsWithImages(items);
-    
     cartItems.value = options.preserveOrder ? preserveCartOrder(enrichedItems) : enrichedItems;
     if (!canCheckout.value) resetVoucher();
   } catch (err: any) {
