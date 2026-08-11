@@ -4,7 +4,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.User;
 import org.example.datn_sd69.modules.order.dto.request.OrderRequest;
-import org.example.datn_sd69.modules.order.dto.response.AdminOrderResponse;
 import org.example.datn_sd69.modules.order.service.OrderService;
 import org.example.datn_sd69.repository.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -63,25 +62,6 @@ public class OrderController {
         // Có thể thêm check xem đơn này có đúng của ông khách đang login không nếu cần bảo mật kỹ hơn
         orderService.reportPayment(orderId);
         return ResponseEntity.ok(Map.of("message", "Đã báo cáo thanh toán thành công"));
-    }
-
-    /**
-     * SỬA LẠI API KHÁCH GỬI THÔNG TIN HOÀN TIỀN
-     * Link: /api/v1/orders/{id}/cancel-bank-info
-     */
-    @PostMapping("/{id}/cancel-bank-info")
-    @PreAuthorize("hasAuthority('USER')")
-    public ResponseEntity<?> submitCancelBankInfo(
-            Principal principal,
-            @PathVariable("id") Integer orderId,
-            @RequestBody OrderRequest.CancelRefundBankRequest request) {
-
-        Integer customerId = getCustomerId(principal);
-
-        // M viết thêm hàm này trong OrderService để lưu vào bảng OrderRefund nhé
-        orderService.submitCancelRefundBankInfo(customerId, orderId, request);
-
-        return ResponseEntity.ok(Map.of("message", "Gửi thông tin tài khoản hoàn tiền thành công"));
     }
 
     private Integer getCustomerId(Principal principal) {
