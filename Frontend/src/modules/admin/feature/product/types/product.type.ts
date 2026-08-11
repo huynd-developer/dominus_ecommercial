@@ -71,6 +71,14 @@ export interface ProductVariant {
 
   stockQuantity: number
 
+  weightGram: number | null
+
+  lengthCm: number | null
+
+  widthCm: number | null
+
+  heightCm: number | null
+
   manufacturingDate: string
 
   expirationDate: string
@@ -113,7 +121,6 @@ export interface Product {
 }
 
 export interface ProductVariantRequest {
-
   id?: number
 
   capacityId: number
@@ -126,16 +133,22 @@ export interface ProductVariantRequest {
 
   stockQuantity: number
 
+  weightGram: number
+
+  lengthCm: number
+
+  widthCm: number
+
+  heightCm: number
+
   manufacturingDate: string
 
   expirationDate: string
 
   status: number
-
 }
 
 export interface ProductRequestDTO {
-
   name: string
 
   description?: string
@@ -155,8 +168,6 @@ export interface ProductRequestDTO {
   fragranceFamilyIds: number[]
 
   variants: ProductVariantRequest[]
-
 }
 
-export interface ProductResponse
-  extends Product {}
+export interface ProductResponse extends Product {}

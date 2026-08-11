@@ -101,6 +101,7 @@ public class OrderService {
         for (CartItem item : cartItems) {
             validateCartItem(item);
             ProductVariant variant = item.getProductVariant();
+            validateVariantLogistics(variant);
 
             if (variant.getStockQuantity() < item.getQuantity()) {
                 throw new ResponseStatusException(
@@ -262,6 +263,10 @@ public class OrderService {
             orderItem.setSku(variant.getSku());
             orderItem.setCapacityName(getSnapshotCapacityName(variant));
             orderItem.setBottleTypeName(getSnapshotBottleTypeName(variant));
+            orderItem.setWeightGram(variant.getWeightGram());
+            orderItem.setLengthCm(variant.getLengthCm());
+            orderItem.setWidthCm(variant.getWidthCm());
+            orderItem.setHeightCm(variant.getHeightCm());
 
             orderItemRepo.save(orderItem);
         }
@@ -505,6 +510,23 @@ public class OrderService {
         }
         if (item.getQuantity() == null || item.getQuantity() <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số lượng sản phẩm trong giỏ hàng không hợp lệ");
+        }
+    }
+
+    private void validateVariantLogistics(ProductVariant variant) {
+        if (variant.getWeightGram() == null
+                || variant.getWeightGram() <= 0
+                || variant.getLengthCm() == null
+                || variant.getLengthCm().compareTo(BigDecimal.ZERO) <= 0
+                || variant.getWidthCm() == null
+                || variant.getWidthCm().compareTo(BigDecimal.ZERO) <= 0
+                || variant.getHeightCm() == null
+                || variant.getHeightCm().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Sản phẩm " + variant.getSku()
+                            + " chưa được cấu hình đầy đủ thông tin vận chuyển"
+            );
         }
     }
 

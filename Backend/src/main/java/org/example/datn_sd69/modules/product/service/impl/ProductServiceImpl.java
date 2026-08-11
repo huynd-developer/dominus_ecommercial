@@ -111,6 +111,10 @@ public class ProductServiceImpl implements ProductService {
 
             variant.setPrice(dto.getPrice());
             variant.setStockQuantity(dto.getStockQuantity());
+            variant.setWeightGram(dto.getWeightGram());
+            variant.setLengthCm(dto.getLengthCm());
+            variant.setWidthCm(dto.getWidthCm());
+            variant.setHeightCm(dto.getHeightCm());
 
             if (dto.getExpirationDate()
                     .isBefore(dto.getManufacturingDate())) {
@@ -226,6 +230,10 @@ public class ProductServiceImpl implements ProductService {
 
             variant.setPrice(dto.getPrice());
             variant.setStockQuantity(dto.getStockQuantity());
+            variant.setWeightGram(dto.getWeightGram());
+            variant.setLengthCm(dto.getLengthCm());
+            variant.setWidthCm(dto.getWidthCm());
+            variant.setHeightCm(dto.getHeightCm());
 
             if (dto.getExpirationDate()
                     .isBefore(dto.getManufacturingDate())) {
@@ -633,6 +641,22 @@ public class ProductServiceImpl implements ProductService {
 
                             dto.setStockQuantity(
                                     v.getStockQuantity()
+                            );
+
+                            dto.setWeightGram(
+                                    v.getWeightGram()
+                            );
+
+                            dto.setLengthCm(
+                                    v.getLengthCm()
+                            );
+
+                            dto.setWidthCm(
+                                    v.getWidthCm()
+                            );
+
+                            dto.setHeightCm(
+                                    v.getHeightCm()
                             );
 
                             dto.setManufacturingDate(

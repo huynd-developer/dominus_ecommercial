@@ -276,6 +276,18 @@
                         <th width="120">
                           Tồn kho <span class="text-danger">*</span>
                         </th>
+                        <th width="145">
+                          Khối lượng (g) <span class="text-danger">*</span>
+                        </th>
+                        <th width="120">
+                          Dài (cm) <span class="text-danger">*</span>
+                        </th>
+                        <th width="120">
+                          Rộng (cm) <span class="text-danger">*</span>
+                        </th>
+                        <th width="120">
+                          Cao (cm) <span class="text-danger">*</span>
+                        </th>
                         <th width="160">
                           NSX <span class="text-danger">*</span>
                         </th>
@@ -344,6 +356,50 @@
                             type="text"
                             class="form-control text-center"
                             placeholder="0"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            v-model.number="variant.weightGram"
+                            type="number"
+                            class="form-control text-end"
+                            min="1"
+                            max="2147483647"
+                            step="1"
+                            placeholder="VD: 550"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            v-model.number="variant.lengthCm"
+                            type="number"
+                            class="form-control text-end"
+                            min="0.01"
+                            max="999999.99"
+                            step="0.01"
+                            placeholder="VD: 16"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            v-model.number="variant.widthCm"
+                            type="number"
+                            class="form-control text-end"
+                            min="0.01"
+                            max="999999.99"
+                            step="0.01"
+                            placeholder="VD: 11"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            v-model.number="variant.heightCm"
+                            type="number"
+                            class="form-control text-end"
+                            min="0.01"
+                            max="999999.99"
+                            step="0.01"
+                            placeholder="VD: 8"
                           />
                         </td>
                         <td>
@@ -597,6 +653,10 @@ const resetForm = () => {
       bottleTypeId: props.bottleTypeList?.[0]?.id ?? 0,
       price: 100,
       stockQuantity: 10,
+      weightGram: null,
+      lengthCm: null,
+      widthCm: null,
+      heightCm: null,
       manufacturingDate: today.value,
       expirationDate: new Date(
         new Date().setFullYear(new Date().getFullYear() + 3),
@@ -618,6 +678,10 @@ const addVariant = () => {
     bottleTypeId: 0,
     price: 0,
     stockQuantity: 0,
+    weightGram: null,
+    lengthCm: null,
+    widthCm: null,
+    heightCm: null,
     manufacturingDate: "",
     expirationDate: "",
     status: 1,
@@ -706,6 +770,10 @@ const fillForm = async (product: Product, isClone = false) => {
         bottleTypeId: v.bottleTypeId,
         price: v.price,
         stockQuantity: v.stockQuantity,
+        weightGram: v.weightGram ?? null,
+        lengthCm: v.lengthCm ?? null,
+        widthCm: v.widthCm ?? null,
+        heightCm: v.heightCm ?? null,
         manufacturingDate: formatDateForInput(v.manufacturingDate),
         expirationDate: formatDateForInput(v.expirationDate),
         status: v.status ?? 1,
@@ -856,6 +924,15 @@ const removeImage = (index: number) => {
   }
 };
 
+const isValidLogisticsDimension = (value: unknown): boolean => {
+  const normalized = String(value ?? "").trim();
+
+  return (
+    /^\d{1,6}(\.\d{1,2})?$/.test(normalized) &&
+    Number(normalized) > 0
+  );
+};
+
 const validateForm = () => {
   const name = formData.value.name.trim();
   if (!name) {
@@ -937,6 +1014,63 @@ const validateForm = () => {
       );
       return false;
     }
+
+    if (
+      variant.weightGram === null ||
+      variant.weightGram === undefined ||
+      variant.weightGram === ""
+    ) {
+      Swal.fire(
+        "Thiếu dữ liệu",
+        `Biến thể dòng ${i + 1}: Vui lòng nhập khối lượng đóng gói.`,
+        "warning",
+      );
+      return false;
+    }
+
+    const weightGram = Number(variant.weightGram);
+    if (
+      !Number.isInteger(weightGram) ||
+      weightGram <= 0 ||
+      weightGram > 2147483647
+    ) {
+      Swal.fire(
+        "Lỗi dữ liệu",
+        `Biến thể dòng ${i + 1}: Khối lượng đóng gói phải là số nguyên lớn hơn 0.`,
+        "warning",
+      );
+      return false;
+    }
+
+    const dimensions = [
+      { label: "Chiều dài", value: variant.lengthCm },
+      { label: "Chiều rộng", value: variant.widthCm },
+      { label: "Chiều cao", value: variant.heightCm },
+    ];
+
+    for (const dimension of dimensions) {
+      if (
+        dimension.value === null ||
+        dimension.value === undefined ||
+        dimension.value === ""
+      ) {
+        Swal.fire(
+          "Thiếu dữ liệu",
+          `Biến thể dòng ${i + 1}: Vui lòng nhập ${dimension.label.toLowerCase()}.`,
+          "warning",
+        );
+        return false;
+      }
+
+      if (!isValidLogisticsDimension(dimension.value)) {
+        Swal.fire(
+          "Lỗi dữ liệu",
+          `Biến thể dòng ${i + 1}: ${dimension.label} phải lớn hơn 0, tối đa 6 chữ số phần nguyên và 2 chữ số thập phân.`,
+          "warning",
+        );
+        return false;
+      }
+    }
   }
   return true;
 };
@@ -962,6 +1096,10 @@ const saveData = async () => {
         bottleTypeId: Number(v.bottleTypeId),
         price: Number(v.price),
         stockQuantity: Number(v.stockQuantity),
+        weightGram: Number(v.weightGram),
+        lengthCm: Number(v.lengthCm),
+        widthCm: Number(v.widthCm),
+        heightCm: Number(v.heightCm),
         manufacturingDate: v.manufacturingDate
           ? String(v.manufacturingDate).substring(0, 10)
           : "",
@@ -1362,7 +1500,7 @@ textarea.form-control {
 }
 .variant-table table {
   margin: 0;
-  min-width: 1200px;
+  min-width: 1800px;
 }
 .variant-table thead {
   position: sticky;

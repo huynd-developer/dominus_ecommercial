@@ -58,4 +58,16 @@ public class ProductVariant extends BaseEntity {
 
     @Column(name = "IsDeleted")
     private Boolean isDeleted = false;
+
+    @Column(name = "WeightGram")
+    private Integer weightGram;
+
+    @Column(name = "LengthCm", precision = 8, scale = 2)
+    private BigDecimal lengthCm;
+
+    @Column(name = "WidthCm", precision = 8, scale = 2)
+    private BigDecimal widthCm;
+
+    @Column(name = "HeightCm", precision = 8, scale = 2)
+    private BigDecimal heightCm;
 }

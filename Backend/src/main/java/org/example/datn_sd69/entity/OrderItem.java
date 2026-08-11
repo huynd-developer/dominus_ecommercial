@@ -89,4 +89,19 @@ public class OrderItem extends BaseEntity {
     @Nationalized
     @Column(name = "BottleTypeName", length = 255)
     private String bottleTypeName;
+
+    /**
+     * Snapshot thông tin logistics tại thời điểm đặt hàng.
+     */
+    @Column(name = "WeightGram")
+    private Integer weightGram;
+
+    @Column(name = "LengthCm", precision = 8, scale = 2)
+    private BigDecimal lengthCm;
+
+    @Column(name = "WidthCm", precision = 8, scale = 2)
+    private BigDecimal widthCm;
+
+    @Column(name = "HeightCm", precision = 8, scale = 2)
+    private BigDecimal heightCm;
 }

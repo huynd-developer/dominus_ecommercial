@@ -109,5 +109,36 @@ public class ProductRequest {
         private LocalDate expirationDate;
 
         private Integer status = 1;
+
+        @NotNull(message = "Khối lượng đóng gói không được để trống")
+        @Positive(message = "Khối lượng đóng gói phải lớn hơn 0")
+        private Integer weightGram;
+
+        @NotNull(message = "Chiều dài không được để trống")
+        @Positive(message = "Chiều dài phải lớn hơn 0")
+        @Digits(
+                integer = 6,
+                fraction = 2,
+                message = "Chiều dài tối đa 6 chữ số phần nguyên và 2 chữ số thập phân"
+        )
+        private BigDecimal lengthCm;
+
+        @NotNull(message = "Chiều rộng không được để trống")
+        @Positive(message = "Chiều rộng phải lớn hơn 0")
+        @Digits(
+                integer = 6,
+                fraction = 2,
+                message = "Chiều rộng tối đa 6 chữ số phần nguyên và 2 chữ số thập phân"
+        )
+        private BigDecimal widthCm;
+
+        @NotNull(message = "Chiều cao không được để trống")
+        @Positive(message = "Chiều cao phải lớn hơn 0")
+        @Digits(
+                integer = 6,
+                fraction = 2,
+                message = "Chiều cao tối đa 6 chữ số phần nguyên và 2 chữ số thập phân"
+        )
+        private BigDecimal heightCm;
     }
 }

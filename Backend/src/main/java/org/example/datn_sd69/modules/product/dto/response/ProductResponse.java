@@ -73,5 +73,13 @@ public class ProductResponse {
         private LocalDate expirationDate;
 
         private Integer status;
+
+        private Integer weightGram;
+
+        private BigDecimal lengthCm;
+
+        private BigDecimal widthCm;
+
+        private BigDecimal heightCm;
     }
 }

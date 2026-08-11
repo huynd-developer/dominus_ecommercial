@@ -91,86 +91,6 @@
               </div>
             </div>
 
-<<<<<<< HEAD
-            <!-- BẮT ĐẦU FORM HOÀN TIỀN ĐƠN HỦY -->
-            <div
-              v-if="isCancelledOrder(order) && isPrepaidOrder(order)"
-              class="cancel-refund-section border rounded p-3 mb-3"
-              style="background: #fff5f5; border-color: #fecaca !important;"
-            >
-              <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
-                <div>
-                  <h6 class="fw-bold mb-1 text-danger">
-                    <i class="bi bi-wallet2 me-1"></i>
-                    Hoàn tiền đơn hủy
-                  </h6>
-                  <small class="text-muted">
-                    Đơn hàng thanh toán qua <strong>{{ formatPaymentMethod(order.paymentMethod) }}</strong>. Quản lý cần hoàn lại tiền cho khách hàng.
-                  </small>
-                </div>
-                <span
-                  class="badge"
-                  :class="isOrderRefunded(order) ? 'bg-success' : (hasCancelRefundBankInfo(order) ? 'bg-warning text-dark' : 'bg-danger')"
-                >
-                  {{ isOrderRefunded(order) ? 'Đã hoàn tiền' : (hasCancelRefundBankInfo(order) ? 'Chờ shop hoàn tiền' : 'Chờ khách nhập STK') }}
-                </span>
-              </div>
-
-              <div class="row g-3">
-                <div class="col-md-6">
-                  <div class="bg-white border rounded p-3 h-100">
-                    <div class="d-flex justify-content-between mb-2 small">
-                        <span class="text-muted">Số tiền cần hoàn:</span>
-                        <strong class="text-danger fs-6">{{ formatMoney(order.finalAmount) }}</strong>
-                    </div>
-                    <div v-if="(order as any).cancelRefundedAt" class="d-flex justify-content-between mb-2 small">
-                        <span class="text-muted">Thời gian hoàn:</span>
-                        <strong>{{ formatDate((order as any).cancelRefundedAt) }}</strong>
-                    </div>
-                    <div v-if="!hasCancelRefundBankInfo(order) && !isOrderRefunded(order)" class="mt-2 text-muted small">
-                      <i class="bi bi-info-circle me-1"></i> Đang chờ khách hàng cung cấp thông tin tài khoản...
-                    </div>
-                  </div>
-                </div>
-                <div class="col-md-6">
-                  <div class="bg-white border rounded p-3 h-100">
-                      <h6 class="fw-bold mb-2" style="font-size: 13px;">Tài khoản nhận hoàn tiền</h6>
-                      <template v-if="hasCancelRefundBankInfo(order)">
-                        <div class="d-flex justify-content-between mb-2 small">
-                          <span class="text-muted">Ngân hàng:</span>
-                          <strong>{{ (order as any).cancelRefundBankName || '-' }}</strong>
-                        </div>
-                        <div class="d-flex justify-content-between mb-2 small">
-                          <span class="text-muted">Số tài khoản:</span>
-                          <strong>{{ (order as any).cancelRefundBankAccount || (order as any).cancelRefundBankAccountNumber || '-' }}</strong>
-                        </div>
-                        <div class="d-flex justify-content-between mb-0 small">
-                          <span class="text-muted">Chủ tài khoản:</span>
-                          <strong>{{ (order as any).cancelRefundAccountName || (order as any).cancelRefundBankAccountHolder || '-' }}</strong>
-                        </div>
-                      </template>
-                      <div v-else class="text-muted small mt-2">
-                        Khách chưa cung cấp thông tin tài khoản.
-                      </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- THÔNG BÁO NHẬP KHO -->
-              <div v-if="isOrderRefunded(order)" class="mt-3">
-                 <div class="alert alert-success d-flex align-items-center py-2 px-3 mb-0" style="font-size: 13px; border-radius: 8px; background-color: #dcfce7; border-color: #bbf7d0; color: #166534;">
-                    <i class="bi bi-check-circle-fill fs-5 me-2"></i>
-                    <div>
-                      <strong>Đã hoàn tiền & Nhập kho:</strong> Quản trị viên đã xác nhận hoàn tiền và sản phẩm đã được tự động cộng lại vào tồn kho hệ thống.
-                    </div>
-                 </div>
-              </div>
-            </div>
-            <!-- KẾT THÚC FORM HOÀN TIỀN ĐƠN HỦY -->
-
-            <div v-if="hasDeliveryInfo(order)" class="delivery-section border rounded p-3 mb-3">
-              <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
-=======
             <div
               v-if="hasDeliveryInfo(order)"
               class="delivery-section border rounded p-3 mb-3"
@@ -178,7 +98,6 @@
               <div
                 class="d-flex align-items-center justify-content-between gap-2 mb-3"
               >
->>>>>>> 9d167f0ed4c026eca4c2ba188b0c8fa4199145de
                 <div>
                   <h6 class="fw-bold mb-1">Thông tin giao hàng</h6>
                   <small class="text-muted">
@@ -456,22 +375,6 @@
                   </div>
                 </div>
               </div>
-
-              <!-- THÔNG BÁO NHẬP KHO -->
-              <div v-if="isDeliveryRefundCompleted(order)" class="mt-3">
-                <div v-if="isRestocked(order) !== false" class="alert alert-success d-flex align-items-center py-2 px-3 mb-0" style="font-size: 13px; border-radius: 8px; background-color: #dcfce7; border-color: #bbf7d0; color: #166534;">
-                  <i class="bi bi-check-circle-fill fs-5 me-2"></i>
-                  <div>
-                    <strong>Đã hoàn tiền & Nhập kho:</strong> Quản trị viên đã xác nhận hoàn tiền và sản phẩm đã được cộng lại vào tồn kho.
-                  </div>
-                </div>
-                <div v-else class="alert alert-secondary d-flex align-items-center py-2 px-3 mb-0" style="font-size: 13px; border-radius: 8px;">
-                  <i class="bi bi-info-circle-fill fs-5 me-2"></i>
-                  <div>
-                    <strong>Đã hoàn tiền:</strong> Quản trị viên đã xác nhận hoàn tiền (Không nhập lại sản phẩm vào kho).
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div class="table-responsive border rounded">
@@ -656,22 +559,6 @@
                       <span>Chủ tài khoản:</span>
                       <strong>{{ order.bankAccountHolder || "-" }}</strong>
                     </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- THÔNG BÁO NHẬP KHO HOÀN TRẢ -->
-              <div v-if="getReturnProcessStatus(order) === 3" class="mb-3">
-                <div v-if="isRestocked(order) !== false" class="alert alert-success d-flex align-items-center py-2 px-3 mb-0" style="font-size: 13px; border-radius: 8px; background-color: #dcfce7; border-color: #bbf7d0; color: #166534;">
-                  <i class="bi bi-check-circle-fill fs-5 me-2"></i>
-                  <div>
-                    <strong>Đã hoàn tiền & Nhập kho:</strong> Quản trị viên đã xác nhận hoàn tiền và sản phẩm hoàn đã được cộng lại vào tồn kho.
-                  </div>
-                </div>
-                <div v-else class="alert alert-secondary d-flex align-items-center py-2 px-3 mb-0" style="font-size: 13px; border-radius: 8px;">
-                  <i class="bi bi-info-circle-fill fs-5 me-2"></i>
-                  <div>
-                    <strong>Đã hoàn tiền:</strong> Quản trị viên đã xác nhận hoàn tiền (Không nhập lại sản phẩm vào kho).
                   </div>
                 </div>
               </div>
@@ -873,9 +760,6 @@
             <i class="bi bi-cash-coin me-1"></i>
             Đã chuyển tiền
           </button>
-<<<<<<< HEAD
-          
-=======
 
           <!-- NÚT MỚI: XÁC NHẬN HOÀN TIỀN KHI HỦY -->
           <button
@@ -888,7 +772,6 @@
             Đã hoàn tiền
           </button>
 
->>>>>>> 9d167f0ed4c026eca4c2ba188b0c8fa4199145de
           <button
             v-if="order && canMarkReturnRefunded(order)"
             class="btn btn-success"
@@ -897,17 +780,6 @@
           >
             <i class="bi bi-cash-coin me-1"></i>
             Đã hoàn tiền
-          </button>
-
-          <!-- NÚT XÁC NHẬN HOÀN TIỀN ĐƠN HỦY (TRẢ VỀ NGUYÊN BẢN EMIT CŨ) -->
-          <button
-            v-if="order && isCancelledOrder(order) && isPrepaidOrder(order) && hasCancelRefundBankInfo(order) && !isOrderRefunded(order)"
-            class="btn btn-danger"
-            type="button"
-            @click="$emit('mark-cancel-refunded', order)"
-          >
-            <i class="bi bi-cash-coin me-1"></i>
-            Đã chuyển khoản (Đơn hủy)
           </button>
 
           <button class="btn btn-secondary" @click="$emit('close')">
@@ -962,11 +834,7 @@ const emit = defineEmits<{
   "reject-return": [order: AdminOrderResponse];
   "mark-return-refunded": [order: AdminOrderResponse];
   "mark-delivery-refunded": [order: AdminOrderResponse];
-<<<<<<< HEAD
-  "mark-cancel-refunded": [order: AdminOrderResponse];
-=======
   "mark-cancel-refunded": [order: AdminOrderResponse]; // BỔ SUNG KHAI BÁO EVENT
->>>>>>> 9d167f0ed4c026eca4c2ba188b0c8fa4199145de
 }>();
 
 void props;
@@ -985,40 +853,6 @@ const FALLBACK_IMAGE =
       </text>
     </svg>
   `);
-
-// HÀM KIỂM TRA XEM ĐƠN HÀNG CÓ ĐƯỢC NHẬP LẠI KHO HAY KHÔNG
-function isRestocked(order: any): boolean | null {
-  if (!order) return null;
-  const fields = [
-    'isRestocked', 'restocked', 'stockRestored', 
-    'deliveryRestocked', 'returnRestocked', 'cancelRestocked', 
-    'isDeliveryRestocked', 'isReturnRestocked', 'isCancelRestocked'
-  ];
-  for (const field of fields) {
-    if (order[field] !== undefined && order[field] !== null) {
-      return Boolean(order[field]);
-    }
-  }
-  return null;
-}
-
-function isPrepaidOrder(order?: AdminOrderResponse | null) {
-  if (!order || !order.paymentMethod) return false;
-  const pm = String(order.paymentMethod).toUpperCase();
-  return pm.includes('VNPAY') || pm.includes('VIETQR') || pm.includes('MOMO') || pm.includes('BANK') || pm.includes('TRANSFER') || pm.includes('MIXED');
-}
-
-function isOrderRefunded(order?: AdminOrderResponse | null) {
-  return Boolean((order as any)?.isRefunded || (order as any)?.refundStatus === 'REFUNDED' || (order as any)?.cancelRefundStatus === 'COMPLETED' || (order as any)?.cancelRefundedAt);
-}
-
-function hasCancelRefundBankInfo(order: any) {
-  return Boolean(
-    String((order as any)?.cancelRefundBankName || "").trim() &&
-    String((order as any)?.cancelRefundBankAccount || (order as any)?.cancelRefundBankAccountNumber || "").trim() &&
-    String((order as any)?.cancelRefundAccountName || (order as any)?.cancelRefundBankAccountHolder || "").trim()
-  );
-}
 
 type DeliveryActorInfo = {
   name: string;
