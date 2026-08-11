@@ -1,5 +1,6 @@
 package org.example.datn_sd69.repository;
 
+import org.example.datn_sd69.entity.Order;
 import org.example.datn_sd69.entity.OrderItem;
 import org.example.datn_sd69.modules.report.projection.BestSellingProductProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -112,4 +113,6 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
         ORDER BY oi.id ASC
     """)
     List<OrderItem> findByOrderIdWithVariant(@Param("orderId") Integer orderId);
+
+    List<OrderItem> findByOrder(Order order);
 }

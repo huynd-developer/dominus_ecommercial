@@ -1,37 +1,21 @@
 package org.example.datn_sd69.modules.customerOrder.service.impl;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import org.example.datn_sd69.entity.*;
+import org.example.datn_sd69.repository.*;
 import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.modules.order.dto.request.CancelOrderRequest;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import org.example.datn_sd69.entity.Brand;
-import org.example.datn_sd69.entity.Customer;
-import org.example.datn_sd69.entity.Order;
-import org.example.datn_sd69.entity.OrderDeliveryEvidence;
-import org.example.datn_sd69.entity.OrderItem;
-import org.example.datn_sd69.entity.Product;
-import org.example.datn_sd69.entity.ProductVariant;
-import org.example.datn_sd69.entity.ReturnRequest;
-import org.example.datn_sd69.entity.ReturnRequestItem;
-import org.example.datn_sd69.entity.ReturnRequestMedia;
-import org.example.datn_sd69.entity.User;
+
 import org.example.datn_sd69.modules.customerOrder.dto.response.CustomerOrderItemResponse;
 import org.example.datn_sd69.modules.customerOrder.dto.response.CustomerOrderResponse;
 import org.example.datn_sd69.modules.customerOrder.dto.response.CustomerReturnItemResponse;
 import org.example.datn_sd69.modules.customerOrder.dto.request.SubmitDeliveryRefundBankRequest;
 import org.example.datn_sd69.modules.customerOrder.service.CustomerOrderService;
 import org.example.datn_sd69.modules.order.service.OrderMailService;
-import org.example.datn_sd69.repository.CustomerRepository;
-import org.example.datn_sd69.repository.OrderDeliveryEvidenceRepository;
-import org.example.datn_sd69.repository.OrderItemRepository;
-import org.example.datn_sd69.repository.OrderRepository;
-import org.example.datn_sd69.repository.ReturnRequestItemRepository;
-import org.example.datn_sd69.repository.ReturnRequestMediaRepository;
-import org.example.datn_sd69.repository.ReturnRequestRepository;
-import org.example.datn_sd69.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -178,6 +162,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     private final Cloudinary cloudinary;
     private final ObjectMapper objectMapper;
     private final OrderMailService orderMailService;
+    private final OrderRefundRepository orderRefundRepo;
 
     private final RestTemplate vietQrRestTemplate = new RestTemplate();
 
@@ -633,6 +618,24 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         List<String> deliverySuccessMediaUrls = getDeliveryEvidenceUrls(order, DELIVERY_EVIDENCE_TYPE_SUCCESS);
         List<String> deliveryFailedMediaUrls = getDeliveryEvidenceUrls(order, DELIVERY_EVIDENCE_TYPE_FAILED);
 
+        // --- MÓC THÔNG TIN HOÀN TIỀN ĐƠN HỦY TỪ DB ---
+        String cancelRefundBankName = null;
+        String cancelRefundBankAccount = null;
+        String cancelRefundAccountName = null;
+        LocalDateTime cancelRefundedAt = null;
+
+        OrderRefund cancelRefund = orderRefundRepo
+                .findByOrderIdAndRefundType(order.getId(), "CANCEL")
+                .orElse(null);
+
+        if (cancelRefund != null) {
+            cancelRefundBankName = cancelRefund.getBankName();
+            cancelRefundBankAccount = cancelRefund.getBankAccountNumber();
+            cancelRefundAccountName = cancelRefund.getBankAccountHolder();
+            cancelRefundedAt = cancelRefund.getRefundedAt();
+        }
+        // ---------------------------------------------
+
         return new CustomerOrderResponse(
                 order.getId(),
                 order.getOrderType(),
@@ -685,6 +688,12 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 null,
                 null,
                 null,
+                // Truyền 4 biến thông tin hoàn tiền đơn hủy vào đúng vị trí:
+                cancelRefundBankName,
+                cancelRefundBankAccount,
+                cancelRefundAccountName,
+                cancelRefundedAt,
+                // Danh sách item sản phẩm ở cuối cùng:
                 itemResponses
         );
     }

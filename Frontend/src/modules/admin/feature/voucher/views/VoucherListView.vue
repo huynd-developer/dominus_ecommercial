@@ -57,41 +57,65 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="v in vouchers" :key="v.id" class="border-bottom">
-                <td class="ps-3">
-                  <span class="fw-bold text-dark">{{ v.code }}</span>
-                </td>
-                <td>
-                  <span class="fw-bold text-dark">{{ formatMoney(v.discountValue) }}</span>
-                  <span class="text-muted ms-1 small">{{ v.discountType === 'PERCENT' ? '%' : 'VNĐ' }}</span>
-                </td>
-                <td class="text-muted">{{ formatMoney(v.minOrderValue) }}</td>
-                <td>
-                  <span class="badge bg-light text-dark border">{{ v.usedCount }} / {{ v.usageLimit }}</span>
-                </td>
-                <td class="small text-muted">
-                  {{ formatDate(v.startDate) }} <br>
-                  <span :class="{'text-danger': isExpired(v.endDate)}">{{ formatDate(v.endDate) }}</span>
-                </td>
-                <td class="text-center">
-                  <span class="badge rounded-pill px-3 py-2" 
-                        :class="v.status === 1 ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary'">
-                    {{ v.status === 1 ? 'Hoạt động' : 'Tạm dừng' }}
-                  </span>
-                </td>
-                <td class="text-end pe-3">
-                  <!-- Đổi sang nút icon -->
-                  <button @click="openEditModal(v)" class="btn btn-sm btn-light text-primary rounded-circle me-2 action-btn" title="Sửa">
-                    <i class="bi bi-pencil-square"></i>
-                  </button>
-                  <button @click="handleDelete(v.id)" class="btn btn-sm btn-light text-danger rounded-circle action-btn" title="Xóa">
-                    <i class="bi bi-trash3"></i>
-                  </button>
-                </td>
-              </tr>
               <tr v-if="vouchers.length === 0">
                 <td colspan="7" class="text-center py-5 text-muted">Không tìm thấy mã giảm giá nào.</td>
               </tr>
+
+              <template v-else>
+                <tr v-for="v in vouchers" :key="v.id" class="border-bottom">
+                  <td class="ps-3">
+                    <span class="fw-bold text-dark">{{ v.code }}</span>
+                  </td>
+                  <td>
+                    <span class="fw-bold text-dark">{{ formatMoney(v.discountValue) }}</span>
+                    <span class="text-muted ms-1 small">{{ v.discountType === 'PERCENT' ? '%' : 'VNĐ' }}</span>
+                  </td>
+                  <td class="text-muted">{{ formatMoney(v.minOrderValue) }}</td>
+                  <td>
+                    <span class="badge bg-light text-dark border">{{ v.usedCount || 0 }} / {{ v.usageLimit }}</span>
+                  </td>
+                  <td class="small text-muted">
+                    {{ formatDate(v.startDate) }} <br>
+                    <span :class="{'text-danger fw-bold': isExpired(v.endDate)}">{{ formatDate(v.endDate) }}</span>
+                  </td>
+                  <td class="text-center">
+                    <span v-if="isExpired(v.endDate)" class="badge bg-secondary-subtle text-secondary rounded-pill px-3 py-2">
+                      Đã hết hạn
+                    </span>
+                    <span v-else class="badge rounded-pill px-3 py-2" 
+                          :class="v.status === 1 ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning'">
+                      {{ v.status === 1 ? 'Đang hoạt động' : 'Tạm dừng' }}
+                    </span>
+                  </td>
+                  <td class="text-end pe-3">
+                    <div class="d-flex gap-1 justify-content-end">
+                      <button @click="openEditModal(v)" class="btn btn-sm btn-light text-primary rounded-circle action-btn" title="Sửa">
+                        <i class="bi bi-pencil-square"></i>
+                      </button>
+
+                      <button
+                        v-if="v.status === 1 && !isExpired(v.endDate)"
+                        class="btn btn-sm btn-light text-warning rounded-circle action-btn"
+                        @click="changeStatus(v, 0)" title="Tạm dừng"
+                      >
+                        <i class="bi bi-pause-circle"></i>
+                      </button>
+
+                      <button
+                        v-else-if="v.status === 0 && !isExpired(v.endDate)"
+                        class="btn btn-sm btn-light text-success rounded-circle action-btn"
+                        @click="changeStatus(v, 1)" title="Kích hoạt"
+                      >
+                        <i class="bi bi-play-circle"></i>
+                      </button>
+
+                      <button @click="handleDelete(v.id)" class="btn btn-sm btn-light text-danger rounded-circle action-btn" title="Xóa">
+                        <i class="bi bi-trash3"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>
@@ -181,7 +205,7 @@
                 </div>
 
                 <div class="col-md-6">
-                  <label class="form-label fw-bold">Đơn tối thiểu (VNĐ) <span class="text-danger">*</span></label>
+                  <label class="form-label fw-bold">Giá tối thiểu (VNĐ) <span class="text-danger">*</span></label>
                   <input 
                     type="text" 
                     class="form-control form-control-lg" 
@@ -512,6 +536,48 @@ const formatDate = (dateStr: string) => {
 };
 const isExpired = (endDate: string) => new Date(endDate) < new Date();
 
+const changeStatus = async (voucher: any, newStatus: number) => {
+  if (isExpired(voucher.endDate)) {
+    Swal.fire({
+      icon: "warning",
+      title: "Không thể đổi trạng thái",
+      text: "Voucher này đã hết hạn sử dụng.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
+  const confirm = await Swal.fire({
+    icon: "question",
+    title: newStatus === 1 ? "Kích hoạt Voucher?" : "Tạm dừng Voucher?",
+    text: newStatus === 1 ? "Khách hàng sẽ có thể áp dụng mã giảm giá này." : "Khách hàng sẽ không thể áp dụng mã này để thanh toán nữa.",
+    showCancelButton: true,
+    confirmButtonText: newStatus === 1 ? "Kích hoạt" : "Tạm dừng",
+    cancelButtonText: "Hủy",
+    confirmButtonColor: "#0d6efd",
+  });
+
+  if (!confirm.isConfirmed) return;
+
+  try {
+    const token = localStorage.getItem('token');
+    
+    // Format lại ngày tháng tránh lỗi định dạng khi gửi về Spring Boot
+    const sDate = voucher.startDate ? voucher.startDate.substring(0, 16) : '';
+    const eDate = voucher.endDate ? voucher.endDate.substring(0, 16) : '';
+    const payload = { ...voucher, startDate: sDate, endDate: eDate, status: newStatus };
+
+    await axios.put(`http://localhost:8080/api/admin/vouchers/${voucher.id}`, payload, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Đã cập nhật trạng thái', showConfirmButton: false, timer: 1500 });
+    fetchVouchers();
+  } catch (error: any) {
+    Swal.fire('Lỗi', error.response?.data || 'Không thể thay đổi trạng thái!', 'error');
+  }
+};
+
 onMounted(fetchVouchers);
 </script>
 
@@ -549,6 +615,12 @@ onMounted(fetchVouchers);
 }
 .bg-secondary-subtle {
   background-color: #e2e3e5 !important;
+}
+.bg-warning-subtle {
+  background-color: #fff3cd !important;
+}
+.text-warning {
+  color: #ffc107 !important;
 }
 
 /* Modal CSS */

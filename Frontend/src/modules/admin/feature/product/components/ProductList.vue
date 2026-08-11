@@ -79,13 +79,43 @@ const handleDelete = (product: Product) => {
   });
 };
 
+const isExpiredDate = (dateStr: any): boolean => {
+  if (!dateStr) return false;
+  const expDate = new Date(dateStr);
+  expDate.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return expDate.getTime() < today.getTime();
+};
+
 const rows = computed(() =>
   props.paginatedData.map((product) => {
-    const stock = calculateTotalStock(product.variants);
+    let finalStatus = product.status;
+    
+    // Kiểm tra xem có biến thể nào còn hạn không
+    const hasValidVariant = product.variants?.some(v => !isExpiredDate(v.expirationDate));
+    const isAllExpired = !hasValidVariant && product.variants && product.variants.length > 0;
+    
+    // Nếu tất cả đều hết hạn thì ép trạng thái hiển thị của sản phẩm về 0
+    if (isAllExpired) {
+        finalStatus = 0; 
+    }
+
+    const updatedVariants = product.variants?.map(v => {
+        return {
+            ...v,
+            status: isExpiredDate(v.expirationDate) ? 0 : v.status
+        };
+    });
+
+    const stock = calculateTotalStock(updatedVariants);
     return {
       ...product,
+      variants: updatedVariants,
+      status: finalStatus,
       stock,
       stockClass: getStockClass(stock),
+      isAllExpired // Thêm cờ này để disable nút ngoài danh sách
     };
   }),
 );
@@ -163,11 +193,12 @@ const rows = computed(() =>
               </span>
             </td>
             <td class="text-center">
+              <!-- TRẠNG THÁI SẢN PHẨM CHÍNH -->
               <span
                 class="status"
                 :class="product.status === 1 ? 'active' : 'inactive'"
               >
-                {{ product.status === 1 ? "Đang bán" : "Ngừng bán" }}
+                {{ product.status === 1 ? "Đang bán" : (product.isAllExpired ? "Đã hết hạn" : "Ngừng bán") }}
               </span>
             </td>
             <td>
@@ -199,8 +230,9 @@ const rows = computed(() =>
                 <button
                   v-else
                   class="icon-btn toggle-status-on"
-                  title="Mở bán"
-                  @click="emit('start-selling', product.id)"
+                  :class="{ 'opacity-50': product.isAllExpired }"
+                  :title="product.isAllExpired ? 'Sản phẩm đã hết hạn' : 'Mở bán'"
+                  @click="!product.isAllExpired && emit('start-selling', product.id)"
                 >
                   <i class="bi bi-eye"></i>
                 </button>
@@ -216,7 +248,7 @@ const rows = computed(() =>
             </td>
           </tr>
 
-          <!-- Dòng phụ hiển thị chi tiết biến thể đã được thu gọn chiều rộng lại -->
+          <!-- Dòng phụ hiển thị chi tiết biến thể -->
           <tr v-if="expandedRowIds.includes(product.id)" class="variant-row">
             <td class="p-0 border-0 bg-transparent"></td>
             <td colspan="7" class="p-0 border-0">
@@ -255,14 +287,18 @@ const rows = computed(() =>
                         </span>
                       </td>
                       <td class="text-center">
+                        <!-- TRẠNG THÁI BIẾN THỂ -->
                         <span
-                          class="status clickable-status"
-                          :class="v.status === 1 ? 'active' : 'inactive'"
-                          title="Bấm để chuyển đổi nhanh trạng thái biến thể"
-                          @click="emit('toggle-variant-status', product, v)"
+                          class="status"
+                          :class="[
+                            v.status === 1 ? 'active' : 'inactive', 
+                            { 'clickable-status': !isExpiredDate(v.expirationDate) }
+                          ]"
+                          :title="isExpiredDate(v.expirationDate) ? 'Biến thể đã hết hạn' : 'Bấm để chuyển đổi nhanh trạng thái biến thể'"
+                          @click="!isExpiredDate(v.expirationDate) && emit('toggle-variant-status', product, v)"
                         >
-                          {{ v.status === 1 ? "Đang bán" : "Ngừng bán" }}
-                          <i class="bi bi-arrow-repeat ms-1 fs-7"></i>
+                          {{ v.status === 1 ? "Đang bán" : (isExpiredDate(v.expirationDate) ? "Đã hết hạn" : "Ngừng bán") }}
+                          <i v-if="!isExpiredDate(v.expirationDate)" class="bi bi-arrow-repeat ms-1 fs-7"></i>
                         </span>
                       </td>
                     </tr>
@@ -323,7 +359,6 @@ const rows = computed(() =>
 
 .variant-row { background: #f8fafc; }
 
-/* ĐÃ THU GỌN CHIỀU RỘNG (MAX-WIDTH: 750PX) ĐỂ CÁC CỘT XÍCH LẠI GẦN NHAU HƠN */
 .variant-container {
   max-width: 750px;
   margin: 6px 0 16px 5px;
@@ -356,18 +391,19 @@ const rows = computed(() =>
 .inactive { background: #f3f4f6; color: #475569; }
 
 .actions { display: flex; justify-content: center; gap: 5px; }
-.icon-btn { width: 34px; height: 34px; border: none; border-radius: 9px; transition: 0.25s; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.icon-btn { width: 34px; height: 34px; border: none; border-radius: 9px; transition: 0.25s; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; }
+.icon-btn:disabled { cursor: not-allowed; }
 
 .clone { background: #f3e8ff; color: #9333ea; }
-.clone:hover { background: #9333ea; color: white; transform: translateY(-2px); }
+.clone:hover:not(:disabled) { background: #9333ea; color: white; transform: translateY(-2px); }
 .edit { background: #eff6ff; color: #2563eb; }
-.edit:hover { background: #2563eb; color: white; transform: translateY(-2px); }
+.edit:hover:not(:disabled) { background: #2563eb; color: white; transform: translateY(-2px); }
 .toggle-status-off { background: #fffbeb; color: #d97706; }
-.toggle-status-off:hover { background: #d97706; color: white; transform: translateY(-2px); }
+.toggle-status-off:hover:not(:disabled) { background: #d97706; color: white; transform: translateY(-2px); }
 .toggle-status-on { background: #dcfce7; color: #15803d; }
-.toggle-status-on:hover { background: #15803d; color: white; transform: translateY(-2px); }
+.toggle-status-on:hover:not(:disabled) { background: #15803d; color: white; transform: translateY(-2px); }
 .delete { background: #fef2f2; color: #dc2626; }
-.delete:hover { background: #dc2626; color: white; transform: translateY(-2px); }
+.delete:hover:not(:disabled) { background: #dc2626; color: white; transform: translateY(-2px); }
 
 .empty { text-align: center; padding: 60px !important; color: #94a3b8; }
 .empty i { font-size: 42px; display: block; margin-bottom: 8px; }

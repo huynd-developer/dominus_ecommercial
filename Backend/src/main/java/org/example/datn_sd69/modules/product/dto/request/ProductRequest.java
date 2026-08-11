@@ -46,23 +46,25 @@ public class ProductRequest {
     private List<VariantRequestDTO> variants;
 
     /**
-     * Không cho phép 1 sản phẩm có nhiều biến thể trùng dung tích.
-     * Ví dụ: không được có 2 dòng cùng capacityId = 10ml.
+     * Không cho phép 1 sản phẩm có nhiều biến thể trùng cả Dung tích và Loại chai.
+     * Ví dụ: được phép có nhiều dòng cùng 10ml, nhưng không được có 2 dòng giống hệt cả 10ml và cùng loại chai Fullbox.
      */
-    @AssertTrue(message = "Dung tích biến thể không được trùng trong cùng một sản phẩm")
+    @AssertTrue(message = "Không được phép có 2 biến thể trùng cả Dung tích và Loại chai trong cùng một sản phẩm")
     public boolean isVariantCapacityUnique() {
         if (variants == null || variants.isEmpty()) {
             return true;
         }
 
-        Set<Integer> capacityIds = new HashSet<>();
+        Set<String> variantPairSet = new HashSet<>();
 
         for (VariantRequestDTO variant : variants) {
-            if (variant == null || variant.getCapacityId() == null) {
+            if (variant == null || variant.getCapacityId() == null || variant.getBottleTypeId() == null) {
                 continue;
             }
 
-            if (!capacityIds.add(variant.getCapacityId())) {
+            String pairKey = variant.getCapacityId() + "-" + variant.getBottleTypeId();
+
+            if (!variantPairSet.add(pairKey)) {
                 return false;
             }
         }

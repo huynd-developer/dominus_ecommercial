@@ -106,10 +106,10 @@
               <h6>{{ currentTargetProduct?.name || activeProduct?.name }}</h6>
               <div class="d-flex align-items-center gap-2 flex-wrap">
                 <p class="vm-price mb-0">
-                  {{ formatCurrency(selectedVariant ? (selectedVariant.salePrice || selectedVariant.price || cardSalePrice) : cardSalePrice) }}
+                  {{ formatCurrency(selectedVariant ? (selectedVariant.salePrice ?? selectedVariant.price ?? 0) : cardSalePrice) }}
                 </p>
-                <span v-if="selectedVariant && selectedVariant.salePrice && selectedVariant.salePrice < selectedVariant.originalPrice" class="text-decoration-line-through text-muted small">
-                  {{ formatCurrency(selectedVariant.originalPrice) }}
+                <span v-if="selectedVariant && (selectedVariant.salePrice ?? selectedVariant.price ?? 0) < (selectedVariant.originalPrice ?? selectedVariant.oldPrice ?? 0)" class="text-decoration-line-through text-muted small">
+                  {{ formatCurrency(selectedVariant.originalPrice ?? selectedVariant.oldPrice ?? 0) }}
                 </span>
                 <span v-if="calculatedDiscountPercent > 0" class="flash-sale-badge ms-2">-{{ calculatedDiscountPercent }}%</span>
               </div>
@@ -1136,25 +1136,11 @@ const openVariantModal = async (type: "CART" | "BUY", customProduct: any = null,
   isLoadingVariants.value = true;
 
   try {
-    const flashSalePriceMap = new Map<number, number>();
-    const originalPriceMap = new Map<number, number>();
-    const tp = currentTargetProduct.value;
-    if (tp?.variants && Array.isArray(tp.variants)) {
-      tp.variants.forEach((pv: any) => {
-        const vId = Number(pv.productVariantId || pv.variantId || pv.id);
-        if (vId) {
-          const { sale, orig } = getProductPrices(pv);
-          if (sale > 0) flashSalePriceMap.set(vId, sale);
-          if (orig > 0) originalPriceMap.set(vId, orig);
-        }
-      });
-    }
-
-    const tId = getProductIdNum(tp);
+    const tId = getProductIdNum(currentTargetProduct.value);
     const res = await api.get(`/v1/products/${tId}`);
     const data = res.data?.data || res.data;
     let rawVariants = data?.variants || data?.productVariants || data?.productVariantList;
-    if (!rawVariants || rawVariants.length === 0) rawVariants = tp.variants || [tp];
+    if (!rawVariants || rawVariants.length === 0) rawVariants = currentTargetProduct.value.variants || [currentTargetProduct.value];
 
     const processedVariants = rawVariants.map((v: any) => {
       const vId = Number(v.productVariantId || v.variantId || v.id);
@@ -1177,21 +1163,21 @@ const openVariantModal = async (type: "CART" | "BUY", customProduct: any = null,
       else if (bottleName) displayCap = bottleName;
       else if (!displayCap) displayCap = "Loại " + (vId || "");
 
-      const prices = getProductPrices(v);
-      const mappedSalePrice = flashSalePriceMap.get(vId) ?? prices.sale;
-      const mappedOriginalPrice = originalPriceMap.get(vId) ?? prices.orig;
+      // Lấy trực tiếp giá chuẩn từ dữ liệu trả về của biến thể
+      const sale = Number(v.salePrice ?? v.promotionPrice ?? v.flashSalePrice ?? v.price ?? 0);
+      const orig = Number(v.originalPrice ?? v.oldPrice ?? v.price ?? sale);
 
       return {
         ...v,
         productVariantId: vId,
         id: vId,
-        salePrice: mappedSalePrice,
-        originalPrice: mappedOriginalPrice,
-        price: mappedOriginalPrice > 0 ? mappedOriginalPrice : mappedSalePrice,
+        salePrice: sale,
+        originalPrice: orig,
+        price: sale > 0 ? sale : orig,
         displayCapacity: displayCap,
         numericCapacity: numericCap,
-        manufacturingDate: v.manufacturingDate || v.mfgDate || tp.manufacturingDate,
-        expirationDate: v.expirationDate || v.expDate || tp.expirationDate,
+        manufacturingDate: v.manufacturingDate || v.mfgDate || currentTargetProduct.value.manufacturingDate,
+        expirationDate: v.expirationDate || v.expDate || currentTargetProduct.value.expirationDate,
       };
     }).filter((v: any) => !isExpiredDate(v.expirationDate));
 

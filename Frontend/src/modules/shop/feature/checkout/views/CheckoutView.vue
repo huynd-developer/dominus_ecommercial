@@ -151,7 +151,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import api from "@/common/api";
@@ -386,10 +386,67 @@ const validateCheckoutForm = async (): Promise<any | null> => {
   };
 };
 
+const fetchProductDetail = async (productId: number) => {
+  if (!productId) return null;
+  
+  try {
+    // THÊM CHỐNG CACHE Ở ĐÂY NỮA
+    const t = Date.now();
+    let res = await api.get(`/v1/products/${productId}?t=${t}`).catch(() => null);
+    if (!res) res = await api.get(`/customer/products/${productId}?t=${t}`).catch(() => null);
+    if (!res) return null;
+    return res.data?.data ?? res.data?.result ?? res.data;
+  } catch (error) {
+    return null;
+  }
+};
+
 const loadCartSummary = async () => {
   try {
-    const res = await api.get("/v1/customer/cart/my-cart");
-    cartItems.value = Array.isArray(res.data) ? res.data : [];
+    // Ép trình duyệt không dùng cache
+    const res = await api.get(`/v1/customer/cart/my-cart?t=${Date.now()}`);
+    let items = Array.isArray(res.data) ? res.data : [];
+
+    items = await Promise.all(items.map(async (item: any) => {
+      try {
+        const productId = Number(item?.productId || item?.ProductId || item?.product?.id || item?.product?.productId || item?.Product?.id || item?.Product?.productId || item?.productVariant?.productId || item?.productVariant?.product?.id || item?.ProductVariant?.ProductId || item?.ProductVariant?.Product?.Id || item?.variant?.productId || item?.variant?.product?.id || 0);
+        const variantId = Number(item?.productVariantId || item?.ProductVariantId || item?.variantId || item?.VariantId || item?.productVariant?.id || item?.ProductVariant?.Id || item?.productVariant?.productVariantId || item?.variant?.id || item?.Variant?.Id || 0);
+        
+        if (!productId) return item;
+
+        const productData = await fetchProductDetail(productId);
+        if (!productData) return item;
+
+        const candidates = [productData?.variants, productData?.Variants, productData?.productVariants, productData?.ProductVariants, productData?.productVariantList, productData?.ProductVariantList, productData?.productVariantResponses, productData?.productVariantDTOs];
+        let variants = [];
+        for (const candidate of candidates) {
+          if (Array.isArray(candidate)) { variants = candidate; break; }
+        }
+
+        const matchedVariant = variants.find((v: any) => Number(v?.productVariantId || v?.id || v?.Id || 0) === variantId);
+
+        if (matchedVariant) {
+          // Gán đè dữ liệu thật (Giá, Tồn kho) từ Admin vào Item thanh toán
+          return {
+             ...item,
+             price: Number(matchedVariant.salePrice ?? matchedVariant.price ?? item.price),
+             originalPrice: Number(matchedVariant.originalPrice ?? matchedVariant.oldPrice ?? item.originalPrice),
+             stockQuantity: Number(matchedVariant.stockQuantity ?? matchedVariant.stock ?? item.stockQuantity),
+             variantStatus: Number(matchedVariant.status ?? item.variantStatus),
+             expirationDate: matchedVariant.expirationDate ?? item.expirationDate,
+             product: productData,
+             productVariant: matchedVariant
+          };
+        }
+
+        // Nếu biến thể đã bị xóa hẳn bên Admin
+        return { ...item, variantStatus: 0, stockQuantity: 0 };
+      } catch (e) {
+        return item;
+      }
+    }));
+
+    cartItems.value = items;
   } catch (error: any) {
     console.error(error);
   }
@@ -634,6 +691,17 @@ window.addEventListener("pageshow", async (event) => {
   }
 });
 
+// BẮT SỰ KIỆN CLICK CHUỘT VÀO CỬA SỔ ĐỂ TỰ ĐỘNG LOAD LẠI FLASH SALE & VOUCHER
+const handleFocus = async () => {
+  if (!showPaymentModal.value && !showSuccessModal.value) {
+    await loadCartSummary();
+    // Check cả localStorage phòng khi có mã đang áp dụng
+    if (localStorage.getItem("applied_voucher") || appliedVoucherCode.value) {
+      await loadSavedVoucher();
+    }
+  }
+};
+
 onMounted(async () => {
   try {
     isPageLoading.value = true;
@@ -658,6 +726,13 @@ onMounted(async () => {
   } finally {
     isPageLoading.value = false;
   }
+
+  // Thêm lắng nghe sự kiện Focus
+  window.addEventListener("focus", handleFocus);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("focus", handleFocus);
 });
 </script>
 

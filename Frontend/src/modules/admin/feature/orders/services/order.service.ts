@@ -230,4 +230,21 @@ export const orderService = {
 
     return response.data;
   },
+
+  /**
+   * Admin xác nhận đã hoàn tiền cho đơn hủy.
+   */
+  async confirmCancelRefund(orderId: number, restoreStock: boolean) {
+    const response = await api.patch<AdminOrderResponse>(
+      `${ORDER_ADMIN_API}/${orderId}/cancel-refund/confirm`,
+      null,
+      {
+        params: {
+          restoreStock,
+        },
+      }
+    );
+
+    return response.data;
+  },
 };

@@ -303,7 +303,6 @@
                               v-for="item in capacityList"
                               :key="item.id"
                               :value="item.id"
-                              :disabled="isCapacitySelected(item.id, index)"
                             >
                               {{ item.value }} ml
                             </option>
@@ -319,6 +318,7 @@
                               v-for="item in bottleTypeList"
                               :key="item.id"
                               :value="item.id"
+                              :disabled="isVariantDuplicate(variant.capacityId, item.id, index)"
                             >
                               {{ item.bottleTypeName ?? item.name }}
                             </option>
@@ -624,21 +624,25 @@ const addVariant = () => {
   });
 };
 
-const isCapacitySelected = (
+const isVariantDuplicate = (
   capacityId: number | string,
+  bottleTypeId: number | string,
   currentIndex: number | string,
 ) => {
-  const currentCapacityId = Number(capacityId || 0);
+  const currentCapId = Number(capacityId || 0);
+  const currentBotId = Number(bottleTypeId || 0);
   const currentIndexNumber = Number(currentIndex);
 
-  if (!currentCapacityId || Number.isNaN(currentIndexNumber)) {
+  if (!currentCapId || !currentBotId || Number.isNaN(currentIndexNumber)) {
     return false;
   }
 
+  // Chặn nếu có dòng khác trùng cả Dung tích VÀ Loại chai
   return formData.value.variants.some((variant: any, index: number) => {
     return (
       index !== currentIndexNumber &&
-      Number(variant?.capacityId || 0) === currentCapacityId
+      Number(variant?.capacityId || 0) === currentCapId &&
+      Number(variant?.bottleTypeId || 0) === currentBotId
     );
   });
 };
@@ -900,27 +904,30 @@ const validateForm = () => {
     return false;
   }
 
-  const capacityIdSet = new Set<number>();
+  const variantPairSet = new Set<string>();
   for (let i = 0; i < formData.value.variants.length; i++) {
     const variant = formData.value.variants[i];
     if (variant.capacityId === 0 || variant.bottleTypeId === 0) {
       Swal.fire(
         "Thiếu dữ liệu",
-        `Biến thể dòng ${i + 1}: Vui lòng chọn Dung tích và Loại chai.`,
+        `Biến thể dòng ${i + 1}: Vui lòng chọn đầy đủ Dung tích và Loại chai.`,
         "warning",
       );
       return false;
     }
     const capacityId = Number(variant.capacityId || 0);
-    if (capacityIdSet.has(capacityId)) {
+    const bottleTypeId = Number(variant.bottleTypeId || 0);
+    const pairKey = `${capacityId}-${bottleTypeId}`;
+
+    if (variantPairSet.has(pairKey)) {
       Swal.fire(
-        "Trùng dung tích",
-        `Biến thể dòng ${i + 1}: Dung tích này đã tồn tại trong sản phẩm.`,
-        "warning",
+        "Trùng biến thể",
+        `Biến thể dòng ${i + 1}: Không được phép có 2 biến thể trùng cả Dung tích và Loại chai giống nhau!`,
+        "error",
       );
       return false;
     }
-    capacityIdSet.add(capacityId);
+    variantPairSet.add(pairKey);
 
     if (variant.price <= 0 || isNaN(variant.price)) {
       Swal.fire(
