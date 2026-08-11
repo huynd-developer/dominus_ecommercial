@@ -403,48 +403,45 @@ const fetchProductDetail = async (productId: number) => {
 
 const loadCartSummary = async () => {
   try {
-    // Ép trình duyệt không dùng cache
     const res = await api.get(`/v1/customer/cart/my-cart?t=${Date.now()}`);
     let items = Array.isArray(res.data) ? res.data : [];
 
-    items = await Promise.all(items.map(async (item: any) => {
-      try {
-        const productId = Number(item?.productId || item?.ProductId || item?.product?.id || item?.product?.productId || item?.Product?.id || item?.Product?.productId || item?.productVariant?.productId || item?.productVariant?.product?.id || item?.ProductVariant?.ProductId || item?.ProductVariant?.Product?.Id || item?.variant?.productId || item?.variant?.product?.id || 0);
-        const variantId = Number(item?.productVariantId || item?.ProductVariantId || item?.variantId || item?.VariantId || item?.productVariant?.id || item?.ProductVariant?.Id || item?.productVariant?.productVariantId || item?.variant?.id || item?.Variant?.Id || 0);
-        
-        if (!productId) return item;
+    if (items.length > 0) {
+      items = await Promise.all(items.map(async (item: any) => {
+        try {
+          const productId = Number(item?.productId || item?.ProductId || item?.product?.id || item?.product?.productId || item?.Product?.id || item?.Product?.productId || item?.productVariant?.productId || item?.productVariant?.product?.id || item?.ProductVariant?.ProductId || item?.ProductVariant?.Product?.Id || item?.variant?.productId || item?.variant?.product?.id || 0);
+          const variantId = Number(item?.productVariantId || item?.ProductVariantId || item?.variantId || item?.VariantId || item?.productVariant?.id || item?.ProductVariant?.Id || item?.productVariant?.productVariantId || item?.variant?.id || item?.Variant?.Id || 0);
+          
+          if (!productId) return item;
 
-        const productData = await fetchProductDetail(productId);
-        if (!productData) return item;
+          const productData = await fetchProductDetail(productId);
+          if (!productData) return { ...item, variantStatus: 0, stockQuantity: 0, sellable: false };
 
-        const candidates = [productData?.variants, productData?.Variants, productData?.productVariants, productData?.ProductVariants, productData?.productVariantList, productData?.ProductVariantList, productData?.productVariantResponses, productData?.productVariantDTOs];
-        let variants = [];
-        for (const candidate of candidates) {
-          if (Array.isArray(candidate)) { variants = candidate; break; }
+          const candidates = [productData?.variants, productData?.Variants, productData?.productVariants, productData?.ProductVariants, productData?.productVariantList, productData?.ProductVariantList, productData?.productVariantResponses, productData?.productVariantDTOs];
+          let variants = [];
+          for (const candidate of candidates) {
+            if (Array.isArray(candidate)) { variants = candidate; break; }
+          }
+
+          const matchedVariant = variants.find((v: any) => Number(v?.productVariantId || v?.id || v?.Id || 0) === variantId);
+
+          if (matchedVariant) {
+            // ĐÃ SỬA: KHÔNG ghi đè giá nữa! Giữ nguyên item.price, item.originalPrice từ giỏ hàng
+            return {
+               ...item,
+               stockQuantity: Number(matchedVariant.stockQuantity ?? matchedVariant.stock ?? item.stockQuantity),
+               variantStatus: Number(matchedVariant.status ?? item.variantStatus),
+               expirationDate: matchedVariant.expirationDate ?? item.expirationDate,
+               product: productData,
+               productVariant: matchedVariant
+            };
+          }
+          return { ...item, variantStatus: 0, stockQuantity: 0, sellable: false };
+        } catch (e) {
+          return item;
         }
-
-        const matchedVariant = variants.find((v: any) => Number(v?.productVariantId || v?.id || v?.Id || 0) === variantId);
-
-        if (matchedVariant) {
-          // Gán đè dữ liệu thật (Giá, Tồn kho) từ Admin vào Item thanh toán
-          return {
-             ...item,
-             price: Number(matchedVariant.salePrice ?? matchedVariant.price ?? item.price),
-             originalPrice: Number(matchedVariant.originalPrice ?? matchedVariant.oldPrice ?? item.originalPrice),
-             stockQuantity: Number(matchedVariant.stockQuantity ?? matchedVariant.stock ?? item.stockQuantity),
-             variantStatus: Number(matchedVariant.status ?? item.variantStatus),
-             expirationDate: matchedVariant.expirationDate ?? item.expirationDate,
-             product: productData,
-             productVariant: matchedVariant
-          };
-        }
-
-        // Nếu biến thể đã bị xóa hẳn bên Admin
-        return { ...item, variantStatus: 0, stockQuantity: 0 };
-      } catch (e) {
-        return item;
-      }
-    }));
+      }));
+    }
 
     cartItems.value = items;
   } catch (error: any) {

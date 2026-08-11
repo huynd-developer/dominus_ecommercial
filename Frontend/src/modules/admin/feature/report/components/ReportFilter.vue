@@ -2,7 +2,7 @@
   <div class="card border-0 shadow-sm mb-4">
     <div class="card-body">
       <div class="row g-3 align-items-end">
-        <div class="col-12 col-md-3">
+        <div class="col-12 col-md-2">
           <label class="form-label fw-semibold">Mốc thời gian</label>
           <select
             v-model="reportStore.filter.filterType"
@@ -19,9 +19,22 @@
           </select>
         </div>
 
+        <div class="col-12 col-md-2">
+          <label class="form-label fw-semibold">Loại đơn</label>
+          <select
+            v-model="reportStore.filter.orderType"
+            class="form-select"
+            :disabled="reportStore.loading"
+          >
+            <option value="">Tất cả</option>
+            <option value="ONLINE">Online</option>
+            <option value="IN_STORE">Tại quầy</option>
+          </select>
+        </div>
+
         <div
           v-if="reportStore.filter.filterType === 'CUSTOM'"
-          class="col-12 col-md-3"
+          class="col-12 col-md-2"
         >
           <label class="form-label fw-semibold">Từ ngày</label>
           <input
@@ -35,7 +48,7 @@
 
         <div
           v-if="reportStore.filter.filterType === 'CUSTOM'"
-          class="col-12 col-md-3"
+          class="col-12 col-md-2"
         >
           <label class="form-label fw-semibold">Đến ngày</label>
           <input
@@ -64,7 +77,7 @@
           />
         </div>
 
-        <div class="col-12 col-md-1 d-grid">
+        <div class="col-12 col-md-2 d-grid">
           <button
             class="btn btn-dark"
             :disabled="reportStore.loading"
