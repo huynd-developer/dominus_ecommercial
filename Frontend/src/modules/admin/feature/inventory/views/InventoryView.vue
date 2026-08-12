@@ -54,19 +54,103 @@ const currentLots = computed(() => {
 });
 
 const totalPages = computed(() => {
-  if (activeTab.value === "overview") {
-    return inventoryStore.overviewTotalPages;
-  }
+  const value =
+    activeTab.value === "overview"
+      ? inventoryStore.overviewTotalPages
+      : inventoryStore.lotTotalPages;
 
-  return inventoryStore.lotTotalPages;
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : 0;
 });
 
 const currentPage = computed(() => {
-  if (activeTab.value === "overview") {
-    return inventoryStore.overviewPage;
+  const value =
+    activeTab.value === "overview"
+      ? inventoryStore.overviewPage
+      : inventoryStore.lotPage;
+
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) && parsed >= 0
+    ? parsed
+    : 0;
+});
+
+const totalElements = computed(() => {
+  const value =
+    activeTab.value === "overview"
+      ? inventoryStore.overviewTotalElements
+      : inventoryStore.lotTotalElements;
+
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) && parsed >= 0
+    ? parsed
+    : 0;
+});
+
+const pageSize = computed(() => {
+  const value =
+    activeTab.value === "overview"
+      ? inventoryStore.overviewSize
+      : inventoryStore.lotSize;
+
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : 20;
+});
+
+const pageStart = computed(() => {
+  if (totalElements.value === 0) {
+    return 0;
   }
 
-  return inventoryStore.lotPage;
+  return currentPage.value * pageSize.value + 1;
+});
+
+const pageEnd = computed(() => {
+  if (totalElements.value === 0) {
+    return 0;
+  }
+
+  return Math.min(
+    (currentPage.value + 1) * pageSize.value,
+    totalElements.value
+  );
+});
+
+const pageNumbers = computed(() => {
+  const total = totalPages.value;
+
+  if (total <= 0) {
+    return [];
+  }
+
+  const maxVisible = 5;
+  let start = Math.max(
+    0,
+    currentPage.value - Math.floor(maxVisible / 2)
+  );
+
+  let end = Math.min(
+    total - 1,
+    start + maxVisible - 1
+  );
+
+  start = Math.max(
+    0,
+    end - maxVisible + 1
+  );
+
+  return Array.from(
+    { length: end - start + 1 },
+    (_, index) => start + index
+  );
 });
 
 const loadCurrentTab = async () => {
@@ -190,6 +274,24 @@ const nextPage = async () => {
     inventoryStore.overviewPage++;
   } else {
     inventoryStore.lotPage++;
+  }
+
+  await loadCurrentTab();
+};
+
+const goToPage = async (page: number) => {
+  if (
+    page < 0 ||
+    page >= totalPages.value ||
+    page === currentPage.value
+  ) {
+    return;
+  }
+
+  if (activeTab.value === "overview") {
+    inventoryStore.overviewPage = page;
+  } else {
+    inventoryStore.lotPage = page;
   }
 
   await loadCurrentTab();
@@ -414,16 +516,27 @@ onMounted(async () => {
       />
 
       <div class="pagination">
-        <span>
-          Trang
-          {{ currentPage + 1 }}
-          /
-          {{ Math.max(totalPages, 1) }}
-        </span>
+        <div class="pagination-info">
+          <span>
+            Hiển thị
+            <strong>{{ pageStart }}-{{ pageEnd }}</strong>
+            /
+            <strong>{{ totalElements }}</strong>
+            bản ghi
+          </span>
 
-        <div>
+          <span class="page-summary">
+            Trang
+            <strong>{{ totalPages > 0 ? currentPage + 1 : 0 }}</strong>
+            /
+            <strong>{{ totalPages }}</strong>
+          </span>
+        </div>
+
+        <div class="pagination-controls">
           <button
             type="button"
+            class="page-nav"
             :disabled="currentPage <= 0"
             @click="previousPage"
           >
@@ -431,8 +544,24 @@ onMounted(async () => {
           </button>
 
           <button
+            v-for="page in pageNumbers"
+            :key="page"
             type="button"
-            :disabled="currentPage + 1 >= totalPages"
+            class="page-number"
+            :class="{ active: page === currentPage }"
+            :disabled="page === currentPage"
+            @click="goToPage(page)"
+          >
+            {{ page + 1 }}
+          </button>
+
+          <button
+            type="button"
+            class="page-nav"
+            :disabled="
+              totalPages === 0 ||
+              currentPage + 1 >= totalPages
+            "
             @click="nextPage"
           >
             Sau
@@ -587,26 +716,60 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   margin-top: 16px;
   color: #666;
 }
 
-.pagination > div {
+.pagination-info {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 14px;
+}
+
+.page-summary {
+  color: #777;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .pagination button {
-  padding: 8px 14px;
+  min-width: 38px;
+  height: 38px;
+  padding: 0 12px;
   border: 1px solid #ddd;
   background: white;
+  color: #444;
   border-radius: 7px;
   cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pagination button:hover:not(:disabled) {
+  border-color: #222;
+  color: #111;
+}
+
+.pagination .page-number.active {
+  background: #222;
+  border-color: #222;
+  color: white;
+  font-weight: 600;
 }
 
 .pagination button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.pagination .page-number.active:disabled {
+  opacity: 1;
 }
 
 @media (max-width: 800px) {
@@ -621,6 +784,17 @@ onMounted(async () => {
   .search-box {
     width: 100%;
     min-width: 100%;
+  }
+
+  .pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pagination-controls {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
   }
 }
 </style>

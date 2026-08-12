@@ -49,26 +49,17 @@ interface InventoryState {
 }
 
 const getErrorMessage = (error: any): string => {
-  return (
-    error?.response?.data?.message ||
-    error?.message ||
-    "Có lỗi xảy ra"
-  );
+  return error?.response?.data?.message || error?.message || "Có lỗi xảy ra";
 };
 
 /**
  * Chuyển giá trị pagination về number an toàn.
  * Nếu API không trả hoặc giá trị không hợp lệ thì dùng fallback.
  */
-const safeNumber = (
-  value: unknown,
-  fallback: number = 0
-): number => {
+const safeNumber = (value: unknown, fallback: number = 0): number => {
   const numberValue = Number(value);
 
-  return Number.isFinite(numberValue)
-    ? numberValue
-    : fallback;
+  return Number.isFinite(numberValue) ? numberValue : fallback;
 };
 
 /**
@@ -96,372 +87,251 @@ const unwrapResponse = <T>(response: T): any => {
   return value;
 };
 
-export const useInventoryStore = defineStore(
-  "inventory",
-  {
-    state: (): InventoryState => ({
-      summary: null,
-
-      overview: [],
-      nearExpiryLots: [],
-      expiredLots: [],
-      lockedLots: [],
-
-      config: null,
-
-      loadingSummary: false,
-      loadingOverview: false,
-      loadingLots: false,
-      loadingConfig: false,
-      savingConfig: false,
-
-      keyword: "",
-
-      stockStatus: "ALL",
-
-      nearExpiryFilter: undefined,
-      expiredFilter: undefined,
-      lockedFilter: undefined,
-
-      overviewPage: 0,
-      overviewSize: 20,
-      overviewTotalElements: 0,
-      overviewTotalPages: 0,
-
-      lotPage: 0,
-      lotSize: 20,
-      lotTotalElements: 0,
-      lotTotalPages: 0,
-
-      error: null,
-    }),
-
-    actions: {
-      async fetchSummary() {
-        this.loadingSummary = true;
-        this.error = null;
-
-        try {
-          this.summary =
-            await inventoryService.getSummary();
-        } catch (error) {
-          this.error = getErrorMessage(error);
-          throw error;
-        } finally {
-          this.loadingSummary = false;
-        }
-      },
-
-      async fetchOverview(
-        override: Partial<InventoryOverviewParams> = {}
-      ) {
-        this.loadingOverview = true;
-        this.error = null;
-
-        try {
-          const response =
-            await inventoryService.getOverview({
-              keyword:
-                override.keyword ??
-                this.keyword,
-
-              stockStatus:
-                override.stockStatus ??
-                this.stockStatus,
-
-              nearExpiry:
-                override.nearExpiry !==
-                undefined
-                  ? override.nearExpiry
-                  : this.nearExpiryFilter,
-
-              expired:
-                override.expired !==
-                undefined
-                  ? override.expired
-                  : this.expiredFilter,
-
-              locked:
-                override.locked !==
-                undefined
-                  ? override.locked
-                  : this.lockedFilter,
-
-              page:
-                override.page ??
-                this.overviewPage,
-
-              size:
-                override.size ??
-                this.overviewSize,
-            });
-
-          const data =
-            unwrapResponse(response);
-
-          this.overview =
-            Array.isArray(data?.content)
-              ? data.content
-              : [];
-
-          this.overviewPage =
-            safeNumber(
-              data?.number,
-              0
-            );
-
-          this.overviewSize =
-            safeNumber(
-              data?.size,
-              this.overviewSize
-            );
-
-          this.overviewTotalElements =
-            safeNumber(
-              data?.totalElements,
-              0
-            );
-
-          this.overviewTotalPages =
-            safeNumber(
-              data?.totalPages,
-              0
-            );
-        } catch (error) {
-          this.error =
-            getErrorMessage(error);
-
-          throw error;
-        } finally {
-          this.loadingOverview = false;
-        }
-      },
-
-      async fetchNearExpiry() {
-        this.loadingLots = true;
-        this.error = null;
-
-        try {
-          const response =
-            await inventoryService.getNearExpiry({
-              keyword: this.keyword,
-              page: this.lotPage,
-              size: this.lotSize,
-            });
-
-          const data =
-            unwrapResponse(response);
-
-          this.nearExpiryLots =
-            Array.isArray(data?.content)
-              ? data.content
-              : [];
-
-          this.lotPage =
-            safeNumber(
-              data?.number,
-              0
-            );
-
-          this.lotSize =
-            safeNumber(
-              data?.size,
-              this.lotSize
-            );
-
-          this.lotTotalElements =
-            safeNumber(
-              data?.totalElements,
-              0
-            );
-
-          this.lotTotalPages =
-            safeNumber(
-              data?.totalPages,
-              0
-            );
-        } catch (error) {
-          this.error =
-            getErrorMessage(error);
-
-          throw error;
-        } finally {
-          this.loadingLots = false;
-        }
-      },
-
-      async fetchExpired() {
-        this.loadingLots = true;
-        this.error = null;
-
-        try {
-          const response =
-            await inventoryService.getExpired({
-              keyword: this.keyword,
-              page: this.lotPage,
-              size: this.lotSize,
-            });
-
-          const data =
-            unwrapResponse(response);
-
-          this.expiredLots =
-            Array.isArray(data?.content)
-              ? data.content
-              : [];
-
-          this.lotPage =
-            safeNumber(
-              data?.number,
-              0
-            );
-
-          this.lotSize =
-            safeNumber(
-              data?.size,
-              this.lotSize
-            );
-
-          this.lotTotalElements =
-            safeNumber(
-              data?.totalElements,
-              0
-            );
-
-          this.lotTotalPages =
-            safeNumber(
-              data?.totalPages,
-              0
-            );
-        } catch (error) {
-          this.error =
-            getErrorMessage(error);
-
-          throw error;
-        } finally {
-          this.loadingLots = false;
-        }
-      },
-
-      async fetchLocked() {
-        this.loadingLots = true;
-        this.error = null;
-
-        try {
-          const response =
-            await inventoryService.getLocked({
-              keyword: this.keyword,
-              page: this.lotPage,
-              size: this.lotSize,
-            });
-
-          const data =
-            unwrapResponse(response);
-
-          this.lockedLots =
-            Array.isArray(data?.content)
-              ? data.content
-              : [];
-
-          this.lotPage =
-            safeNumber(
-              data?.number,
-              0
-            );
-
-          this.lotSize =
-            safeNumber(
-              data?.size,
-              this.lotSize
-            );
-
-          this.lotTotalElements =
-            safeNumber(
-              data?.totalElements,
-              0
-            );
-
-          this.lotTotalPages =
-            safeNumber(
-              data?.totalPages,
-              0
-            );
-        } catch (error) {
-          this.error =
-            getErrorMessage(error);
-
-          throw error;
-        } finally {
-          this.loadingLots = false;
-        }
-      },
-
-      async fetchConfig() {
-        this.loadingConfig = true;
-        this.error = null;
-
-        try {
-          this.config =
-            await inventoryService.getConfig();
-        } catch (error) {
-          this.error =
-            getErrorMessage(error);
-
-          throw error;
-        } finally {
-          this.loadingConfig = false;
-        }
-      },
-
-      async updateConfig(
-        request: InventoryConfigUpdateRequest
-      ) {
-        this.savingConfig = true;
-        this.error = null;
-
-        try {
-          const updated =
-            await inventoryService.updateConfig(
-              request
-            );
-
-          this.config = updated;
-
-          await Promise.all([
-            this.fetchSummary(),
-            this.fetchOverview(),
-          ]);
-
-          return updated;
-        } catch (error) {
-          this.error =
-            getErrorMessage(error);
-
-          throw error;
-        } finally {
-          this.savingConfig = false;
-        }
-      },
-
-      resetOverviewFilters() {
-        this.keyword = "";
-        this.stockStatus = "ALL";
-
-        this.nearExpiryFilter =
-          undefined;
-
-        this.expiredFilter =
-          undefined;
-
-        this.lockedFilter =
-          undefined;
-
-        this.overviewPage = 0;
-      },
-
-      resetLotPage() {
-        this.lotPage = 0;
-      },
+export const useInventoryStore = defineStore("inventory", {
+  state: (): InventoryState => ({
+    summary: null,
+
+    overview: [],
+    nearExpiryLots: [],
+    expiredLots: [],
+    lockedLots: [],
+
+    config: null,
+
+    loadingSummary: false,
+    loadingOverview: false,
+    loadingLots: false,
+    loadingConfig: false,
+    savingConfig: false,
+
+    keyword: "",
+
+    stockStatus: "ALL",
+
+    nearExpiryFilter: undefined,
+    expiredFilter: undefined,
+    lockedFilter: undefined,
+
+    overviewPage: 0,
+    overviewSize: 20,
+    overviewTotalElements: 0,
+    overviewTotalPages: 0,
+
+    lotPage: 0,
+    lotSize: 20,
+    lotTotalElements: 0,
+    lotTotalPages: 0,
+
+    error: null,
+  }),
+
+  actions: {
+    async fetchSummary() {
+      this.loadingSummary = true;
+      this.error = null;
+
+      try {
+        this.summary = await inventoryService.getSummary();
+      } catch (error) {
+        this.error = getErrorMessage(error);
+        throw error;
+      } finally {
+        this.loadingSummary = false;
+      }
     },
-  }
-);
+
+    async fetchOverview(override: Partial<InventoryOverviewParams> = {}) {
+      this.loadingOverview = true;
+      this.error = null;
+
+      try {
+        const response = await inventoryService.getOverview({
+          keyword: override.keyword ?? this.keyword,
+
+          stockStatus: override.stockStatus ?? this.stockStatus,
+
+          nearExpiry:
+            override.nearExpiry !== undefined
+              ? override.nearExpiry
+              : this.nearExpiryFilter,
+
+          expired:
+            override.expired !== undefined
+              ? override.expired
+              : this.expiredFilter,
+
+          locked:
+            override.locked !== undefined ? override.locked : this.lockedFilter,
+
+          page: override.page ?? this.overviewPage,
+
+          size: override.size ?? this.overviewSize,
+        });
+
+        const data = unwrapResponse(response);
+
+        this.overview = Array.isArray(data?.content) ? data.content : [];
+
+        this.overviewPage = safeNumber(data?.page?.number, 0);
+
+        this.overviewSize = safeNumber(data?.page?.size, this.overviewSize);
+
+        this.overviewTotalElements = safeNumber(data?.page?.totalElements, 0);
+
+        this.overviewTotalPages = safeNumber(data?.page?.totalPages, 0);
+      } catch (error) {
+        this.error = getErrorMessage(error);
+
+        throw error;
+      } finally {
+        this.loadingOverview = false;
+      }
+    },
+
+    async fetchNearExpiry() {
+      this.loadingLots = true;
+      this.error = null;
+
+      try {
+        const response = await inventoryService.getNearExpiry({
+          keyword: this.keyword,
+          page: this.lotPage,
+          size: this.lotSize,
+        });
+
+        const data = unwrapResponse(response);
+
+        this.nearExpiryLots = Array.isArray(data?.content) ? data.content : [];
+
+        this.lotPage = safeNumber(data?.number, 0);
+
+        this.lotSize = safeNumber(data?.size, this.lotSize);
+
+        this.lotTotalElements = safeNumber(data?.totalElements, 0);
+
+        this.lotTotalPages = safeNumber(data?.totalPages, 0);
+      } catch (error) {
+        this.error = getErrorMessage(error);
+
+        throw error;
+      } finally {
+        this.loadingLots = false;
+      }
+    },
+
+    async fetchExpired() {
+      this.loadingLots = true;
+      this.error = null;
+
+      try {
+        const response = await inventoryService.getExpired({
+          keyword: this.keyword,
+          page: this.lotPage,
+          size: this.lotSize,
+        });
+
+        const data = unwrapResponse(response);
+
+        this.expiredLots = Array.isArray(data?.content) ? data.content : [];
+
+        this.lotPage = safeNumber(data?.number, 0);
+
+        this.lotSize = safeNumber(data?.size, this.lotSize);
+
+        this.lotTotalElements = safeNumber(data?.totalElements, 0);
+
+        this.lotTotalPages = safeNumber(data?.totalPages, 0);
+      } catch (error) {
+        this.error = getErrorMessage(error);
+
+        throw error;
+      } finally {
+        this.loadingLots = false;
+      }
+    },
+
+    async fetchLocked() {
+      this.loadingLots = true;
+      this.error = null;
+
+      try {
+        const response = await inventoryService.getLocked({
+          keyword: this.keyword,
+          page: this.lotPage,
+          size: this.lotSize,
+        });
+
+        const data = unwrapResponse(response);
+
+        this.lockedLots = Array.isArray(data?.content) ? data.content : [];
+
+        this.lotPage = safeNumber(data?.number, 0);
+
+        this.lotSize = safeNumber(data?.size, this.lotSize);
+
+        this.lotTotalElements = safeNumber(data?.totalElements, 0);
+
+        this.lotTotalPages = safeNumber(data?.totalPages, 0);
+      } catch (error) {
+        this.error = getErrorMessage(error);
+
+        throw error;
+      } finally {
+        this.loadingLots = false;
+      }
+    },
+
+    async fetchConfig() {
+      this.loadingConfig = true;
+      this.error = null;
+
+      try {
+        this.config = await inventoryService.getConfig();
+      } catch (error) {
+        this.error = getErrorMessage(error);
+
+        throw error;
+      } finally {
+        this.loadingConfig = false;
+      }
+    },
+
+    async updateConfig(request: InventoryConfigUpdateRequest) {
+      this.savingConfig = true;
+      this.error = null;
+
+      try {
+        const updated = await inventoryService.updateConfig(request);
+
+        this.config = updated;
+
+        await Promise.all([this.fetchSummary(), this.fetchOverview()]);
+
+        return updated;
+      } catch (error) {
+        this.error = getErrorMessage(error);
+
+        throw error;
+      } finally {
+        this.savingConfig = false;
+      }
+    },
+
+    resetOverviewFilters() {
+      this.keyword = "";
+      this.stockStatus = "ALL";
+
+      this.nearExpiryFilter = undefined;
+
+      this.expiredFilter = undefined;
+
+      this.lockedFilter = undefined;
+
+      this.overviewPage = 0;
+    },
+
+    resetLotPage() {
+      this.lotPage = 0;
+    },
+  },
+});
