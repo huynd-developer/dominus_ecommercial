@@ -297,6 +297,21 @@ const menuItems = [
     ],
   },
   {
+    id: "inventory-group",
+    name: "Quản lý kho",
+    icon: "bi-boxes",
+    roles: ["OWNER", "MANAGER", "CASHIER"],
+    children: [
+      {
+        id: "inventory-overview",
+        path: "/admin/inventory",
+        name: "Tổng quan kho",
+        icon: "bi-grid-1x2",
+        roles: ["OWNER", "MANAGER", "CASHIER"],
+      },
+    ],
+  },
+  {
     id: "orders",
     path: "/admin/orders",
     name: "Quản lý đơn hàng",

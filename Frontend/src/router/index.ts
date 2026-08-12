@@ -163,7 +163,7 @@ const routes: Array<RouteRecordRaw> = [
           allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
         },
       },
-      
+
       {
         path: "products",
         name: "AdminProducts",
@@ -236,15 +236,25 @@ const routes: Array<RouteRecordRaw> = [
         },
       },
       {
-      path: "reviews",
-      name: "AdminReviews",
-      component: () =>
-        import("@/modules/admin/feature/review/views/ReviewView.vue"), 
-      meta: {
-        requiresAuth: true,
-        allowedRoles: ["OWNER", "MANAGER"],
+        path: "inventory",
+        name: "AdminInventory",
+        component: () =>
+          import("@/modules/admin/feature/inventory/views/InventoryView.vue"),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
       },
-    },
+      {
+        path: "reviews",
+        name: "AdminReviews",
+        component: () =>
+          import("@/modules/admin/feature/review/views/ReviewView.vue"),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER"],
+        },
+      },
       {
         path: "vouchers",
         name: "AdminVouchers",
