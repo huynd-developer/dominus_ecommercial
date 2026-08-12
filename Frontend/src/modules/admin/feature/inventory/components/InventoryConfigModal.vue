@@ -138,11 +138,7 @@ const submit = () => {
 
 <template>
   <Teleport to="body">
-    <div
-      v-if="visible"
-      class="inventory-config-backdrop"
-      @click.self="handleClose"
-    >
+    <div v-if="visible" class="inventory-config-backdrop">
       <div
         class="inventory-config-dialog"
         role="dialog"

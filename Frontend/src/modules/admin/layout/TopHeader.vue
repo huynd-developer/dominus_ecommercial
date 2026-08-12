@@ -309,6 +309,13 @@ const menuItems = [
         icon: "bi-grid-1x2",
         roles: ["OWNER", "MANAGER", "CASHIER"],
       },
+      {
+        id: "goods-receipts",
+        path: "/admin/goods-receipts",
+        name: "Phiếu nhập kho",
+        icon: "bi-receipt-cutoff",
+        roles: ["OWNER", "MANAGER", "CASHIER"],
+      },
     ],
   },
   {

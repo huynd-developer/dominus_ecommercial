@@ -5,8 +5,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 
-public interface GoodsReceiptItemRepository
-        extends JpaRepository<GoodsReceiptItem, Long> {
+public interface GoodsReceiptItemRepository extends JpaRepository<GoodsReceiptItem, Integer> {
 
-    List<GoodsReceiptItem> findByGoodsReceiptId(Long goodsReceiptId);
+    List<GoodsReceiptItem> findByGoodsReceipt_IdOrderByIdAsc(Integer goodsReceiptId);
+
+    void deleteAllByGoodsReceipt_Id(Integer goodsReceiptId);
+
+    boolean existsByGoodsReceipt_Id(Integer goodsReceiptId);
 }

@@ -6,8 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface GoodsReceiptApprovalHistoryRepository
-        extends JpaRepository<GoodsReceiptApprovalHistory, Long> {
+        extends JpaRepository<GoodsReceiptApprovalHistory, Integer> {
 
     List<GoodsReceiptApprovalHistory>
-    findByGoodsReceiptIdOrderByActionAtAsc(Long goodsReceiptId);
+    findByGoodsReceipt_IdOrderByActionAtAscIdAsc(Integer goodsReceiptId);
 }

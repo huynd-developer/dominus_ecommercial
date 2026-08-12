@@ -246,6 +246,18 @@ const routes: Array<RouteRecordRaw> = [
         },
       },
       {
+        path: "goods-receipts",
+        name: "AdminGoodsReceipts",
+        component: () =>
+          import(
+            "@/modules/admin/feature/goodsReceipt/views/GoodsReceiptView.vue"
+          ),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
+      },
+      {
         path: "reviews",
         name: "AdminReviews",
         component: () =>
