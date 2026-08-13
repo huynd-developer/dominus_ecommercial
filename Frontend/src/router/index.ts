@@ -258,6 +258,18 @@ const routes: Array<RouteRecordRaw> = [
         },
       },
       {
+        path: "inventory-lots",
+        name: "AdminInventoryLots",
+        component: () =>
+          import(
+            "@/modules/admin/feature/inventoryLot/views/InventoryLotView.vue"
+          ),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
+      },
+      {
         path: "reviews",
         name: "AdminReviews",
         component: () =>

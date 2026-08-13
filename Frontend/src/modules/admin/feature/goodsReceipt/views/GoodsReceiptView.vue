@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useRoute } from "vue-router";
 import { computed, onMounted, ref } from "vue";
 import Swal from "sweetalert2";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
@@ -11,7 +12,7 @@ import type {
   GoodsReceiptSaveRequest,
   GoodsReceiptStatus,
 } from "../types/goods-receipt.type";
-
+const route = useRoute();
 const store = useGoodsReceiptStore();
 const authStore = useAuthStore();
 
@@ -345,34 +346,23 @@ const rejectReceipt = async (item: GoodsReceiptListResponse) => {
         "reject-reason-note"
       ) as HTMLTextAreaElement | null;
 
-      const selectedReason = String(
-        reasonSelect?.value || ""
-      ).trim();
+      const selectedReason = String(reasonSelect?.value || "").trim();
 
-      const note = String(
-        noteInput?.value || ""
-      ).trim();
+      const note = String(noteInput?.value || "").trim();
 
       if (!selectedReason) {
-        Swal.showValidationMessage(
-          "Vui lòng chọn lý do từ chối."
-        );
+        Swal.showValidationMessage("Vui lòng chọn lý do từ chối.");
         return false;
       }
 
-      if (
-        selectedReason === "Khác" &&
-        !note
-      ) {
+      if (selectedReason === "Khác" && !note) {
         Swal.showValidationMessage(
           'Vui lòng nhập lý do cụ thể khi chọn "Khác".'
         );
         return false;
       }
 
-      const reason = note
-        ? `${selectedReason} - ${note}`
-        : selectedReason;
+      const reason = note ? `${selectedReason} - ${note}` : selectedReason;
 
       if (reason.length > 500) {
         Swal.showValidationMessage(
@@ -471,39 +461,26 @@ const cancelReceipt = async (item: GoodsReceiptListResponse) => {
         "cancel-reason-note"
       ) as HTMLTextAreaElement | null;
 
-      const selectedReason = String(
-        reasonSelect?.value || ""
-      ).trim();
+      const selectedReason = String(reasonSelect?.value || "").trim();
 
-      const note = String(
-        noteInput?.value || ""
-      ).trim();
+      const note = String(noteInput?.value || "").trim();
 
       if (!selectedReason) {
-        Swal.showValidationMessage(
-          "Vui lòng chọn lý do hủy."
-        );
+        Swal.showValidationMessage("Vui lòng chọn lý do hủy.");
         return false;
       }
 
-      if (
-        selectedReason === "Khác" &&
-        !note
-      ) {
+      if (selectedReason === "Khác" && !note) {
         Swal.showValidationMessage(
           'Vui lòng nhập lý do cụ thể khi chọn "Khác".'
         );
         return false;
       }
 
-      const reason = note
-        ? `${selectedReason} - ${note}`
-        : selectedReason;
+      const reason = note ? `${selectedReason} - ${note}` : selectedReason;
 
       if (reason.length > 500) {
-        Swal.showValidationMessage(
-          "Lý do hủy không được vượt quá 500 ký tự."
-        );
+        Swal.showValidationMessage("Lý do hủy không được vượt quá 500 ký tự.");
         return false;
       }
 
@@ -536,6 +513,11 @@ const cancelReceipt = async (item: GoodsReceiptListResponse) => {
 onMounted(async () => {
   await Promise.all([loadList(), store.fetchPendingCount()]);
 });
+const receiptNoFromLot = String(route.query.receiptNo || "").trim();
+if (receiptNoFromLot) {
+  store.keyword = receiptNoFromLot;
+  store.page = 0;
+}
 </script>
 
 <template>
@@ -677,8 +659,7 @@ onMounted(async () => {
                   </button>
                   <button
                     v-if="
-                      item.status === 'PENDING_APPROVAL' &&
-                      canApproveOrReject
+                      item.status === 'PENDING_APPROVAL' && canApproveOrReject
                     "
                     type="button"
                     class="action-approve"
@@ -690,8 +671,7 @@ onMounted(async () => {
                   </button>
                   <button
                     v-if="
-                      item.status === 'PENDING_APPROVAL' &&
-                      canApproveOrReject
+                      item.status === 'PENDING_APPROVAL' && canApproveOrReject
                     "
                     type="button"
                     class="action-danger"
