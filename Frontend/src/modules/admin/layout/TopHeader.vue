@@ -330,6 +330,13 @@ const menuItems = [
         icon: "bi-clipboard2-check",
         roles: ["OWNER", "MANAGER", "CASHIER"],
       },
+      {
+        id: "expiry-alerts",
+        path: "/admin/expiry-alerts",
+        name: "Cảnh báo hạn sử dụng",
+        icon: "bi-exclamation-triangle",
+        roles: ["OWNER", "MANAGER", "CASHIER"],
+      },
     ],
   },
   {

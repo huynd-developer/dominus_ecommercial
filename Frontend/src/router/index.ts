@@ -282,6 +282,18 @@ const routes: Array<RouteRecordRaw> = [
         },
       },
       {
+        path: "expiry-alerts",
+        name: "AdminExpiryAlerts",
+        component: () =>
+          import(
+            "@/modules/admin/feature/expiryAlert/views/ExpiryAlertView.vue"
+          ),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
+      },
+      {
         path: "reviews",
         name: "AdminReviews",
         component: () =>
