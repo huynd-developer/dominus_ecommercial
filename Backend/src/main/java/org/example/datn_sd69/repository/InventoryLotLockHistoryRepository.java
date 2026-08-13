@@ -6,8 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface InventoryLotLockHistoryRepository
-        extends JpaRepository<InventoryLotLockHistory, Long> {
+        extends JpaRepository<InventoryLotLockHistory, Integer> {
 
-    List<InventoryLotLockHistory>
-    findByInventoryLotIdOrderByActionAtDesc(Long inventoryLotId);
+    List<InventoryLotLockHistory> findByInventoryLot_IdOrderByActionAtDescIdDesc(
+            Integer inventoryLotId
+    );
 }
