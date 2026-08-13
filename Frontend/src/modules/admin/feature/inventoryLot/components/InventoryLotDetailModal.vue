@@ -147,20 +147,15 @@ const actionClass = (actionType?: string) =>
               </div>
             </div>
 
-            <div
-              v-if="detail.isExpired"
-              class="notice danger"
-            >
+            <div v-if="detail.isExpired" class="notice danger">
               <i class="bi bi-exclamation-triangle"></i>
               Lô đã hết hạn nên số lượng có thể bán bằng 0.
             </div>
 
-            <div
-              v-else-if="detail.isLocked"
-              class="notice warning"
-            >
+            <div v-else-if="detail.isLocked" class="notice warning">
               <i class="bi bi-lock"></i>
-              Lô đang bị khóa nên số lượng có thể bán bằng 0. Tồn vật lý vẫn giữ nguyên.
+              Lô đang bị khóa nên số lượng có thể bán bằng 0. Tồn vật lý vẫn giữ
+              nguyên.
             </div>
           </section>
 
@@ -206,7 +201,9 @@ const actionClass = (actionType?: string) =>
               </button>
             </div>
 
-            <div v-if="loadingSource" class="state small">Đang tải nguồn nhập...</div>
+            <div v-if="loadingSource" class="state small">
+              Đang tải nguồn nhập...
+            </div>
 
             <div v-else-if="source" class="info-grid">
               <div>
@@ -215,11 +212,15 @@ const actionClass = (actionType?: string) =>
               </div>
               <div>
                 <span>Loại phiếu</span>
-                <strong>{{ source.receiptTypeLabel || source.receiptType || "—" }}</strong>
+                <strong>{{
+                  source.receiptTypeLabel || source.receiptType || "—"
+                }}</strong>
               </div>
               <div>
                 <span>Trạng thái phiếu</span>
-                <strong>{{ source.receiptStatusLabel || source.receiptStatus || "—" }}</strong>
+                <strong>{{
+                  source.receiptStatusLabel || source.receiptStatus || "—"
+                }}</strong>
               </div>
             </div>
 
@@ -308,56 +309,254 @@ const actionClass = (actionType?: string) =>
 </template>
 
 <style scoped>
-.detail-backdrop{position:fixed;inset:0;z-index:99999;overflow-y:auto;padding:24px;background:rgba(15,23,42,.5)}
-.detail-dialog{width:min(1120px,100%);margin:20px auto;overflow:hidden;border-radius:16px;background:#fff;box-shadow:0 24px 60px rgba(15,23,42,.22)}
-.detail-header,.detail-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px 22px;border-bottom:1px solid #e5e7eb}
-.detail-header h3{margin:0}
-.detail-header p{margin:6px 0 0;color:#6b7280;font-size:13px}
-.title-line{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
-.detail-footer{border-top:1px solid #e5e7eb;border-bottom:0}
-.detail-footer>div{display:flex;gap:8px}
-.close-btn{width:36px;height:36px;border:0;border-radius:8px;background:transparent;cursor:pointer}
-.close-footer-btn,.danger-btn,.success-btn,.link-btn{border:0;border-radius:8px;cursor:pointer;font-weight:600}
-.close-footer-btn{padding:9px 16px;background:#111827;color:#fff}
-.danger-btn{padding:9px 14px;background:#b91c1c;color:#fff}
-.success-btn{padding:9px 14px;background:#047857;color:#fff}
-.link-btn{padding:7px 10px;background:#eff6ff;color:#1d4ed8}
-.detail-footer button:disabled{opacity:.5;cursor:not-allowed}
-.detail-body{padding:20px 22px}
-section+section{margin-top:24px}
-section h4{margin:0 0 12px}
-.section-title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
-.section-title-row h4{margin:0}
-.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-.info-grid>div,.stock-grid>div{padding:12px;border:1px solid #e5e7eb;border-radius:10px;background:#fafafa}
-.info-grid span,.stock-grid span{display:block;margin-bottom:4px;color:#6b7280;font-size:12px}
-.stock-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.stock-grid strong{font-size:22px}
-.notice{display:flex;align-items:center;gap:8px;margin-top:12px;padding:12px;border-radius:10px;font-size:13px}
-.notice.danger{border:1px solid #fecaca;background:#fef2f2;color:#991b1b}
-.notice.warning{border:1px solid #fed7aa;background:#fff7ed;color:#9a3412}
-.notice.success{border:1px solid #a7f3d0;background:#ecfdf5;color:#047857}
-.status-badge{display:inline-flex;padding:4px 9px;border-radius:999px;font-size:12px;font-weight:600}
-.badge-locked{background:#fef2f2;color:#b91c1c}
-.badge-unlocked{background:#ecfdf5;color:#047857}
-.badge-expired{background:#fef2f2;color:#b91c1c}
-.badge-warning{background:#fff7ed;color:#c2410c}
-.badge-ok{background:#ecfdf5;color:#047857}
-.timeline{display:flex;flex-direction:column;gap:14px}
-.timeline-item{display:grid;grid-template-columns:16px 1fr;gap:10px}
-.dot{width:10px;height:10px;margin-top:5px;border-radius:50%}
-.history-lock{background:#dc2626}
-.history-unlock{background:#059669}
-.history-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.history-head span,.timeline-content p{color:#6b7280;font-size:13px}
-.timeline-content p{margin:3px 0 0}
-.history-reason{color:#374151!important}
-.state{padding:24px;text-align:center;color:#6b7280}
-.state.small{padding:14px}
-@media(max-width:800px){
-  .detail-backdrop{padding:10px}
-  .info-grid{grid-template-columns:repeat(2,1fr)}
-  .stock-grid{grid-template-columns:1fr}
-  .section-title-row{align-items:flex-start;flex-direction:column}
+.detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  overflow-y: auto;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.5);
+}
+:global(.swal2-container) {
+  z-index: 100000 !important;
+}
+.detail-dialog {
+  width: min(1120px, 100%);
+  margin: 20px auto;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+}
+.detail-header,
+.detail-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 22px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.detail-header h3 {
+  margin: 0;
+}
+.detail-header p {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+.title-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.detail-footer {
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 0;
+}
+.detail-footer > div {
+  display: flex;
+  gap: 8px;
+}
+.close-btn {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+.close-footer-btn,
+.danger-btn,
+.success-btn,
+.link-btn {
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.close-footer-btn {
+  padding: 9px 16px;
+  background: #111827;
+  color: #fff;
+}
+.danger-btn {
+  padding: 9px 14px;
+  background: #b91c1c;
+  color: #fff;
+}
+.success-btn {
+  padding: 9px 14px;
+  background: #047857;
+  color: #fff;
+}
+.link-btn {
+  padding: 7px 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.detail-footer button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.detail-body {
+  padding: 20px 22px;
+}
+section + section {
+  margin-top: 24px;
+}
+section h4 {
+  margin: 0 0 12px;
+}
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.section-title-row h4 {
+  margin: 0;
+}
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.info-grid > div,
+.stock-grid > div {
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fafafa;
+}
+.info-grid span,
+.stock-grid span {
+  display: block;
+  margin-bottom: 4px;
+  color: #6b7280;
+  font-size: 12px;
+}
+.stock-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.stock-grid strong {
+  font-size: 22px;
+}
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.notice.danger {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+.notice.warning {
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+}
+.notice.success {
+  border: 1px solid #a7f3d0;
+  background: #ecfdf5;
+  color: #047857;
+}
+.status-badge {
+  display: inline-flex;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge-locked {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+.badge-unlocked {
+  background: #ecfdf5;
+  color: #047857;
+}
+.badge-expired {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+.badge-warning {
+  background: #fff7ed;
+  color: #c2410c;
+}
+.badge-ok {
+  background: #ecfdf5;
+  color: #047857;
+}
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.timeline-item {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 10px;
+}
+.dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border-radius: 50%;
+}
+.history-lock {
+  background: #dc2626;
+}
+.history-unlock {
+  background: #059669;
+}
+.history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.history-head span,
+.timeline-content p {
+  color: #6b7280;
+  font-size: 13px;
+}
+.timeline-content p {
+  margin: 3px 0 0;
+}
+.history-reason {
+  color: #374151 !important;
+}
+.state {
+  padding: 24px;
+  text-align: center;
+  color: #6b7280;
+}
+.state.small {
+  padding: 14px;
+}
+@media (max-width: 800px) {
+  .detail-backdrop {
+    padding: 10px;
+  }
+  .info-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .stock-grid {
+    grid-template-columns: 1fr;
+  }
+  .section-title-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>
