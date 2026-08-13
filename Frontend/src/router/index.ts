@@ -270,6 +270,18 @@ const routes: Array<RouteRecordRaw> = [
         },
       },
       {
+        path: "opening-balances",
+        name: "AdminOpeningBalances",
+        component: () =>
+          import(
+            "@/modules/admin/feature/openingBalance/views/OpeningBalanceView.vue"
+          ),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
+      },
+      {
         path: "reviews",
         name: "AdminReviews",
         component: () =>

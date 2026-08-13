@@ -323,6 +323,13 @@ const menuItems = [
         icon: "bi-box-seam",
         roles: ["OWNER", "MANAGER", "CASHIER"],
       },
+      {
+        id: "opening-balances",
+        path: "/admin/opening-balances",
+        name: "Kiểm kê tồn đầu kỳ",
+        icon: "bi-clipboard2-check",
+        roles: ["OWNER", "MANAGER", "CASHIER"],
+      },
     ],
   },
   {

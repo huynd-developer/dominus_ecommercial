@@ -158,6 +158,8 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
     @Override
     @Transactional
     public GoodsReceiptDetailResponse create(GoodsReceiptSaveRequest request) {
+        requireOpeningBalanceWritePermission(request.getReceiptType());
+
         User actor = getCurrentUser();
 
         Map<Integer, ProductVariant> variants = validateAndLoadVariants(request.getItems());
@@ -186,6 +188,15 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
         requireStatus(receipt, GoodsReceiptStatus.DRAFT,
                 "Chỉ phiếu lưu tạm mới được sửa.");
 
+        GoodsReceiptType currentType =
+                GoodsReceiptType.fromCode(receipt.getReceiptType());
+
+        requireOpeningBalanceWritePermission(currentType);
+
+        if (request.getReceiptType() != currentType) {
+            throw badRequest("Không được thay đổi loại phiếu.");
+        }
+
         Map<Integer, ProductVariant> variants = validateAndLoadVariants(request.getItems());
 
         receipt.setReceiptType(request.getReceiptType().getCode());
@@ -209,6 +220,11 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
 
         requireStatus(receipt, GoodsReceiptStatus.DRAFT,
                 "Chỉ phiếu lưu tạm mới được gửi duyệt.");
+
+        GoodsReceiptType currentType =
+                GoodsReceiptType.fromCode(receipt.getReceiptType());
+
+        requireOpeningBalanceWritePermission(currentType);
 
         if (!goodsReceiptItemRepository.existsByGoodsReceipt_Id(id)) {
             throw badRequest("Phiếu nhập phải có ít nhất một sản phẩm.");
@@ -278,6 +294,11 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
 
         requireStatus(receipt, GoodsReceiptStatus.DRAFT,
                 "Chỉ phiếu lưu tạm mới được hủy.");
+
+        GoodsReceiptType currentType =
+                GoodsReceiptType.fromCode(receipt.getReceiptType());
+
+        requireOpeningBalanceWritePermission(currentType);
 
         User actor = getCurrentUser();
         String reason = request == null ? null : normalizeOptional(request.getReason());
@@ -535,6 +556,40 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     message + " Trạng thái hiện tại: " + current.getLabel()
+            );
+        }
+    }
+
+    private void requireOpeningBalanceWritePermission(
+            GoodsReceiptType receiptType
+    ) {
+        if (receiptType != GoodsReceiptType.OPENING_BALANCE) {
+            return;
+        }
+
+        Authentication authentication =
+                SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null
+                || !authentication.isAuthenticated()) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Không xác định được người dùng hiện tại."
+            );
+        }
+
+        boolean allowed =
+                authentication.getAuthorities()
+                        .stream()
+                        .anyMatch(authority ->
+                                "OWNER".equals(authority.getAuthority())
+                                        || "MANAGER".equals(authority.getAuthority())
+                        );
+
+        if (!allowed) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Bạn không có quyền thao tác phiếu kiểm kho ban đầu."
             );
         }
     }
