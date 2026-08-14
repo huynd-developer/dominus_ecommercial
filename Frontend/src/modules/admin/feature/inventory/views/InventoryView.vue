@@ -13,7 +13,7 @@ import { useInventoryStore } from "../stores/inventory.store.ts";
 
 import type { InventoryStockStatus } from "../types/inventory.type.ts";
 
-type TabType = "overview" | "near-expiry" | "expired" | "locked";
+type TabType = "overview" | "near-expiry" | "expired";
 
 const inventoryStore = useInventoryStore();
 const authStore = useAuthStore();
@@ -44,10 +44,6 @@ const currentLots = computed(() => {
 
   if (activeTab.value === "expired") {
     return inventoryStore.expiredLots;
-  }
-
-  if (activeTab.value === "locked") {
-    return inventoryStore.lockedLots;
   }
 
   return [];
@@ -170,9 +166,6 @@ const loadCurrentTab = async () => {
       return;
     }
 
-    if (activeTab.value === "locked") {
-      await inventoryStore.fetchLocked();
-    }
   } catch (error) {
     await showLoadError(error);
   }
@@ -235,16 +228,6 @@ const toggleExpired = async (event: Event) => {
   const checked = (event.target as HTMLInputElement).checked;
 
   inventoryStore.expiredFilter = checked ? true : undefined;
-
-  inventoryStore.overviewPage = 0;
-
-  await inventoryStore.fetchOverview();
-};
-
-const toggleLocked = async (event: Event) => {
-  const checked = (event.target as HTMLInputElement).checked;
-
-  inventoryStore.lockedFilter = checked ? true : undefined;
 
   inventoryStore.overviewPage = 0;
 
@@ -432,14 +415,6 @@ onMounted(async () => {
           Đã hết hạn
         </button>
 
-        <button
-          :class="{
-            active: activeTab === 'locked',
-          }"
-          @click="changeTab('locked')"
-        >
-          Đang khóa
-        </button>
       </div>
 
       <div class="filters">
@@ -487,15 +462,6 @@ onMounted(async () => {
             Hết hạn
           </label>
 
-          <label class="check-filter">
-            <input
-              type="checkbox"
-              :checked="inventoryStore.lockedFilter === true"
-              @change="toggleLocked"
-            />
-
-            Lô khóa
-          </label>
         </template>
 
         <button type="button" class="reset-btn" @click="resetFilters">

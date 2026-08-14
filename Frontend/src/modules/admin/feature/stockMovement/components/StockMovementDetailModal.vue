@@ -132,8 +132,7 @@ const referenceLabel = (
             <h3>Chi tiết biến động kho</h3>
 
             <p v-if="detail">
-              #{{ detail.id }}
-              · {{ detail.sku }}
+              {{ detail.sku }}
               · Lô {{ detail.lotCode }}
             </p>
           </div>
@@ -256,12 +255,6 @@ const referenceLabel = (
                   </strong>
                 </div>
 
-                <div>
-                  <span>ID lô</span>
-                  <strong>
-                    {{ detail.inventoryLotId }}
-                  </strong>
-                </div>
               </div>
             </section>
 
@@ -280,24 +273,6 @@ const referenceLabel = (
                   </strong>
                 </div>
 
-                <div>
-                  <span>ID chứng từ</span>
-                  <strong>
-                    {{
-                      detail.referenceId ?? "—"
-                    }}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>ID dòng chứng từ</span>
-                  <strong>
-                    {{
-                      detail.referenceLineId ??
-                      "—"
-                    }}
-                  </strong>
-                </div>
               </div>
             </section>
 
@@ -315,13 +290,6 @@ const referenceLabel = (
                   </strong>
                 </div>
 
-                <div>
-                  <span>ID người thao tác</span>
-                  <strong>
-                    {{ detail.createdById }}
-                  </strong>
-                </div>
-
                 <div class="full">
                   <span>Lý do / ghi chú</span>
                   <strong>
@@ -334,20 +302,6 @@ const referenceLabel = (
               </div>
             </section>
 
-            <section class="audit-note">
-              <i class="bi bi-shield-lock"></i>
-
-              <div>
-                <strong>
-                  Bản ghi lịch sử chỉ đọc
-                </strong>
-
-                <p>
-                  Không có chức năng chỉnh sửa
-                  hoặc xóa StockMovement.
-                </p>
-              </div>
-            </section>
           </template>
 
           <div
@@ -518,32 +472,6 @@ section h4 {
 
 .movement-badge.movement-neutral {
   background: #f3f4f6;
-}
-
-.audit-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 1px solid #bfdbfe;
-  border-radius: 10px;
-  background: #eff6ff;
-  color: #1e40af;
-}
-
-.audit-note i {
-  margin-top: 2px;
-  font-size: 18px;
-}
-
-.audit-note strong {
-  display: block;
-  margin-bottom: 4px;
-}
-
-.audit-note p {
-  margin: 0;
-  font-size: 13px;
 }
 
 .state {

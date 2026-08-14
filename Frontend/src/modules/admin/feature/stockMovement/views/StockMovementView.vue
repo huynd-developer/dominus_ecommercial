@@ -543,10 +543,6 @@ onUnmounted(() => {
                   {{ item.lotCode }}
                 </strong>
 
-                <small>
-                  ID lô:
-                  {{ item.inventoryLotId }}
-                </small>
               </td>
 
               <td>
@@ -577,9 +573,6 @@ onUnmounted(() => {
                     {{ referenceTypeLabel(item.referenceType) }}
                   </span>
 
-                  <small v-if="item.referenceId">
-                    #{{ item.referenceId }}
-                  </small>
                 </div>
               </td>
 

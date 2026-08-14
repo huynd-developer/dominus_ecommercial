@@ -59,24 +59,13 @@ const formatNumber = (value?: number) => {
         }}
       </div>
     </div>
-
-    <div class="summary-card">
-      <div class="label">Đang khóa</div>
-      <div class="value danger">
-        {{
-          loading
-            ? "..."
-            : formatNumber(summary?.lockedQuantity)
-        }}
-      </div>
-    </div>
   </div>
 </template>
 
 <style scoped>
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(150px, 1fr));
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
   gap: 16px;
 }
 

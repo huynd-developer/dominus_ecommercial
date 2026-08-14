@@ -21,19 +21,18 @@ const formatNumber = (value: number) =>
           <th class="number">Có thể bán</th>
           <th class="number">Sắp hết hạn</th>
           <th class="number">Hết hạn</th>
-          <th class="number">Đang khóa</th>
         </tr>
       </thead>
 
       <tbody>
         <tr v-if="loading">
-          <td colspan="7" class="empty">
+          <td colspan="6" class="empty">
             Đang tải dữ liệu...
           </td>
         </tr>
 
         <tr v-else-if="items.length === 0">
-          <td colspan="7" class="empty">
+          <td colspan="6" class="empty">
             Không có dữ liệu tồn kho
           </td>
         </tr>
@@ -65,10 +64,6 @@ const formatNumber = (value: number) =>
 
           <td class="number danger">
             {{ formatNumber(item.expiredQuantity) }}
-          </td>
-
-          <td class="number locked">
-            {{ formatNumber(item.lockedQuantity) }}
           </td>
         </tr>
       </tbody>
@@ -128,10 +123,6 @@ td {
 
 .danger {
   color: #c62828;
-}
-
-.locked {
-  color: #9a3412;
 }
 
 .empty {
