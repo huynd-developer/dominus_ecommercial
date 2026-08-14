@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.enums.GoodsReceiptStatus;
+import org.example.datn_sd69.modules.goodsreceipt.dto.request.GoodsReceiptCancelRequest;
 import org.example.datn_sd69.modules.goodsreceipt.dto.request.GoodsReceiptRejectRequest;
 import org.example.datn_sd69.modules.goodsreceipt.dto.response.GoodsReceiptApprovalHistoryResponse;
 import org.example.datn_sd69.modules.goodsreceipt.dto.response.GoodsReceiptDetailResponse;
@@ -101,11 +102,12 @@ public class OpeningBalanceController {
 
     // =========================================================
     // CREATE DRAFT
+    // CASHIER / MANAGER / OWNER
     // =========================================================
 
     @PostMapping
     @PreAuthorize(
-            "hasAnyAuthority('OWNER', 'MANAGER')"
+            "hasAnyAuthority('OWNER', 'MANAGER', 'CASHIER')"
     )
     public ResponseEntity<GoodsReceiptDetailResponse> create(
             @Valid @RequestBody OpeningBalanceSaveRequest request
@@ -120,11 +122,13 @@ public class OpeningBalanceController {
 
     // =========================================================
     // UPDATE DRAFT
+    // CASHIER / MANAGER: phiếu của mình
+    // OWNER: toàn quyền
     // =========================================================
 
     @PutMapping("/{id}")
     @PreAuthorize(
-            "hasAnyAuthority('OWNER', 'MANAGER')"
+            "hasAnyAuthority('OWNER', 'MANAGER', 'CASHIER')"
     )
     public ResponseEntity<GoodsReceiptDetailResponse> update(
             @PathVariable Integer id,
@@ -138,11 +142,13 @@ public class OpeningBalanceController {
 
     // =========================================================
     // SUBMIT
+    // CASHIER / MANAGER: phiếu của mình
+    // OWNER: toàn quyền
     // =========================================================
 
     @PostMapping("/{id}/submit")
     @PreAuthorize(
-            "hasAnyAuthority('OWNER', 'MANAGER')"
+            "hasAnyAuthority('OWNER', 'MANAGER', 'CASHIER')"
     )
     public ResponseEntity<GoodsReceiptDetailResponse> submit(
             @PathVariable Integer id
@@ -155,10 +161,14 @@ public class OpeningBalanceController {
 
     // =========================================================
     // APPROVE
+    // OWNER toàn quyền
+    // MANAGER được duyệt phiếu người khác, không self-review
     // =========================================================
 
     @PostMapping("/{id}/approve")
-    @PreAuthorize("hasAuthority('OWNER')")
+    @PreAuthorize(
+            "hasAnyAuthority('OWNER', 'MANAGER')"
+    )
     public ResponseEntity<GoodsReceiptDetailResponse> approve(
             @PathVariable Integer id
     ) {
@@ -170,10 +180,14 @@ public class OpeningBalanceController {
 
     // =========================================================
     // REJECT
+    // OWNER toàn quyền
+    // MANAGER được từ chối phiếu người khác, không self-review
     // =========================================================
 
     @PostMapping("/{id}/reject")
-    @PreAuthorize("hasAuthority('OWNER')")
+    @PreAuthorize(
+            "hasAnyAuthority('OWNER', 'MANAGER')"
+    )
     public ResponseEntity<GoodsReceiptDetailResponse> reject(
             @PathVariable Integer id,
             @Valid @RequestBody GoodsReceiptRejectRequest request
@@ -199,6 +213,29 @@ public class OpeningBalanceController {
 
         return ResponseEntity.ok(
                 openingBalanceService.getApprovalHistory(id)
+        );
+    }
+
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize(
+            "hasAnyAuthority('OWNER', 'MANAGER', 'CASHIER')"
+    )
+    public ResponseEntity<GoodsReceiptDetailResponse> cancel(
+            @PathVariable Integer id,
+            @Valid
+            @RequestBody(required = false)
+            GoodsReceiptCancelRequest request
+    ) {
+
+        if (request == null) {
+            request = new GoodsReceiptCancelRequest();
+        }
+
+        return ResponseEntity.ok(
+                openingBalanceService.cancel(
+                        id,
+                        request
+                )
         );
     }
 }

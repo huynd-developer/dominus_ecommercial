@@ -1,6 +1,7 @@
 package org.example.datn_sd69.modules.openingbalance.service;
 
 import org.example.datn_sd69.enums.GoodsReceiptStatus;
+import org.example.datn_sd69.modules.goodsreceipt.dto.request.GoodsReceiptCancelRequest;
 import org.example.datn_sd69.modules.goodsreceipt.dto.request.GoodsReceiptRejectRequest;
 import org.example.datn_sd69.modules.goodsreceipt.dto.response.GoodsReceiptApprovalHistoryResponse;
 import org.example.datn_sd69.modules.goodsreceipt.dto.response.GoodsReceiptDetailResponse;
@@ -33,7 +34,10 @@ public interface OpeningBalanceService {
     );
 
     GoodsReceiptDetailResponse submit(Integer id);
-
+    GoodsReceiptDetailResponse cancel(
+            Integer id,
+            GoodsReceiptCancelRequest request
+    );
     GoodsReceiptDetailResponse approve(Integer id);
 
     GoodsReceiptDetailResponse reject(

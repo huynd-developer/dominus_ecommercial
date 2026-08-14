@@ -1,8 +1,12 @@
 package org.example.datn_sd69.modules.openingbalance.service.impl;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.NoResultException;
 import lombok.RequiredArgsConstructor;
+import org.example.datn_sd69.entity.User;
 import org.example.datn_sd69.enums.GoodsReceiptStatus;
 import org.example.datn_sd69.enums.GoodsReceiptType;
+import org.example.datn_sd69.modules.goodsreceipt.dto.request.GoodsReceiptCancelRequest;
 import org.example.datn_sd69.modules.goodsreceipt.dto.request.GoodsReceiptItemRequest;
 import org.example.datn_sd69.modules.goodsreceipt.dto.request.GoodsReceiptRejectRequest;
 import org.example.datn_sd69.modules.goodsreceipt.dto.request.GoodsReceiptSaveRequest;
@@ -16,6 +20,8 @@ import org.example.datn_sd69.modules.openingbalance.service.OpeningBalanceServic
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -31,6 +37,8 @@ import java.util.Set;
 public class OpeningBalanceServiceImpl implements OpeningBalanceService {
 
     private final GoodsReceiptService goodsReceiptService;
+
+    private final EntityManager entityManager;
 
     private static final GoodsReceiptType TYPE =
             GoodsReceiptType.OPENING_BALANCE;
@@ -83,6 +91,15 @@ public class OpeningBalanceServiceImpl implements OpeningBalanceService {
     ) {
         requireOpeningBalance(id);
 
+        User currentUser =
+                getCurrentUser();
+
+        ensureDraftOwnerOrOwner(
+                id,
+                currentUser,
+                "Chỉ người tạo phiếu hoặc OWNER được sửa phiếu tồn đầu kỳ."
+        );
+
         validateRequest(request);
 
         return goodsReceiptService.update(
@@ -96,13 +113,53 @@ public class OpeningBalanceServiceImpl implements OpeningBalanceService {
     public GoodsReceiptDetailResponse submit(Integer id) {
         requireOpeningBalance(id);
 
+        User currentUser =
+                getCurrentUser();
+
+        ensureDraftOwnerOrOwner(
+                id,
+                currentUser,
+                "Chỉ người tạo phiếu hoặc OWNER được gửi duyệt phiếu tồn đầu kỳ."
+        );
+
         return goodsReceiptService.submit(id);
+    }
+
+    @Override
+    @Transactional
+    public GoodsReceiptDetailResponse cancel(
+            Integer id,
+            GoodsReceiptCancelRequest request
+    ) {
+        requireOpeningBalance(id);
+
+        User currentUser =
+                getCurrentUser();
+
+        ensureDraftOwnerOrOwner(
+                id,
+                currentUser,
+                "Chỉ người tạo phiếu hoặc OWNER được hủy phiếu tồn đầu kỳ."
+        );
+
+        return goodsReceiptService.cancel(
+                id,
+                request
+        );
     }
 
     @Override
     @Transactional
     public GoodsReceiptDetailResponse approve(Integer id) {
         requireOpeningBalance(id);
+
+        User currentUser =
+                getCurrentUser();
+
+        ensureReviewerPermission(
+                id,
+                currentUser
+        );
 
         return goodsReceiptService.approve(id);
     }
@@ -114,6 +171,14 @@ public class OpeningBalanceServiceImpl implements OpeningBalanceService {
             GoodsReceiptRejectRequest request
     ) {
         requireOpeningBalance(id);
+
+        User currentUser =
+                getCurrentUser();
+
+        ensureReviewerPermission(
+                id,
+                currentUser
+        );
 
         return goodsReceiptService.reject(id, request);
     }
@@ -151,6 +216,197 @@ public class OpeningBalanceServiceImpl implements OpeningBalanceService {
         }
 
         return detail;
+    }
+
+    // =========================================================
+    // PERMISSION
+    // =========================================================
+
+    /**
+     * DRAFT:
+     * - CASHIER / MANAGER chỉ được sửa hoặc gửi phiếu do mình tạo.
+     * - OWNER toàn quyền.
+     */
+    private void ensureDraftOwnerOrOwner(
+            Integer receiptId,
+            User currentUser,
+            String message
+    ) {
+
+        if (isOwner(currentUser)) {
+            return;
+        }
+
+        String role =
+                roleName(currentUser);
+
+        if (!"MANAGER".equals(role)
+                && !"CASHIER".equals(role)) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    message
+            );
+        }
+
+        Integer createdById =
+                getReceiptCreatedById(receiptId);
+
+        if (createdById.equals(currentUser.getId())) {
+            return;
+        }
+
+        throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                message
+        );
+    }
+
+    /**
+     * OWNER:
+     * - toàn quyền
+     * - được tự duyệt / từ chối phiếu mình tạo.
+     *
+     * MANAGER:
+     * - được duyệt / từ chối phiếu người khác
+     * - KHÔNG được tự duyệt / từ chối phiếu mình tạo.
+     */
+    private void ensureReviewerPermission(
+            Integer receiptId,
+            User currentUser
+    ) {
+
+        String role =
+                roleName(currentUser);
+
+        if ("OWNER".equals(role)) {
+            return;
+        }
+
+        if (!"MANAGER".equals(role)) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Chỉ OWNER hoặc MANAGER được xử lý phiếu tồn đầu kỳ."
+            );
+        }
+
+        Integer createdById =
+                getReceiptCreatedById(receiptId);
+
+        if (createdById.equals(currentUser.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "MANAGER không được tự phê duyệt hoặc từ chối phiếu tồn đầu kỳ do chính mình tạo."
+            );
+        }
+    }
+
+    private Integer getReceiptCreatedById(
+            Integer receiptId
+    ) {
+
+        Object result;
+
+        try {
+            result = entityManager
+                    .createNativeQuery(
+                            """
+                            SELECT CreatedBy
+                            FROM dbo.GoodsReceipt
+                            WHERE Id = :id
+                            """
+                    )
+                    .setParameter("id", receiptId)
+                    .getSingleResult();
+
+        } catch (NoResultException ex) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Không tìm thấy phiếu kiểm kho ban đầu."
+            );
+        }
+
+        if (!(result instanceof Number number)) {
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Không xác định được người tạo phiếu tồn đầu kỳ."
+            );
+        }
+
+        return number.intValue();
+    }
+
+    private boolean isOwner(User user) {
+        return "OWNER".equals(
+                roleName(user)
+        );
+    }
+
+    private String roleName(User user) {
+
+        if (user == null
+                || user.getRole() == null
+                || user.getRole().getName() == null) {
+
+            return "";
+        }
+
+        return user.getRole()
+                .getName()
+                .trim()
+                .toUpperCase(Locale.ROOT)
+                .replace("ROLE_", "");
+    }
+
+    /**
+     * Giữ cùng cách xác định user như module StockAdjustment:
+     * authentication.getName() là email đăng nhập.
+     */
+    private User getCurrentUser() {
+
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
+
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication.getName() == null
+                || authentication.getName().isBlank()) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Không xác định được người dùng hiện tại."
+            );
+        }
+
+        String email =
+                authentication.getName().trim();
+
+        try {
+
+            return entityManager
+                    .createQuery(
+                            """
+                            select u
+                            from User u
+                            join fetch u.role
+                            where lower(u.email) = lower(:email)
+                            """,
+                            User.class
+                    )
+                    .setParameter("email", email)
+                    .setMaxResults(1)
+                    .getSingleResult();
+
+        } catch (NoResultException ex) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Không tìm thấy tài khoản đăng nhập."
+            );
+        }
     }
 
     /**

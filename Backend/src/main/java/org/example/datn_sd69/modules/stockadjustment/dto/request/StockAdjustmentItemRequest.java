@@ -14,7 +14,10 @@ public class StockAdjustmentItemRequest {
     private Integer inventoryLotId;
 
     @NotNull(message = "Số lượng thực tế không được để trống")
-    @Min(value = 0, message = "Số lượng thực tế phải lớn hơn hoặc bằng 0")
+    @Min(
+            value = 0,
+            message = "Số lượng thực tế phải lớn hơn hoặc bằng 0"
+    )
     private Integer actualQuantity;
 
     @Size(

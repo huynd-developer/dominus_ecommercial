@@ -584,6 +584,7 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                         .anyMatch(authority ->
                                 "OWNER".equals(authority.getAuthority())
                                         || "MANAGER".equals(authority.getAuthority())
+                                        || "CASHIER".equals(authority.getAuthority())
                         );
 
         if (!allowed) {

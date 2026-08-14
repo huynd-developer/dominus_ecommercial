@@ -22,11 +22,96 @@ const userRole = computed(() =>
     .trim()
 );
 
-const canManage = computed(() =>
-  ["OWNER", "MANAGER"].includes(userRole.value)
+const currentUserId = computed(() => {
+  const auth = authStore as any;
+
+  const authId =
+    auth?.id ??
+    auth?.userId ??
+    auth?.employeeId ??
+    auth?.user?.id ??
+    auth?.user?.userId ??
+    auth?.user?.employeeId ??
+    auth?.currentUser?.id ??
+    auth?.currentUser?.userId ??
+    auth?.currentUser?.employeeId;
+
+  const parsedAuthId = Number(authId);
+  if (Number.isInteger(parsedAuthId) && parsedAuthId > 0) {
+    return parsedAuthId;
+  }
+
+  try {
+    const currentUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
+    const localId = Number(
+      currentUser?.id ??
+        currentUser?.userId ??
+        currentUser?.employeeId ??
+        0
+    );
+
+    return Number.isInteger(localId) && localId > 0 ? localId : 0;
+  } catch {
+    return 0;
+  }
+});
+
+const currentUserName = computed(() => {
+  const auth = authStore as any;
+
+  let localUser: any = {};
+  try {
+    localUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
+  } catch {
+    localUser = {};
+  }
+
+  return String(
+    auth?.name ??
+      auth?.user?.name ??
+      auth?.currentUser?.name ??
+      localUser?.name ??
+      localUser?.fullName ??
+      localUser?.username ??
+      ""
+  ).trim();
+});
+
+const normalizeUserName = (value?: string | null) =>
+  String(value ?? "")
+    .trim()
+    .toLocaleLowerCase("vi-VN");
+
+const canCreate = computed(() =>
+  ["OWNER", "MANAGER", "CASHIER"].includes(userRole.value)
 );
 
-const canReview = computed(() => userRole.value === "OWNER");
+const isOwner = computed(() => userRole.value === "OWNER");
+
+const isOwnReceipt = (item: OpeningBalanceListResponse) => {
+  const createdById = Number(item.createdById);
+
+  if (
+    currentUserId.value > 0 &&
+    Number.isInteger(createdById) &&
+    createdById > 0
+  ) {
+    return createdById === currentUserId.value;
+  }
+
+  const loggedInName = normalizeUserName(currentUserName.value);
+  const createdByName = normalizeUserName(item.createdByName);
+
+  return loggedInName !== "" && loggedInName === createdByName;
+};
+
+const canEditOrSubmit = (item: OpeningBalanceListResponse) =>
+  isOwner.value ||
+  (["MANAGER", "CASHIER"].includes(userRole.value) && isOwnReceipt(item));
+
+const canReviewReceipt = (item: OpeningBalanceListResponse) =>
+  isOwner.value ||
+  (userRole.value === "MANAGER" && !isOwnReceipt(item));
 
 const formVisible = ref(false);
 const detailVisible = ref(false);
@@ -128,25 +213,43 @@ const getErrorMessage = (error: any) =>
   store.error ||
   "Đã xảy ra lỗi.";
 
-const ensureCanManage = async () => {
-  if (canManage.value) return true;
+const ensureCanCreate = async () => {
+  if (canCreate.value) return true;
 
   await Swal.fire({
     icon: "error",
     title: "Không có quyền",
-    text: "Chỉ chủ hệ thống hoặc quản lý được thao tác phiếu tồn đầu kỳ.",
+    text: "Bạn không có quyền tạo phiếu tồn đầu kỳ.",
   });
 
   return false;
 };
 
-const ensureCanReview = async () => {
-  if (canReview.value) return true;
+const ensureCanEditOrSubmit = async (item: OpeningBalanceListResponse) => {
+  if (canEditOrSubmit(item)) return true;
 
   await Swal.fire({
     icon: "error",
     title: "Không có quyền",
-    text: "Chỉ chủ hệ thống được phê duyệt hoặc từ chối phiếu tồn đầu kỳ.",
+    text:
+      userRole.value === "OWNER"
+        ? "Không thể thao tác phiếu này."
+        : "Bạn chỉ được sửa hoặc gửi duyệt phiếu Lưu tạm do chính mình tạo.",
+  });
+
+  return false;
+};
+
+const ensureCanReview = async (item: OpeningBalanceListResponse) => {
+  if (canReviewReceipt(item)) return true;
+
+  await Swal.fire({
+    icon: "error",
+    title: "Không có quyền",
+    text:
+      userRole.value === "MANAGER"
+        ? "Quản lý không được tự phê duyệt hoặc từ chối phiếu do chính mình tạo."
+        : "Chỉ chủ hệ thống hoặc quản lý được phê duyệt / từ chối phiếu tồn đầu kỳ.",
   });
 
   return false;
@@ -211,15 +314,15 @@ const nextPage = async () => {
 };
 
 const openCreate = async () => {
-  if (!(await ensureCanManage())) return;
+  if (!(await ensureCanCreate())) return;
 
   editingDetail.value = null;
   formVisible.value = true;
 };
 
 const openEdit = async (item: OpeningBalanceListResponse) => {
-  if (!(await ensureCanManage())) return;
   if (item.status !== "DRAFT") return;
+  if (!(await ensureCanEditOrSubmit(item))) return;
 
   try {
     editingDetail.value = await store.fetchDetail(item.id);
@@ -240,7 +343,11 @@ const closeForm = () => {
 };
 
 const saveForm = async (payload: OpeningBalanceSaveRequest) => {
-  if (!(await ensureCanManage())) return;
+  if (editingDetail.value?.id) {
+    if (!(await ensureCanEditOrSubmit(editingDetail.value))) return;
+  } else if (!(await ensureCanCreate())) {
+    return;
+  }
 
   try {
     if (editingDetail.value?.id) {
@@ -292,7 +399,7 @@ const openDetail = async (id: number) => {
 };
 
 const submitReceipt = async (item: OpeningBalanceListResponse) => {
-  if (!(await ensureCanManage())) return;
+  if (!(await ensureCanEditOrSubmit(item))) return;
 
   const result = await Swal.fire({
     icon: "question",
@@ -323,8 +430,115 @@ const submitReceipt = async (item: OpeningBalanceListResponse) => {
   }
 };
 
+
+const cancelReceipt = async (item: OpeningBalanceListResponse) => {
+  if (item.status !== "DRAFT") return;
+  if (!(await ensureCanEditOrSubmit(item))) return;
+
+  const result = await Swal.fire({
+    icon: "question",
+    title: "Hủy phiếu tồn đầu kỳ?",
+    html: `
+      <div style="text-align:left;">
+        <p style="margin-top:0;"><strong>${item.receiptNo}</strong></p>
+
+        <label for="ob-cancel-select" style="display:block;margin-bottom:6px;font-weight:600;">
+          Lý do hủy <span style="color:#dc2626;">*</span>
+        </label>
+
+        <select id="ob-cancel-select" class="swal2-select" style="width:100%;margin:0 0 14px 0;">
+          <option value="">-- Chọn lý do hủy --</option>
+          <option value="Tạo nhầm phiếu">Tạo nhầm phiếu</option>
+          <option value="Sai SKU / sản phẩm">Sai SKU / sản phẩm</option>
+          <option value="Sai số lượng tồn đầu kỳ">Sai số lượng tồn đầu kỳ</option>
+          <option value="Sai mã lô / hạn sử dụng">Sai mã lô / hạn sử dụng</option>
+          <option value="Chưa xác minh tồn thực tế">Chưa xác minh tồn thực tế</option>
+          <option value="Khác">Khác</option>
+        </select>
+
+        <label for="ob-cancel-note" style="display:block;margin-bottom:6px;font-weight:600;">
+          Ghi chú chi tiết
+        </label>
+
+        <textarea
+          id="ob-cancel-note"
+          class="swal2-textarea"
+          maxlength="450"
+          placeholder="Nhập thêm chi tiết nếu cần..."
+          style="width:100%;margin:0;box-sizing:border-box;"
+        ></textarea>
+
+        <div style="margin-top:8px;color:#6b7280;font-size:12px;">
+          Nếu chọn "Khác", bắt buộc nhập nội dung cụ thể.
+        </div>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Hủy phiếu",
+    cancelButtonText: "Đóng",
+    focusConfirm: false,
+    preConfirm: () => {
+      const select = document.getElementById(
+        "ob-cancel-select"
+      ) as HTMLSelectElement | null;
+
+      const textarea = document.getElementById(
+        "ob-cancel-note"
+      ) as HTMLTextAreaElement | null;
+
+      const selected = String(select?.value || "").trim();
+      const note = String(textarea?.value || "").trim();
+
+      if (!selected) {
+        Swal.showValidationMessage("Vui lòng chọn lý do hủy.");
+        return false;
+      }
+
+      if (selected === "Khác" && !note) {
+        Swal.showValidationMessage(
+          'Vui lòng nhập lý do cụ thể khi chọn "Khác".'
+        );
+        return false;
+      }
+
+      const reason = note ? `${selected} - ${note}` : selected;
+
+      if (reason.length > 500) {
+        Swal.showValidationMessage(
+          "Lý do hủy không được vượt quá 500 ký tự."
+        );
+        return false;
+      }
+
+      return reason;
+    },
+  });
+
+  if (!result.isConfirmed) return;
+
+  try {
+    await store.cancel(item.id, {
+      reason: String(result.value || "").trim(),
+    });
+
+    await Swal.fire({
+      icon: "success",
+      title: "Đã hủy phiếu",
+      text: "Phiếu tồn đầu kỳ đã được hủy và không làm thay đổi tồn kho.",
+      timer: 1700,
+      showConfirmButton: false,
+    });
+  } catch (error) {
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể hủy phiếu",
+      text: getErrorMessage(error),
+    });
+  }
+};
+
 const approveReceipt = async (item: OpeningBalanceListResponse) => {
-  if (!(await ensureCanReview())) return;
+  if (!(await ensureCanReview(item))) return;
 
   const result = await Swal.fire({
     icon: "warning",
@@ -356,7 +570,7 @@ const approveReceipt = async (item: OpeningBalanceListResponse) => {
 };
 
 const rejectReceipt = async (item: OpeningBalanceListResponse) => {
-  if (!(await ensureCanReview())) return;
+  if (!(await ensureCanReview(item))) return;
 
   const result = await Swal.fire({
     icon: "warning",
@@ -458,7 +672,6 @@ onMounted(async () => {
           <span v-if="store.pendingCount > 0" class="pending-badge">
             {{ store.pendingCount }} chờ duyệt
           </span>
-          <span v-if="!canManage" class="view-only-badge">Chỉ xem</span>
         </div>
         <p>
           Khai báo số lượng hàng thực tế đang có trong kho theo từng SKU và lô.
@@ -467,7 +680,7 @@ onMounted(async () => {
       </div>
 
       <button
-        v-if="canManage"
+        v-if="canCreate"
         type="button"
         class="create-btn"
         @click="openCreate"
@@ -476,10 +689,16 @@ onMounted(async () => {
       </button>
     </div>
 
-    <div v-if="!canManage" class="permission-note">
-      <i class="bi bi-eye"></i>
-      Thu ngân được xem danh sách, chi tiết và lịch sử. Tạo, sửa, gửi duyệt
-      dành cho chủ hệ thống hoặc quản lý; phê duyệt và từ chối chỉ dành cho chủ hệ thống.
+    <div v-if="userRole === 'CASHIER'" class="permission-note">
+      <i class="bi bi-info-circle"></i>
+      Thu ngân được tạo, sửa, hủy và gửi duyệt phiếu Lưu tạm do chính mình tạo.
+      Phê duyệt hoặc từ chối do quản lý khác người tạo hoặc chủ hệ thống thực hiện.
+    </div>
+
+    <div v-else-if="userRole === 'MANAGER'" class="permission-note">
+      <i class="bi bi-info-circle"></i>
+      Quản lý được tạo, sửa, hủy và gửi phiếu của mình; được phê duyệt hoặc từ chối
+      phiếu do người khác tạo, nhưng không được tự duyệt phiếu của chính mình.
     </div>
 
     <div class="content-card">
@@ -580,7 +799,7 @@ onMounted(async () => {
                   </button>
 
                   <button
-                    v-if="canManage && item.status === 'DRAFT'"
+                    v-if="canEditOrSubmit(item) && item.status === 'DRAFT'"
                     type="button"
                     title="Sửa phiếu"
                     @click="openEdit(item)"
@@ -589,7 +808,7 @@ onMounted(async () => {
                   </button>
 
                   <button
-                    v-if="canManage && item.status === 'DRAFT'"
+                    v-if="canEditOrSubmit(item) && item.status === 'DRAFT'"
                     type="button"
                     class="action-submit"
                     title="Gửi duyệt"
@@ -600,7 +819,18 @@ onMounted(async () => {
                   </button>
 
                   <button
-                    v-if="canReview && item.status === 'PENDING_APPROVAL'"
+                    v-if="canEditOrSubmit(item) && item.status === 'DRAFT'"
+                    type="button"
+                    class="action-cancel"
+                    title="Hủy phiếu"
+                    :disabled="store.processing"
+                    @click="cancelReceipt(item)"
+                  >
+                    <i class="bi bi-trash"></i>
+                  </button>
+
+                  <button
+                    v-if="canReviewReceipt(item) && item.status === 'PENDING_APPROVAL'"
                     type="button"
                     class="action-approve"
                     title="Phê duyệt"
@@ -611,7 +841,7 @@ onMounted(async () => {
                   </button>
 
                   <button
-                    v-if="canReview && item.status === 'PENDING_APPROVAL'"
+                    v-if="canReviewReceipt(item) && item.status === 'PENDING_APPROVAL'"
                     type="button"
                     class="action-danger"
                     title="Từ chối"
@@ -895,6 +1125,7 @@ th {
 .actions .action-approve {
   color: #047857;
 }
+.actions .action-cancel,
 .actions .action-danger {
   color: #b91c1c;
 }

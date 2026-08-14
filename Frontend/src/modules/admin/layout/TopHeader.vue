@@ -324,9 +324,9 @@ const menuItems = [
         roles: ["OWNER", "MANAGER", "CASHIER"],
       },
       {
-        id: "opening-balances",
-        path: "/admin/opening-balances",
-        name: "Kiểm kê tồn đầu kỳ",
+        id: "inventory-audit",
+        path: "/admin/inventory-audit",
+        name: "Kiểm kê kho",
         icon: "bi-clipboard2-check",
         roles: ["OWNER", "MANAGER", "CASHIER"],
       },

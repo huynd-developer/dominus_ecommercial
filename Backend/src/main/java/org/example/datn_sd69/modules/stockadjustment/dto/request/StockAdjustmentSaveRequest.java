@@ -13,12 +13,14 @@ import java.util.List;
 public class StockAdjustmentSaveRequest {
 
     @Size(
-            max = 500,
-            message = "Ghi chú không được vượt quá 500 ký tự"
+            max = 1000,
+            message = "Ghi chú không được vượt quá 1000 ký tự"
     )
     private String note;
 
     @Valid
-    @NotEmpty(message = "Phiếu kiểm kê phải có ít nhất một lô")
+    @NotEmpty(
+            message = "Phiếu kiểm kê phải có ít nhất một lô hàng"
+    )
     private List<StockAdjustmentItemRequest> items;
 }

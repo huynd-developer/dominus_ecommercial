@@ -3,6 +3,7 @@ import openingBalanceService from "../services/opening-balance.service";
 
 import type {
   OpeningBalanceApprovalHistoryResponse,
+  OpeningBalanceCancelRequest,
   OpeningBalanceDetailResponse,
   OpeningBalanceListResponse,
   OpeningBalanceRejectRequest,
@@ -196,6 +197,23 @@ export const useOpeningBalanceStore = defineStore("openingBalance", {
 
       try {
         const result = await openingBalanceService.submit(id);
+        if (this.detail?.id === id) this.detail = result;
+        await Promise.all([this.fetchList(), this.fetchPendingCount()]);
+        return result;
+      } catch (error) {
+        this.error = errorMessage(error);
+        throw error;
+      } finally {
+        this.processing = false;
+      }
+    },
+
+    async cancel(id: number, request: OpeningBalanceCancelRequest) {
+      this.processing = true;
+      this.error = null;
+
+      try {
+        const result = await openingBalanceService.cancel(id, request);
         if (this.detail?.id === id) this.detail = result;
         await Promise.all([this.fetchList(), this.fetchPendingCount()]);
         return result;

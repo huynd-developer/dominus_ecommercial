@@ -270,15 +270,31 @@ const routes: Array<RouteRecordRaw> = [
         },
       },
       {
-        path: "opening-balances",
-        name: "AdminOpeningBalances",
+        path: "inventory-audit",
+        name: "AdminInventoryAudit",
         component: () =>
           import(
-            "@/modules/admin/feature/openingBalance/views/OpeningBalanceView.vue"
+            "@/modules/admin/feature/inventoryAudit/views/InventoryAuditView.vue"
           ),
         meta: {
           requiresAuth: true,
           allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
+      },
+      {
+        path: "opening-balances",
+        name: "AdminOpeningBalances",
+        redirect: {
+          path: "/admin/inventory-audit",
+          query: { tab: "opening" },
+        },
+      },
+      {
+        path: "stock-adjustments",
+        name: "AdminStockAdjustments",
+        redirect: {
+          path: "/admin/inventory-audit",
+          query: { tab: "adjustment" },
         },
       },
       {

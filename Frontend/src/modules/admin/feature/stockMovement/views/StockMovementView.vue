@@ -592,10 +592,6 @@ onUnmounted(() => {
                   {{ item.createdByName || "—" }}
                 </strong>
 
-                <small>
-                  ID:
-                  {{ item.createdById }}
-                </small>
               </td>
 
               <td>

@@ -7,11 +7,8 @@ import type {
 } from "@/modules/admin/feature/goodsReceipt/types/goods-receipt.type";
 
 /**
- * Module 4 hiện tại dùng chung GoodsReceipt của BE với:
- * receiptType = OPENING_BALANCE.
- *
- * Response dùng nguyên shape GoodsReceipt để không tạo contract FE giả
- * khác với BE đang chạy.
+ * Opening Balance dùng dedicated API /admin/opening-balances nhưng response
+ * vẫn là GoodsReceipt response của BE với receiptType = OPENING_BALANCE.
  */
 export type OpeningBalanceStatus = GoodsReceiptStatus;
 export type OpeningBalanceListResponse = GoodsReceiptListResponse;
@@ -31,8 +28,8 @@ export interface OpeningBalanceItemRequest {
 }
 
 /**
- * Không expose receiptType cho component.
- * Service sẽ luôn ép OPENING_BALANCE và unitCost = null trước khi gọi BE.
+ * Khớp OpeningBalanceSaveRequest của BE.
+ * FE không gửi receiptType và unitCost.
  */
 export interface OpeningBalanceSaveRequest {
   note: string | null;
@@ -40,6 +37,14 @@ export interface OpeningBalanceSaveRequest {
 }
 
 export interface OpeningBalanceRejectRequest {
+  reason: string;
+}
+
+/**
+ * Lý do hủy được FE bắt buộc chọn trước khi gọi BE.
+ * BE GoodsReceiptCancelRequest vẫn nhận reason dạng chuỗi.
+ */
+export interface OpeningBalanceCancelRequest {
   reason: string;
 }
 
@@ -61,7 +66,7 @@ export interface PageMeta {
 }
 
 /**
- * Hỗ trợ cả hai format Page mà project đã từng nhận:
+ * Hỗ trợ cả hai format Page:
  * - { content, page: { size, number, totalElements, totalPages } }
  * - { content, size, number, totalElements, totalPages }
  */
