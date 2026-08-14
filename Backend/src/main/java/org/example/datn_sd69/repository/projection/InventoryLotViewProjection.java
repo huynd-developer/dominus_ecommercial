@@ -18,11 +18,6 @@ public interface InventoryLotViewProjection {
     Integer getSellableQuantity();
     Boolean getIsNearExpiry();
     Boolean getIsExpired();
-    Boolean getIsLocked();
-    String getLockReason();
-    Integer getLockedById();
-    String getLockedByName();
-    LocalDateTime getLockedAt();
     Integer getCreatedById();
     String getCreatedByName();
     LocalDateTime getCreatedAt();

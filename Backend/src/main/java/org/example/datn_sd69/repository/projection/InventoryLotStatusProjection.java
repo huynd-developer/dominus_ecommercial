@@ -24,10 +24,6 @@ public interface InventoryLotStatusProjection {
 
     Integer getQuantityOnHand();
 
-    Boolean getLocked();
-
-    String getLockReason();
-
     Integer getDaysToExpiry();
 
     Boolean getExpired();

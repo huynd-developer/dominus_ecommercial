@@ -11,7 +11,6 @@ export interface InventorySummary {
   sellableQuantity: number;
   nearExpiryQuantity: number;
   expiredQuantity: number;
-  lockedQuantity: number;
 }
 
 export interface InventoryOverview {
@@ -22,7 +21,6 @@ export interface InventoryOverview {
   sellableQuantity: number;
   nearExpiryQuantity: number;
   expiredQuantity: number;
-  lockedQuantity: number;
 }
 
 export interface InventoryLotStatus {
@@ -45,9 +43,6 @@ export interface InventoryLotStatus {
 
   nearExpiry: boolean;
   expired: boolean;
-  locked: boolean;
-
-  lockReason: string | null;
 }
 
 export interface InventoryConfig {
@@ -63,7 +58,6 @@ export interface InventoryOverviewParams {
   keyword?: string;
   nearExpiry?: boolean;
   expired?: boolean;
-  locked?: boolean;
   stockStatus?: InventoryStockStatus;
   page?: number;
   size?: number;

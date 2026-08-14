@@ -55,7 +55,6 @@ public class InventoryServiceImpl
                     .sellableQuantity(0L)
                     .nearExpiryQuantity(0L)
                     .expiredQuantity(0L)
-                    .lockedQuantity(0L)
                     .build();
         }
 
@@ -87,11 +86,6 @@ public class InventoryServiceImpl
                                 projection.getExpiredQuantity()
                         )
                 )
-                .lockedQuantity(
-                        valueOrZero(
-                                projection.getLockedQuantity()
-                        )
-                )
                 .build();
     }
 
@@ -108,7 +102,6 @@ public class InventoryServiceImpl
             String keyword,
             Boolean nearExpiry,
             Boolean expired,
-            Boolean locked,
             InventoryStockStatus stockStatus,
             Pageable pageable
     ) {
@@ -122,9 +115,6 @@ public class InventoryServiceImpl
         Integer expiredFlag =
                 toFlag(expired);
 
-        Integer lockedFlag =
-                toFlag(locked);
-
         String stockStatusValue =
                 stockStatus == null
                         ? InventoryStockStatus.ALL.name()
@@ -135,7 +125,6 @@ public class InventoryServiceImpl
                         normalizedKeyword,
                         nearExpiryFlag,
                         expiredFlag,
-                        lockedFlag,
                         stockStatusValue,
                         pageable
                 )
@@ -180,28 +169,6 @@ public class InventoryServiceImpl
 
         return inventoryQueryRepository
                 .findExpiredLots(
-                        normalizeKeyword(keyword),
-                        pageable
-                )
-                .map(this::toLotStatusResponse);
-    }
-
-
-    /*
-     * =========================================================
-     * LOCKED
-     * =========================================================
-     */
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<InventoryLotStatusResponse> getLockedLots(
-            String keyword,
-            Pageable pageable
-    ) {
-
-        return inventoryQueryRepository
-                .findLockedLots(
                         normalizeKeyword(keyword),
                         pageable
                 )
@@ -271,6 +238,12 @@ public class InventoryServiceImpl
                 .productName(
                         projection.getProductName()
                 )
+                .capacityValue(
+                        projection.getCapacityValue()
+                )
+                .bottleTypeName(
+                        projection.getBottleTypeName()
+                )
                 .totalQuantity(
                         valueOrZero(
                                 projection.getTotalQuantity()
@@ -289,11 +262,6 @@ public class InventoryServiceImpl
                 .expiredQuantity(
                         valueOrZero(
                                 projection.getExpiredQuantity()
-                        )
-                )
-                .lockedQuantity(
-                        valueOrZero(
-                                projection.getLockedQuantity()
                         )
                 )
                 .build();
@@ -350,14 +318,6 @@ public class InventoryServiceImpl
                         Boolean.TRUE.equals(
                                 projection.getExpired()
                         )
-                )
-                .locked(
-                        Boolean.TRUE.equals(
-                                projection.getLocked()
-                        )
-                )
-                .lockReason(
-                        projection.getLockReason()
                 )
                 .build();
     }

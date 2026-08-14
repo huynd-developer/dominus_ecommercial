@@ -65,9 +65,6 @@ public class InventoryController {
             @RequestParam(required = false)
             Boolean expired,
 
-            @RequestParam(required = false)
-            Boolean locked,
-
             @RequestParam(defaultValue = "ALL")
             InventoryStockStatus stockStatus,
 
@@ -97,7 +94,6 @@ public class InventoryController {
                         keyword,
                         nearExpiry,
                         expired,
-                        locked,
                         stockStatus,
                         pageable
                 )
@@ -188,51 +184,6 @@ public class InventoryController {
 
         return ResponseEntity.ok(
                 inventoryService.getExpiredLots(
-                        keyword,
-                        pageable
-                )
-        );
-    }
-
-
-    /*
-     * =========================================================
-     * LÔ ĐANG KHÓA
-     * OWNER / MANAGER / CASHIER đều được xem
-     * =========================================================
-     */
-
-    @GetMapping("/locked")
-    @PreAuthorize("hasAnyAuthority('OWNER', 'MANAGER', 'CASHIER')")
-    public ResponseEntity<Page<InventoryLotStatusResponse>>
-    getLockedLots(
-
-            @RequestParam(required = false)
-            String keyword,
-
-            @RequestParam(defaultValue = "0")
-            @Min(
-                    value = 0,
-                    message = "Trang phải lớn hơn hoặc bằng 0"
-            )
-            int page,
-
-            @RequestParam(defaultValue = "20")
-            @Min(
-                    value = 1,
-                    message = "Số bản ghi mỗi trang phải lớn hơn hoặc bằng 1"
-            )
-            @Max(
-                    value = 100,
-                    message = "Số bản ghi mỗi trang không được vượt quá 100"
-            )
-            int size
-    ) {
-
-        Pageable pageable = PageRequest.of(page, size);
-
-        return ResponseEntity.ok(
-                inventoryService.getLockedLots(
                         keyword,
                         pageable
                 )

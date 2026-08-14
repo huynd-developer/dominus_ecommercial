@@ -25,8 +25,4 @@ public interface ExpiryAlertViewProjection {
     Boolean getIsNearExpiry();
 
     Boolean getIsExpired();
-
-    Boolean getIsLocked();
-
-    String getLockReason();
 }

@@ -92,7 +92,7 @@ const handleRegister = async () => {
   const result = await authStore.registerCustomer(form);
 
   if (result.success) {
-    successMessage.value = result.message;
+    successMessage.value = result.message ?? '';
     setTimeout(() => {
       router.push('/login');
     }, 2000);
@@ -100,7 +100,7 @@ const handleRegister = async () => {
     if (result.validationErrors) {
       validationErrors.value = result.validationErrors;
     } else {
-      generalError.value = result.message;
+      generalError.value = result.message ?? '';
     }
   }
   loading.value = false;

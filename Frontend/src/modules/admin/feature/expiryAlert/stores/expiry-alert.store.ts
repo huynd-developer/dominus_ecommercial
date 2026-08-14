@@ -7,8 +7,6 @@ import type {
   ExpiryAlertListResponse,
   ExpiryAlertSummaryResponse,
   InventoryLotDetailResponse,
-  InventoryLotLockRequest,
-  InventoryLotUnlockRequest,
 } from "../types/expiry-alert.type";
 
 interface ExpiryAlertState {
@@ -34,8 +32,6 @@ interface ExpiryAlertState {
   loadingList: boolean;
   loadingSummary: boolean;
   loadingDetail: boolean;
-
-  processing: boolean;
 
   error: string | null;
 }
@@ -79,8 +75,6 @@ export const useExpiryAlertStore = defineStore("expiryAlert", {
     loadingList: false,
     loadingSummary: false,
     loadingDetail: false,
-
-    processing: false,
 
     error: null,
   }),
@@ -156,10 +150,6 @@ export const useExpiryAlertStore = defineStore("expiryAlert", {
           expiredLotCount: safeNumber(data?.expiredLotCount),
 
           expiredQuantity: safeNumber(data?.expiredQuantity),
-
-          lockedLotCount: safeNumber(data?.lockedLotCount),
-
-          lockedQuantity: safeNumber(data?.lockedQuantity),
         };
       } catch (error) {
         this.summary = null;
@@ -188,60 +178,6 @@ export const useExpiryAlertStore = defineStore("expiryAlert", {
         throw error;
       } finally {
         this.loadingDetail = false;
-      }
-    },
-
-    async lockLot(id: number, request: InventoryLotLockRequest) {
-      this.processing = true;
-      this.error = null;
-
-      try {
-        const detail = await expiryAlertService.lock(id, request);
-
-        this.detail = detail;
-
-        /**
-         * Sau khi khóa:
-         * - IsLocked thay đổi
-         * - summary LOCKED thay đổi
-         * - danh sách hiện tại có thể thay đổi
-         */
-        await Promise.all([this.fetchList(), this.fetchSummary()]);
-
-        return detail;
-      } catch (error) {
-        this.error = getErrorMessage(error);
-
-        throw error;
-      } finally {
-        this.processing = false;
-      }
-    },
-    async unlockLot(id: number, request?: InventoryLotUnlockRequest) {
-      this.processing = true;
-      this.error = null;
-
-      try {
-        const detail = await expiryAlertService.unlock(id, request);
-
-        this.detail = detail;
-
-        /*
-         * Sau khi mở khóa:
-         *
-         * - IsLocked đổi false
-         * - locked summary thay đổi
-         * - nếu đang ở tab LOCKED thì lô có thể biến mất
-         */
-        await Promise.all([this.fetchList(), this.fetchSummary()]);
-
-        return detail;
-      } catch (error) {
-        this.error = getErrorMessage(error);
-
-        throw error;
-      } finally {
-        this.processing = false;
       }
     },
 

@@ -1,18 +1,14 @@
 <script setup lang="ts">
 import type { InventoryLotDetailResponse } from "../types/expiry-alert.type";
 
-const props = defineProps<{
+defineProps<{
   visible: boolean;
   detail: InventoryLotDetailResponse | null;
   loading: boolean;
-  processing: boolean;
-  canManage: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: "close"): void;
-  (e: "lock", id: number): void;
-  (e: "unlock", id: number): void;
 }>();
 
 const formatNumber = (value?: number | null) => {
@@ -67,10 +63,6 @@ const expiryClass = (detail: InventoryLotDetailResponse) => {
 };
 
 const close = () => {
-  if (props.processing) {
-    return;
-  }
-
   emit("close");
 };
 </script>
@@ -94,7 +86,6 @@ const close = () => {
           <button
             type="button"
             class="icon-close"
-            :disabled="processing"
             @click="close"
           >
             <i class="bi bi-x-lg"></i>
@@ -138,16 +129,6 @@ const close = () => {
                   <span>Mã lô</span>
                   <strong>
                     {{ detail.lotCode }}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Trạng thái khóa</span>
-
-                  <strong
-                    :class="detail.isLocked ? 'text-danger' : 'text-success'"
-                  >
-                    {{ detail.isLocked ? "Đang khóa" : "Không khóa" }}
                   </strong>
                 </div>
               </div>
@@ -229,33 +210,6 @@ const close = () => {
               </div>
             </section>
 
-            <section v-if="detail.isLocked">
-              <h4>Thông tin khóa</h4>
-
-              <div class="info-grid">
-                <div class="full">
-                  <span>Lý do khóa</span>
-                  <strong>
-                    {{ detail.lockReason || "Không có lý do" }}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Người khóa</span>
-                  <strong>
-                    {{ detail.lockedByName || "—" }}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Thời gian khóa</span>
-                  <strong>
-                    {{ formatDateTime(detail.lockedAt) }}
-                  </strong>
-                </div>
-              </div>
-            </section>
-
             <section>
               <h4>Nguồn nhập</h4>
 
@@ -310,48 +264,9 @@ const close = () => {
         </div>
 
         <div class="modal-footer">
-          <div class="footer-actions">
-            <!-- KHÓA -->
-            <button
-              v-if="detail && canManage && !detail.isLocked"
-              type="button"
-              class="danger-btn"
-              :disabled="processing"
-              @click="emit('lock', detail.id)"
-            >
-              <span
-                v-if="processing"
-                class="spinner-border spinner-border-sm"
-              ></span>
-
-              <i v-else class="bi bi-lock"></i>
-
-              Khóa lô
-            </button>
-
-            <!-- MỞ KHÓA -->
-            <button
-              v-if="detail && canManage && detail.isLocked"
-              type="button"
-              class="success-btn"
-              :disabled="processing"
-              @click="emit('unlock', detail.id)"
-            >
-              <span
-                v-if="processing"
-                class="spinner-border spinner-border-sm"
-              ></span>
-
-              <i v-else class="bi bi-unlock"></i>
-
-              Mở khóa
-            </button>
-          </div>
-
           <button
             type="button"
             class="close-btn"
-            :disabled="processing"
             @click="close"
           >
             Đóng
@@ -560,7 +475,7 @@ section h4 {
 .modal-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
 
   padding: 16px 24px;
@@ -570,8 +485,6 @@ section h4 {
   background: #f9fafb;
 }
 
-.danger-btn,
-.success-btn,
 .close-btn {
   min-height: 40px;
 
@@ -585,23 +498,6 @@ section h4 {
   cursor: pointer;
 }
 
-.danger-btn {
-  border: 1px solid #dc2626;
-
-  background: #dc2626;
-  color: #ffffff;
-}
-.success-btn {
-  border: 1px solid #059669;
-
-  background: #059669;
-  color: #ffffff;
-}
-.footer-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 .close-btn {
   border: 1px solid #d1d5db;
 

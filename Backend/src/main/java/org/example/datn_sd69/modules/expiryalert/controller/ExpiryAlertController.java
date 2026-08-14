@@ -1,13 +1,10 @@
 package org.example.datn_sd69.modules.expiryalert.controller;
 
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.enums.ExpiryAlertGroup;
 import org.example.datn_sd69.modules.expiryalert.dto.response.ExpiryAlertListResponse;
 import org.example.datn_sd69.modules.expiryalert.dto.response.ExpiryAlertSummaryResponse;
 import org.example.datn_sd69.modules.expiryalert.service.ExpiryAlertService;
-import org.example.datn_sd69.modules.inventorylot.dto.request.InventoryLotLockRequest;
-import org.example.datn_sd69.modules.inventorylot.dto.request.InventoryLotUnlockRequest;
 import org.example.datn_sd69.modules.inventorylot.dto.response.InventoryLotDetailResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -114,27 +111,6 @@ public class ExpiryAlertController {
     }
 
 
-    @PostMapping("/{id}/lock")
-    @PreAuthorize(
-            "hasAnyAuthority('OWNER', 'MANAGER')"
-    )
-    public ResponseEntity<InventoryLotDetailResponse> lock(
-            @PathVariable Integer id,
-
-            @Valid
-            @RequestBody
-            InventoryLotLockRequest request
-    ) {
-
-        return ResponseEntity.ok(
-                expiryAlertService.lock(
-                        id,
-                        request
-                )
-        );
-    }
-
-
     private void validatePagination(
             int page,
             int size
@@ -155,16 +131,5 @@ public class ExpiryAlertController {
                     "Số bản ghi phải từ 1 đến 100."
             );
         }
-    }
-    @PostMapping("/{id}/unlock")
-    @PreAuthorize("hasAnyAuthority('OWNER', 'MANAGER')")
-    public ResponseEntity<InventoryLotDetailResponse> unlock(
-            @PathVariable Integer id,
-            @Valid @RequestBody(required = false)
-            InventoryLotUnlockRequest request
-    ) {
-        return ResponseEntity.ok(
-                expiryAlertService.unlock(id, request)
-        );
     }
 }

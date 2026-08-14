@@ -60,10 +60,7 @@ public interface InventoryQueryRepository
                             AS nearExpiryQuantity,
 
                         COALESCE(SUM(ExpiredQuantity), 0)
-                            AS expiredQuantity,
-
-                        COALESCE(SUM(LockedQuantity), 0)
-                            AS lockedQuantity
+                            AS expiredQuantity
 
                     FROM dbo.vw_ProductVariantInventory
                     """,
@@ -81,23 +78,30 @@ public interface InventoryQueryRepository
     @Query(
             value = """
                     SELECT
-                        ProductVariantId AS productVariantId,
-                        Sku AS sku,
-                        ProductName AS productName,
-                        TotalQuantity AS totalQuantity,
-                        SellableQuantity AS sellableQuantity,
-                        NearExpiryQuantity AS nearExpiryQuantity,
-                        ExpiredQuantity AS expiredQuantity,
-                        LockedQuantity AS lockedQuantity
+                        v.ProductVariantId AS productVariantId,
+                        v.Sku AS sku,
+                        v.ProductName AS productName,
+                        c.Value AS capacityValue,
+                        bt.Name AS bottleTypeName,
+                        v.TotalQuantity AS totalQuantity,
+                        v.SellableQuantity AS sellableQuantity,
+                        v.NearExpiryQuantity AS nearExpiryQuantity,
+                        v.ExpiredQuantity AS expiredQuantity
 
-                    FROM dbo.vw_ProductVariantInventory
+                    FROM dbo.vw_ProductVariantInventory v
+                    LEFT JOIN dbo.ProductVariant pv
+                        ON pv.Id = v.ProductVariantId
+                    LEFT JOIN dbo.Capacity c
+                        ON c.Id = pv.CapacityId
+                    LEFT JOIN dbo.BottleType bt
+                        ON bt.Id = pv.BottleTypeId
 
                     WHERE
                         (
                             :keyword IS NULL
                             OR :keyword = ''
-                            OR Sku LIKE CONCAT('%', :keyword, '%')
-                            OR ProductName LIKE CONCAT('%', :keyword, '%')
+                            OR v.Sku LIKE CONCAT('%', :keyword, '%')
+                            OR v.ProductName LIKE CONCAT('%', :keyword, '%')
                         )
 
                         AND
@@ -106,12 +110,12 @@ public interface InventoryQueryRepository
 
                             OR (
                                 :nearExpiryFlag = 1
-                                AND NearExpiryQuantity > 0
+                                AND v.NearExpiryQuantity > 0
                             )
 
                             OR (
                                 :nearExpiryFlag = 0
-                                AND NearExpiryQuantity = 0
+                                AND v.NearExpiryQuantity = 0
                             )
                         )
 
@@ -121,27 +125,12 @@ public interface InventoryQueryRepository
 
                             OR (
                                 :expiredFlag = 1
-                                AND ExpiredQuantity > 0
+                                AND v.ExpiredQuantity > 0
                             )
 
                             OR (
                                 :expiredFlag = 0
-                                AND ExpiredQuantity = 0
-                            )
-                        )
-
-                        AND
-                        (
-                            :lockedFlag IS NULL
-
-                            OR (
-                                :lockedFlag = 1
-                                AND LockedQuantity > 0
-                            )
-
-                            OR (
-                                :lockedFlag = 0
-                                AND LockedQuantity = 0
+                                AND v.ExpiredQuantity = 0
                             )
                         )
 
@@ -152,18 +141,18 @@ public interface InventoryQueryRepository
 
                             OR (
                                 :stockStatus = 'IN_STOCK'
-                                AND TotalQuantity > 0
+                                AND v.TotalQuantity > 0
                             )
 
                             OR (
                                 :stockStatus = 'OUT_OF_STOCK'
-                                AND TotalQuantity = 0
+                                AND v.TotalQuantity = 0
                             )
                         )
 
                     ORDER BY
-                        ProductName ASC,
-                        Sku ASC
+                        v.ProductName ASC,
+                        v.Sku ASC
                     """,
 
             countQuery = """
@@ -211,21 +200,6 @@ public interface InventoryQueryRepository
 
                         AND
                         (
-                            :lockedFlag IS NULL
-
-                            OR (
-                                :lockedFlag = 1
-                                AND LockedQuantity > 0
-                            )
-
-                            OR (
-                                :lockedFlag = 0
-                                AND LockedQuantity = 0
-                            )
-                        )
-
-                        AND
-                        (
                             :stockStatus IS NULL
                             OR :stockStatus = 'ALL'
 
@@ -254,9 +228,6 @@ public interface InventoryQueryRepository
             @Param("expiredFlag")
             Integer expiredFlag,
 
-            @Param("lockedFlag")
-            Integer lockedFlag,
-
             @Param("stockStatus")
             String stockStatus,
 
@@ -283,8 +254,6 @@ public interface InventoryQueryRepository
                         ExpirationDate AS expirationDate,
                         InitialQuantity AS initialQuantity,
                         QuantityOnHand AS quantityOnHand,
-                        IsLocked AS locked,
-                        LockReason AS lockReason,
                         DaysToExpiry AS daysToExpiry,
                         IsExpired AS expired,
                         IsNearExpiry AS nearExpiry,
@@ -359,8 +328,6 @@ public interface InventoryQueryRepository
                         ExpirationDate AS expirationDate,
                         InitialQuantity AS initialQuantity,
                         QuantityOnHand AS quantityOnHand,
-                        IsLocked AS locked,
-                        LockReason AS lockReason,
                         DaysToExpiry AS daysToExpiry,
                         IsExpired AS expired,
                         IsNearExpiry AS nearExpiry,
@@ -409,78 +376,6 @@ public interface InventoryQueryRepository
             nativeQuery = true
     )
     Page<InventoryLotStatusProjection> findExpiredLots(
-            @Param("keyword") String keyword,
-            Pageable pageable
-    );
-
-
-    /*
-     * =========================================================
-     * LÔ ĐANG KHÓA
-     * =========================================================
-     */
-
-    @Query(
-            value = """
-                    SELECT
-                        InventoryLotId AS inventoryLotId,
-                        ProductVariantId AS productVariantId,
-                        Sku AS sku,
-                        ProductName AS productName,
-                        LotCode AS lotCode,
-                        ManufacturedDate AS manufacturedDate,
-                        ReceivedDate AS receivedDate,
-                        ExpirationDate AS expirationDate,
-                        InitialQuantity AS initialQuantity,
-                        QuantityOnHand AS quantityOnHand,
-                        IsLocked AS locked,
-                        LockReason AS lockReason,
-                        DaysToExpiry AS daysToExpiry,
-                        IsExpired AS expired,
-                        IsNearExpiry AS nearExpiry,
-                        SellableQuantity AS sellableQuantity
-
-                    FROM dbo.vw_InventoryLotStatus
-
-                    WHERE
-                        IsLocked = 1
-
-                        AND
-                        (
-                            :keyword IS NULL
-                            OR :keyword = ''
-                            OR Sku LIKE CONCAT('%', :keyword, '%')
-                            OR ProductName LIKE CONCAT('%', :keyword, '%')
-                            OR LotCode LIKE CONCAT('%', :keyword, '%')
-                        )
-
-                    ORDER BY
-                        ExpirationDate ASC,
-                        ProductName ASC,
-                        Sku ASC
-                    """,
-
-            countQuery = """
-                    SELECT COUNT(*)
-
-                    FROM dbo.vw_InventoryLotStatus
-
-                    WHERE
-                        IsLocked = 1
-
-                        AND
-                        (
-                            :keyword IS NULL
-                            OR :keyword = ''
-                            OR Sku LIKE CONCAT('%', :keyword, '%')
-                            OR ProductName LIKE CONCAT('%', :keyword, '%')
-                            OR LotCode LIKE CONCAT('%', :keyword, '%')
-                        )
-                    """,
-
-            nativeQuery = true
-    )
-    Page<InventoryLotStatusProjection> findLockedLots(
             @Param("keyword") String keyword,
             Pageable pageable
     );

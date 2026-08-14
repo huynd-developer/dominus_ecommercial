@@ -1,14 +1,11 @@
 import type {
   InventoryLotDetailResponse,
-  InventoryLotLockRequest,
-  InventoryLotUnlockRequest,
 } from "@/modules/admin/feature/inventoryLot/types/inventory-lot.type";
 
 export type ExpiryAlertGroup =
   | "ALL"
   | "NEAR_EXPIRY"
-  | "EXPIRED"
-  | "LOCKED";
+  | "EXPIRED";
 
 export interface ExpiryAlertListResponse {
   id: number;
@@ -27,9 +24,6 @@ export interface ExpiryAlertListResponse {
 
   isNearExpiry: boolean;
   isExpired: boolean;
-  isLocked: boolean;
-
-  lockReason: string | null;
 }
 
 export interface ExpiryAlertSummaryResponse {
@@ -40,9 +34,6 @@ export interface ExpiryAlertSummaryResponse {
 
   expiredLotCount: number;
   expiredQuantity: number;
-
-  lockedLotCount: number;
-  lockedQuantity: number;
 }
 
 export interface ExpiryAlertListParams {
@@ -101,6 +92,4 @@ export interface PageResponse<T> {
 
 export type {
   InventoryLotDetailResponse,
-  InventoryLotLockRequest,
-  InventoryLotUnlockRequest,
 };

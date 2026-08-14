@@ -43,7 +43,6 @@ export const inventoryService = {
         keyword: params.keyword?.trim(),
         nearExpiry: params.nearExpiry,
         expired: params.expired,
-        locked: params.locked,
         stockStatus: params.stockStatus ?? "ALL",
         page: params.page ?? 0,
         size: params.size ?? 20,
@@ -75,22 +74,6 @@ export const inventoryService = {
     const response = await api.get<
       PageResponse<InventoryLotStatus>
     >(`${BASE_URL}/expired`, {
-      params: cleanParams({
-        keyword: params.keyword?.trim(),
-        page: params.page ?? 0,
-        size: params.size ?? 20,
-      }),
-    });
-
-    return response.data;
-  },
-
-  async getLocked(
-    params: InventoryLotParams
-  ): Promise<PageResponse<InventoryLotStatus>> {
-    const response = await api.get<
-      PageResponse<InventoryLotStatus>
-    >(`${BASE_URL}/locked`, {
       params: cleanParams({
         keyword: params.keyword?.trim(),
         page: params.page ?? 0,

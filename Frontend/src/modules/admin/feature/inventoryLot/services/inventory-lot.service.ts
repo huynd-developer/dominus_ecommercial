@@ -4,10 +4,7 @@ import type {
   InventoryLotDetailResponse,
   InventoryLotListParams,
   InventoryLotListResponse,
-  InventoryLotLockHistoryResponse,
-  InventoryLotLockRequest,
   InventoryLotSourceResponse,
-  InventoryLotUnlockRequest,
   PageResponse,
 } from "../types/inventory-lot.type";
 
@@ -26,7 +23,6 @@ const inventoryLotService = {
       params: cleanParams({
         keyword: params.keyword?.trim() || undefined,
         productVariantId: params.productVariantId ?? undefined,
-        isLocked: params.isLocked,
         isExpired: params.isExpired,
         isNearExpiry: params.isNearExpiry,
         hasStock: params.hasStock,
@@ -47,32 +43,6 @@ const inventoryLotService = {
 
   async getSource(id: number): Promise<InventoryLotSourceResponse> {
     const response = await api.get(`/admin/inventory-lots/${id}/source`);
-    return response.data;
-  },
-
-  async getLockHistory(id: number): Promise<InventoryLotLockHistoryResponse[]> {
-    const response = await api.get(`/admin/inventory-lots/${id}/lock-history`);
-    return response.data;
-  },
-
-  async lock(
-    id: number,
-    request: InventoryLotLockRequest
-  ): Promise<InventoryLotDetailResponse> {
-    const response = await api.post(`/admin/inventory-lots/${id}/lock`, request);
-    return response.data;
-  },
-
-  async unlock(
-    id: number,
-    request?: InventoryLotUnlockRequest
-  ): Promise<InventoryLotDetailResponse> {
-    const reason = request?.reason?.trim();
-
-    const response = reason
-      ? await api.post(`/admin/inventory-lots/${id}/unlock`, { reason })
-      : await api.post(`/admin/inventory-lots/${id}/unlock`);
-
     return response.data;
   },
 };

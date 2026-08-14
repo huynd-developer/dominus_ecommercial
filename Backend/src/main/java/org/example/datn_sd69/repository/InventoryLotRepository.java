@@ -30,11 +30,6 @@ public interface InventoryLotRepository extends JpaRepository<InventoryLot, Inte
                         LS.SellableQuantity AS sellableQuantity,
                         LS.IsNearExpiry AS isNearExpiry,
                         LS.IsExpired AS isExpired,
-                        LS.IsLocked AS isLocked,
-                        LS.LockReason AS lockReason,
-                        L.LockedBy AS lockedById,
-                        LU.Name AS lockedByName,
-                        L.LockedAt AS lockedAt,
                         L.CreatedBy AS createdById,
                         CU.Name AS createdByName,
                         L.CreatedAt AS createdAt,
@@ -46,8 +41,6 @@ public interface InventoryLotRepository extends JpaRepository<InventoryLot, Inte
                     FROM dbo.vw_InventoryLotStatus LS
                     INNER JOIN dbo.InventoryLot L
                         ON L.Id = LS.InventoryLotId
-                    LEFT JOIN dbo.Users LU
-                        ON LU.Id = L.LockedBy
                     INNER JOIN dbo.Users CU
                         ON CU.Id = L.CreatedBy
                     LEFT JOIN dbo.GoodsReceiptItem GRI
@@ -63,7 +56,6 @@ public interface InventoryLotRepository extends JpaRepository<InventoryLot, Inte
                             OR LOWER(COALESCE(GR.ReceiptNo, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
                         )
                         AND (:productVariantId IS NULL OR LS.ProductVariantId = :productVariantId)
-                        AND (:isLocked IS NULL OR LS.IsLocked = :isLocked)
                         AND (:isExpired IS NULL OR LS.IsExpired = :isExpired)
                         AND (:isNearExpiry IS NULL OR LS.IsNearExpiry = :isNearExpiry)
                         AND (
@@ -96,7 +88,6 @@ public interface InventoryLotRepository extends JpaRepository<InventoryLot, Inte
                             OR LOWER(COALESCE(GR.ReceiptNo, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
                         )
                         AND (:productVariantId IS NULL OR LS.ProductVariantId = :productVariantId)
-                        AND (:isLocked IS NULL OR LS.IsLocked = :isLocked)
                         AND (:isExpired IS NULL OR LS.IsExpired = :isExpired)
                         AND (:isNearExpiry IS NULL OR LS.IsNearExpiry = :isNearExpiry)
                         AND (
@@ -112,7 +103,6 @@ public interface InventoryLotRepository extends JpaRepository<InventoryLot, Inte
     Page<InventoryLotViewProjection> search(
             @Param("keyword") String keyword,
             @Param("productVariantId") Integer productVariantId,
-            @Param("isLocked") Boolean isLocked,
             @Param("isExpired") Boolean isExpired,
             @Param("isNearExpiry") Boolean isNearExpiry,
             @Param("hasStock") Boolean hasStock,
@@ -138,11 +128,6 @@ public interface InventoryLotRepository extends JpaRepository<InventoryLot, Inte
                         LS.SellableQuantity AS sellableQuantity,
                         LS.IsNearExpiry AS isNearExpiry,
                         LS.IsExpired AS isExpired,
-                        LS.IsLocked AS isLocked,
-                        LS.LockReason AS lockReason,
-                        L.LockedBy AS lockedById,
-                        LU.Name AS lockedByName,
-                        L.LockedAt AS lockedAt,
                         L.CreatedBy AS createdById,
                         CU.Name AS createdByName,
                         L.CreatedAt AS createdAt,
@@ -154,8 +139,6 @@ public interface InventoryLotRepository extends JpaRepository<InventoryLot, Inte
                     FROM dbo.vw_InventoryLotStatus LS
                     INNER JOIN dbo.InventoryLot L
                         ON L.Id = LS.InventoryLotId
-                    LEFT JOIN dbo.Users LU
-                        ON LU.Id = L.LockedBy
                     INNER JOIN dbo.Users CU
                         ON CU.Id = L.CreatedBy
                     LEFT JOIN dbo.GoodsReceiptItem GRI

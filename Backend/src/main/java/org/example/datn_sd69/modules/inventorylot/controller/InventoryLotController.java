@@ -1,11 +1,8 @@
 package org.example.datn_sd69.modules.inventorylot.controller;
 
-import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
-import org.example.datn_sd69.modules.inventorylot.dto.request.InventoryLotLockRequest;
-import org.example.datn_sd69.modules.inventorylot.dto.request.InventoryLotUnlockRequest;
 import org.example.datn_sd69.modules.inventorylot.dto.response.*;
 import org.example.datn_sd69.modules.inventorylot.service.InventoryLotService;
 import org.springframework.data.domain.Page;
@@ -18,7 +15,6 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/inventory-lots")
@@ -33,7 +29,6 @@ public class InventoryLotController {
     public ResponseEntity<Page<InventoryLotListResponse>> getList(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Integer productVariantId,
-            @RequestParam(required = false) Boolean isLocked,
             @RequestParam(required = false) Boolean isExpired,
             @RequestParam(required = false) Boolean isNearExpiry,
             @RequestParam(required = false) Boolean hasStock,
@@ -57,7 +52,6 @@ public class InventoryLotController {
                 inventoryLotService.getList(
                         keyword,
                         productVariantId,
-                        isLocked,
                         isExpired,
                         isNearExpiry,
                         hasStock,
@@ -82,35 +76,5 @@ public class InventoryLotController {
             @PathVariable Integer id
     ) {
         return ResponseEntity.ok(inventoryLotService.getSource(id));
-    }
-
-    @GetMapping("/{id}/lock-history")
-    @PreAuthorize("hasAnyAuthority('OWNER', 'MANAGER', 'CASHIER')")
-    public ResponseEntity<List<InventoryLotLockHistoryResponse>> getLockHistory(
-            @PathVariable Integer id
-    ) {
-        return ResponseEntity.ok(inventoryLotService.getLockHistory(id));
-    }
-
-    @PostMapping("/{id}/lock")
-    @PreAuthorize("hasAnyAuthority('OWNER', 'MANAGER')")
-    public ResponseEntity<InventoryLotDetailResponse> lock(
-            @PathVariable Integer id,
-            @Valid @RequestBody InventoryLotLockRequest request
-    ) {
-        return ResponseEntity.ok(inventoryLotService.lock(id, request));
-    }
-
-    @PostMapping("/{id}/unlock")
-    @PreAuthorize("hasAnyAuthority('OWNER', 'MANAGER')")
-    public ResponseEntity<InventoryLotDetailResponse> unlock(
-            @PathVariable Integer id,
-            @Valid @RequestBody(required = false) InventoryLotUnlockRequest request
-    ) {
-        if (request == null) {
-            request = new InventoryLotUnlockRequest();
-        }
-
-        return ResponseEntity.ok(inventoryLotService.unlock(id, request));
     }
 }

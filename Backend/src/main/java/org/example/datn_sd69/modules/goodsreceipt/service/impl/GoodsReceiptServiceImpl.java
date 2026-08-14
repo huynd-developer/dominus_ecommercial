@@ -162,7 +162,11 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
 
         User actor = getCurrentUser();
 
-        Map<Integer, ProductVariant> variants = validateAndLoadVariants(request.getItems());
+        LocalDateTime createdAt = LocalDateTime.now();
+        LocalDate receivedDate = createdAt.toLocalDate();
+
+        Map<Integer, ProductVariant> variants =
+                validateAndLoadVariants(request.getItems(), receivedDate);
 
         GoodsReceipt receipt = new GoodsReceipt();
         receipt.setReceiptNo(generateReceiptNo());
@@ -170,11 +174,11 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
         receipt.setStatus(GoodsReceiptStatus.DRAFT.getCode());
         receipt.setNote(normalizeOptional(request.getNote()));
         receipt.setCreatedBy(actor);
-        receipt.setCreatedAt(LocalDateTime.now());
+        receipt.setCreatedAt(createdAt);
 
         receipt = goodsReceiptRepository.saveAndFlush(receipt);
 
-        saveItems(receipt, request.getItems(), variants);
+        saveItems(receipt, request.getItems(), variants, receivedDate);
         goodsReceiptItemRepository.flush();
 
         return getDetail(receipt.getId());
@@ -197,7 +201,13 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
             throw badRequest("Không được thay đổi loại phiếu.");
         }
 
-        Map<Integer, ProductVariant> variants = validateAndLoadVariants(request.getItems());
+        LocalDate receivedDate =
+                receipt.getCreatedAt() == null
+                        ? LocalDate.now()
+                        : receipt.getCreatedAt().toLocalDate();
+
+        Map<Integer, ProductVariant> variants =
+                validateAndLoadVariants(request.getItems(), receivedDate);
 
         receipt.setReceiptType(request.getReceiptType().getCode());
         receipt.setNote(normalizeOptional(request.getNote()));
@@ -207,7 +217,7 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
         goodsReceiptItemRepository.deleteAllByGoodsReceipt_Id(id);
         goodsReceiptItemRepository.flush();
 
-        saveItems(receipt, request.getItems(), variants);
+        saveItems(receipt, request.getItems(), variants, receivedDate);
         goodsReceiptItemRepository.flush();
 
         return getDetail(id);
@@ -347,7 +357,8 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
     }
 
     private Map<Integer, ProductVariant> validateAndLoadVariants(
-            List<GoodsReceiptItemRequest> items
+            List<GoodsReceiptItemRequest> items,
+            LocalDate receivedDate
     ) {
         if (items == null || items.isEmpty()) {
             throw badRequest("Phiếu nhập phải có ít nhất một sản phẩm.");
@@ -373,7 +384,7 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
             throw badRequest("Không tìm thấy ProductVariant: " + missingIds);
         }
 
-        Set<String> uniqueSkuLot = new HashSet<>();
+        Set<Integer> uniqueVariantIds = new HashSet<>();
 
         for (int i = 0; i < items.size(); i++) {
             GoodsReceiptItemRequest item = items.get(i);
@@ -382,20 +393,17 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                 throw badRequest("Dòng " + (i + 1) + ": ProductVariantId không được để trống.");
             }
 
-            String lotCode = normalizeRequired(
-                    item.getLotCode(),
-                    "Dòng " + (i + 1) + ": mã lô không được để trống."
-            );
-
-            if (item.getReceivedDate() == null) {
-                throw badRequest("Dòng " + (i + 1) + ": ngày nhận hàng không được để trống.");
+            if (!uniqueVariantIds.add(item.getProductVariantId())) {
+                throw badRequest(
+                        "Dòng " + (i + 1) + ": SKU đã tồn tại trong phiếu nhập."
+                );
             }
 
             if (item.getExpirationDate() == null) {
                 throw badRequest("Dòng " + (i + 1) + ": hạn sử dụng không được để trống.");
             }
 
-            if (item.getExpirationDate().isBefore(item.getReceivedDate())) {
+            if (item.getExpirationDate().isBefore(receivedDate)) {
                 throw badRequest(
                         "Dòng " + (i + 1) +
                                 ": hạn sử dụng phải lớn hơn hoặc bằng ngày nhận hàng."
@@ -403,7 +411,7 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
             }
 
             if (item.getManufacturedDate() != null
-                    && item.getManufacturedDate().isAfter(item.getReceivedDate())) {
+                    && item.getManufacturedDate().isAfter(receivedDate)) {
                 throw badRequest(
                         "Dòng " + (i + 1) +
                                 ": ngày sản xuất phải nhỏ hơn hoặc bằng ngày nhận hàng."
@@ -417,18 +425,6 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                                 ": ngày sản xuất phải nhỏ hơn hoặc bằng hạn sử dụng."
                 );
             }
-
-            String duplicateKey =
-                    item.getProductVariantId()
-                            + "|"
-                            + lotCode.toUpperCase(Locale.ROOT);
-
-            if (!uniqueSkuLot.add(duplicateKey)) {
-                throw badRequest(
-                        "Không được trùng SKU + LotCode trong cùng phiếu. Dòng lỗi: "
-                                + (i + 1)
-                );
-            }
         }
 
         return variantMap;
@@ -437,20 +433,22 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
     private void saveItems(
             GoodsReceipt receipt,
             List<GoodsReceiptItemRequest> requests,
-            Map<Integer, ProductVariant> variants
+            Map<Integer, ProductVariant> variants,
+            LocalDate receivedDate
     ) {
         List<GoodsReceiptItem> entities = new ArrayList<>();
 
-        for (GoodsReceiptItemRequest request : requests) {
+        for (int i = 0; i < requests.size(); i++) {
+            GoodsReceiptItemRequest request = requests.get(i);
             GoodsReceiptItem item = new GoodsReceiptItem();
 
             item.setGoodsReceipt(receipt);
             item.setProductVariant(variants.get(request.getProductVariantId()));
-            item.setLotCode(request.getLotCode().trim());
+            item.setLotCode(generateLotCode(receipt, i + 1));
             item.setQuantity(request.getQuantity());
             item.setUnitCost(request.getUnitCost());
             item.setManufacturedDate(request.getManufacturedDate());
-            item.setReceivedDate(request.getReceivedDate());
+            item.setReceivedDate(receivedDate);
             item.setExpirationDate(request.getExpirationDate());
             item.setNote(normalizeOptional(request.getNote()));
 
@@ -498,6 +496,16 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                 .productVariantId(variant == null ? null : variant.getId())
                 .sku(variant == null ? null : variant.getSku())
                 .productName(productName)
+                .capacityValue(
+                        variant != null && variant.getCapacity() != null
+                                ? variant.getCapacity().getValue()
+                                : null
+                )
+                .bottleTypeName(
+                        variant != null && variant.getBottleType() != null
+                                ? variant.getBottleType().getName()
+                                : null
+                )
                 .lotCode(item.getLotCode())
                 .quantity(item.getQuantity())
                 .unitCost(item.getUnitCost())
@@ -643,6 +651,13 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Không thể sinh mã phiếu nhập."
         );
+    }
+
+    private String generateLotCode(GoodsReceipt receipt, int lineNumber) {
+        return "LOT-"
+                + receipt.getReceiptNo()
+                + "-"
+                + String.format(Locale.ROOT, "%03d", lineNumber);
     }
 
     private void executeProcedure(String sql, Object... args) {

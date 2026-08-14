@@ -42,19 +42,6 @@ public class InventoryLot extends BaseEntity {
     @Column(name = "QuantityOnHand", nullable = false)
     private Integer quantityOnHand;
 
-    @Column(name = "IsLocked", nullable = false)
-    private Boolean isLocked;
-
-    @Column(name = "LockReason", length = 500)
-    private String lockReason;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "LockedBy")
-    private User lockedBy;
-
-    @Column(name = "LockedAt")
-    private LocalDateTime lockedAt;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CreatedBy", nullable = false)
     private User createdBy;

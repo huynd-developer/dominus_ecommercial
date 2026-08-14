@@ -519,7 +519,6 @@ const close = () => {
                         <small>
                           Tồn hệ thống:
                           {{ formatNumber(option.quantityOnHand) }}
-                          <template v-if="option.isLocked"> · Đang khóa</template>
                           <template v-if="option.isExpired"> · Đã hết hạn</template>
                         </small>
                       </button>

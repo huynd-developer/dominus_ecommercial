@@ -8,6 +8,10 @@ public interface InventoryOverviewProjection {
 
     String getProductName();
 
+    Double getCapacityValue();
+
+    String getBottleTypeName();
+
     Long getTotalQuantity();
 
     Long getSellableQuantity();
@@ -15,6 +19,4 @@ public interface InventoryOverviewProjection {
     Long getNearExpiryQuantity();
 
     Long getExpiredQuantity();
-
-    Long getLockedQuantity();
 }

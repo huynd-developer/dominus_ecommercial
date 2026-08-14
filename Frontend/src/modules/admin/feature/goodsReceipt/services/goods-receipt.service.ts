@@ -21,7 +21,9 @@ const cleanParams = (params: Record<string, unknown>) =>
   );
 
 const goodsReceiptService = {
-  async getList(params: GoodsReceiptListParams): Promise<PageResponse<GoodsReceiptListResponse>> {
+  async getList(
+    params: GoodsReceiptListParams
+  ): Promise<PageResponse<GoodsReceiptListResponse>> {
     const response = await api.get("/admin/goods-receipts", {
       params: cleanParams({
         keyword: params.keyword?.trim() || undefined,
@@ -34,6 +36,7 @@ const goodsReceiptService = {
         size: params.size ?? 20,
       }),
     });
+
     return response.data;
   },
 
@@ -42,43 +45,80 @@ const goodsReceiptService = {
     return response.data;
   },
 
-  async create(request: GoodsReceiptSaveRequest): Promise<GoodsReceiptDetailResponse> {
+  async create(
+    request: GoodsReceiptSaveRequest
+  ): Promise<GoodsReceiptDetailResponse> {
     const response = await api.post("/admin/goods-receipts", request);
     return response.data;
   },
 
-  async update(id: number, request: GoodsReceiptSaveRequest): Promise<GoodsReceiptDetailResponse> {
-    const response = await api.put(`/admin/goods-receipts/${id}`, request);
+  async update(
+    id: number,
+    request: GoodsReceiptSaveRequest
+  ): Promise<GoodsReceiptDetailResponse> {
+    const response = await api.put(
+      `/admin/goods-receipts/${id}`,
+      request
+    );
+
     return response.data;
   },
 
   async submit(id: number): Promise<GoodsReceiptDetailResponse> {
-    const response = await api.post(`/admin/goods-receipts/${id}/submit`);
+    const response = await api.post(
+      `/admin/goods-receipts/${id}/submit`
+    );
+
     return response.data;
   },
 
   async approve(id: number): Promise<GoodsReceiptDetailResponse> {
-    const response = await api.post(`/admin/goods-receipts/${id}/approve`);
+    const response = await api.post(
+      `/admin/goods-receipts/${id}/approve`
+    );
+
     return response.data;
   },
 
-  async reject(id: number, request: GoodsReceiptRejectRequest): Promise<GoodsReceiptDetailResponse> {
-    const response = await api.post(`/admin/goods-receipts/${id}/reject`, request);
+  async reject(
+    id: number,
+    request: GoodsReceiptRejectRequest
+  ): Promise<GoodsReceiptDetailResponse> {
+    const response = await api.post(
+      `/admin/goods-receipts/${id}/reject`,
+      request
+    );
+
     return response.data;
   },
 
-  async cancel(id: number, request: GoodsReceiptCancelRequest): Promise<GoodsReceiptDetailResponse> {
-    const response = await api.post(`/admin/goods-receipts/${id}/cancel`, request);
+  async cancel(
+    id: number,
+    request: GoodsReceiptCancelRequest
+  ): Promise<GoodsReceiptDetailResponse> {
+    const response = await api.post(
+      `/admin/goods-receipts/${id}/cancel`,
+      request
+    );
+
     return response.data;
   },
 
-  async getApprovalHistory(id: number): Promise<GoodsReceiptApprovalHistoryResponse[]> {
-    const response = await api.get(`/admin/goods-receipts/${id}/approval-history`);
+  async getApprovalHistory(
+    id: number
+  ): Promise<GoodsReceiptApprovalHistoryResponse[]> {
+    const response = await api.get(
+      `/admin/goods-receipts/${id}/approval-history`
+    );
+
     return response.data;
   },
 
   async getPendingCount(): Promise<PendingReceiptCountResponse> {
-    const response = await api.get("/admin/goods-receipts/pending-count");
+    const response = await api.get(
+      "/admin/goods-receipts/pending-count"
+    );
+
     return response.data;
   },
 
@@ -94,11 +134,23 @@ const goodsReceiptService = {
     });
 
     const data = response.data;
+
     return Array.isArray(data?.content)
       ? data.content.map((item: any) => ({
           productVariantId: Number(item.productVariantId),
           sku: String(item.sku ?? ""),
           productName: String(item.productName ?? ""),
+
+          // Hai field mới BE đã bổ sung cho việc nhận diện biến thể.
+          capacityValue:
+            item.capacityValue == null
+              ? null
+              : Number(item.capacityValue),
+
+          bottleTypeName:
+            item.bottleTypeName == null
+              ? null
+              : String(item.bottleTypeName),
         }))
       : [];
   },

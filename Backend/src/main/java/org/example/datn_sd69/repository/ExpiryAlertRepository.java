@@ -25,20 +25,15 @@ public interface ExpiryAlertRepository
                         LS.ExpirationDate AS expirationDate,
                         LS.DaysToExpiry AS daysToExpiry,
                         LS.IsNearExpiry AS isNearExpiry,
-                        LS.IsExpired AS isExpired,
-                        LS.IsLocked AS isLocked,
-                        LS.LockReason AS lockReason
+                        LS.IsExpired AS isExpired
                     FROM dbo.vw_InventoryLotStatus LS
                     WHERE
                         (
                             :keyword IS NULL
-
                             OR LOWER(LS.Sku)
                                 LIKE LOWER(CONCAT('%', :keyword, '%'))
-
                             OR LOWER(LS.ProductName)
                                 LIKE LOWER(CONCAT('%', :keyword, '%'))
-
                             OR LOWER(LS.LotCode)
                                 LIKE LOWER(CONCAT('%', :keyword, '%'))
                         )
@@ -61,12 +56,6 @@ public interface ExpiryAlertRepository
 
                             OR
                             (
-                                :groupName = 'LOCKED'
-                                AND LS.IsLocked = 1
-                            )
-
-                            OR
-                            (
                                 :groupName = 'ALL'
                                 AND
                                 (
@@ -81,8 +70,6 @@ public interface ExpiryAlertRepository
                                         LS.IsExpired = 1
                                         AND LS.QuantityOnHand > 0
                                     )
-
-                                    OR LS.IsLocked = 1
                                 )
                             )
                         )
@@ -108,13 +95,10 @@ public interface ExpiryAlertRepository
                     WHERE
                         (
                             :keyword IS NULL
-
                             OR LOWER(LS.Sku)
                                 LIKE LOWER(CONCAT('%', :keyword, '%'))
-
                             OR LOWER(LS.ProductName)
                                 LIKE LOWER(CONCAT('%', :keyword, '%'))
-
                             OR LOWER(LS.LotCode)
                                 LIKE LOWER(CONCAT('%', :keyword, '%'))
                         )
@@ -137,12 +121,6 @@ public interface ExpiryAlertRepository
 
                             OR
                             (
-                                :groupName = 'LOCKED'
-                                AND LS.IsLocked = 1
-                            )
-
-                            OR
-                            (
                                 :groupName = 'ALL'
                                 AND
                                 (
@@ -157,8 +135,6 @@ public interface ExpiryAlertRepository
                                         LS.IsExpired = 1
                                         AND LS.QuantityOnHand > 0
                                     )
-
-                                    OR LS.IsLocked = 1
                                 )
                             )
                         )
@@ -246,32 +222,7 @@ public interface ExpiryAlertRepository
                                 END
                             ),
                             0
-                        ) AS expiredQuantity,
-
-                        COALESCE(
-                            SUM(
-                                CASE
-                                    WHEN LS.IsLocked = 1
-                                    THEN CONVERT(BIGINT, 1)
-                                    ELSE CONVERT(BIGINT, 0)
-                                END
-                            ),
-                            0
-                        ) AS lockedLotCount,
-
-                        COALESCE(
-                            SUM(
-                                CASE
-                                    WHEN LS.IsLocked = 1
-                                    THEN CONVERT(
-                                        BIGINT,
-                                        COALESCE(LS.QuantityOnHand, 0)
-                                    )
-                                    ELSE CONVERT(BIGINT, 0)
-                                END
-                            ),
-                            0
-                        ) AS lockedQuantity
+                        ) AS expiredQuantity
 
                     FROM dbo.InventoryConfig C
 

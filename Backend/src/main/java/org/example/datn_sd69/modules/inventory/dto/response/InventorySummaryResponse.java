@@ -26,6 +26,4 @@ public class InventorySummaryResponse {
     private Long nearExpiryQuantity;
 
     private Long expiredQuantity;
-
-    private Long lockedQuantity;
 }

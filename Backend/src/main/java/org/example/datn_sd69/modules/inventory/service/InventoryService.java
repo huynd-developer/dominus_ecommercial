@@ -18,7 +18,6 @@ public interface InventoryService {
             String keyword,
             Boolean nearExpiry,
             Boolean expired,
-            Boolean locked,
             InventoryStockStatus stockStatus,
             Pageable pageable
     );
@@ -31,12 +30,6 @@ public interface InventoryService {
 
 
     Page<InventoryLotStatusResponse> getExpiredLots(
-            String keyword,
-            Pageable pageable
-    );
-
-
-    Page<InventoryLotStatusResponse> getLockedLots(
             String keyword,
             Pageable pageable
     );

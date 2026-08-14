@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
 
 import InventoryLotDetailModal from "../components/InventoryLotDetailModal.vue";
@@ -8,31 +7,11 @@ import { useInventoryLotStore } from "../stores/inventory-lot.store";
 import type {
   InventoryLotExpiryFilter,
   InventoryLotListResponse,
-  InventoryLotLockFilter,
   InventoryLotStockFilter,
 } from "../types/inventory-lot.type";
 
 const store = useInventoryLotStore();
-const router = useRouter();
 const detailVisible = ref(false);
-
-const role = computed(() =>
-  String(localStorage.getItem("role") || "")
-    .toUpperCase()
-    .replace("ROLE_", "")
-    .trim()
-);
-
-const canManage = computed(() => ["OWNER", "MANAGER"].includes(role.value));
-
-const lockOptions: Array<{
-  value: InventoryLotLockFilter;
-  label: string;
-}> = [
-  { value: "", label: "Tất cả trạng thái lô" },
-  { value: "LOCKED", label: "Đang khóa" },
-  { value: "UNLOCKED", label: "Không khóa" },
-];
 
 const expiryOptions: Array<{
   value: InventoryLotExpiryFilter;
@@ -208,345 +187,8 @@ const openDetail = async (id: number) => {
 };
 
 const closeDetail = () => {
-  if (store.processing) return;
   detailVisible.value = false;
   store.clearDetailContext();
-};
-
-const lockLot = async (id: number) => {
-  if (!canManage.value) return;
-
-  const result = await Swal.fire({
-    icon: "warning",
-    title: "Khóa lô hàng?",
-    width: 640,
-    html: `
-      <div style="text-align:left;">
-        <label
-          for="lock-reason-select"
-          style="
-            display:block;
-            margin-bottom:8px;
-            font-size:16px;
-            font-weight:700;
-            color:#4b5563;
-          "
-        >
-          Lý do khóa <span style="color:#dc2626;">*</span>
-        </label>
-
-        <select
-          id="lock-reason-select"
-          class="swal2-select"
-          style="
-            width:100%;
-            box-sizing:border-box;
-            margin:0 0 16px 0;
-            height:50px;
-            border:2px solid #374151;
-            border-radius:10px;
-            font-size:16px;
-          "
-        >
-          <option value="">-- Chọn lý do khóa lô --</option>
-          <option value="Hàng có dấu hiệu hư hỏng">
-            Hàng có dấu hiệu hư hỏng
-          </option>
-          <option value="Bao bì bị hư hỏng">
-            Bao bì bị hư hỏng
-          </option>
-          <option value="Nghi ngờ chất lượng sản phẩm">
-            Nghi ngờ chất lượng sản phẩm
-          </option>
-          <option value="Chờ kiểm tra chất lượng">
-            Chờ kiểm tra chất lượng
-          </option>
-          <option value="Sai thông tin lô / HSD">
-            Sai thông tin lô / HSD
-          </option>
-          <option value="Tạm ngưng bán để kiểm tra">
-            Tạm ngưng bán để kiểm tra
-          </option>
-          <option value="__OTHER__">Khác</option>
-        </select>
-
-        <label
-          for="lock-reason-description"
-          style="
-            display:block;
-            margin-bottom:8px;
-            font-size:16px;
-            font-weight:700;
-            color:#4b5563;
-          "
-        >
-          Mô tả chi tiết
-          <span style="font-weight:600;color:#6b7280;">
-            (không bắt buộc, trừ khi chọn Khác)
-          </span>
-        </label>
-
-        <textarea
-          id="lock-reason-description"
-          class="swal2-textarea"
-          maxlength="500"
-          placeholder="Có thể nhập thêm ghi chú khóa lô để lưu lịch sử xử lý..."
-          style="
-            width:100%;
-            min-height:130px;
-            box-sizing:border-box;
-            margin:0;
-            padding:14px;
-            border:1px solid #cbd5e1;
-            border-radius:10px;
-            resize:vertical;
-            font-size:15px;
-          "
-        ></textarea>
-      </div>
-    `,
-    showCancelButton: true,
-    confirmButtonText: "Xác nhận khóa",
-    cancelButtonText: "Quay lại",
-    confirmButtonColor: "#dc2626",
-    cancelButtonColor: "#6b7280",
-    focusConfirm: false,
-
-    preConfirm: () => {
-      const select = document.getElementById(
-        "lock-reason-select"
-      ) as HTMLSelectElement | null;
-
-      const descriptionInput = document.getElementById(
-        "lock-reason-description"
-      ) as HTMLTextAreaElement | null;
-
-      const selectedReason = String(select?.value || "").trim();
-      const description = String(descriptionInput?.value || "").trim();
-
-      if (!selectedReason) {
-        Swal.showValidationMessage("Bắt buộc chọn lý do khóa lô.");
-        return false;
-      }
-
-      if (selectedReason === "__OTHER__" && !description) {
-        Swal.showValidationMessage(
-          "Bắt buộc nhập mô tả chi tiết khi chọn lý do Khác."
-        );
-        return false;
-      }
-
-      const reason =
-        selectedReason === "__OTHER__"
-          ? description
-          : description
-          ? `${selectedReason}: ${description}`
-          : selectedReason;
-
-      if (reason.length > 500) {
-        Swal.showValidationMessage(
-          "Tổng nội dung lý do khóa lô không được vượt quá 500 ký tự."
-        );
-        return false;
-      }
-
-      return reason;
-    },
-  });
-
-  if (!result.isConfirmed) return;
-
-  try {
-    await store.lock(id, {
-      reason: String(result.value).trim(),
-    });
-
-    await Swal.fire({
-      icon: "success",
-      title: "Đã khóa lô",
-      text: "Lô không còn được phép bán. Tồn vật lý không thay đổi.",
-      timer: 1600,
-      showConfirmButton: false,
-    });
-  } catch (error) {
-    await Swal.fire({
-      icon: "error",
-      title: "Không thể khóa lô",
-      text: getErrorMessage(error),
-    });
-  }
-};
-
-const unlockLot = async (id: number) => {
-  if (!canManage.value) return;
-
-  const result = await Swal.fire({
-    icon: "question",
-    title: "Mở khóa lô hàng?",
-    width: 640,
-    html: `
-      <div style="text-align:left;">
-        <label
-          for="unlock-reason-select"
-          style="
-            display:block;
-            margin-bottom:8px;
-            font-size:16px;
-            font-weight:700;
-            color:#4b5563;
-          "
-        >
-          Lý do mở khóa <span style="color:#dc2626;">*</span>
-        </label>
-
-        <select
-          id="unlock-reason-select"
-          class="swal2-select"
-          style="
-            width:100%;
-            box-sizing:border-box;
-            margin:0 0 16px 0;
-            height:50px;
-            border:2px solid #374151;
-            border-radius:10px;
-            font-size:16px;
-          "
-        >
-          <option value="">-- Chọn lý do mở khóa lô --</option>
-          <option value="Đã kiểm tra lại chất lượng">
-            Đã kiểm tra lại chất lượng
-          </option>
-          <option value="Sản phẩm đạt yêu cầu">
-            Sản phẩm đạt yêu cầu
-          </option>
-          <option value="Đã xử lý vấn đề bao bì">
-            Đã xử lý vấn đề bao bì
-          </option>
-          <option value="Đã xác minh lại thông tin lô / HSD">
-            Đã xác minh lại thông tin lô / HSD
-          </option>
-          <option value="Cho phép bán lại">
-            Cho phép bán lại
-          </option>
-          <option value="__OTHER__">Khác</option>
-        </select>
-
-        <label
-          for="unlock-reason-description"
-          style="
-            display:block;
-            margin-bottom:8px;
-            font-size:16px;
-            font-weight:700;
-            color:#4b5563;
-          "
-        >
-          Mô tả chi tiết
-          <span style="font-weight:600;color:#6b7280;">
-            (không bắt buộc, trừ khi chọn Khác)
-          </span>
-        </label>
-
-        <textarea
-          id="unlock-reason-description"
-          class="swal2-textarea"
-          maxlength="500"
-          placeholder="Có thể nhập thêm ghi chú mở khóa lô để lưu lịch sử xử lý..."
-          style="
-            width:100%;
-            min-height:130px;
-            box-sizing:border-box;
-            margin:0;
-            padding:14px;
-            border:1px solid #cbd5e1;
-            border-radius:10px;
-            resize:vertical;
-            font-size:15px;
-          "
-        ></textarea>
-      </div>
-    `,
-    showCancelButton: true,
-    confirmButtonText: "Xác nhận mở khóa",
-    cancelButtonText: "Quay lại",
-    confirmButtonColor: "#059669",
-    cancelButtonColor: "#6b7280",
-    focusConfirm: false,
-
-    preConfirm: () => {
-      const select = document.getElementById(
-        "unlock-reason-select"
-      ) as HTMLSelectElement | null;
-
-      const descriptionInput = document.getElementById(
-        "unlock-reason-description"
-      ) as HTMLTextAreaElement | null;
-
-      const selectedReason = String(select?.value || "").trim();
-      const description = String(descriptionInput?.value || "").trim();
-
-      if (!selectedReason) {
-        Swal.showValidationMessage("Bắt buộc chọn lý do mở khóa lô.");
-        return false;
-      }
-
-      if (selectedReason === "__OTHER__" && !description) {
-        Swal.showValidationMessage(
-          "Bắt buộc nhập mô tả chi tiết khi chọn lý do Khác."
-        );
-        return false;
-      }
-
-      const reason =
-        selectedReason === "__OTHER__"
-          ? description
-          : description
-          ? `${selectedReason}: ${description}`
-          : selectedReason;
-
-      if (reason.length > 500) {
-        Swal.showValidationMessage(
-          "Tổng nội dung lý do mở khóa lô không được vượt quá 500 ký tự."
-        );
-        return false;
-      }
-
-      return reason;
-    },
-  });
-
-  if (!result.isConfirmed) return;
-
-  try {
-    await store.unlock(id, {
-      reason: String(result.value).trim(),
-    });
-
-    await Swal.fire({
-      icon: "success",
-      title: "Đã mở khóa lô",
-      text: "Lô được phép bán lại nếu chưa hết hạn và vẫn còn tồn.",
-      timer: 1600,
-      showConfirmButton: false,
-    });
-  } catch (error) {
-    await Swal.fire({
-      icon: "error",
-      title: "Không thể mở khóa lô",
-      text: getErrorMessage(error),
-    });
-  }
-};
-
-const openReceiptList = async (receiptNo: string) => {
-  // Module 2 hiện có route danh sách phiếu nhập.
-  // Truyền receiptNo qua query để không làm sai route hiện có.
-  await router.push({
-    name: "AdminGoodsReceipts",
-    query: {
-      receiptNo,
-    },
-  });
 };
 
 onMounted(loadList);
@@ -557,7 +199,7 @@ onMounted(loadList);
     <div class="page-header">
       <div>
         <h1>Lô hàng</h1>
-        <p>Theo dõi tồn theo lô, hạn sử dụng, nguồn nhập và trạng thái khóa.</p>
+        <p>Theo dõi tồn kho theo lô và hạn sử dụng.</p>
       </div>
     </div>
 
@@ -567,21 +209,11 @@ onMounted(loadList);
           <input
             v-model="store.keyword"
             maxlength="100"
-            placeholder="Tìm SKU, sản phẩm, mã lô hoặc mã phiếu..."
+            placeholder="Tìm SKU, sản phẩm hoặc mã lô..."
             @keyup.enter="search"
           />
           <button type="button" @click="search">Tìm kiếm</button>
         </div>
-
-        <select v-model="store.lockFilter" @change="search">
-          <option
-            v-for="option in lockOptions"
-            :key="option.value"
-            :value="option.value"
-          >
-            {{ option.label }}
-          </option>
-        </select>
 
         <select v-model="store.expiryFilter" @change="search">
           <option
@@ -629,22 +261,20 @@ onMounted(loadList);
               <th>Sản phẩm</th>
               <th>Ngày nhập</th>
               <th>Hạn sử dụng</th>
-              <th>Tồn thực tế</th>
+              <th>Tồn hiện tại</th>
               <th>Có thể bán</th>
               <th>Trạng thái HSD</th>
-              <th>Trạng thái lô</th>
-              <th>Nguồn nhập</th>
               <th>Thao tác</th>
             </tr>
           </thead>
 
           <tbody>
             <tr v-if="store.loadingList">
-              <td colspan="11" class="state-row">Đang tải danh sách lô...</td>
+              <td colspan="9" class="state-row">Đang tải danh sách lô...</td>
             </tr>
 
             <tr v-else-if="store.lots.length === 0">
-              <td colspan="11" class="state-row">Không có lô hàng phù hợp.</td>
+              <td colspan="9" class="state-row">Không có lô hàng phù hợp.</td>
             </tr>
 
             <template v-else>
@@ -691,22 +321,6 @@ onMounted(loadList);
                 </td>
 
                 <td>
-                  <span
-                    class="status-badge"
-                    :class="item.isLocked ? 'status-locked' : 'status-unlocked'"
-                  >
-                    {{ item.isLocked ? "Đang khóa" : "Không khóa" }}
-                  </span>
-                </td>
-
-                <td>
-                  <span v-if="item.receiptNo" class="receipt-no">
-                    {{ item.receiptNo }}
-                  </span>
-                  <span v-else>—</span>
-                </td>
-
-                <td>
                   <div class="actions">
                     <button
                       type="button"
@@ -714,28 +328,6 @@ onMounted(loadList);
                       @click="openDetail(item.id)"
                     >
                       <i class="bi bi-eye"></i>
-                    </button>
-
-                    <button
-                      v-if="canManage && !item.isLocked"
-                      type="button"
-                      class="action-danger"
-                      title="Khóa lô"
-                      :disabled="store.processing"
-                      @click="lockLot(item.id)"
-                    >
-                      <i class="bi bi-lock"></i>
-                    </button>
-
-                    <button
-                      v-if="canManage && item.isLocked"
-                      type="button"
-                      class="action-success"
-                      title="Mở khóa lô"
-                      :disabled="store.processing"
-                      @click="unlockLot(item.id)"
-                    >
-                      <i class="bi bi-unlock"></i>
                     </button>
                   </div>
                 </td>
@@ -796,17 +388,8 @@ onMounted(loadList);
     <InventoryLotDetailModal
       :visible="detailVisible"
       :detail="store.detail"
-      :source="store.source"
-      :history="store.history"
       :loading="store.loadingDetail"
-      :loading-source="store.loadingSource"
-      :loading-history="store.loadingHistory"
-      :processing="store.processing"
-      :can-manage="canManage"
       @close="closeDetail"
-      @lock="lockLot"
-      @unlock="unlockLot"
-      @open-receipt="openReceiptList"
     />
   </div>
 </template>
@@ -925,7 +508,7 @@ onMounted(loadList);
 }
 table {
   width: 100%;
-  min-width: 1320px;
+  min-width: 1040px;
   border-collapse: collapse;
 }
 th,
@@ -951,10 +534,6 @@ th {
 .lot-link:hover {
   text-decoration: underline;
 }
-.receipt-no {
-  color: #374151;
-  font-weight: 600;
-}
 .status-badge {
   display: inline-flex;
   white-space: nowrap;
@@ -975,14 +554,6 @@ th {
   background: #ecfdf5;
   color: #047857;
 }
-.status-locked {
-  background: #fef2f2;
-  color: #b91c1c;
-}
-.status-unlocked {
-  background: #f3f4f6;
-  color: #4b5563;
-}
 .sellable-zero {
   color: #b91c1c;
 }
@@ -1002,12 +573,6 @@ th {
   background: #fff;
   color: #374151;
   cursor: pointer;
-}
-.actions .action-danger {
-  color: #b91c1c;
-}
-.actions .action-success {
-  color: #047857;
 }
 .actions button:disabled {
   opacity: 0.45;

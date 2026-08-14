@@ -23,8 +23,6 @@ public class InventoryLotListResponse {
     private Integer sellableQuantity;
     private Boolean isNearExpiry;
     private Boolean isExpired;
-    private Boolean isLocked;
-    private String lockReason;
     private Integer goodsReceiptId;
     private String receiptNo;
 }

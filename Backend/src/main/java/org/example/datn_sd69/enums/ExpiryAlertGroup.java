@@ -8,5 +8,4 @@ public enum ExpiryAlertGroup {
 
     EXPIRED,
 
-    LOCKED
 }

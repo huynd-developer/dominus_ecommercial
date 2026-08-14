@@ -16,14 +16,6 @@ const store = useExpiryAlertStore();
 
 const detailVisible = ref(false);
 
-const role = computed(() =>
-  String(localStorage.getItem("role") || "")
-    .toUpperCase()
-    .replace("ROLE_", "")
-    .trim()
-);
-
-const canManage = computed(() => ["OWNER", "MANAGER"].includes(role.value));
 
 const groupOptions: Array<{
   value: ExpiryAlertGroup;
@@ -36,10 +28,6 @@ const groupOptions: Array<{
   {
     value: "EXPIRED",
     label: "Đã hết hạn",
-  },
-  {
-    value: "LOCKED",
-    label: "Đang khóa",
   },
   {
     value: "ALL",
@@ -305,477 +293,9 @@ const openDetail = async (id: number) => {
 };
 
 const closeDetail = () => {
-  if (store.processing) {
-    return;
-  }
-
   detailVisible.value = false;
 
   store.clearDetail();
-};
-
-const lockLot = async (id: number) => {
-  if (!canManage.value) {
-    await Swal.fire({
-      icon: "error",
-      title: "Không có quyền",
-      text: "Bạn không có quyền khóa lô hàng.",
-    });
-
-    return;
-  }
-
-  const result = await Swal.fire({
-    icon: "warning",
-
-    title: "Khóa lô hàng?",
-
-    width: 640,
-
-    html: `
-      <div style="text-align:left;">
-        <p style="margin:0 0 18px;color:#4b5563;line-height:1.6;">
-          Sau khi khóa, số lượng tồn vật lý không thay đổi nhưng lô sẽ không được phép bán.
-        </p>
-
-        <label
-          for="expiry-alert-lock-reason-select"
-          style="
-            display:block;
-            margin-bottom:8px;
-            font-size:16px;
-            font-weight:700;
-            color:#4b5563;
-          "
-        >
-          Lý do khóa <span style="color:#dc2626;">*</span>
-        </label>
-
-        <select
-          id="expiry-alert-lock-reason-select"
-          class="swal2-select"
-          style="
-            width:100%;
-            box-sizing:border-box;
-            margin:0 0 16px 0;
-            height:50px;
-            border:2px solid #374151;
-            border-radius:10px;
-            font-size:16px;
-          "
-        >
-          <option value="">-- Chọn lý do khóa lô --</option>
-          <option value="Hàng có dấu hiệu hư hỏng">
-            Hàng có dấu hiệu hư hỏng
-          </option>
-          <option value="Bao bì bị hư hỏng">
-            Bao bì bị hư hỏng
-          </option>
-          <option value="Nghi ngờ chất lượng sản phẩm">
-            Nghi ngờ chất lượng sản phẩm
-          </option>
-          <option value="Chờ kiểm tra chất lượng">
-            Chờ kiểm tra chất lượng
-          </option>
-          <option value="Sai thông tin lô / HSD">
-            Sai thông tin lô / HSD
-          </option>
-          <option value="Tạm ngưng bán để kiểm tra">
-            Tạm ngưng bán để kiểm tra
-          </option>
-          <option value="__OTHER__">Khác</option>
-        </select>
-
-        <label
-          for="expiry-alert-lock-reason-description"
-          style="
-            display:block;
-            margin-bottom:8px;
-            font-size:16px;
-            font-weight:700;
-            color:#4b5563;
-          "
-        >
-          Mô tả chi tiết
-          <span style="font-weight:600;color:#6b7280;">
-            (không bắt buộc, trừ khi chọn Khác)
-          </span>
-        </label>
-
-        <textarea
-          id="expiry-alert-lock-reason-description"
-          class="swal2-textarea"
-          maxlength="500"
-          placeholder="Có thể nhập thêm ghi chú khóa lô để lưu lịch sử xử lý..."
-          style="
-            width:100%;
-            min-height:130px;
-            box-sizing:border-box;
-            margin:0;
-            padding:14px;
-            border:1px solid #cbd5e1;
-            border-radius:10px;
-            resize:vertical;
-            font-size:15px;
-          "
-        ></textarea>
-      </div>
-    `,
-
-    showCancelButton: true,
-
-    confirmButtonText: "Xác nhận khóa",
-
-    cancelButtonText: "Quay lại",
-
-    confirmButtonColor: "#dc2626",
-
-    cancelButtonColor: "#6b7280",
-
-    focusConfirm: false,
-
-    preConfirm: () => {
-      const select = document.getElementById(
-        "expiry-alert-lock-reason-select"
-      ) as HTMLSelectElement | null;
-
-      const descriptionInput = document.getElementById(
-        "expiry-alert-lock-reason-description"
-      ) as HTMLTextAreaElement | null;
-
-      const selectedReason = String(select?.value || "").trim();
-      const description = String(descriptionInput?.value || "").trim();
-
-      if (!selectedReason) {
-        Swal.showValidationMessage("Bắt buộc chọn lý do khóa lô.");
-
-        return false;
-      }
-
-      if (selectedReason === "__OTHER__" && !description) {
-        Swal.showValidationMessage(
-          "Bắt buộc nhập mô tả chi tiết khi chọn lý do Khác."
-        );
-
-        return false;
-      }
-
-      const reason =
-        selectedReason === "__OTHER__"
-          ? description
-          : description
-            ? `${selectedReason}: ${description}`
-            : selectedReason;
-
-      if (reason.length > 500) {
-        Swal.showValidationMessage(
-          "Tổng nội dung lý do khóa lô không được vượt quá 500 ký tự."
-        );
-
-        return false;
-      }
-
-      return reason;
-    },
-  });
-
-  if (!result.isConfirmed) {
-    return;
-  }
-
-  const reason = String(result.value || "").trim();
-
-  try {
-    await store.lockLot(id, {
-      reason,
-    });
-
-    await Swal.fire({
-      icon: "success",
-      title: "Đã khóa lô",
-      text: "Lô đã được khóa và không còn được phép bán.",
-      timer: 1600,
-      showConfirmButton: false,
-    });
-  } catch (error: any) {
-    if (error?.response?.status === 403) {
-      await Swal.fire({
-        icon: "error",
-        title: "Không có quyền",
-        text: "Chỉ chủ hệ thống hoặc quản lý được phép khóa lô.",
-      });
-
-      return;
-    }
-
-    if (error?.response?.status === 409) {
-      await Swal.fire({
-        icon: "warning",
-        title: "Không thể khóa lô",
-        text: getErrorMessage(error),
-      });
-
-      /**
-       * Ví dụ:
-       * "Lô hiện đang bị khóa."
-       */
-      await loadPage();
-
-      return;
-    }
-
-    await Swal.fire({
-      icon: "error",
-      title: "Không thể khóa lô",
-      text: getErrorMessage(error),
-    });
-  }
-};
-
-const unlockLot = async (id: number) => {
-  if (!canManage.value) {
-    await Swal.fire({
-      icon: "error",
-      title: "Không có quyền",
-      text: "Bạn không có quyền mở khóa lô hàng.",
-    });
-
-    return;
-  }
-
-  const currentItem = store.alerts.find((item) => item.id === id);
-
-  const isExpired =
-    currentItem?.isExpired === true ||
-    (store.detail?.id === id && store.detail?.isExpired === true);
-
-  const result = await Swal.fire({
-    icon: isExpired ? "warning" : "question",
-
-    title: "Mở khóa lô hàng?",
-
-    width: 640,
-
-    html: `
-      <div style="text-align:left;">
-        ${
-          isExpired
-            ? `
-              <div
-                style="
-                  margin-bottom:18px;
-                  padding:12px 14px;
-                  border:1px solid #fed7aa;
-                  border-radius:10px;
-                  background:#fff7ed;
-                  color:#9a3412;
-                  line-height:1.6;
-                "
-              >
-                <strong>Lô này đã hết hạn sử dụng.</strong>
-                <div>
-                  Mở khóa chỉ gỡ trạng thái khóa thủ công.
-                  Lô vẫn không thể bán vì đã hết hạn.
-                </div>
-              </div>
-            `
-            : `
-              <p style="margin:0 0 18px;color:#4b5563;line-height:1.6;">
-                Sau khi mở khóa, lô chỉ có thể bán nếu chưa hết hạn và vẫn còn tồn.
-              </p>
-            `
-        }
-
-        <label
-          for="expiry-alert-unlock-reason-select"
-          style="
-            display:block;
-            margin-bottom:8px;
-            font-size:16px;
-            font-weight:700;
-            color:#4b5563;
-          "
-        >
-         Lý do mở khóa
-<span style="color:#dc2626;">*</span>
-        </label>
-
-        <select
-          id="expiry-alert-unlock-reason-select"
-          class="swal2-select"
-          style="
-            width:100%;
-            box-sizing:border-box;
-            margin:0 0 16px 0;
-            height:50px;
-            border:2px solid #374151;
-            border-radius:10px;
-            font-size:16px;
-          "
-        >
-         <option value="">-- Chọn lý do mở khóa lô --</option>
-          <option value="Đã kiểm tra lại chất lượng">
-            Đã kiểm tra lại chất lượng
-          </option>
-          <option value="Sản phẩm đạt yêu cầu">
-            Sản phẩm đạt yêu cầu
-          </option>
-          <option value="Đã xử lý vấn đề bao bì">
-            Đã xử lý vấn đề bao bì
-          </option>
-          <option value="Đã xác minh lại thông tin lô / HSD">
-            Đã xác minh lại thông tin lô / HSD
-          </option>
-          <option value="Gỡ khóa sau khi xử lý">
-            Gỡ khóa sau khi xử lý
-          </option>
-          <option value="__OTHER__">Khác</option>
-        </select>
-
-        <label
-          for="expiry-alert-unlock-reason-description"
-          style="
-            display:block;
-            margin-bottom:8px;
-            font-size:16px;
-            font-weight:700;
-            color:#4b5563;
-          "
-        >
-          Mô tả chi tiết
-          <span style="font-weight:600;color:#6b7280;">
-            (không bắt buộc, trừ khi chọn Khác)
-          </span>
-        </label>
-
-        <textarea
-          id="expiry-alert-unlock-reason-description"
-          class="swal2-textarea"
-          maxlength="500"
-          placeholder="Có thể nhập thêm ghi chú mở khóa lô để lưu lịch sử xử lý..."
-          style="
-            width:100%;
-            min-height:130px;
-            box-sizing:border-box;
-            margin:0;
-            padding:14px;
-            border:1px solid #cbd5e1;
-            border-radius:10px;
-            resize:vertical;
-            font-size:15px;
-          "
-        ></textarea>
-      </div>
-    `,
-
-    showCancelButton: true,
-
-    confirmButtonText: "Xác nhận mở khóa",
-
-    cancelButtonText: "Quay lại",
-
-    confirmButtonColor: "#059669",
-
-    cancelButtonColor: "#6b7280",
-
-    focusConfirm: false,
-
-    preConfirm: () => {
-      const select = document.getElementById(
-        "expiry-alert-unlock-reason-select"
-      ) as HTMLSelectElement | null;
-
-      const descriptionInput = document.getElementById(
-        "expiry-alert-unlock-reason-description"
-      ) as HTMLTextAreaElement | null;
-
-      const selectedReason = String(select?.value || "").trim();
-      const description = String(descriptionInput?.value || "").trim();
-if (!selectedReason) {
-  Swal.showValidationMessage(
-    "Bắt buộc chọn lý do mở khóa lô."
-  );
-
-  return false;
-}
-      if (selectedReason === "__OTHER__" && !description) {
-        Swal.showValidationMessage(
-          "Bắt buộc nhập mô tả chi tiết khi chọn lý do Khác."
-        );
-
-        return false;
-      }
-
-      const reason =
-        selectedReason === "__OTHER__"
-          ? description
-          : selectedReason
-            ? description
-              ? `${selectedReason}: ${description}`
-              : selectedReason
-            : description;
-
-      if (reason.length > 500) {
-        Swal.showValidationMessage(
-          "Tổng nội dung lý do mở khóa lô không được vượt quá 500 ký tự."
-        );
-
-        return false;
-      }
-
-      return reason;
-    },
-  });
-
-  if (!result.isConfirmed) {
-    return;
-  }
-
-  const reason = String(result.value || "").trim();
-
-  try {
-    await store.unlockLot(id, {
-  reason,
-});
-
-    await Swal.fire({
-      icon: "success",
-      title: "Đã mở khóa lô",
-      text: isExpired
-        ? "Lô đã được mở khóa nhưng vẫn không thể bán vì đã hết hạn."
-        : "Lô đã được mở khóa.",
-      timer: 1800,
-      showConfirmButton: false,
-    });
-  } catch (error: any) {
-    if (error?.response?.status === 403) {
-      await Swal.fire({
-        icon: "error",
-        title: "Không có quyền",
-        text: "Chỉ chủ hệ thống hoặc quản lý được phép mở khóa lô.",
-      });
-
-      return;
-    }
-
-    if (error?.response?.status === 409) {
-      await Swal.fire({
-        icon: "warning",
-        title: "Không thể mở khóa",
-        text: getErrorMessage(error),
-      });
-
-      await loadPage();
-
-      return;
-    }
-
-    await Swal.fire({
-      icon: "error",
-      title: "Không thể mở khóa lô",
-      text: getErrorMessage(error),
-    });
-  }
 };
 
 onMounted(loadPage);
@@ -788,15 +308,7 @@ onMounted(loadPage);
       <div>
         <h1>Cảnh báo hạn sử dụng</h1>
 
-        <p>Theo dõi các lô sắp hết hạn, đã hết hạn và đang bị khóa.</p>
-      </div>
-
-      <div class="role-note">
-        <i class="bi" :class="canManage ? 'bi-shield-check' : 'bi-eye'"></i>
-
-        <span>
-          {{ canManage ? "Có quyền khóa / mở khóa lô" : "Chỉ có quyền xem" }}
-        </span>
+        <p>Theo dõi các lô sắp hết hạn và đã hết hạn.</p>
       </div>
     </div>
 
@@ -851,33 +363,6 @@ onMounted(loadPage);
 
           <small>
             {{ formatNumber(store.summary?.expiredQuantity) }}
-            sản phẩm
-          </small>
-        </div>
-      </button>
-
-      <button
-        type="button"
-        class="summary-card locked"
-        :class="{
-          active: store.group === 'LOCKED',
-        }"
-        @click="changeGroup('LOCKED')"
-      >
-        <div class="summary-icon">
-          <i class="bi bi-lock"></i>
-        </div>
-
-        <div>
-          <span> Đang khóa </span>
-
-          <strong>
-            {{ formatNumber(store.summary?.lockedLotCount) }}
-            lô
-          </strong>
-
-          <small>
-            {{ formatNumber(store.summary?.lockedQuantity) }}
             sản phẩm
           </small>
         </div>
@@ -986,10 +471,6 @@ onMounted(loadPage);
               Lô đã hết hạn
             </template>
 
-            <template v-else-if="store.group === 'LOCKED'">
-              Lô đang khóa
-            </template>
-
             <template v-else> Tất cả cảnh báo </template>
           </h3>
 
@@ -1004,10 +485,6 @@ onMounted(loadPage);
 
             <template v-else-if="store.group === 'EXPIRED'">
               Các lô đã quá hạn sử dụng và vẫn còn tồn kho.
-            </template>
-
-            <template v-else-if="store.group === 'LOCKED'">
-              Các lô đang bị khóa bán.
             </template>
 
             <template v-else> Tổng hợp các lô cần chú ý. </template>
@@ -1042,15 +519,13 @@ onMounted(loadPage);
               <th>Hạn sử dụng</th>
               <th>Còn lại</th>
               <th>HSD</th>
-              <th>Khóa</th>
-              <th>Lý do khóa</th>
               <th>Thao tác</th>
             </tr>
           </thead>
 
           <tbody>
             <tr v-if="store.loadingList">
-              <td colspan="11" class="state-row">
+              <td colspan="9" class="state-row">
                 <span class="spinner-border spinner-border-sm"></span>
 
                 Đang tải dữ liệu...
@@ -1058,7 +533,7 @@ onMounted(loadPage);
             </tr>
 
             <tr v-else-if="store.alerts.length === 0">
-              <td colspan="11" class="state-row">
+              <td colspan="9" class="state-row">
                 <i class="bi bi-inbox"></i>
 
                 <div>Không có lô phù hợp.</div>
@@ -1125,24 +600,6 @@ onMounted(loadPage);
               </td>
 
               <td>
-                <span
-                  class="status-badge"
-                  :class="item.isLocked ? 'status-locked' : 'status-unlocked'"
-                >
-                  <i
-                    class="bi"
-                    :class="item.isLocked ? 'bi-lock' : 'bi-unlock'"
-                  ></i>
-
-                  {{ item.isLocked ? "Đang khóa" : "Không khóa" }}
-                </span>
-              </td>
-
-              <td class="reason-cell">
-                {{ item.lockReason || "—" }}
-              </td>
-
-              <td>
                 <div class="actions">
                   <!-- XEM CHI TIẾT -->
                   <button
@@ -1151,30 +608,6 @@ onMounted(loadPage);
                     @click="openDetail(item.id)"
                   >
                     <i class="bi bi-eye"></i>
-                  </button>
-
-                  <!-- KHÓA NHANH -->
-                  <button
-                    v-if="canManage && !item.isLocked"
-                    type="button"
-                    class="action-danger"
-                    title="Khóa nhanh lô"
-                    :disabled="store.processing"
-                    @click="lockLot(item.id)"
-                  >
-                    <i class="bi bi-lock"></i>
-                  </button>
-
-                  <!-- MỞ KHÓA NHANH -->
-                  <button
-                    v-if="canManage && item.isLocked"
-                    type="button"
-                    class="action-success"
-                    title="Mở khóa lô"
-                    :disabled="store.processing"
-                    @click="unlockLot(item.id)"
-                  >
-                    <i class="bi bi-unlock"></i>
                   </button>
                 </div>
               </td>
@@ -1255,11 +688,7 @@ onMounted(loadPage);
       :visible="detailVisible"
       :detail="store.detail"
       :loading="store.loadingDetail"
-      :processing="store.processing"
-      :can-manage="canManage"
       @close="closeDetail"
-      @lock="lockLot"
-      @unlock="unlockLot"
     />
   </div>
 </template>
@@ -1301,31 +730,13 @@ onMounted(loadPage);
   font-size: 14px;
 }
 
-.role-note {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-
-  padding: 9px 12px;
-
-  border: 1px solid #e5e7eb;
-  border-radius: 9px;
-
-  background: #fff;
-
-  color: #4b5563;
-
-  font-size: 13px;
-
-  white-space: nowrap;
-}
 
 /* SUMMARY */
 
 .summary-grid {
   display: grid;
 
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 
   gap: 14px;
 
@@ -1393,10 +804,6 @@ button.summary-card:hover {
   color: #b91c1c;
 }
 
-.summary-card.locked .summary-icon {
-  background: #f3f4f6;
-  color: #374151;
-}
 
 .summary-card.config .summary-icon {
   background: #eff6ff;
@@ -1713,15 +1120,6 @@ tbody tr:last-child td {
   color: #047857;
 }
 
-.status-locked {
-  background: #fef2f2;
-  color: #b91c1c;
-}
-
-.status-unlocked {
-  background: #f3f4f6;
-  color: #4b5563;
-}
 
 .days-expired {
   color: #b91c1c;
@@ -1739,17 +1137,6 @@ tbody tr:last-child td {
   color: #047857;
 }
 
-.reason-cell {
-  max-width: 220px;
-
-  overflow: hidden;
-
-  color: #6b7280;
-
-  text-overflow: ellipsis;
-
-  white-space: nowrap;
-}
 
 .actions {
   display: flex;
@@ -1779,23 +1166,6 @@ tbody tr:last-child td {
   background: #f9fafb;
 }
 
-.actions .action-danger {
-  color: #b91c1c;
-}
-
-.actions .action-success {
-  color: #047857;
-}
-
-.actions .action-success:hover:not(:disabled) {
-  border-color: #a7f3d0;
-  background: #ecfdf5;
-}
-
-.actions .action-danger:hover:not(:disabled) {
-  border-color: #fecaca;
-  background: #fef2f2;
-}
 
 .actions button:disabled,
 .filters button:disabled {

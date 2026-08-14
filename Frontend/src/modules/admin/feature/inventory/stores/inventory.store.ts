@@ -18,7 +18,6 @@ interface InventoryState {
   overview: InventoryOverview[];
   nearExpiryLots: InventoryLotStatus[];
   expiredLots: InventoryLotStatus[];
-  lockedLots: InventoryLotStatus[];
 
   config: InventoryConfig | null;
 
@@ -33,7 +32,6 @@ interface InventoryState {
   stockStatus: InventoryStockStatus;
   nearExpiryFilter?: boolean;
   expiredFilter?: boolean;
-  lockedFilter?: boolean;
 
   overviewPage: number;
   overviewSize: number;
@@ -94,7 +92,6 @@ export const useInventoryStore = defineStore("inventory", {
     overview: [],
     nearExpiryLots: [],
     expiredLots: [],
-    lockedLots: [],
 
     config: null,
 
@@ -110,7 +107,6 @@ export const useInventoryStore = defineStore("inventory", {
 
     nearExpiryFilter: undefined,
     expiredFilter: undefined,
-    lockedFilter: undefined,
 
     overviewPage: 0,
     overviewSize: 20,
@@ -159,9 +155,6 @@ export const useInventoryStore = defineStore("inventory", {
             override.expired !== undefined
               ? override.expired
               : this.expiredFilter,
-
-          locked:
-            override.locked !== undefined ? override.locked : this.lockedFilter,
 
           page: override.page ?? this.overviewPage,
 
@@ -250,37 +243,6 @@ export const useInventoryStore = defineStore("inventory", {
       }
     },
 
-    async fetchLocked() {
-      this.loadingLots = true;
-      this.error = null;
-
-      try {
-        const response = await inventoryService.getLocked({
-          keyword: this.keyword,
-          page: this.lotPage,
-          size: this.lotSize,
-        });
-
-        const data = unwrapResponse(response);
-
-        this.lockedLots = Array.isArray(data?.content) ? data.content : [];
-
-        this.lotPage = safeNumber(data?.number, 0);
-
-        this.lotSize = safeNumber(data?.size, this.lotSize);
-
-        this.lotTotalElements = safeNumber(data?.totalElements, 0);
-
-        this.lotTotalPages = safeNumber(data?.totalPages, 0);
-      } catch (error) {
-        this.error = getErrorMessage(error);
-
-        throw error;
-      } finally {
-        this.loadingLots = false;
-      }
-    },
-
     async fetchConfig() {
       this.loadingConfig = true;
       this.error = null;
@@ -324,8 +286,6 @@ export const useInventoryStore = defineStore("inventory", {
       this.nearExpiryFilter = undefined;
 
       this.expiredFilter = undefined;
-
-      this.lockedFilter = undefined;
 
       this.overviewPage = 0;
     },

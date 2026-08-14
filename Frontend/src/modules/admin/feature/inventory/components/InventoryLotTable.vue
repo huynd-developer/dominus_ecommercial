@@ -120,20 +120,11 @@ const formatDate = (value?: string | null) => {
                 Sắp hết hạn
               </span>
 
-              <!-- ĐANG KHÓA -->
-              <span
-                v-if="item.locked"
-                class="badge badge-locked"
-              >
-                Đang khóa
-              </span>
-
               <!-- BÌNH THƯỜNG -->
               <span
                 v-if="
                   !item.expired &&
-                  !item.nearExpiry &&
-                  !item.locked
+                  !item.nearExpiry
                 "
                 class="badge badge-success"
               >
@@ -214,11 +205,6 @@ td {
 .badge-warning {
   background: #fff8e1;
   color: #b26a00;
-}
-
-.badge-locked {
-  background: #fff3e0;
-  color: #9a3412;
 }
 
 .badge-success {

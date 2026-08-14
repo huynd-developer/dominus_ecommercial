@@ -16,8 +16,4 @@ public class ExpiryAlertSummaryResponse {
     private Long expiredLotCount;
 
     private Long expiredQuantity;
-
-    private Long lockedLotCount;
-
-    private Long lockedQuantity;
 }

@@ -31,12 +31,6 @@ public class InventoryLotDetailResponse {
 
     private Boolean isNearExpiry;
     private Boolean isExpired;
-    private Boolean isLocked;
-
-    private String lockReason;
-    private Integer lockedById;
-    private String lockedByName;
-    private LocalDateTime lockedAt;
 
     private Integer createdById;
     private String createdByName;

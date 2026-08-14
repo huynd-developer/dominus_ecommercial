@@ -21,11 +21,9 @@ export interface PageResponse<T> {
 
 export interface GoodsReceiptItemRequest {
   productVariantId: number;
-  lotCode: string;
   quantity: number;
   unitCost?: number | null;
   manufacturedDate?: string | null;
-  receivedDate: string;
   expirationDate: string;
   note?: string | null;
 }
@@ -49,12 +47,19 @@ export interface GoodsReceiptItemResponse {
   productVariantId: number;
   sku: string;
   productName: string;
+
+  // Metadata nhận diện biến thể.
+  capacityValue: number | null;
+  bottleTypeName: string | null;
+
   lotCode: string;
   quantity: number;
   unitCost: number | null;
   manufacturedDate: string | null;
   receivedDate: string;
   expirationDate: string;
+
+  // Giữ để tương thích API/dữ liệu cũ, màn chi tiết không hiển thị.
   note: string | null;
 }
 
@@ -138,4 +143,9 @@ export interface InventorySkuOption {
   productVariantId: number;
   sku: string;
   productName: string;
+
+  // Metadata chỉ dùng để nhận diện biến thể khi chọn SKU.
+  // Để optional nhằm không ảnh hưởng các chỗ khác nếu có dùng interface này.
+  capacityValue?: number | null;
+  bottleTypeName?: string | null;
 }

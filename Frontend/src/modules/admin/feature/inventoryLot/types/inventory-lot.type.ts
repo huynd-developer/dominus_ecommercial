@@ -7,8 +7,6 @@ export type GoodsReceiptStatus =
 
 export type GoodsReceiptType = "NORMAL_RECEIPT" | "OPENING_BALANCE";
 
-export type InventoryLotLockActionType = "LOCK" | "UNLOCK";
-
 export interface PageMeta {
   size: number;
   number: number;
@@ -44,8 +42,6 @@ export interface InventoryLotListResponse {
   sellableQuantity: number;
   isNearExpiry: boolean;
   isExpired: boolean;
-  isLocked: boolean;
-  lockReason: string | null;
   goodsReceiptId: number | null;
   receiptNo: string | null;
 }
@@ -69,12 +65,6 @@ export interface InventoryLotDetailResponse {
 
   isNearExpiry: boolean;
   isExpired: boolean;
-  isLocked: boolean;
-
-  lockReason: string | null;
-  lockedById: number | null;
-  lockedByName: string | null;
-  lockedAt: string | null;
 
   createdById: number;
   createdByName: string;
@@ -100,28 +90,9 @@ export interface InventoryLotSourceResponse {
   receiptStatusLabel: string | null;
 }
 
-export interface InventoryLotLockHistoryResponse {
-  id: number;
-  actionType: InventoryLotLockActionType;
-  actionTypeLabel: string;
-  reason: string | null;
-  actionById: number;
-  actionByName: string;
-  actionAt: string;
-}
-
-export interface InventoryLotLockRequest {
-  reason: string;
-}
-
-export interface InventoryLotUnlockRequest {
-  reason?: string | null;
-}
-
 export interface InventoryLotListParams {
   keyword?: string;
   productVariantId?: number | null;
-  isLocked?: boolean;
   isExpired?: boolean;
   isNearExpiry?: boolean;
   hasStock?: boolean;
@@ -131,6 +102,10 @@ export interface InventoryLotListParams {
   size?: number;
 }
 
-export type InventoryLotLockFilter = "" | "LOCKED" | "UNLOCKED";
-export type InventoryLotExpiryFilter = "" | "NEAR_EXPIRY" | "EXPIRED" | "NOT_EXPIRED";
+export type InventoryLotExpiryFilter =
+  | ""
+  | "NEAR_EXPIRY"
+  | "EXPIRED"
+  | "NOT_EXPIRED";
+
 export type InventoryLotStockFilter = "" | "IN_STOCK" | "OUT_OF_STOCK";

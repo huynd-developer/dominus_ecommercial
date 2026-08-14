@@ -15,6 +15,4 @@ public interface InventorySummaryProjection {
     Long getNearExpiryQuantity();
 
     Long getExpiredQuantity();
-
-    Long getLockedQuantity();
 }

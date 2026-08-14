@@ -42,8 +42,4 @@ public class InventoryLotStatusResponse {
     private Boolean nearExpiry;
 
     private Boolean expired;
-
-    private Boolean locked;
-
-    private String lockReason;
 }

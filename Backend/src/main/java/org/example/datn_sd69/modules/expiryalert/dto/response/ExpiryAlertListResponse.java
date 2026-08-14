@@ -30,8 +30,4 @@ public class ExpiryAlertListResponse {
     private Boolean isNearExpiry;
 
     private Boolean isExpired;
-
-    private Boolean isLocked;
-
-    private String lockReason;
 }

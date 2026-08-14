@@ -19,6 +19,10 @@ public class InventoryOverviewResponse {
 
     private String productName;
 
+    private Double capacityValue;
+
+    private String bottleTypeName;
+
     private Long totalQuantity;
 
     private Long sellableQuantity;
@@ -26,6 +30,4 @@ public class InventoryOverviewResponse {
     private Long nearExpiryQuantity;
 
     private Long expiredQuantity;
-
-    private Long lockedQuantity;
 }

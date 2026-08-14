@@ -11,8 +11,4 @@ public interface ExpiryAlertSummaryProjection {
     Long getExpiredLotCount();
 
     Long getExpiredQuantity();
-
-    Long getLockedLotCount();
-
-    Long getLockedQuantity();
 }

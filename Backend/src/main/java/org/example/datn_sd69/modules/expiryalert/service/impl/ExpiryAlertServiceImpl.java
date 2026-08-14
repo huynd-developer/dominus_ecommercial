@@ -5,8 +5,6 @@ import org.example.datn_sd69.enums.ExpiryAlertGroup;
 import org.example.datn_sd69.modules.expiryalert.dto.response.ExpiryAlertListResponse;
 import org.example.datn_sd69.modules.expiryalert.dto.response.ExpiryAlertSummaryResponse;
 import org.example.datn_sd69.modules.expiryalert.service.ExpiryAlertService;
-import org.example.datn_sd69.modules.inventorylot.dto.request.InventoryLotLockRequest;
-import org.example.datn_sd69.modules.inventorylot.dto.request.InventoryLotUnlockRequest;
 import org.example.datn_sd69.modules.inventorylot.dto.response.InventoryLotDetailResponse;
 import org.example.datn_sd69.modules.inventorylot.service.InventoryLotService;
 import org.example.datn_sd69.repository.ExpiryAlertRepository;
@@ -93,14 +91,6 @@ public class ExpiryAlertServiceImpl implements ExpiryAlertService {
                         safeLong(projection.getExpiredQuantity())
                 )
 
-                .lockedLotCount(
-                        safeLong(projection.getLockedLotCount())
-                )
-
-                .lockedQuantity(
-                        safeLong(projection.getLockedQuantity())
-                )
-
                 .build();
     }
 
@@ -112,35 +102,6 @@ public class ExpiryAlertServiceImpl implements ExpiryAlertService {
         validateId(id);
 
         return inventoryLotService.getDetail(id);
-    }
-
-
-    @Override
-    @Transactional
-    public InventoryLotDetailResponse lock(
-            Integer id,
-            InventoryLotLockRequest request
-    ) {
-
-        validateId(id);
-
-        validateLockRequest(request);
-
-        /*
-         * Không tự update InventoryLot ở đây.
-         *
-         * Module 3 đã xử lý:
-         *
-         * - kiểm tra lô tồn tại
-         * - kiểm tra đang khóa hay chưa
-         * - lấy current user
-         * - gọi usp_InventoryLot_Lock
-         * - tạo InventoryLotLockHistory
-         * - cập nhật IsLocked
-         *
-         * Module 5 chỉ reuse.
-         */
-        return inventoryLotService.lock(id, request);
     }
 
 
@@ -194,14 +155,6 @@ public class ExpiryAlertServiceImpl implements ExpiryAlertService {
                         projection.getIsExpired()
                 )
 
-                .isLocked(
-                        projection.getIsLocked()
-                )
-
-                .lockReason(
-                        projection.getLockReason()
-                )
-
                 .build();
     }
 
@@ -235,34 +188,6 @@ public class ExpiryAlertServiceImpl implements ExpiryAlertService {
     }
 
 
-    private void validateLockRequest(
-            InventoryLotLockRequest request
-    ) {
-
-        if (request == null
-                || request.getReason() == null
-                || request.getReason().trim().isEmpty()) {
-
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Bắt buộc nhập lý do khóa lô."
-            );
-        }
-
-        String reason = request.getReason().trim();
-
-        if (reason.length() > 500) {
-
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Lý do khóa lô không được vượt quá 500 ký tự."
-            );
-        }
-
-        request.setReason(reason);
-    }
-
-
     private String normalizeOptional(String value) {
 
         if (value == null) {
@@ -282,19 +207,5 @@ public class ExpiryAlertServiceImpl implements ExpiryAlertService {
         return value == null
                 ? 0L
                 : value;
-    }
-    @Override
-    @Transactional
-    public InventoryLotDetailResponse unlock(
-            Integer id,
-            InventoryLotUnlockRequest request
-    ) {
-        validateId(id);
-
-        if (request == null) {
-            request = new InventoryLotUnlockRequest();
-        }
-
-        return inventoryLotService.unlock(id, request);
     }
 }

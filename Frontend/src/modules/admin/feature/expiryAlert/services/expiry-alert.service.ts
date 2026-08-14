@@ -5,8 +5,6 @@ import type {
   ExpiryAlertListResponse,
   ExpiryAlertSummaryResponse,
   InventoryLotDetailResponse,
-  InventoryLotLockRequest,
-  InventoryLotUnlockRequest,
   PageResponse,
 } from "../types/expiry-alert.type";
 
@@ -60,39 +58,6 @@ const expiryAlertService = {
    */
   async getDetail(id: number): Promise<InventoryLotDetailResponse> {
     const response = await api.get(`/admin/expiry-alerts/${id}`);
-
-    return response.data;
-  },
-
-  /**
-   * POST /api/admin/expiry-alerts/{id}/lock
-   *
-   * OWNER / MANAGER
-   */
-  async lock(
-    id: number,
-    request: InventoryLotLockRequest
-  ): Promise<InventoryLotDetailResponse> {
-    const response = await api.post(`/admin/expiry-alerts/${id}/lock`, {
-      reason: request.reason.trim(),
-    });
-
-    return response.data;
-  },
-  /**
-   * POST /api/admin/expiry-alerts/{id}/unlock
-   *
-   * OWNER / MANAGER
-   */
-  async unlock(
-    id: number,
-    request?: InventoryLotUnlockRequest
-  ): Promise<InventoryLotDetailResponse> {
-    const reason = request?.reason?.trim();
-
-    const response = reason
-      ? await api.post(`/admin/expiry-alerts/${id}/unlock`, { reason })
-      : await api.post(`/admin/expiry-alerts/${id}/unlock`);
 
     return response.data;
   },

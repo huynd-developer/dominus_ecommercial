@@ -5,23 +5,17 @@ import type {
   InventoryLotDetailResponse,
   InventoryLotExpiryFilter,
   InventoryLotListResponse,
-  InventoryLotLockFilter,
-  InventoryLotLockHistoryResponse,
-  InventoryLotLockRequest,
   InventoryLotSourceResponse,
   InventoryLotStockFilter,
-  InventoryLotUnlockRequest,
 } from "../types/inventory-lot.type";
 
 interface InventoryLotState {
   lots: InventoryLotListResponse[];
   detail: InventoryLotDetailResponse | null;
   source: InventoryLotSourceResponse | null;
-  history: InventoryLotLockHistoryResponse[];
 
   keyword: string;
   productVariantId: number | null;
-  lockFilter: InventoryLotLockFilter;
   expiryFilter: InventoryLotExpiryFilter;
   stockFilter: InventoryLotStockFilter;
   expirationFrom: string;
@@ -35,8 +29,6 @@ interface InventoryLotState {
   loadingList: boolean;
   loadingDetail: boolean;
   loadingSource: boolean;
-  loadingHistory: boolean;
-  processing: boolean;
   error: string | null;
 }
 
@@ -56,11 +48,9 @@ export const useInventoryLotStore = defineStore("inventoryLot", {
     lots: [],
     detail: null,
     source: null,
-    history: [],
 
     keyword: "",
     productVariantId: null,
-    lockFilter: "",
     expiryFilter: "",
     stockFilter: "",
     expirationFrom: "",
@@ -74,20 +64,11 @@ export const useInventoryLotStore = defineStore("inventoryLot", {
     loadingList: false,
     loadingDetail: false,
     loadingSource: false,
-    loadingHistory: false,
-    processing: false,
     error: null,
   }),
 
   actions: {
     buildApiFilters() {
-      const isLocked =
-        this.lockFilter === "LOCKED"
-          ? true
-          : this.lockFilter === "UNLOCKED"
-            ? false
-            : undefined;
-
       let isExpired: boolean | undefined;
       let isNearExpiry: boolean | undefined;
 
@@ -107,7 +88,7 @@ export const useInventoryLotStore = defineStore("inventoryLot", {
             ? false
             : undefined;
 
-      return { isLocked, isExpired, isNearExpiry, hasStock };
+      return { isExpired, isNearExpiry, hasStock };
     },
 
     async fetchList() {
@@ -179,75 +160,21 @@ export const useInventoryLotStore = defineStore("inventoryLot", {
       }
     },
 
-    async fetchHistory(id: number) {
-      this.loadingHistory = true;
-      this.error = null;
-
-      try {
-        this.history = await inventoryLotService.getLockHistory(id);
-        return this.history;
-      } catch (error) {
-        this.error = errorMessage(error);
-        throw error;
-      } finally {
-        this.loadingHistory = false;
-      }
-    },
-
     async fetchDetailContext(id: number) {
       this.detail = null;
       this.source = null;
-      this.history = [];
 
       await Promise.all([
         this.fetchDetail(id),
         this.fetchSource(id),
-        this.fetchHistory(id),
       ]);
 
       return this.detail;
     },
 
-    async lock(id: number, request: InventoryLotLockRequest) {
-      this.processing = true;
-      this.error = null;
-
-      try {
-        const result = await inventoryLotService.lock(id, request);
-        if (this.detail?.id === id) this.detail = result;
-
-        await Promise.all([this.fetchList(), this.fetchHistory(id)]);
-        return result;
-      } catch (error) {
-        this.error = errorMessage(error);
-        throw error;
-      } finally {
-        this.processing = false;
-      }
-    },
-
-    async unlock(id: number, request?: InventoryLotUnlockRequest) {
-      this.processing = true;
-      this.error = null;
-
-      try {
-        const result = await inventoryLotService.unlock(id, request);
-        if (this.detail?.id === id) this.detail = result;
-
-        await Promise.all([this.fetchList(), this.fetchHistory(id)]);
-        return result;
-      } catch (error) {
-        this.error = errorMessage(error);
-        throw error;
-      } finally {
-        this.processing = false;
-      }
-    },
-
     resetFilters() {
       this.keyword = "";
       this.productVariantId = null;
-      this.lockFilter = "";
       this.expiryFilter = "";
       this.stockFilter = "";
       this.expirationFrom = "";
@@ -258,7 +185,6 @@ export const useInventoryLotStore = defineStore("inventoryLot", {
     clearDetailContext() {
       this.detail = null;
       this.source = null;
-      this.history = [];
     },
   },
 });

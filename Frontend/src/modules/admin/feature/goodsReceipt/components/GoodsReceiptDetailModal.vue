@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import type {
   GoodsReceiptApprovalHistoryResponse,
   GoodsReceiptDetailResponse,
@@ -49,6 +50,44 @@ const formatMoney = (
           currency: "VND",
         }
       ).format(value);
+
+const formatCapacity = (
+  value?: number | null
+) => {
+  if (value == null || !Number.isFinite(Number(value))) {
+    return "";
+  }
+
+  return `${new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 2,
+  }).format(Number(value))} ml`;
+};
+
+const variantLabel = (item: {
+  capacityValue?: number | null;
+  bottleTypeName?: string | null;
+}) => {
+  const parts = [
+    formatCapacity(item.capacityValue),
+    item.bottleTypeName?.trim() || "",
+  ].filter(Boolean);
+
+  return parts.join(" · ");
+};
+
+const lineTotal = (
+  quantity?: number | null,
+  unitCost?: number | null
+) =>
+  Number(quantity ?? 0) * Number(unitCost ?? 0);
+
+const totalValue = computed(() =>
+  props.detail?.items?.reduce(
+    (sum, item) =>
+      sum + lineTotal(item.quantity, item.unitCost),
+    0
+  ) ?? 0
+);
 
 const statusClass = (
   status?: string
@@ -165,6 +204,13 @@ const statusClass = (
                   {{
                     detail.totalQuantity
                   }}
+                </strong>
+              </div>
+
+              <div>
+                <span>Tổng giá trị</span>
+                <strong class="total-value">
+                  {{ formatMoney(totalValue) }}
                 </strong>
               </div>
 
@@ -314,15 +360,6 @@ const statusClass = (
               </template>
             </div>
 
-            <!-- GHI CHÚ PHIẾU -->
-            <div
-              v-if="detail.note"
-              class="note-box"
-            >
-              <span>Ghi chú</span>
-              <p>{{ detail.note }}</p>
-            </div>
-
             <!-- LÝ DO TỪ CHỐI -->
             <div
               v-if="
@@ -369,14 +406,14 @@ const statusClass = (
                 <thead>
                   <tr>
                     <th>SKU</th>
-                    <th>Sản phẩm</th>
+                    <th>Sản phẩm / Biến thể</th>
                     <th>Mã lô</th>
                     <th>SL</th>
                     <th>Đơn giá</th>
+                    <th>Thành tiền</th>
                     <th>NSX</th>
                     <th>Ngày nhận</th>
                     <th>HSD</th>
-                    <th>Ghi chú</th>
                   </tr>
                 </thead>
 
@@ -392,9 +429,18 @@ const statusClass = (
                     </td>
 
                     <td>
-                      {{
-                        item.productName
-                      }}
+                      <div class="product-cell">
+                        <strong>
+                          {{ item.productName }}
+                        </strong>
+
+                        <span
+                          v-if="variantLabel(item)"
+                          class="variant-info"
+                        >
+                          {{ variantLabel(item) }}
+                        </span>
+                      </div>
                     </td>
 
                     <td>
@@ -409,6 +455,17 @@ const statusClass = (
                       {{
                         formatMoney(
                           item.unitCost
+                        )
+                      }}
+                    </td>
+
+                    <td class="line-total">
+                      {{
+                        formatMoney(
+                          lineTotal(
+                            item.quantity,
+                            item.unitCost
+                          )
                         )
                       }}
                     </td>
@@ -437,9 +494,6 @@ const statusClass = (
                       }}
                     </td>
 
-                    <td>
-                      {{ item.note || "—" }}
-                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -644,7 +698,6 @@ section h4 {
 }
 
 .info-grid > div,
-.note-box,
 .reason-box {
   padding: 12px;
 
@@ -656,8 +709,7 @@ section h4 {
   background: #fafafa;
 }
 
-.info-grid span,
-.note-box span {
+.info-grid span {
   display: block;
 
   margin-bottom: 4px;
@@ -666,12 +718,10 @@ section h4 {
   font-size: 12px;
 }
 
-.note-box,
 .reason-box {
   margin-top: 12px;
 }
 
-.note-box p,
 .reason-box p {
   margin: 4px 0 0;
 }
@@ -712,6 +762,29 @@ td {
 th {
   background: #f9fafb;
   color: #4b5563;
+}
+
+.product-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.product-cell > strong {
+  color: #111827;
+}
+
+.variant-info {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.line-total,
+.total-value {
+  color: #15803d;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .timeline {
