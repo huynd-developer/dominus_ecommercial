@@ -3,13 +3,12 @@ import goodsReceiptService from "@/modules/admin/feature/goodsReceipt/services/g
 
 import type {
   GoodsReceiptDetailResponse,
-  GoodsReceiptItemRequest,
-  GoodsReceiptSaveRequest,
 } from "@/modules/admin/feature/goodsReceipt/types/goods-receipt.type";
 
 import type {
   InventorySkuOption,
   OpeningBalanceApprovalHistoryResponse,
+  OpeningBalanceCancelRequest,
   OpeningBalanceDetailResponse,
   OpeningBalanceListParams,
   OpeningBalanceListResponse,
@@ -44,7 +43,7 @@ const assertOpeningBalance = <T extends { receiptType?: string | null }>(
 ): T => {
   if (!data || data.receiptType !== OPENING_BALANCE) {
     throw contractError(
-      "BE trả về dữ liệu không phải phiếu kiểm kho ban đầu (OPENING_BALANCE)."
+      "BE trả về dữ liệu không phải phiếu khởi tạo tồn đầu kỳ (OPENING_BALANCE)."
     );
   }
 
@@ -69,25 +68,24 @@ const assertOpeningBalancePage = (
   return data;
 };
 
-const toGoodsReceiptPayload = (
+/**
+ * Dedicated OpeningBalanceController nhận đúng OpeningBalanceSaveRequest.
+ * Không gửi receiptType và không gửi unitCost từ FE.
+ * receiptType = OPENING_BALANCE do server quyết định.
+ */
+const toOpeningBalancePayload = (
   request: OpeningBalanceSaveRequest
-): GoodsReceiptSaveRequest => ({
-  receiptType: OPENING_BALANCE,
+): OpeningBalanceSaveRequest => ({
   note: request.note?.trim() || null,
-  items: request.items.map(
-    (item): GoodsReceiptItemRequest => ({
-      productVariantId: Number(item.productVariantId),
-      lotCode: item.lotCode.trim(),
-      quantity: Number(item.quantity),
-      // Module 4 không có nghiệp vụ đơn giá. BE dùng chung GoodsReceiptItem,
-      // vì vậy luôn gửi null để contract khớp DTO hiện tại.
-      unitCost: null,
-      manufacturedDate: item.manufacturedDate || null,
-      receivedDate: item.receivedDate,
-      expirationDate: item.expirationDate,
-      note: item.note?.trim() || null,
-    })
-  ),
+  items: request.items.map((item) => ({
+    productVariantId: Number(item.productVariantId),
+    lotCode: item.lotCode.trim(),
+    quantity: Number(item.quantity),
+    manufacturedDate: item.manufacturedDate || null,
+    receivedDate: item.receivedDate,
+    expirationDate: item.expirationDate,
+    note: item.note?.trim() || null,
+  })),
 });
 
 const totalElementsOf = (
@@ -107,11 +105,10 @@ const openingBalanceService = {
   async getList(
     params: OpeningBalanceListParams
   ): Promise<OpeningBalancePageResponse<OpeningBalanceListResponse>> {
-    const response = await api.get("/admin/goods-receipts", {
+    const response = await api.get("/admin/opening-balances", {
       params: cleanParams({
         keyword: params.keyword?.trim() || undefined,
         status: params.status || undefined,
-        receiptType: OPENING_BALANCE,
         createdBy: params.createdBy ?? undefined,
         fromDate: params.fromDate || undefined,
         toDate: params.toDate || undefined,
@@ -124,7 +121,7 @@ const openingBalanceService = {
   },
 
   async getDetail(id: number): Promise<OpeningBalanceDetailResponse> {
-    const response = await api.get(`/admin/goods-receipts/${id}`);
+    const response = await api.get(`/admin/opening-balances/${id}`);
     return assertOpeningBalance(response.data as GoodsReceiptDetailResponse);
   },
 
@@ -132,8 +129,8 @@ const openingBalanceService = {
     request: OpeningBalanceSaveRequest
   ): Promise<OpeningBalanceDetailResponse> {
     const response = await api.post(
-      "/admin/goods-receipts",
-      toGoodsReceiptPayload(request)
+      "/admin/opening-balances",
+      toOpeningBalancePayload(request)
     );
 
     return assertOpeningBalance(response.data as GoodsReceiptDetailResponse);
@@ -144,20 +141,31 @@ const openingBalanceService = {
     request: OpeningBalanceSaveRequest
   ): Promise<OpeningBalanceDetailResponse> {
     const response = await api.put(
-      `/admin/goods-receipts/${id}`,
-      toGoodsReceiptPayload(request)
+      `/admin/opening-balances/${id}`,
+      toOpeningBalancePayload(request)
     );
 
     return assertOpeningBalance(response.data as GoodsReceiptDetailResponse);
   },
 
   async submit(id: number): Promise<OpeningBalanceDetailResponse> {
-    const response = await api.post(`/admin/goods-receipts/${id}/submit`);
+    const response = await api.post(`/admin/opening-balances/${id}/submit`);
+    return assertOpeningBalance(response.data as GoodsReceiptDetailResponse);
+  },
+
+  async cancel(
+    id: number,
+    request: OpeningBalanceCancelRequest
+  ): Promise<OpeningBalanceDetailResponse> {
+    const response = await api.post(`/admin/opening-balances/${id}/cancel`, {
+      reason: request.reason.trim(),
+    });
+
     return assertOpeningBalance(response.data as GoodsReceiptDetailResponse);
   },
 
   async approve(id: number): Promise<OpeningBalanceDetailResponse> {
-    const response = await api.post(`/admin/goods-receipts/${id}/approve`);
+    const response = await api.post(`/admin/opening-balances/${id}/approve`);
     return assertOpeningBalance(response.data as GoodsReceiptDetailResponse);
   },
 
@@ -165,7 +173,7 @@ const openingBalanceService = {
     id: number,
     request: OpeningBalanceRejectRequest
   ): Promise<OpeningBalanceDetailResponse> {
-    const response = await api.post(`/admin/goods-receipts/${id}/reject`, {
+    const response = await api.post(`/admin/opening-balances/${id}/reject`, {
       reason: request.reason.trim(),
     });
 
@@ -176,16 +184,15 @@ const openingBalanceService = {
     id: number
   ): Promise<OpeningBalanceApprovalHistoryResponse[]> {
     const response = await api.get(
-      `/admin/goods-receipts/${id}/approval-history`
+      `/admin/opening-balances/${id}/approval-history`
     );
 
     return Array.isArray(response.data) ? response.data : [];
   },
 
   /**
-   * KHÔNG gọi /admin/goods-receipts/pending-count vì BE hiện tại
-   * đang đếm riêng NORMAL_RECEIPT.
-   * Đếm Module 4 bằng chính list filter OPENING_BALANCE + PENDING_APPROVAL.
+   * OpeningBalanceController hiện không có /pending-count.
+   * Đếm bằng chính list dedicated + PENDING_APPROVAL.
    */
   async getPendingCount(): Promise<number> {
     const data = await this.getList({
@@ -198,7 +205,7 @@ const openingBalanceService = {
   },
 
   /**
-   * Tái sử dụng đúng API tìm SKU của Module 2 đang chạy ổn.
+   * Tái sử dụng API tìm SKU của Module 2.
    */
   async searchSku(keyword: string): Promise<InventorySkuOption[]> {
     return goodsReceiptService.searchSku(keyword);

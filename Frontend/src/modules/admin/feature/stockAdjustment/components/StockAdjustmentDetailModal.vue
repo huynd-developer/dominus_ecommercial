@@ -1,0 +1,427 @@
+<script setup lang="ts">
+import type { StockAdjustmentDetailResponse } from "../types/stock-adjustment.type";
+
+defineProps<{
+  visible: boolean;
+  detail: StockAdjustmentDetailResponse | null;
+  loading?: boolean;
+}>();
+
+const emit = defineEmits<{ (e: "close"): void }>();
+
+const formatNumber = (value?: number | null) =>
+  new Intl.NumberFormat("vi-VN").format(Number(value ?? 0));
+
+const formatSigned = (value?: number | null) => {
+  const number = Number(value ?? 0);
+  return number > 0 ? `+${formatNumber(number)}` : formatNumber(number);
+};
+
+const formatDateTime = (value?: string | null) =>
+  value
+    ? new Intl.DateTimeFormat("vi-VN", {
+        dateStyle: "short",
+        timeStyle: "short",
+      }).format(new Date(value))
+    : "—";
+
+const statusClass = (status?: string | null) =>
+  `status-${String(status || "").toLowerCase().replace("_approval", "")}`;
+
+const differenceClass = (value?: number | null) => {
+  const number = Number(value ?? 0);
+  if (number > 0) return "diff-up";
+  if (number < 0) return "diff-down";
+  return "diff-neutral";
+};
+</script>
+
+<template>
+  <Teleport to="body">
+    <div v-if="visible" class="detail-backdrop" @click.self="emit('close')">
+      <div class="detail-dialog">
+        <div class="detail-header">
+          <div>
+            <h3>{{ detail?.adjustmentNo || "Chi tiết phiếu kiểm kê" }}</h3>
+            <div class="header-meta">
+              <span class="type-badge">Kiểm kê thực tế</span>
+              <span
+                v-if="detail"
+                class="status-badge"
+                :class="statusClass(detail.status)"
+              >
+                {{ detail.statusLabel }}
+              </span>
+            </div>
+          </div>
+          <button type="button" class="close-btn" @click="emit('close')">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+
+        <div v-if="loading" class="state">Đang tải chi tiết...</div>
+
+        <div v-else-if="detail" class="detail-body">
+          <section>
+            <h4>Thông tin chung</h4>
+
+            <div class="summary-grid">
+              <div>
+                <span>Tổng lô</span>
+                <strong>{{ formatNumber(detail.totalLots) }}</strong>
+              </div>
+              <div>
+                <span>Khớp tồn</span>
+                <strong>{{ formatNumber(detail.matchedLots) }}</strong>
+              </div>
+              <div>
+                <span>Có chênh lệch</span>
+                <strong>{{ formatNumber(detail.mismatchLots) }}</strong>
+              </div>
+              <div>
+                <span>Tổng tăng</span>
+                <strong class="text-up">+{{ formatNumber(detail.totalIncrease) }}</strong>
+              </div>
+              <div>
+                <span>Tổng giảm</span>
+                <strong class="text-down">-{{ formatNumber(detail.totalDecrease) }}</strong>
+              </div>
+            </div>
+
+            <div class="info-grid">
+              <div>
+                <span>Người tạo</span>
+                <strong>{{ detail.createdByName || "—" }}</strong>
+              </div>
+              <div>
+                <span>Ngày tạo</span>
+                <strong>{{ formatDateTime(detail.createdAt) }}</strong>
+              </div>
+              <div>
+                <span>Người gửi duyệt</span>
+                <strong>{{ detail.submittedByName || "—" }}</strong>
+              </div>
+              <div>
+                <span>Thời gian gửi</span>
+                <strong>{{ formatDateTime(detail.submittedAt) }}</strong>
+              </div>
+              <div>
+                <span>Người phê duyệt</span>
+                <strong>{{ detail.approvedByName || "—" }}</strong>
+              </div>
+              <div>
+                <span>Thời gian phê duyệt</span>
+                <strong>{{ formatDateTime(detail.approvedAt) }}</strong>
+              </div>
+              <div>
+                <span>Người từ chối</span>
+                <strong>{{ detail.rejectedByName || "—" }}</strong>
+              </div>
+              <div>
+                <span>Thời gian từ chối</span>
+                <strong>{{ formatDateTime(detail.rejectedAt) }}</strong>
+              </div>
+            </div>
+
+            <div v-if="detail.note" class="note-box">
+              <span>Ghi chú</span>
+              <p>{{ detail.note }}</p>
+            </div>
+
+            <div v-if="detail.rejectionReason" class="reason-box">
+              <strong>Lý do từ chối</strong>
+              <p>{{ detail.rejectionReason }}</p>
+            </div>
+          </section>
+
+          <section>
+            <h4>Đối chiếu theo lô</h4>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Sản phẩm</th>
+                    <th>Mã lô</th>
+                    <th>Tồn hệ thống</th>
+                    <th>Tồn thực tế</th>
+                    <th>Chênh lệch</th>
+                    <th>Tồn hiện tại</th>
+                    <th>Kết quả</th>
+                    <th>Lý do</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="item in detail.items" :key="item.id">
+                    <td><strong>{{ item.sku || "—" }}</strong></td>
+                    <td>{{ item.productName || "—" }}</td>
+                    <td>{{ item.lotCode || "—" }}</td>
+                    <td>{{ formatNumber(item.systemQuantity) }}</td>
+                    <td>{{ formatNumber(item.actualQuantity) }}</td>
+                    <td>
+                      <strong :class="differenceClass(item.quantityDifference)">
+                        {{ formatSigned(item.quantityDifference) }}
+                      </strong>
+                    </td>
+                    <td>{{ formatNumber(item.currentQuantity) }}</td>
+                    <td>{{ item.resultLabel || "—" }}</td>
+                    <td>{{ item.reason || "—" }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="snapshot-note">
+              <i class="bi bi-info-circle"></i>
+              “Tồn hệ thống” là snapshot lúc lập/sửa phiếu. “Tồn hiện tại” có
+              thể khác nếu kho phát sinh giao dịch trước khi phiếu được duyệt.
+            </div>
+          </section>
+        </div>
+
+        <div class="detail-footer">
+          <button type="button" @click="emit('close')">Đóng</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+</template>
+
+<style scoped>
+.detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  overflow-y: auto;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.detail-dialog {
+  width: min(1180px, 100%);
+  margin: 20px auto;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+}
+
+.detail-header,
+.detail-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 22px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.detail-footer {
+  justify-content: flex-end;
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 0;
+}
+
+.detail-header h3 {
+  margin: 0 0 7px;
+}
+
+.header-meta {
+  display: flex;
+  gap: 7px;
+}
+
+.type-badge,
+.status-badge {
+  display: inline-flex;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.type-badge {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.status-draft {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.status-pending {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.status-approved {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.status-rejected {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.close-btn,
+.detail-footer button {
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.close-btn {
+  width: 36px;
+  height: 36px;
+  background: transparent;
+}
+
+.detail-footer button {
+  padding: 9px 16px;
+  background: #111827;
+  color: #fff;
+}
+
+.detail-body {
+  padding: 20px 22px;
+}
+
+section + section {
+  margin-top: 24px;
+}
+
+section h4 {
+  margin: 0 0 12px;
+}
+
+.summary-grid,
+.info-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.summary-grid {
+  grid-template-columns: repeat(5, 1fr);
+  margin-bottom: 12px;
+}
+
+.info-grid {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.summary-grid > div,
+.info-grid > div,
+.note-box,
+.reason-box,
+.snapshot-note {
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+.summary-grid span,
+.info-grid span,
+.note-box span {
+  display: block;
+  margin-bottom: 4px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.note-box,
+.reason-box,
+.snapshot-note {
+  margin-top: 12px;
+}
+
+.note-box p,
+.reason-box p {
+  margin: 5px 0 0;
+}
+
+.reason-box {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.text-up,
+.diff-up {
+  color: #047857;
+}
+
+.text-down,
+.diff-down {
+  color: #b91c1c;
+}
+
+.diff-neutral {
+  color: #4b5563;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+table {
+  width: 100%;
+  min-width: 1120px;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+  vertical-align: top;
+  font-size: 13px;
+}
+
+th {
+  background: #f9fafb;
+  color: #4b5563;
+}
+
+.state {
+  padding: 42px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.snapshot-note {
+  color: #4b5563;
+  font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .info-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .detail-backdrop {
+    padding: 0;
+  }
+
+  .detail-dialog {
+    min-height: 100%;
+    margin: 0;
+    border-radius: 0;
+  }
+
+  .summary-grid,
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
