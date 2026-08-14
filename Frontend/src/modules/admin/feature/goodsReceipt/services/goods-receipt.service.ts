@@ -20,6 +20,57 @@ const cleanParams = (params: Record<string, unknown>) =>
     )
   );
 
+const mapInventorySkuOption = (item: any): InventorySkuOption => ({
+  productVariantId: Number(item.productVariantId),
+  sku: String(item.sku ?? ""),
+  productName: String(item.productName ?? ""),
+
+  // Metadata nhận diện biến thể.
+  capacityValue:
+    item.capacityValue == null
+      ? null
+      : Number(item.capacityValue),
+
+  bottleTypeName:
+    item.bottleTypeName == null
+      ? null
+      : String(item.bottleTypeName),
+
+  // Dùng riêng cho việc ưu tiên SKU cần nhập thêm.
+  totalQuantity: Number(item.totalQuantity ?? 0),
+  sellableQuantity: Number(item.sellableQuantity ?? 0),
+});
+
+const compareLowStockFirst = (
+  a: InventorySkuOption,
+  b: InventorySkuOption
+) => {
+  const sellableA = Number(a.sellableQuantity ?? 0);
+  const sellableB = Number(b.sellableQuantity ?? 0);
+
+  if (sellableA !== sellableB) {
+    return sellableA - sellableB;
+  }
+
+  const totalA = Number(a.totalQuantity ?? 0);
+  const totalB = Number(b.totalQuantity ?? 0);
+
+  if (totalA !== totalB) {
+    return totalA - totalB;
+  }
+
+  const productCompare = a.productName.localeCompare(
+    b.productName,
+    "vi"
+  );
+
+  if (productCompare !== 0) {
+    return productCompare;
+  }
+
+  return a.sku.localeCompare(b.sku, "vi");
+};
+
 const goodsReceiptService = {
   async getList(
     params: GoodsReceiptListParams
@@ -123,36 +174,74 @@ const goodsReceiptService = {
   },
 
   // Tận dụng API Module 1 để search SKU, không tạo API giả ở FE.
+  // Chỉ riêng màn chọn SKU của phiếu nhập:
+  // - lấy đủ các trang kết quả phù hợp
+  // - ưu tiên SKU có số lượng có thể bán thấp hơn lên trước
+  // Không thay đổi thứ tự của màn Tổng quan kho.
   async searchSku(keyword = ""): Promise<InventorySkuOption[]> {
-    const response = await api.get("/admin/inventory/overview", {
-      params: {
-        keyword: keyword.trim() || undefined,
-        stockStatus: "ALL",
-        page: 0,
-        size: 20,
-      },
+    const normalizedKeyword = keyword.trim();
+    const pageSize = 100;
+
+    const getPage = async (page: number) => {
+      const response = await api.get("/admin/inventory/overview", {
+        params: {
+          keyword: normalizedKeyword || undefined,
+          stockStatus: "ALL",
+          page,
+          size: pageSize,
+        },
+      });
+
+      return response.data;
+    };
+
+    const firstPage = await getPage(0);
+
+    const firstContent = Array.isArray(firstPage?.content)
+      ? firstPage.content
+      : [];
+
+    const totalPagesRaw =
+      firstPage?.page?.totalPages ??
+      firstPage?.totalPages ??
+      (firstContent.length > 0 ? 1 : 0);
+
+    const totalPages = Math.max(
+      0,
+      Number.isFinite(Number(totalPagesRaw))
+        ? Number(totalPagesRaw)
+        : 0
+    );
+
+    const allItems: any[] = [...firstContent];
+
+    // API inventory đang giới hạn page size, nên lấy tiếp các trang còn lại
+    // để việc ưu tiên "sắp hết hàng" đúng trên toàn bộ kết quả tìm kiếm,
+    // không chỉ đúng trong 20/100 SKU đầu tiên.
+    for (let page = 1; page < totalPages; page++) {
+      const data = await getPage(page);
+
+      if (Array.isArray(data?.content)) {
+        allItems.push(...data.content);
+      }
+    }
+
+    const uniqueOptions = new Map<number, InventorySkuOption>();
+
+    allItems.forEach((item) => {
+      const option = mapInventorySkuOption(item);
+
+      if (
+        Number.isInteger(option.productVariantId) &&
+        option.productVariantId > 0
+      ) {
+        uniqueOptions.set(option.productVariantId, option);
+      }
     });
 
-    const data = response.data;
-
-    return Array.isArray(data?.content)
-      ? data.content.map((item: any) => ({
-          productVariantId: Number(item.productVariantId),
-          sku: String(item.sku ?? ""),
-          productName: String(item.productName ?? ""),
-
-          // Hai field mới BE đã bổ sung cho việc nhận diện biến thể.
-          capacityValue:
-            item.capacityValue == null
-              ? null
-              : Number(item.capacityValue),
-
-          bottleTypeName:
-            item.bottleTypeName == null
-              ? null
-              : String(item.bottleTypeName),
-        }))
-      : [];
+    return Array.from(uniqueOptions.values()).sort(
+      compareLowStockFirst
+    );
   },
 };
 

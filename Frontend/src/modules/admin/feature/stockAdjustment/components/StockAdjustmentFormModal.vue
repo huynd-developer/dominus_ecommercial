@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import Swal from "sweetalert2";
 import stockAdjustmentService from "../services/stock-adjustment.service";
 
@@ -11,17 +11,14 @@ import type {
 } from "../types/stock-adjustment.type";
 
 interface EditableItem {
-  inventoryLotId: number | null;
+  inventoryLotId: number;
   sku: string;
   productName: string;
   lotCode: string;
-  lotSearch: string;
   systemQuantity: number;
   actualQuantity: number | null;
   reasonPreset: string;
   customReason: string;
-  suggestions: InventoryLotListResponse[];
-  searching: boolean;
 }
 
 const props = defineProps<{
@@ -35,9 +32,17 @@ const emit = defineEmits<{
   (e: "save", payload: StockAdjustmentSaveRequest): void;
 }>();
 
+/**
+ * Ghi chú vẫn được giữ trong state để khi sửa phiếu cũ không làm mất dữ liệu.
+ * UI không hiển thị theo yêu cầu.
+ */
 const note = ref("");
 const items = ref<EditableItem[]>([]);
-const timers = new Map<number, ReturnType<typeof setTimeout>>();
+
+const lotKeyword = ref("");
+const lotOptions = ref<InventoryLotListResponse[]>([]);
+const loadingLots = ref(false);
+const lotLoadError = ref("");
 
 const OTHER_REASON = "__OTHER__";
 
@@ -56,7 +61,9 @@ const DECREASE_REASONS = [
   "Điều chỉnh sau kiểm kê định kỳ",
 ] as const;
 
-const reasonsForDifference = (difference: number | null): readonly string[] => {
+const reasonsForDifference = (
+  difference: number | null
+): readonly string[] => {
   if (difference === null || difference === 0) return [];
   return difference > 0 ? INCREASE_REASONS : DECREASE_REASONS;
 };
@@ -87,30 +94,23 @@ const buildReasonState = (
   };
 };
 
-
 const isEdit = computed(() => Boolean(props.detail?.id));
+
 const title = computed(() =>
   isEdit.value
     ? `Sửa phiếu kiểm kê ${props.detail?.adjustmentNo ?? ""}`
     : "Tạo phiếu kiểm kê thực tế"
 );
 
-const createEmptyItem = (): EditableItem => ({
-  inventoryLotId: null,
-  sku: "",
-  productName: "",
-  lotCode: "",
-  lotSearch: "",
-  systemQuantity: 0,
-  actualQuantity: null,
-  reasonPreset: "",
-  customReason: "",
-  suggestions: [],
-  searching: false,
-});
+const selectedLotIds = computed(
+  () => new Set(items.value.map((item) => item.inventoryLotId))
+);
 
 const resetForm = () => {
+  // Giữ ghi chú cũ khi edit, chỉ ẩn khỏi UI.
   note.value = props.detail?.note ?? "";
+  lotKeyword.value = "";
+  lotLoadError.value = "";
 
   if (props.detail?.items?.length) {
     items.value = props.detail.items.map((item) => {
@@ -120,130 +120,92 @@ const resetForm = () => {
       const reasonState = buildReasonState(item.reason, difference);
 
       return {
-        inventoryLotId: item.inventoryLotId,
+        inventoryLotId: Number(item.inventoryLotId),
         sku: item.sku ?? "",
         productName: item.productName ?? "",
         lotCode: item.lotCode ?? "",
-        lotSearch: `${item.sku ?? "—"} - ${item.productName ?? "—"} · Lô ${item.lotCode ?? "—"}`,
         systemQuantity,
         actualQuantity,
         ...reasonState,
-        suggestions: [],
-        searching: false,
       };
     });
   } else {
-    items.value = [createEmptyItem()];
+    items.value = [];
   }
+};
+
+const loadLotOptions = async () => {
+  loadingLots.value = true;
+  lotLoadError.value = "";
+
+  try {
+    lotOptions.value = await stockAdjustmentService.searchLots(
+      lotKeyword.value.trim()
+    );
+  } catch {
+    lotOptions.value = [];
+    lotLoadError.value = "Không thể tải danh sách lô hàng.";
+  } finally {
+    loadingLots.value = false;
+  }
+};
+
+const searchLots = async () => {
+  await loadLotOptions();
+};
+
+const clearLotSearch = async () => {
+  lotKeyword.value = "";
+  await loadLotOptions();
 };
 
 watch(
   () => props.visible,
-  (visible) => {
-    if (visible) resetForm();
+  async (visible) => {
+    if (visible) {
+      resetForm();
+      await loadLotOptions();
+    }
   }
 );
 
 watch(
   () => props.detail,
   () => {
-    if (props.visible) resetForm();
+    if (props.visible) {
+      resetForm();
+    }
   },
   { deep: true }
 );
 
-onBeforeUnmount(() => {
-  timers.forEach((timer) => clearTimeout(timer));
-  timers.clear();
-});
+const isLotSelected = (inventoryLotId: number) =>
+  selectedLotIds.value.has(inventoryLotId);
 
-const addItem = () => items.value.push(createEmptyItem());
-
-const removeItem = (index: number) => {
-  if (items.value.length <= 1) return;
-  items.value.splice(index, 1);
-};
-
-const displayLot = (lot: InventoryLotListResponse) =>
-  `${lot.sku} - ${lot.productName} · Lô ${lot.lotCode}`;
-
-const clearSelectedLot = (row: EditableItem) => {
-  row.inventoryLotId = null;
-  row.sku = "";
-  row.productName = "";
-  row.lotCode = "";
-  row.systemQuantity = 0;
-  row.actualQuantity = null;
-  row.reasonPreset = "";
-  row.customReason = "";
-};
-
-const loadSuggestions = async (index: number, keyword: string) => {
-  const row = items.value[index];
-  if (!row) return;
-
-  row.searching = true;
-
-  try {
-    row.suggestions = await stockAdjustmentService.searchLots(keyword);
-  } catch {
-    row.suggestions = [];
-  } finally {
-    row.searching = false;
-  }
-};
-
-const searchLot = (index: number, event: Event) => {
-  const row = items.value[index];
-  if (!row) return;
-
-  const value = (event.target as HTMLInputElement).value;
-  row.lotSearch = value;
-
-  if (
-    row.inventoryLotId &&
-    value !== `${row.sku} - ${row.productName} · Lô ${row.lotCode}`
-  ) {
-    clearSelectedLot(row);
+const selectLot = (lot: InventoryLotListResponse) => {
+  if (isLotSelected(lot.id)) {
+    items.value = items.value.filter(
+      (item) => item.inventoryLotId !== lot.id
+    );
+    return;
   }
 
-  const oldTimer = timers.get(index);
-  if (oldTimer) clearTimeout(oldTimer);
-
-  const timer = setTimeout(() => {
-    loadSuggestions(index, row.lotSearch);
-  }, 250);
-
-  timers.set(index, timer);
+  items.value.push({
+    inventoryLotId: lot.id,
+    sku: lot.sku,
+    productName: lot.productName,
+    lotCode: lot.lotCode,
+    systemQuantity: Number(lot.quantityOnHand ?? 0),
+    actualQuantity: null,
+    reasonPreset: "",
+    customReason: "",
+  });
 };
 
-const openLotSuggestions = async (index: number) => {
-  const row = items.value[index];
-  if (!row || row.suggestions.length > 0) return;
-  await loadSuggestions(index, "");
-};
-
-const selectLot = (index: number, lot: InventoryLotListResponse) => {
-  const row = items.value[index];
-  if (!row) return;
-
-  row.inventoryLotId = lot.id;
-  row.sku = lot.sku;
-  row.productName = lot.productName;
-  row.lotCode = lot.lotCode;
-  row.lotSearch = displayLot(lot);
-  row.systemQuantity = Number(lot.quantityOnHand ?? 0);
-  row.actualQuantity = null;
-  row.reasonPreset = "";
-  row.customReason = "";
-  row.suggestions = [];
-};
-
-const closeSuggestionsLater = (index: number) => {
-  setTimeout(() => {
-    const row = items.value[index];
-    if (row) row.suggestions = [];
-  }, 180);
+const removeItem = (inventoryLotId: number) => {
+  items.value = items.value.filter(
+    (item) => item.inventoryLotId !== inventoryLotId
+  );
 };
 
 const differenceOf = (row: EditableItem): number | null => {
@@ -257,7 +219,6 @@ const differenceOf = (row: EditableItem): number | null => {
 
   return Number(row.actualQuantity) - Number(row.systemQuantity ?? 0);
 };
-
 
 const reasonOptionsOf = (row: EditableItem): readonly string[] =>
   reasonsForDifference(differenceOf(row));
@@ -354,6 +315,7 @@ const validate = async () => {
       );
       return false;
     }
+
     lotIds.add(row.inventoryLotId);
 
     if (
@@ -401,6 +363,7 @@ const submit = async () => {
   if (!(await validate())) return;
 
   const payload: StockAdjustmentSaveRequest = {
+    // Ghi chú bị ẩn nhưng vẫn bảo toàn dữ liệu cũ khi sửa.
     note: String(note.value ?? "").trim() || null,
     items: items.value.map(
       (row): StockAdjustmentItemRequest => ({
@@ -427,10 +390,11 @@ const close = () => {
           <div>
             <h3>{{ title }}</h3>
             <p>
-              Chọn lô đã có trong kho, nhập số lượng đếm thực tế. Hệ thống tự
-              tính chênh lệch; không chọn thủ công tăng/giảm tồn.
+              Chọn lô cần kiểm kê, nhập số lượng đếm thực tế. Hệ thống tự tính
+              chênh lệch; không chọn thủ công tăng/giảm tồn.
             </p>
           </div>
+
           <button
             type="button"
             class="icon-btn"
@@ -442,174 +406,254 @@ const close = () => {
         </div>
 
         <form @submit.prevent="submit">
-          <div class="general-grid">
-            <div class="field">
-              <label>Loại nghiệp vụ</label>
-              <input value="Kiểm kê thực tế" readonly />
+          <!--
+            Đã ẩn:
+            - Loại nghiệp vụ
+            - Ghi chú chung
+          -->
+
+          <section class="lot-picker-section">
+            <div class="section-head">
+              <div>
+                <h4>Chọn lô cần kiểm kê</h4>
+                <p>
+                  Tìm theo SKU, sản phẩm hoặc mã lô. Mỗi lô chỉ được chọn một
+                  lần trong cùng phiếu.
+                </p>
+              </div>
+
+              <div class="selected-badge">
+                Đã chọn {{ items.length }} lô
+              </div>
             </div>
 
-            <div class="field wide-3">
-              <label>Ghi chú</label>
-              <textarea
-                v-model="note"
-                maxlength="1000"
-                rows="2"
-                placeholder="Ghi chú chung cho phiếu kiểm kê..."
-              ></textarea>
-            </div>
-          </div>
+            <div class="lot-search">
+              <div class="search-input-wrap">
+                <i class="bi bi-search"></i>
 
-          <div class="items-head">
-            <div>
-              <h4>Đối chiếu tồn theo lô</h4>
-              <p>
-                Tồn hệ thống là số lượng tại thời điểm lập/sửa phiếu. Tồn thực
-                tế là số lượng bạn kiểm đếm.
-              </p>
-            </div>
-            <button type="button" class="secondary-btn" @click="addItem">
-              <i class="bi bi-plus-lg"></i> Thêm lô
-            </button>
-          </div>
+                <input
+                  v-model="lotKeyword"
+                  type="text"
+                  maxlength="100"
+                  placeholder="Tìm theo SKU, sản phẩm hoặc mã lô..."
+                  @keyup.enter.prevent="searchLots"
+                />
 
-          <div class="items-wrap">
-            <div v-for="(row, index) in items" :key="index" class="item-card">
-              <div class="item-title">
-                <strong>Lô kiểm kê {{ index + 1 }}</strong>
                 <button
+                  v-if="lotKeyword"
                   type="button"
-                  class="remove-btn"
-                  :disabled="items.length <= 1"
-                  @click="removeItem(index)"
+                  class="clear-search-btn"
+                  aria-label="Xóa tìm kiếm"
+                  @click="clearLotSearch"
                 >
-                  <i class="bi bi-trash"></i>
+                  <i class="bi bi-x-lg"></i>
                 </button>
               </div>
 
-              <div class="item-grid">
-                <div class="field lot-field">
-                  <label>Sản phẩm / lô hàng <span>*</span></label>
-                  <div class="lot-wrap">
-                    <input
-                      :value="row.lotSearch"
-                      placeholder="Tìm theo SKU, sản phẩm hoặc mã lô..."
-                      autocomplete="off"
-                      @input="searchLot(index, $event)"
-                      @focus="openLotSuggestions(index)"
-                      @click="openLotSuggestions(index)"
-                      @blur="closeSuggestionsLater(index)"
-                    />
+              <button
+                type="button"
+                class="search-btn"
+                :disabled="loadingLots"
+                @click="searchLots"
+              >
+                {{ loadingLots ? "Đang tìm..." : "Tìm kiếm" }}
+              </button>
+            </div>
 
-                    <div v-if="row.searching" class="lot-loading">
-                      Đang tìm lô...
-                    </div>
+            <div v-if="lotLoadError" class="lot-error">
+              {{ lotLoadError }}
+            </div>
 
-                    <div
-                      v-else-if="row.suggestions.length"
-                      class="lot-dropdown"
-                    >
-                      <button
-                        v-for="option in row.suggestions"
-                        :key="option.id"
-                        type="button"
-                        @mousedown.prevent="selectLot(index, option)"
-                      >
-                        <strong>{{ option.sku }} · Lô {{ option.lotCode }}</strong>
-                        <span>{{ option.productName }}</span>
-                        <small>
-                          Tồn hệ thống:
-                          {{ formatNumber(option.quantityOnHand) }}
-                          <template v-if="option.isExpired"> · Đã hết hạn</template>
-                        </small>
-                      </button>
-                    </div>
-                  </div>
+            <div v-if="loadingLots" class="lot-state">
+              Đang tải danh sách lô...
+            </div>
 
-                  <small v-if="row.inventoryLotId" class="selected-lot">
-                    <i class="bi bi-check-circle-fill"></i>
-                    {{ row.sku }} · {{ row.productName }} · Lô {{ row.lotCode }}
-                  </small>
-                </div>
+            <div
+              v-else-if="lotOptions.length === 0"
+              class="lot-state"
+            >
+              Không tìm thấy lô phù hợp.
+            </div>
 
-                <div class="field">
-                  <label>Tồn hệ thống</label>
-                  <input :value="formatNumber(row.systemQuantity)" readonly />
-                </div>
+            <div v-else class="lot-grid">
+              <button
+                v-for="option in lotOptions"
+                :key="option.id"
+                type="button"
+                class="lot-card"
+                :class="{ selected: isLotSelected(option.id) }"
+                @click="selectLot(option)"
+              >
+                <span class="lot-card-check">
+                  <i
+                    v-if="isLotSelected(option.id)"
+                    class="bi bi-check-lg"
+                  ></i>
+                </span>
 
-                <div class="field">
-                  <label>Tồn thực tế <span>*</span></label>
-                  <input
-                    v-model.number="row.actualQuantity"
-                    type="number"
-                    min="0"
-                    step="1"
-                    inputmode="numeric"
-                    placeholder="Nhập số đếm thực tế"
-                    @input="actualQuantityChanged(row)"
-                  />
-                </div>
+                <strong>{{ option.productName }}</strong>
+                <span class="sku-code">{{ option.sku }}</span>
+                <span class="lot-code">Lô {{ option.lotCode }}</span>
 
-                <div class="result-card" :class="differenceClass(row)">
-                  <span>Chênh lệch</span>
-                  <strong>
-                    {{
-                      differenceOf(row) === null
-                        ? "—"
-                        : `${Number(differenceOf(row)) > 0 ? "+" : ""}${differenceOf(row)}`
-                    }}
-                  </strong>
-                  <small>{{ resultLabel(row) }}</small>
-                </div>
+                <div class="lot-meta">
+                  <span>
+                    Tồn hệ thống:
+                    <strong>{{ formatNumber(option.quantityOnHand) }}</strong>
+                  </span>
 
-                <div class="field reason-field">
-                  <label>
-                    Lý do
-                    <span v-if="differenceOf(row) !== null && differenceOf(row) !== 0">
-                      *
-                    </span>
-                  </label>
-
-                  <select
-                    v-model="row.reasonPreset"
-                    :disabled="differenceOf(row) === null || differenceOf(row) === 0"
+                  <span
+                    v-if="option.isExpired"
+                    class="expired-text"
                   >
-                    <option value="">
-                      {{
-                        differenceOf(row) === null
-                          ? "Nhập tồn thực tế trước"
-                          : differenceOf(row) === 0
-                            ? "Không bắt buộc khi tồn khớp"
-                            : "-- Chọn lý do chênh lệch --"
-                      }}
-                    </option>
-
-                    <option
-                      v-for="reason in reasonOptionsOf(row)"
-                      :key="reason"
-                      :value="reason"
-                    >
-                      {{ reason }}
-                    </option>
-
-                    <option
-                      v-if="differenceOf(row) !== null && differenceOf(row) !== 0"
-                      :value="OTHER_REASON"
-                    >
-                      Khác
-                    </option>
-                  </select>
-
-                  <textarea
-                    v-if="row.reasonPreset === OTHER_REASON"
-                    v-model="row.customReason"
-                    maxlength="500"
-                    rows="2"
-                    placeholder="Nhập lý do cụ thể..."
-                  ></textarea>
+                    Đã hết hạn
+                  </span>
                 </div>
+              </button>
+            </div>
+          </section>
+
+          <section class="selected-section">
+            <div class="section-head selected-head">
+              <div>
+                <h4>Lô đã chọn ({{ items.length }})</h4>
+                <p>
+                  Nhập số lượng kiểm đếm thực tế. Khi có chênh lệch, bắt buộc
+                  chọn lý do.
+                </p>
               </div>
             </div>
-          </div>
+
+            <div
+              v-if="items.length === 0"
+              class="selected-empty"
+            >
+              Chưa có lô nào được chọn.
+            </div>
+
+            <div v-else class="table-wrapper">
+              <table class="selected-table">
+                <thead>
+                  <tr>
+                    <th class="product-column">Sản phẩm / lô</th>
+                    <th class="quantity-column">Tồn hệ thống</th>
+                    <th class="quantity-column">Tồn thực tế *</th>
+                    <th class="difference-column">Chênh lệch</th>
+                    <th class="reason-column">Lý do</th>
+                    <th class="action-column">Thao tác</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  <tr
+                    v-for="row in items"
+                    :key="row.inventoryLotId"
+                  >
+                    <td>
+                      <div class="product-cell">
+                        <strong>{{ row.productName }}</strong>
+                        <span>{{ row.sku }}</span>
+                        <span>Lô {{ row.lotCode }}</span>
+                      </div>
+                    </td>
+
+                    <td class="system-quantity">
+                      {{ formatNumber(row.systemQuantity) }}
+                    </td>
+
+                    <td>
+                      <input
+                        v-model.number="row.actualQuantity"
+                        class="table-input"
+                        type="number"
+                        min="0"
+                        step="1"
+                        inputmode="numeric"
+                        placeholder="0"
+                        @input="actualQuantityChanged(row)"
+                      />
+                    </td>
+
+                    <td>
+                      <div
+                        class="difference-box"
+                        :class="differenceClass(row)"
+                      >
+                        <strong>
+                          {{
+                            differenceOf(row) === null
+                              ? "—"
+                              : `${Number(differenceOf(row)) > 0 ? "+" : ""}${differenceOf(row)}`
+                          }}
+                        </strong>
+                        <small>{{ resultLabel(row) }}</small>
+                      </div>
+                    </td>
+
+                    <td>
+                      <div class="reason-wrap">
+                        <select
+                          v-model="row.reasonPreset"
+                          class="table-input"
+                          :disabled="
+                            differenceOf(row) === null ||
+                            differenceOf(row) === 0
+                          "
+                        >
+                          <option value="">
+                            {{
+                              differenceOf(row) === null
+                                ? "Nhập tồn thực tế trước"
+                                : differenceOf(row) === 0
+                                  ? "Không cần lý do"
+                                  : "-- Chọn lý do --"
+                            }}
+                          </option>
+
+                          <option
+                            v-for="reason in reasonOptionsOf(row)"
+                            :key="reason"
+                            :value="reason"
+                          >
+                            {{ reason }}
+                          </option>
+
+                          <option
+                            v-if="
+                              differenceOf(row) !== null &&
+                              differenceOf(row) !== 0
+                            "
+                            :value="OTHER_REASON"
+                          >
+                            Khác
+                          </option>
+                        </select>
+
+                        <textarea
+                          v-if="row.reasonPreset === OTHER_REASON"
+                          v-model="row.customReason"
+                          class="reason-textarea"
+                          maxlength="500"
+                          rows="2"
+                          placeholder="Nhập lý do cụ thể..."
+                        ></textarea>
+                      </div>
+                    </td>
+
+                    <td class="action-cell">
+                      <button
+                        type="button"
+                        class="remove-btn"
+                        title="Xóa lô khỏi phiếu"
+                        @click="removeItem(row.inventoryLotId)"
+                      >
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
 
           <div class="sa-footer">
             <button
@@ -620,7 +664,12 @@ const close = () => {
             >
               Đóng
             </button>
-            <button type="submit" class="primary-btn" :disabled="saving">
+
+            <button
+              type="submit"
+              class="primary-btn"
+              :disabled="saving"
+            >
               {{
                 saving
                   ? "Đang lưu..."
@@ -650,7 +699,7 @@ const close = () => {
 }
 
 .sa-dialog {
-  width: min(1180px, 100%);
+  width: min(1240px, 100%);
   margin: 20px auto;
   overflow: hidden;
   border-radius: 16px;
@@ -660,195 +709,359 @@ const close = () => {
 
 .sa-header,
 .sa-footer,
-.items-head {
+.section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 22px;
 }
 
 .sa-header {
+  padding: 18px 22px;
   border-bottom: 1px solid #e5e7eb;
 }
 
 .sa-footer {
   justify-content: flex-end;
+  padding: 16px 22px;
   border-top: 1px solid #e5e7eb;
+  background: #fff;
 }
 
 .sa-header h3,
-.items-head h4 {
+.section-head h4 {
   margin: 0;
 }
 
 .sa-header p,
-.items-head p {
+.section-head p {
   margin: 5px 0 0;
   color: #6b7280;
   font-size: 13px;
 }
 
-.general-grid,
-.item-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-}
-
-.general-grid {
+.lot-picker-section,
+.selected-section {
   padding: 20px 22px;
-  border-bottom: 1px solid #eee;
 }
 
-.items-wrap {
-  padding: 0 22px 22px;
+.lot-picker-section {
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
 }
 
-.item-card {
-  margin-top: 12px;
-  padding: 16px;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+.selected-section {
   background: #fafafa;
 }
 
-.item-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14px;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.wide-3 {
-  grid-column: span 3;
-}
-
-.lot-field,
-.reason-field {
-  grid-column: span 2;
-}
-
-.field label {
+.selected-badge {
+  flex: 0 0 auto;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: #f3f4f6;
   color: #374151;
   font-size: 13px;
   font-weight: 600;
 }
 
-.field label span {
-  color: #dc2626;
+.lot-search {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
 }
 
-.field input,
-.field select,
-.field textarea {
+.search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.search-input-wrap > i {
+  position: absolute;
+  left: 12px;
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+.search-input-wrap input {
   box-sizing: border-box;
   width: 100%;
-  min-height: 40px;
-  padding: 9px 11px;
+  height: 42px;
+  padding: 0 40px 0 38px;
   border: 1px solid #d1d5db;
   border-radius: 8px;
   background: #fff;
   outline: none;
 }
 
-.field input:focus,
-.field select:focus,
-.field textarea:focus {
+.search-input-wrap input:focus {
   border-color: #111827;
 }
 
-.field select:disabled {
+.clear-search-btn {
+  position: absolute;
+  right: 6px;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+}
+
+.clear-search-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.search-btn {
+  min-width: 108px;
+  height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  background: #111827;
+  color: #fff;
+  cursor: pointer;
+}
+
+.lot-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  max-height: 280px;
+  margin-top: 14px;
+  overflow-y: auto;
+}
+
+.lot-card {
+  position: relative;
+  display: flex;
+  min-height: 116px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 5px;
+  padding: 13px 40px 13px 14px;
+  border: 1px solid #dfe3e8;
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.lot-card:hover {
+  border-color: #9ca3af;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.05);
+}
+
+.lot-card.selected {
+  border-color: #65a30d;
+  background: #f7fee7;
+}
+
+.lot-card > strong {
+  color: #111827;
+  font-size: 14px;
+}
+
+.lot-card-check {
+  position: absolute;
+  top: 11px;
+  right: 11px;
+  display: flex;
+  width: 21px;
+  height: 21px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d1d5db;
+  border-radius: 50%;
+  background: #fff;
+  color: #65a30d;
+  font-size: 13px;
+}
+
+.lot-card.selected .lot-card-check {
+  border-color: #84cc16;
+}
+
+.sku-code,
+.lot-code {
+  color: #6b7280;
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.lot-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+  color: #4b5563;
+  font-size: 12px;
+}
+
+.lot-meta strong {
+  color: #111827;
+}
+
+.expired-text {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.lot-state,
+.lot-error,
+.selected-empty {
+  margin-top: 14px;
+  padding: 18px;
+  border: 1px dashed #d1d5db;
+  border-radius: 10px;
+  background: #fafafa;
+  color: #6b7280;
+  text-align: center;
+  font-size: 13px;
+}
+
+.lot-error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.selected-head {
+  margin-bottom: 14px;
+}
+
+.table-wrapper {
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.selected-table {
+  width: 100%;
+  min-width: 1120px;
+  border-collapse: collapse;
+}
+
+.selected-table th,
+.selected-table td {
+  padding: 11px 10px;
+  border-bottom: 1px solid #eef0f2;
+  vertical-align: middle;
+}
+
+.selected-table th {
+  background: #f9fafb;
+  color: #4b5563;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.selected-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.product-column {
+  min-width: 220px;
+}
+
+.quantity-column {
+  width: 125px;
+}
+
+.difference-column {
+  width: 150px;
+}
+
+.reason-column {
+  min-width: 280px;
+}
+
+.action-column {
+  width: 72px;
+  text-align: center !important;
+}
+
+.product-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.product-cell strong {
+  color: #111827;
+  font-size: 13px;
+}
+
+.product-cell span {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.system-quantity {
+  color: #111827;
+  font-weight: 700;
+}
+
+.table-input,
+.reason-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 9px;
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+  background: #fff;
+  outline: none;
+}
+
+.table-input:focus,
+.reason-textarea:focus {
+  border-color: #111827;
+}
+
+.table-input:disabled {
   background: #f9fafb;
   color: #6b7280;
   cursor: not-allowed;
 }
 
-.field input[readonly] {
-  background: #f9fafb;
-  color: #4b5563;
-  font-weight: 600;
-}
-
-.lot-wrap {
-  position: relative;
-}
-
-.lot-loading,
-.lot-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  left: 0;
-  z-index: 30;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
-}
-
-.lot-loading {
-  padding: 10px;
-  color: #6b7280;
-}
-
-.lot-dropdown {
-  max-height: 280px;
-  overflow-y: auto;
-}
-
-.lot-dropdown button {
+.reason-wrap {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  padding: 10px 12px;
-  border: 0;
-  border-bottom: 1px solid #f3f4f6;
-  background: #fff;
-  text-align: left;
-  cursor: pointer;
+  gap: 6px;
 }
 
-.lot-dropdown button:hover {
-  background: #f9fafb;
+.reason-textarea {
+  resize: vertical;
 }
 
-.lot-dropdown span,
-.lot-dropdown small {
-  color: #6b7280;
-  font-size: 12px;
-}
-
-.selected-lot {
-  color: #047857;
-  font-size: 12px;
-}
-
-.result-card {
+.difference-box {
   display: flex;
+  min-height: 52px;
   flex-direction: column;
   justify-content: center;
-  gap: 3px;
-  min-height: 78px;
-  padding: 10px 12px;
+  gap: 2px;
+  padding: 7px 9px;
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
-.result-card span,
-.result-card small {
-  font-size: 12px;
+.difference-box strong {
+  font-size: 16px;
 }
 
-.result-card strong {
-  font-size: 18px;
+.difference-box small {
+  font-size: 11px;
 }
 
 .difference-neutral {
@@ -866,6 +1079,10 @@ const close = () => {
   border-color: #fecaca;
   background: #fef2f2;
   color: #b91c1c;
+}
+
+.action-cell {
+  text-align: center;
 }
 
 .primary-btn,
@@ -907,16 +1124,23 @@ button:disabled {
   cursor: not-allowed;
 }
 
-@media (max-width: 900px) {
-  .general-grid,
-  .item-grid {
-    grid-template-columns: repeat(2, 1fr);
+@media (max-width: 1000px) {
+  .lot-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .lot-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .wide-3,
-  .lot-field,
-  .reason-field {
-    grid-column: span 2;
+  .lot-search {
+    flex-direction: column;
+  }
+
+  .search-btn {
+    width: 100%;
   }
 }
 
@@ -930,16 +1154,11 @@ button:disabled {
     margin: 0;
     border-radius: 0;
   }
+}
 
-  .general-grid,
-  .item-grid {
+@media (max-width: 480px) {
+  .lot-grid {
     grid-template-columns: 1fr;
-  }
-
-  .wide-3,
-  .lot-field,
-  .reason-field {
-    grid-column: span 1;
   }
 }
 

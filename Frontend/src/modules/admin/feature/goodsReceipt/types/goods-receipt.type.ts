@@ -148,4 +148,9 @@ export interface InventorySkuOption {
   // Để optional nhằm không ảnh hưởng các chỗ khác nếu có dùng interface này.
   capacityValue?: number | null;
   bottleTypeName?: string | null;
+
+  // Chỉ phục vụ sắp xếp danh sách chọn SKU trong phiếu nhập.
+  // Không gửi các field này trong payload tạo/cập nhật phiếu.
+  totalQuantity?: number;
+  sellableQuantity?: number;
 }

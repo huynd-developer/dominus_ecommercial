@@ -88,12 +88,13 @@ const stockAdjustmentService = {
   /**
    * Kiểm kê thực tế chọn InventoryLot đã tồn tại.
    * Không lọc hasStock để vẫn kiểm kê được lô hệ thống đang = 0 nhưng thực tế > 0.
+   * Picker hiển thị tối đa 100 lô cho mỗi lần tìm kiếm.
    */
   async searchLots(keyword: string): Promise<InventoryLotListResponse[]> {
     const data = await inventoryLotService.getList({
       keyword: keyword.trim(),
       page: 0,
-      size: 20,
+      size: 100,
     });
 
     return Array.isArray(data?.content) ? data.content : [];

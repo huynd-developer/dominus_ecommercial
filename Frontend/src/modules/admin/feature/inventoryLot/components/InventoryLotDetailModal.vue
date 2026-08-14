@@ -3,7 +3,7 @@ import type {
   InventoryLotDetailResponse,
 } from "../types/inventory-lot.type";
 
-const props = defineProps<{
+defineProps<{
   visible: boolean;
   detail: InventoryLotDetailResponse | null;
   loading?: boolean;
@@ -28,6 +28,25 @@ const formatDateTime = (value?: string | null) =>
 
 const formatNumber = (value?: number | null) =>
   new Intl.NumberFormat("vi-VN").format(Number(value ?? 0));
+
+const formatMoney = (value?: number | null) => {
+  if (value == null || !Number.isFinite(Number(value))) {
+    return "—";
+  }
+
+  return `${new Intl.NumberFormat("vi-VN").format(Number(value))} đ`;
+};
+
+const inventoryValue = (detail: InventoryLotDetailResponse) => {
+  if (
+    detail.unitCost == null ||
+    !Number.isFinite(Number(detail.unitCost))
+  ) {
+    return null;
+  }
+
+  return Number(detail.quantityOnHand ?? 0) * Number(detail.unitCost);
+};
 
 const expiryText = (detail: InventoryLotDetailResponse) => {
   if (detail.isExpired) {
@@ -124,6 +143,14 @@ const expiryClass = (detail: InventoryLotDetailResponse) => {
               <div>
                 <span>Có thể bán</span>
                 <strong>{{ formatNumber(detail.sellableQuantity) }}</strong>
+              </div>
+              <div>
+                <span>Đơn giá nhập</span>
+                <strong>{{ formatMoney(detail.unitCost) }}</strong>
+              </div>
+              <div>
+                <span>Giá trị tồn</span>
+                <strong>{{ formatMoney(inventoryValue(detail)) }}</strong>
               </div>
             </div>
 
@@ -274,7 +301,7 @@ section h4 {
 }
 .stock-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 12px;
 }
 .stock-grid strong {

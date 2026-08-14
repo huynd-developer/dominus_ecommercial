@@ -120,6 +120,7 @@ public class InventoryLotServiceImpl implements InventoryLotService {
                 .initialQuantity(projection.getInitialQuantity())
                 .quantityOnHand(projection.getQuantityOnHand())
                 .sellableQuantity(projection.getSellableQuantity())
+                .unitCost(projection.getUnitCost())
                 .isNearExpiry(projection.getIsNearExpiry())
                 .isExpired(projection.getIsExpired())
                 .createdById(projection.getCreatedById())
@@ -160,7 +161,6 @@ public class InventoryLotServiceImpl implements InventoryLotService {
     private ResponseStatusException badRequest(String message) {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
-
 
     private ResponseStatusException notFound() {
         return new ResponseStatusException(

@@ -19,7 +19,6 @@ export type { InventorySkuOption };
 
 export interface OpeningBalanceItemRequest {
   productVariantId: number;
-  lotCode: string;
   quantity: number;
   manufacturedDate: string | null;
   receivedDate: string;
@@ -29,7 +28,8 @@ export interface OpeningBalanceItemRequest {
 
 /**
  * Khớp OpeningBalanceSaveRequest của BE.
- * FE không gửi receiptType và unitCost.
+ * FE không gửi receiptType, unitCost và lotCode.
+ * Mã lô do backend tự sinh.
  */
 export interface OpeningBalanceSaveRequest {
   note: string | null;

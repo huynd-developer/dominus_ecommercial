@@ -27,10 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -427,8 +425,6 @@ public class OpeningBalanceServiceImpl implements OpeningBalanceService {
             );
         }
 
-        Set<String> duplicateSet = new HashSet<>();
-
         for (int i = 0; i < request.getItems().size(); i++) {
 
             OpeningBalanceItemRequest item = request.getItems().get(i);
@@ -453,18 +449,6 @@ public class OpeningBalanceServiceImpl implements OpeningBalanceService {
                 throw badRequest(
                         "Dòng " + line
                                 + ": số lượng thực tế phải lớn hơn 0."
-                );
-            }
-
-            String lotCode = normalizeRequired(
-                    item.getLotCode(),
-                    "Dòng " + line + ": mã lô không được để trống."
-            );
-
-            if (lotCode.length() > 100) {
-                throw badRequest(
-                        "Dòng " + line
-                                + ": mã lô không được vượt quá 100 ký tự."
                 );
             }
 
@@ -514,19 +498,6 @@ public class OpeningBalanceServiceImpl implements OpeningBalanceService {
                     );
                 }
             }
-
-            String duplicateKey =
-                    item.getProductVariantId()
-                            + "|"
-                            + lotCode.toUpperCase(Locale.ROOT);
-
-            if (!duplicateSet.add(duplicateKey)) {
-                throw badRequest(
-                        "Dòng " + line
-                                + ": không được trùng SKU + LotCode "
-                                + "trong cùng phiếu."
-                );
-            }
         }
     }
 
@@ -564,7 +535,11 @@ public class OpeningBalanceServiceImpl implements OpeningBalanceService {
                 new GoodsReceiptItemRequest();
 
         target.setProductVariantId(source.getProductVariantId());
-        target.setLotCode(source.getLotCode().trim());
+
+        /*
+         * Mã lô không nhận từ FE.
+         * GoodsReceiptService sẽ tự sinh theo cùng cơ chế của phiếu nhập kho.
+         */
         target.setQuantity(source.getQuantity());
 
         /*
@@ -578,17 +553,6 @@ public class OpeningBalanceServiceImpl implements OpeningBalanceService {
         target.setNote(normalizeOptional(source.getNote()));
 
         return target;
-    }
-
-    private String normalizeRequired(
-            String value,
-            String message
-    ) {
-        if (value == null || value.trim().isEmpty()) {
-            throw badRequest(message);
-        }
-
-        return value.trim();
     }
 
     private String normalizeOptional(String value) {

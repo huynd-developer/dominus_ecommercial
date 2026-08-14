@@ -1,5 +1,6 @@
 package org.example.datn_sd69.repository.projection;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -22,6 +23,7 @@ public interface InventoryLotViewProjection {
     String getCreatedByName();
     LocalDateTime getCreatedAt();
     Integer getGoodsReceiptItemId();
+    BigDecimal getUnitCost();
     Integer getGoodsReceiptId();
     String getReceiptNo();
     Byte getReceiptType();

@@ -70,7 +70,7 @@ const assertOpeningBalancePage = (
 
 /**
  * Dedicated OpeningBalanceController nhận đúng OpeningBalanceSaveRequest.
- * Không gửi receiptType và không gửi unitCost từ FE.
+ * Không gửi receiptType, unitCost và lotCode từ FE.
  * receiptType = OPENING_BALANCE do server quyết định.
  */
 const toOpeningBalancePayload = (
@@ -79,7 +79,6 @@ const toOpeningBalancePayload = (
   note: request.note?.trim() || null,
   items: request.items.map((item) => ({
     productVariantId: Number(item.productVariantId),
-    lotCode: item.lotCode.trim(),
     quantity: Number(item.quantity),
     manufacturedDate: item.manufacturedDate || null,
     receivedDate: item.receivedDate,
@@ -206,9 +205,12 @@ const openingBalanceService = {
 
   /**
    * Tái sử dụng API tìm SKU của Module 2.
+   * Chỉ giới hạn số SKU hiển thị trong picker ở tối đa 100.
+   * Khi có keyword, goodsReceiptService vẫn gọi BE để tìm trên toàn bộ dữ liệu.
    */
   async searchSku(keyword: string): Promise<InventorySkuOption[]> {
-    return goodsReceiptService.searchSku(keyword);
+    const options = await goodsReceiptService.searchSku(keyword);
+    return options.slice(0, 100);
   },
 };
 

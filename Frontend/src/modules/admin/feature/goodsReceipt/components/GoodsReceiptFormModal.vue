@@ -588,6 +588,7 @@ const onUnitCostInput = (index: number, event: Event) => {
                         v-model="row.manufacturedDate"
                         class="table-input"
                         type="date"
+                        :max="effectiveReceivedDate"
                       />
                     </td>
 
@@ -596,6 +597,7 @@ const onUnitCostInput = (index: number, event: Event) => {
                         v-model="row.expirationDate"
                         class="table-input"
                         type="date"
+                        :min="effectiveReceivedDate"
                       />
                     </td>
 

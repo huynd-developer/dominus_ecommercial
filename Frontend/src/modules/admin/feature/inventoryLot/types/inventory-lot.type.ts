@@ -62,6 +62,7 @@ export interface InventoryLotDetailResponse {
   initialQuantity: number;
   quantityOnHand: number;
   sellableQuantity: number;
+  unitCost: number | null;
 
   isNearExpiry: boolean;
   isExpired: boolean;

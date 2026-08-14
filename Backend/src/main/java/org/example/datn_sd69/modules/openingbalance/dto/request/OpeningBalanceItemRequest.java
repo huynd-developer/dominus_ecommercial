@@ -14,10 +14,6 @@ public class OpeningBalanceItemRequest {
     @Positive(message = "ProductVariantId phải lớn hơn 0")
     private Integer productVariantId;
 
-    @NotBlank(message = "Mã lô không được để trống")
-    @Size(max = 100, message = "Mã lô không được vượt quá 100 ký tự")
-    private String lotCode;
-
     @NotNull(message = "Số lượng thực tế không được để trống")
     @Positive(message = "Số lượng thực tế phải lớn hơn 0")
     private Integer quantity;

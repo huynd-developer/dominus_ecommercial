@@ -34,6 +34,7 @@ public interface InventoryLotRepository extends JpaRepository<InventoryLot, Inte
                         CU.Name AS createdByName,
                         L.CreatedAt AS createdAt,
                         L.GoodsReceiptItemId AS goodsReceiptItemId,
+                        GRI.UnitCost AS unitCost,
                         GR.Id AS goodsReceiptId,
                         GR.ReceiptNo AS receiptNo,
                         GR.ReceiptType AS receiptType,
@@ -66,9 +67,10 @@ public interface InventoryLotRepository extends JpaRepository<InventoryLot, Inte
                         AND (:expirationFrom IS NULL OR LS.ExpirationDate >= :expirationFrom)
                         AND (:expirationTo IS NULL OR LS.ExpirationDate <= :expirationTo)
                     ORDER BY
+                        CASE WHEN LS.IsExpired = 1 THEN 1 ELSE 0 END ASC,
                         LS.ExpirationDate ASC,
-                        LS.ReceivedDate DESC,
-                        LS.InventoryLotId DESC
+                        LS.ReceivedDate ASC,
+                        LS.InventoryLotId ASC
                     """,
             countQuery = """
                     SELECT COUNT(*)
@@ -132,6 +134,7 @@ public interface InventoryLotRepository extends JpaRepository<InventoryLot, Inte
                         CU.Name AS createdByName,
                         L.CreatedAt AS createdAt,
                         L.GoodsReceiptItemId AS goodsReceiptItemId,
+                        GRI.UnitCost AS unitCost,
                         GR.Id AS goodsReceiptId,
                         GR.ReceiptNo AS receiptNo,
                         GR.ReceiptType AS receiptType,

@@ -4,6 +4,7 @@ import lombok.*;
 import org.example.datn_sd69.enums.GoodsReceiptStatus;
 import org.example.datn_sd69.enums.GoodsReceiptType;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -28,6 +29,7 @@ public class InventoryLotDetailResponse {
     private Integer initialQuantity;
     private Integer quantityOnHand;
     private Integer sellableQuantity;
+    private BigDecimal unitCost;
 
     private Boolean isNearExpiry;
     private Boolean isExpired;
