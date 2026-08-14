@@ -596,10 +596,8 @@ const unlockLot = async (id: number) => {
             color:#4b5563;
           "
         >
-          Lý do mở khóa
-          <span style="font-weight:600;color:#6b7280;">
-            (không bắt buộc)
-          </span>
+         Lý do mở khóa
+<span style="color:#dc2626;">*</span>
         </label>
 
         <select
@@ -615,7 +613,7 @@ const unlockLot = async (id: number) => {
             font-size:16px;
           "
         >
-          <option value="">-- Không chọn lý do --</option>
+         <option value="">-- Chọn lý do mở khóa lô --</option>
           <option value="Đã kiểm tra lại chất lượng">
             Đã kiểm tra lại chất lượng
           </option>
@@ -693,7 +691,13 @@ const unlockLot = async (id: number) => {
 
       const selectedReason = String(select?.value || "").trim();
       const description = String(descriptionInput?.value || "").trim();
+if (!selectedReason) {
+  Swal.showValidationMessage(
+    "Bắt buộc chọn lý do mở khóa lô."
+  );
 
+  return false;
+}
       if (selectedReason === "__OTHER__" && !description) {
         Swal.showValidationMessage(
           "Bắt buộc nhập mô tả chi tiết khi chọn lý do Khác."
@@ -730,14 +734,9 @@ const unlockLot = async (id: number) => {
   const reason = String(result.value || "").trim();
 
   try {
-    await store.unlockLot(
-      id,
-      reason
-        ? {
-            reason,
-          }
-        : undefined
-    );
+    await store.unlockLot(id, {
+  reason,
+});
 
     await Swal.fire({
       icon: "success",

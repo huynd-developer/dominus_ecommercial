@@ -26,6 +26,8 @@ const canManage = computed(() =>
   ["OWNER", "MANAGER"].includes(userRole.value)
 );
 
+const canReview = computed(() => userRole.value === "OWNER");
+
 const formVisible = ref(false);
 const detailVisible = ref(false);
 const editingDetail = ref<OpeningBalanceDetailResponse | null>(null);
@@ -133,6 +135,18 @@ const ensureCanManage = async () => {
     icon: "error",
     title: "Không có quyền",
     text: "Chỉ chủ hệ thống hoặc quản lý được thao tác phiếu tồn đầu kỳ.",
+  });
+
+  return false;
+};
+
+const ensureCanReview = async () => {
+  if (canReview.value) return true;
+
+  await Swal.fire({
+    icon: "error",
+    title: "Không có quyền",
+    text: "Chỉ chủ hệ thống được phê duyệt hoặc từ chối phiếu tồn đầu kỳ.",
   });
 
   return false;
@@ -310,7 +324,7 @@ const submitReceipt = async (item: OpeningBalanceListResponse) => {
 };
 
 const approveReceipt = async (item: OpeningBalanceListResponse) => {
-  if (!(await ensureCanManage())) return;
+  if (!(await ensureCanReview())) return;
 
   const result = await Swal.fire({
     icon: "warning",
@@ -342,7 +356,7 @@ const approveReceipt = async (item: OpeningBalanceListResponse) => {
 };
 
 const rejectReceipt = async (item: OpeningBalanceListResponse) => {
-  if (!(await ensureCanManage())) return;
+  if (!(await ensureCanReview())) return;
 
   const result = await Swal.fire({
     icon: "warning",
@@ -464,8 +478,8 @@ onMounted(async () => {
 
     <div v-if="!canManage" class="permission-note">
       <i class="bi bi-eye"></i>
-      Thu ngân được xem danh sách, chi tiết và lịch sử. Tạo, sửa, gửi duyệt,
-      phê duyệt và từ chối chỉ dành cho chủ hệ thống hoặc quản lý.
+      Thu ngân được xem danh sách, chi tiết và lịch sử. Tạo, sửa, gửi duyệt
+      dành cho chủ hệ thống hoặc quản lý; phê duyệt và từ chối chỉ dành cho chủ hệ thống.
     </div>
 
     <div class="content-card">
@@ -586,7 +600,7 @@ onMounted(async () => {
                   </button>
 
                   <button
-                    v-if="canManage && item.status === 'PENDING_APPROVAL'"
+                    v-if="canReview && item.status === 'PENDING_APPROVAL'"
                     type="button"
                     class="action-approve"
                     title="Phê duyệt"
@@ -597,7 +611,7 @@ onMounted(async () => {
                   </button>
 
                   <button
-                    v-if="canManage && item.status === 'PENDING_APPROVAL'"
+                    v-if="canReview && item.status === 'PENDING_APPROVAL'"
                     type="button"
                     class="action-danger"
                     title="Từ chối"

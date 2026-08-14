@@ -158,9 +158,7 @@ public class OpeningBalanceController {
     // =========================================================
 
     @PostMapping("/{id}/approve")
-    @PreAuthorize(
-            "hasAnyAuthority('OWNER', 'MANAGER')"
-    )
+    @PreAuthorize("hasAuthority('OWNER')")
     public ResponseEntity<GoodsReceiptDetailResponse> approve(
             @PathVariable Integer id
     ) {
@@ -175,9 +173,7 @@ public class OpeningBalanceController {
     // =========================================================
 
     @PostMapping("/{id}/reject")
-    @PreAuthorize(
-            "hasAnyAuthority('OWNER', 'MANAGER')"
-    )
+    @PreAuthorize("hasAuthority('OWNER')")
     public ResponseEntity<GoodsReceiptDetailResponse> reject(
             @PathVariable Integer id,
             @Valid @RequestBody GoodsReceiptRejectRequest request

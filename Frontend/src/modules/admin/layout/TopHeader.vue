@@ -337,6 +337,13 @@ const menuItems = [
         icon: "bi-exclamation-triangle",
         roles: ["OWNER", "MANAGER", "CASHIER"],
       },
+      {
+        id: "stock-movements",
+        path: "/admin/stock-movements",
+        name: "Lịch sử kho",
+        icon: "bi-clock-history",
+        roles: ["OWNER", "MANAGER", "CASHIER"],
+      },
     ],
   },
   {

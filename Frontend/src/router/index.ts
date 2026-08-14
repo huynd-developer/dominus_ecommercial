@@ -294,6 +294,18 @@ const routes: Array<RouteRecordRaw> = [
         },
       },
       {
+        path: "stock-movements",
+        name: "AdminStockMovements",
+        component: () =>
+          import(
+            "@/modules/admin/feature/stockMovement/views/StockMovementView.vue"
+          ),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
+      },
+      {
         path: "reviews",
         name: "AdminReviews",
         component: () =>
