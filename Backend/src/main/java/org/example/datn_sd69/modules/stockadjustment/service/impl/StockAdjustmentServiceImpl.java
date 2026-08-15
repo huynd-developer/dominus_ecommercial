@@ -8,6 +8,7 @@ import org.example.datn_sd69.entity.StockAdjustment;
 import org.example.datn_sd69.entity.StockAdjustmentItem;
 import org.example.datn_sd69.entity.User;
 import org.example.datn_sd69.enums.StockAdjustmentStatus;
+import org.example.datn_sd69.modules.stockadjustment.dto.request.StockAdjustmentCancelRequest;
 import org.example.datn_sd69.modules.stockadjustment.dto.request.StockAdjustmentItemRequest;
 import org.example.datn_sd69.modules.stockadjustment.dto.request.StockAdjustmentRejectRequest;
 import org.example.datn_sd69.modules.stockadjustment.dto.request.StockAdjustmentSaveRequest;
@@ -36,7 +37,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -258,6 +258,74 @@ public class StockAdjustmentServiceImpl
                 adjustment
         );
 
+        return toDetailResponse(adjustment);
+    }
+
+    // =========================================================
+    // CANCEL DRAFT
+    // =========================================================
+
+    @Override
+    @Transactional
+    public StockAdjustmentDetailResponse cancel(
+            Integer id,
+            StockAdjustmentCancelRequest request
+    ) {
+
+        if (request == null) {
+            throw badRequest(
+                    "Dữ liệu hủy phiếu không được để trống."
+            );
+        }
+
+        String reason =
+                normalizeRequired(
+                        request.getReason(),
+                        "Lý do hủy không được để trống."
+                );
+
+        if (reason.length() > 500) {
+            throw badRequest(
+                    "Lý do hủy không được vượt quá 500 ký tự."
+            );
+        }
+
+        StockAdjustment adjustment =
+                requireAdjustmentForUpdate(id);
+
+        requireStatus(
+                adjustment,
+                StockAdjustmentStatus.DRAFT,
+                "Chỉ phiếu Lưu tạm mới được hủy."
+        );
+
+        User currentUser =
+                getCurrentUser();
+
+        ensureDraftOwnerOrOwner(
+                adjustment,
+                currentUser,
+                "Chỉ người tạo phiếu hoặc OWNER được hủy phiếu Lưu tạm."
+        );
+
+        adjustment.setStatus(
+                StockAdjustmentStatus
+                        .CANCELLED
+                        .getCode()
+        );
+
+        adjustment.setCancelledBy(currentUser);
+        adjustment.setCancelledAt(LocalDateTime.now());
+        adjustment.setCancellationReason(reason);
+
+        stockAdjustmentRepository.saveAndFlush(
+                adjustment
+        );
+
+        /*
+         * Hủy phiếu Lưu tạm chỉ đổi trạng thái.
+         * Không tạo StockMovement và không thay đổi InventoryLot.
+         */
         return toDetailResponse(adjustment);
     }
 
@@ -820,6 +888,10 @@ public class StockAdjustmentServiceImpl
                 adjustment.getRejectedAt()
         );
 
+        response.setCancelledAt(
+                adjustment.getCancelledAt()
+        );
+
         return response;
     }
 
@@ -924,6 +996,26 @@ public class StockAdjustmentServiceImpl
 
         response.setRejectionReason(
                 adjustment.getRejectionReason()
+        );
+
+        response.setCancelledById(
+                userId(
+                        adjustment.getCancelledBy()
+                )
+        );
+
+        response.setCancelledByName(
+                userName(
+                        adjustment.getCancelledBy()
+                )
+        );
+
+        response.setCancelledAt(
+                adjustment.getCancelledAt()
+        );
+
+        response.setCancellationReason(
+                adjustment.getCancellationReason()
         );
 
         response.setItems(
@@ -1331,24 +1423,34 @@ public class StockAdjustmentServiceImpl
 
     private String generateAdjustmentNo() {
 
-        DateTimeFormatter formatter =
-                DateTimeFormatter.ofPattern(
-                        "yyyyMMdd-HHmmss"
+        String date =
+                LocalDateTime.now().format(
+                        DateTimeFormatter.ofPattern(
+                                "yyyyMMdd"
+                        )
                 );
 
-        for (int i = 0; i < 10; i++) {
+        final String chars =
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
-            String suffix =
-                    UUID.randomUUID()
-                            .toString()
-                            .replace("-", "")
-                            .substring(0, 6)
-                            .toUpperCase(Locale.ROOT);
+        for (int attempt = 0; attempt < 20; attempt++) {
+
+            StringBuilder suffix =
+                    new StringBuilder(6);
+
+            for (int i = 0; i < 6; i++) {
+                suffix.append(
+                        chars.charAt(
+                                java.util.concurrent.ThreadLocalRandom
+                                        .current()
+                                        .nextInt(chars.length())
+                        )
+                );
+            }
 
             String adjustmentNo =
                     "KK-"
-                            + LocalDateTime.now()
-                            .format(formatter)
+                            + date
                             + "-"
                             + suffix;
 

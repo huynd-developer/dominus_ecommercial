@@ -511,9 +511,9 @@ onMounted(loadPage);
         <table>
           <thead>
             <tr>
+              <th>Mã lô</th>
               <th>SKU</th>
               <th>Sản phẩm</th>
-              <th>Mã lô</th>
               <th>Tồn hiện tại</th>
               <th>Có thể bán</th>
               <th>Hạn sử dụng</th>
@@ -542,16 +542,6 @@ onMounted(loadPage);
 
             <tr v-for="item in store.alerts" v-else :key="item.id">
               <td>
-                <strong class="sku">
-                  {{ item.sku }}
-                </strong>
-              </td>
-
-              <td>
-                {{ item.productName }}
-              </td>
-
-              <td>
                 <button
                   type="button"
                   class="lot-link"
@@ -559,6 +549,16 @@ onMounted(loadPage);
                 >
                   {{ item.lotCode }}
                 </button>
+              </td>
+
+              <td>
+                <strong class="sku">
+                  {{ item.sku }}
+                </strong>
+              </td>
+
+              <td>
+                {{ item.productName }}
               </td>
 
               <td>

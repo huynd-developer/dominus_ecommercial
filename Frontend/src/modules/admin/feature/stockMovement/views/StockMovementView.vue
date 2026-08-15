@@ -432,18 +432,6 @@ onUnmounted(() => {
           </option>
         </select>
 
-        <select v-model="store.referenceType">
-          <option value="">Tất cả chứng từ</option>
-
-          <option
-            v-for="option in REFERENCE_TYPE_OPTIONS"
-            :key="option.value"
-            :value="option.value"
-          >
-            {{ option.label }}
-          </option>
-        </select>
-
         <div class="date-filter">
           <label>
             <span>Từ ngày</span>
@@ -494,9 +482,8 @@ onUnmounted(() => {
         <table>
           <thead>
             <tr>
-              <th>Thời gian</th>
-              <th>SKU / Sản phẩm</th>
               <th>Mã lô</th>
+              <th>SKU / Sản phẩm</th>
               <th>Loại biến động</th>
               <th>Thay đổi</th>
               <th>Tồn trước</th>
@@ -504,6 +491,7 @@ onUnmounted(() => {
               <th>Chứng từ nguồn</th>
               <th>Lý do</th>
               <th>Người thao tác</th>
+              <th>Thời gian</th>
               <th>Thao tác</th>
             </tr>
           </thead>
@@ -524,8 +512,10 @@ onUnmounted(() => {
             </tr>
 
             <tr v-for="item in store.movements" v-else :key="item.id">
-              <td class="time-cell">
-                {{ formatDateTime(item.createdAt) }}
+              <td>
+                <strong>
+                  {{ item.lotCode }}
+                </strong>
               </td>
 
               <td>
@@ -536,13 +526,6 @@ onUnmounted(() => {
                 <span class="product-name">
                   {{ item.productName }}
                 </span>
-              </td>
-
-              <td>
-                <strong>
-                  {{ item.lotCode }}
-                </strong>
-
               </td>
 
               <td>
@@ -572,7 +555,6 @@ onUnmounted(() => {
                   <span>
                     {{ referenceTypeLabel(item.referenceType) }}
                   </span>
-
                 </div>
               </td>
 
@@ -584,7 +566,10 @@ onUnmounted(() => {
                 <strong>
                   {{ item.createdByName || "—" }}
                 </strong>
+              </td>
 
+              <td class="time-cell">
+                {{ formatDateTime(item.createdAt) }}
               </td>
 
               <td>

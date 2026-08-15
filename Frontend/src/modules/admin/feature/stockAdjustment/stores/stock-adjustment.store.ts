@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import stockAdjustmentService from "../services/stock-adjustment.service";
 
 import type {
+  StockAdjustmentCancelRequest,
   StockAdjustmentDetailResponse,
   StockAdjustmentListResponse,
   StockAdjustmentRejectRequest,
@@ -175,6 +176,23 @@ export const useStockAdjustmentStore = defineStore("stockAdjustment", {
 
       try {
         const result = await stockAdjustmentService.submit(id);
+        if (this.detail?.id === id) this.detail = result;
+        await Promise.all([this.fetchList(), this.fetchPendingCount()]);
+        return result;
+      } catch (error) {
+        this.error = errorMessage(error);
+        throw error;
+      } finally {
+        this.processing = false;
+      }
+    },
+
+    async cancel(id: number, request: StockAdjustmentCancelRequest) {
+      this.processing = true;
+      this.error = null;
+
+      try {
+        const result = await stockAdjustmentService.cancel(id, request);
         if (this.detail?.id === id) this.detail = result;
         await Promise.all([this.fetchList(), this.fetchPendingCount()]);
         return result;

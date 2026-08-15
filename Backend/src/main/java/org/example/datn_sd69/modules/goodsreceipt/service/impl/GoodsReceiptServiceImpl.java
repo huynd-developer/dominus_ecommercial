@@ -437,6 +437,7 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
             LocalDate receivedDate
     ) {
         List<GoodsReceiptItem> entities = new ArrayList<>();
+        Set<String> generatedLotCodes = new HashSet<>();
 
         for (int i = 0; i < requests.size(); i++) {
             GoodsReceiptItemRequest request = requests.get(i);
@@ -444,7 +445,7 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
 
             item.setGoodsReceipt(receipt);
             item.setProductVariant(variants.get(request.getProductVariantId()));
-            item.setLotCode(generateLotCode(receipt, i + 1));
+            item.setLotCode(generateLotCode(generatedLotCodes));
             item.setQuantity(request.getQuantity());
             item.setUnitCost(request.getUnitCost());
             item.setManufacturedDate(request.getManufacturedDate());
@@ -628,19 +629,28 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
     }
 
     private String generateReceiptNo() {
-        String timestamp =
+        String date =
                 LocalDateTime.now().format(
-                        DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS")
+                        DateTimeFormatter.ofPattern("yyyyMMdd")
                 );
 
-        for (int attempt = 0; attempt < 5; attempt++) {
-            String suffix = UUID.randomUUID()
-                    .toString()
-                    .replace("-", "")
-                    .substring(0, 6)
-                    .toUpperCase(Locale.ROOT);
+        final String chars =
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
-            String receiptNo = "PN-" + timestamp + "-" + suffix;
+        for (int attempt = 0; attempt < 20; attempt++) {
+            StringBuilder suffix = new StringBuilder(6);
+            Random random = new Random();
+
+            for (int i = 0; i < 6; i++) {
+                suffix.append(
+                        chars.charAt(
+                                random.nextInt(chars.length())
+                        )
+                );
+            }
+
+            String receiptNo =
+                    "PN-" + date + "-" + suffix;
 
             if (!goodsReceiptRepository.existsByReceiptNo(receiptNo)) {
                 return receiptNo;
@@ -653,11 +663,62 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
         );
     }
 
-    private String generateLotCode(GoodsReceipt receipt, int lineNumber) {
-        return "LOT-"
-                + receipt.getReceiptNo()
-                + "-"
-                + String.format(Locale.ROOT, "%03d", lineNumber);
+    private String generateLotCode(Set<String> generatedLotCodes) {
+        /*
+         * Mã lô mới chỉ gồm đúng 6 ký tự A-F / 0-9.
+         * Không đổi mã lô cũ đã tồn tại trong hệ thống.
+         *
+         * Kiểm tra cả:
+         * - các mã vừa sinh trong cùng phiếu hiện tại;
+         * - GoodsReceiptItem đã lưu;
+         * - InventoryLot đã tạo.
+         */
+        for (int attempt = 0; attempt < 20; attempt++) {
+            String lotCode = UUID.randomUUID()
+                    .toString()
+                    .replace("-", "")
+                    .substring(0, 6)
+                    .toUpperCase(Locale.ROOT);
+
+            if (generatedLotCodes.contains(lotCode)
+                    || lotCodeExists(lotCode)) {
+                continue;
+            }
+
+            generatedLotCodes.add(lotCode);
+            return lotCode;
+        }
+
+        throw new ResponseStatusException(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Không thể sinh mã lô 6 ký tự."
+        );
+    }
+
+    private boolean lotCodeExists(String lotCode) {
+        Integer exists = jdbcTemplate.queryForObject(
+                """
+                        SELECT CASE
+                            WHEN EXISTS (
+                                SELECT 1
+                                FROM dbo.GoodsReceiptItem
+                                WHERE LotCode = ?
+                            )
+                            OR EXISTS (
+                                SELECT 1
+                                FROM dbo.InventoryLot
+                                WHERE LotCode = ?
+                            )
+                            THEN 1
+                            ELSE 0
+                        END
+                        """,
+                Integer.class,
+                lotCode,
+                lotCode
+        );
+
+        return exists != null && exists == 1;
     }
 
     private void executeProcedure(String sql, Object... args) {

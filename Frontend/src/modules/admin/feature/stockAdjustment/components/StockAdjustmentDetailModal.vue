@@ -121,6 +121,14 @@ const differenceClass = (value?: number | null) => {
                 <span>Thời gian từ chối</span>
                 <strong>{{ formatDateTime(detail.rejectedAt) }}</strong>
               </div>
+              <div v-if="detail.cancelledByName || detail.cancelledAt">
+                <span>Người hủy</span>
+                <strong>{{ detail.cancelledByName || "—" }}</strong>
+              </div>
+              <div v-if="detail.cancelledByName || detail.cancelledAt">
+                <span>Thời gian hủy</span>
+                <strong>{{ formatDateTime(detail.cancelledAt) }}</strong>
+              </div>
             </div>
 
             <div v-if="detail.note" class="note-box">
@@ -131,6 +139,11 @@ const differenceClass = (value?: number | null) => {
             <div v-if="detail.rejectionReason" class="reason-box">
               <strong>Lý do từ chối</strong>
               <p>{{ detail.rejectionReason }}</p>
+            </div>
+
+            <div v-if="detail.cancellationReason" class="reason-box cancel-reason-box">
+              <strong>Lý do hủy</strong>
+              <p>{{ detail.cancellationReason }}</p>
             </div>
           </section>
 
@@ -265,6 +278,11 @@ const differenceClass = (value?: number | null) => {
   color: #b91c1c;
 }
 
+.status-cancelled {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
 .close-btn,
 .detail-footer button {
   border: 0;
@@ -345,6 +363,11 @@ section h4 {
 .reason-box {
   border-color: #fecaca;
   background: #fef2f2;
+}
+
+.cancel-reason-box {
+  border-color: #fed7aa;
+  background: #fff7ed;
 }
 
 .text-up,

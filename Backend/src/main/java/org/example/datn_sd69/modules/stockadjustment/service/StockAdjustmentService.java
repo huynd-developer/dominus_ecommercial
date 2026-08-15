@@ -1,6 +1,7 @@
 package org.example.datn_sd69.modules.stockadjustment.service;
 
 import org.example.datn_sd69.enums.StockAdjustmentStatus;
+import org.example.datn_sd69.modules.stockadjustment.dto.request.StockAdjustmentCancelRequest;
 import org.example.datn_sd69.modules.stockadjustment.dto.request.StockAdjustmentRejectRequest;
 import org.example.datn_sd69.modules.stockadjustment.dto.request.StockAdjustmentSaveRequest;
 import org.example.datn_sd69.modules.stockadjustment.dto.response.StockAdjustmentDetailResponse;
@@ -33,6 +34,11 @@ public interface StockAdjustmentService {
     );
 
     StockAdjustmentDetailResponse submit(Integer id);
+
+    StockAdjustmentDetailResponse cancel(
+            Integer id,
+            StockAdjustmentCancelRequest request
+    );
 
     StockAdjustmentDetailResponse approve(Integer id);
 

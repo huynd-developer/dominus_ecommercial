@@ -129,6 +129,7 @@ const statusOptions: Array<{
   { value: "PENDING_APPROVAL", label: "Chờ duyệt" },
   { value: "APPROVED", label: "Đã phê duyệt" },
   { value: "REJECTED", label: "Đã từ chối" },
+  { value: "CANCELLED", label: "Đã hủy" },
 ];
 
 const totalPages = computed(() => {
@@ -405,6 +406,126 @@ const submitAdjustment = async (item: StockAdjustmentListResponse) => {
   }
 };
 
+const cancelAdjustment = async (item: StockAdjustmentListResponse) => {
+  if (item.status !== "DRAFT") return;
+  if (!(await ensureCanEditOrSubmit(item))) return;
+
+  const result = await Swal.fire({
+    icon: "warning",
+    title: "Hủy phiếu kiểm kê",
+    html: `
+      <div style="text-align: left;">
+        <p style="margin:0 0 14px 0;">
+          <strong>${item.adjustmentNo}</strong>
+        </p>
+
+        <label
+          for="cancel-reason-select"
+          style="display:block; margin-bottom:6px; font-weight:600;"
+        >
+          Lý do hủy <span style="color:#dc2626;">*</span>
+        </label>
+
+        <select
+          id="cancel-reason-select"
+          class="swal2-select"
+          style="width:100%; margin:0 0 14px 0;"
+        >
+          <option value="">-- Chọn lý do hủy --</option>
+          <option value="Tạo nhầm phiếu">Tạo nhầm phiếu</option>
+          <option value="Sai lô kiểm kê">Sai lô kiểm kê</option>
+          <option value="Sai số lượng kiểm kê">Sai số lượng kiểm kê</option>
+          <option value="Không cần kiểm kê nữa">Không cần kiểm kê nữa</option>
+          <option value="Sẽ tạo lại phiếu">Sẽ tạo lại phiếu</option>
+          <option value="Khác">Khác</option>
+        </select>
+
+        <label
+          for="cancel-reason-note"
+          style="display:block; margin-bottom:6px; font-weight:600;"
+        >
+          Ghi chú chi tiết
+        </label>
+
+        <textarea
+          id="cancel-reason-note"
+          class="swal2-textarea"
+          maxlength="450"
+          placeholder="Nhập thêm chi tiết nếu cần..."
+          style="width:100%; margin:0; box-sizing:border-box;"
+        ></textarea>
+
+        <div
+          style="margin-top:8px; color:#6b7280; font-size:12px;"
+        >
+          Chọn lý do có sẵn thì không cần nhập ghi chú. Nếu chọn "Khác", bắt buộc nhập nội dung cụ thể.
+        </div>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Hủy phiếu",
+    cancelButtonText: "Đóng",
+    focusConfirm: false,
+    preConfirm: () => {
+      const reasonSelect = document.getElementById(
+        "cancel-reason-select"
+      ) as HTMLSelectElement | null;
+
+      const noteInput = document.getElementById(
+        "cancel-reason-note"
+      ) as HTMLTextAreaElement | null;
+
+      const selectedReason = String(reasonSelect?.value || "").trim();
+      const note = String(noteInput?.value || "").trim();
+
+      if (!selectedReason) {
+        Swal.showValidationMessage("Vui lòng chọn lý do hủy.");
+        return false;
+      }
+
+      if (selectedReason === "Khác" && !note) {
+        Swal.showValidationMessage(
+          'Vui lòng nhập lý do cụ thể khi chọn "Khác".'
+        );
+        return false;
+      }
+
+      const reason = note ? `${selectedReason} - ${note}` : selectedReason;
+
+      if (reason.length > 500) {
+        Swal.showValidationMessage(
+          "Lý do hủy không được vượt quá 500 ký tự."
+        );
+        return false;
+      }
+
+      return reason;
+    },
+  });
+
+  if (!result.isConfirmed) return;
+
+  try {
+    await store.cancel(item.id, {
+      reason: String(result.value).trim(),
+    });
+
+    await Swal.fire({
+      icon: "success",
+      title: "Đã hủy phiếu",
+      text: "Phiếu Lưu tạm đã được hủy. Tồn kho không thay đổi.",
+      timer: 1700,
+      showConfirmButton: false,
+    });
+  } catch (error) {
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể hủy phiếu",
+      text: getErrorMessage(error),
+    });
+  }
+};
+
 const approveAdjustment = async (item: StockAdjustmentListResponse) => {
   if (!(await ensureCanReview(item))) return;
 
@@ -444,23 +565,86 @@ const rejectAdjustment = async (item: StockAdjustmentListResponse) => {
   const result = await Swal.fire({
     icon: "warning",
     title: "Từ chối phiếu kiểm kê",
-    input: "textarea",
-    inputLabel: "Lý do từ chối",
-    inputPlaceholder: "Nhập lý do từ chối...",
-    inputAttributes: { maxlength: "500" },
+    html: `
+      <div style="text-align: left;">
+        <label
+          for="reject-reason-select"
+          style="display:block; margin-bottom:6px; font-weight:600;"
+        >
+          Lý do từ chối <span style="color:#dc2626;">*</span>
+        </label>
+
+        <select
+          id="reject-reason-select"
+          class="swal2-select"
+          style="width:100%; margin:0 0 14px 0;"
+        >
+          <option value="">-- Chọn lý do từ chối --</option>
+          <option value="Sai số lượng kiểm kê">Sai số lượng kiểm kê</option>
+          <option value="Sai lô hàng">Sai lô hàng</option>
+          <option value="Chênh lệch chưa hợp lý">Chênh lệch chưa hợp lý</option>
+          <option value="Lý do điều chỉnh không phù hợp">Lý do điều chỉnh không phù hợp</option>
+          <option value="Cần kiểm đếm lại">Cần kiểm đếm lại</option>
+          <option value="Thiếu thông tin">Thiếu thông tin</option>
+          <option value="Khác">Khác</option>
+        </select>
+
+        <label
+          for="reject-reason-note"
+          style="display:block; margin-bottom:6px; font-weight:600;"
+        >
+          Ghi chú chi tiết
+        </label>
+
+        <textarea
+          id="reject-reason-note"
+          class="swal2-textarea"
+          maxlength="450"
+          placeholder="Nhập thêm chi tiết nếu cần..."
+          style="width:100%; margin:0; box-sizing:border-box;"
+        ></textarea>
+
+        <div
+          style="margin-top:8px; color:#6b7280; font-size:12px;"
+        >
+          Nếu chọn "Khác", bắt buộc nhập nội dung cụ thể.
+        </div>
+      </div>
+    `,
     showCancelButton: true,
     confirmButtonText: "Từ chối phiếu",
     cancelButtonText: "Đóng",
-    preConfirm: (value) => {
-      const reason = String(value || "").trim();
+    focusConfirm: false,
+    preConfirm: () => {
+      const reasonSelect = document.getElementById(
+        "reject-reason-select"
+      ) as HTMLSelectElement | null;
 
-      if (!reason) {
-        Swal.showValidationMessage("Bắt buộc nhập lý do từ chối.");
+      const noteInput = document.getElementById(
+        "reject-reason-note"
+      ) as HTMLTextAreaElement | null;
+
+      const selectedReason = String(reasonSelect?.value || "").trim();
+      const note = String(noteInput?.value || "").trim();
+
+      if (!selectedReason) {
+        Swal.showValidationMessage("Vui lòng chọn lý do từ chối.");
         return false;
       }
 
+      if (selectedReason === "Khác" && !note) {
+        Swal.showValidationMessage(
+          'Vui lòng nhập lý do cụ thể khi chọn "Khác".'
+        );
+        return false;
+      }
+
+      const reason = note ? `${selectedReason} - ${note}` : selectedReason;
+
       if (reason.length > 500) {
-        Swal.showValidationMessage("Lý do không được vượt quá 500 ký tự.");
+        Swal.showValidationMessage(
+          "Lý do từ chối không được vượt quá 500 ký tự."
+        );
         return false;
       }
 
@@ -691,6 +875,17 @@ onMounted(async () => {
                     @click="submitAdjustment(item)"
                   >
                     <i class="bi bi-send"></i>
+                  </button>
+
+                  <button
+                    v-if="canEditOrSubmit(item) && item.status === 'DRAFT'"
+                    type="button"
+                    class="action-cancel"
+                    title="Hủy phiếu"
+                    :disabled="store.processing"
+                    @click="cancelAdjustment(item)"
+                  >
+                    <i class="bi bi-ban"></i>
                   </button>
 
                   <button
@@ -1004,6 +1199,11 @@ th {
   color: #b91c1c;
 }
 
+.status-cancelled {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
 .text-up {
   color: #047857;
 }
@@ -1033,6 +1233,10 @@ th {
 
 .actions .action-approve {
   color: #047857;
+}
+
+.actions .action-cancel {
+  color: #b45309;
 }
 
 .actions .action-reject {

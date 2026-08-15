@@ -2,7 +2,8 @@ export type StockAdjustmentStatus =
   | "DRAFT"
   | "PENDING_APPROVAL"
   | "APPROVED"
-  | "REJECTED";
+  | "REJECTED"
+  | "CANCELLED";
 
 export interface PageMeta {
   size: number;
@@ -32,6 +33,10 @@ export interface StockAdjustmentSaveRequest {
 }
 
 export interface StockAdjustmentRejectRequest {
+  reason: string;
+}
+
+export interface StockAdjustmentCancelRequest {
   reason: string;
 }
 
@@ -66,6 +71,7 @@ export interface StockAdjustmentListResponse extends StockAdjustmentSummary {
   submittedAt: string | null;
   approvedAt: string | null;
   rejectedAt: string | null;
+  cancelledAt: string | null;
 }
 
 export interface StockAdjustmentItemResponse {
@@ -106,6 +112,11 @@ export interface StockAdjustmentDetailResponse extends StockAdjustmentSummary {
   rejectedByName: string | null;
   rejectedAt: string | null;
   rejectionReason: string | null;
+
+  cancelledById: number | null;
+  cancelledByName: string | null;
+  cancelledAt: string | null;
+  cancellationReason: string | null;
 
   items: StockAdjustmentItemResponse[];
 }

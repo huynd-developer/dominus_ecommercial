@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.enums.StockAdjustmentStatus;
+import org.example.datn_sd69.modules.stockadjustment.dto.request.StockAdjustmentCancelRequest;
 import org.example.datn_sd69.modules.stockadjustment.dto.request.StockAdjustmentRejectRequest;
 import org.example.datn_sd69.modules.stockadjustment.dto.request.StockAdjustmentSaveRequest;
 import org.example.datn_sd69.modules.stockadjustment.dto.response.StockAdjustmentDetailResponse;
@@ -194,6 +195,30 @@ public class StockAdjustmentController {
 
         return ResponseEntity.ok(
                 stockAdjustmentService.submit(id)
+        );
+    }
+
+    // =========================================================
+    // CANCEL DRAFT
+    // Người tạo hoặc OWNER
+    // =========================================================
+
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize(
+            "hasAnyAuthority('OWNER', 'MANAGER', 'CASHIER')"
+    )
+    public ResponseEntity<StockAdjustmentDetailResponse> cancel(
+            @PathVariable Integer id,
+            @Valid
+            @RequestBody
+            StockAdjustmentCancelRequest request
+    ) {
+
+        return ResponseEntity.ok(
+                stockAdjustmentService.cancel(
+                        id,
+                        request
+                )
         );
     }
 

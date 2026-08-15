@@ -46,4 +46,6 @@ public class StockAdjustmentListResponse {
     private LocalDateTime approvedAt;
 
     private LocalDateTime rejectedAt;
+
+    private LocalDateTime cancelledAt;
 }

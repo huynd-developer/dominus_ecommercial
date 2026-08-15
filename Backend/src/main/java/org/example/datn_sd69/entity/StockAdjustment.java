@@ -33,6 +33,7 @@ public class StockAdjustment extends BaseEntity {
      * 1 = PENDING_APPROVAL
      * 2 = APPROVED
      * 3 = REJECTED
+     * 4 = CANCELLED
      */
     @Column(name = "Status", nullable = false)
     private Byte status;
@@ -70,6 +71,16 @@ public class StockAdjustment extends BaseEntity {
 
     @Column(name = "RejectionReason", length = 500)
     private String rejectionReason;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "CancelledBy")
+    private User cancelledBy;
+
+    @Column(name = "CancelledAt")
+    private LocalDateTime cancelledAt;
+
+    @Column(name = "CancellationReason", length = 500)
+    private String cancellationReason;
 
     @OneToMany(
             mappedBy = "stockAdjustment",

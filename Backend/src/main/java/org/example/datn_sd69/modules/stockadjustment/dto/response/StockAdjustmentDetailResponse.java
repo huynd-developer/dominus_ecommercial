@@ -61,5 +61,13 @@ public class StockAdjustmentDetailResponse {
 
     private String rejectionReason;
 
+    private Integer cancelledById;
+
+    private String cancelledByName;
+
+    private LocalDateTime cancelledAt;
+
+    private String cancellationReason;
+
     private List<StockAdjustmentItemResponse> items;
 }

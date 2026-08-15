@@ -5,6 +5,7 @@ import type { InventoryLotListResponse } from "@/modules/admin/feature/inventory
 
 import type {
   PageResponse,
+  StockAdjustmentCancelRequest,
   StockAdjustmentDetailResponse,
   StockAdjustmentListParams,
   StockAdjustmentListResponse,
@@ -66,6 +67,17 @@ const stockAdjustmentService = {
 
   async submit(id: number): Promise<StockAdjustmentDetailResponse> {
     const response = await api.post(`/admin/stock-adjustments/${id}/submit`);
+    return response.data;
+  },
+
+  async cancel(
+    id: number,
+    request: StockAdjustmentCancelRequest
+  ): Promise<StockAdjustmentDetailResponse> {
+    const response = await api.post(`/admin/stock-adjustments/${id}/cancel`, {
+      reason: request.reason.trim(),
+    });
+
     return response.data;
   },
 
