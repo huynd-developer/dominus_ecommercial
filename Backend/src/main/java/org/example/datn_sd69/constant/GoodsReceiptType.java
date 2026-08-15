@@ -6,5 +6,4 @@ public final class GoodsReceiptType {
     }
 
     public static final byte NORMAL_RECEIPT = 1;
-    public static final byte OPENING_BALANCE = 2;
 }

@@ -10,6 +10,7 @@ import type {
 } from "../types/goods-receipt.type";
 
 interface EditableItem {
+  rowKey: string;
   productVariantId: number;
   sku: string;
   productName: string;
@@ -35,6 +36,13 @@ const emit = defineEmits<{
 
 const note = ref("");
 const items = ref<EditableItem[]>([]);
+
+let rowSequence = 0;
+
+const createRowKey = () => {
+  rowSequence += 1;
+  return `gr-row-${Date.now()}-${rowSequence}`;
+};
 
 const skuKeyword = ref("");
 const skuOptions = ref<InventorySkuOption[]>([]);
@@ -68,7 +76,14 @@ const effectiveReceivedDate = computed(() => {
   return today();
 });
 
-const totalSku = computed(() => items.value.length);
+const totalSku = computed(
+  () =>
+    new Set(
+      items.value.map((item) => item.productVariantId)
+    ).size
+);
+
+const totalLots = computed(() => items.value.length);
 
 const totalQuantity = computed(() =>
   items.value.reduce(
@@ -97,6 +112,7 @@ const resetForm = () => {
 
   if (props.detail?.items?.length) {
     items.value = props.detail.items.map((item) => ({
+      rowKey: `saved-${item.id}`,
       productVariantId: item.productVariantId,
       sku: item.sku,
       productName: item.productName,
@@ -182,36 +198,41 @@ watch(
   { deep: true }
 );
 
-const isSkuSelected = (productVariantId: number) =>
-  items.value.some(
+const selectedCountForSku = (productVariantId: number) =>
+  items.value.filter(
     (item) => item.productVariantId === productVariantId
-  );
+  ).length;
 
-const selectSku = (option: InventorySkuOption) => {
-  if (isSkuSelected(option.productVariantId)) {
-    items.value = items.value.filter(
-      (item) => item.productVariantId !== option.productVariantId
+const addSkuLot = (option: InventorySkuOption) => {
+  const previousSameSku = [...items.value]
+    .reverse()
+    .find(
+      (item) =>
+        item.productVariantId === option.productVariantId
     );
-    return;
-  }
 
   items.value.push({
+    rowKey: createRowKey(),
     productVariantId: option.productVariantId,
     sku: option.sku,
     productName: option.productName,
     capacityValue: option.capacityValue ?? null,
     bottleTypeName: option.bottleTypeName ?? null,
     quantity: null,
-    unitCost: null,
+
+    // Nếu SKU này đã có dòng trước đó thì lấy giá gần nhất làm mặc định.
+    // Người dùng vẫn có thể sửa lại giá ở dòng mới.
+    unitCost: previousSameSku?.unitCost ?? null,
+
     manufacturedDate: "",
     expirationDate: "",
     note: "",
   });
 };
 
-const removeItem = (productVariantId: number) => {
+const removeItem = (rowKey: string) => {
   items.value = items.value.filter(
-    (item) => item.productVariantId !== productVariantId
+    (item) => item.rowKey !== rowKey
   );
 };
 
@@ -226,8 +247,6 @@ const validate = async () => {
     return false;
   }
 
-  const uniqueVariantIds = new Set<number>();
-
   for (let index = 0; index < items.value.length; index++) {
     const row = items.value[index];
     const line = index + 1;
@@ -240,17 +259,6 @@ const validate = async () => {
       );
       return false;
     }
-
-    if (uniqueVariantIds.has(row.productVariantId)) {
-      await Swal.fire(
-        "Dữ liệu không hợp lệ",
-        `Dòng ${line}: SKU đã tồn tại trong phiếu nhập.`,
-        "warning"
-      );
-      return false;
-    }
-
-    uniqueVariantIds.add(row.productVariantId);
 
     if (
       row.quantity == null ||
@@ -395,8 +403,8 @@ const onUnitCostInput = (index: number, event: Event) => {
           <div>
             <h3>{{ title }}</h3>
             <p>
-              Chọn SKU cần nhập và khai báo số lượng, giá, ngày sản xuất,
-              hạn sử dụng. Mã lô được hệ thống tự sinh.
+              Chọn SKU và khai báo số lượng, giá, ngày sản xuất, hạn sử dụng.
+              Mỗi dòng nhập được hệ thống tự sinh một mã lô riêng.
             </p>
           </div>
 
@@ -416,13 +424,13 @@ const onUnitCostInput = (index: number, event: Event) => {
               <div>
                 <h4>Chọn sản phẩm / SKU</h4>
                 <p>
-                  Chọn nhiều SKU. Các SKU đã chọn sẽ được đưa xuống bảng
-                  nhập hàng bên dưới.
+                  Bấm vào SKU để thêm một dòng nhập. Có thể thêm cùng một SKU
+                  nhiều lần khi hàng về có nhiều lô khác nhau.
                 </p>
               </div>
 
               <div class="selected-badge">
-                Đã chọn {{ totalSku }}
+                Đã thêm {{ totalLots }} lô
               </div>
             </div>
 
@@ -480,16 +488,10 @@ const onUnitCostInput = (index: number, event: Event) => {
                 :key="option.productVariantId"
                 type="button"
                 class="sku-card"
-                :class="{
-                  selected: isSkuSelected(option.productVariantId),
-                }"
-                @click="selectSku(option)"
+                @click="addSkuLot(option)"
               >
                 <span class="sku-card-check">
-                  <i
-                    v-if="isSkuSelected(option.productVariantId)"
-                    class="bi bi-check-lg"
-                  ></i>
+                  <i class="bi bi-plus-lg"></i>
                 </span>
 
                 <strong>{{ option.productName }}</strong>
@@ -502,6 +504,13 @@ const onUnitCostInput = (index: number, event: Event) => {
                 </span>
 
                 <span class="sku-code">{{ option.sku }}</span>
+
+                <span
+                  v-if="selectedCountForSku(option.productVariantId) > 0"
+                  class="sku-added-count"
+                >
+                  Đã thêm {{ selectedCountForSku(option.productVariantId) }} lô
+                </span>
               </button>
             </div>
           </section>
@@ -509,9 +518,9 @@ const onUnitCostInput = (index: number, event: Event) => {
           <section class="selected-section">
             <div class="section-head selected-head">
               <div>
-                <h4>Sản phẩm đã chọn ({{ totalSku }})</h4>
+                <h4>Các lô nhập ({{ totalLots }})</h4>
                 <p>
-                  Nhập thông tin nhập kho cho từng SKU đã chọn.
+                  Mỗi dòng bên dưới sẽ tạo một lô riêng khi phiếu được duyệt.
                 </p>
               </div>
             </div>
@@ -540,7 +549,7 @@ const onUnitCostInput = (index: number, event: Event) => {
                 <tbody>
                   <tr
                     v-for="(row, index) in items"
-                    :key="row.productVariantId"
+                    :key="row.rowKey"
                   >
                     <td>
                       <div class="product-cell">
@@ -610,7 +619,7 @@ const onUnitCostInput = (index: number, event: Event) => {
                         type="button"
                         class="remove-btn"
                         title="Xóa SKU khỏi phiếu"
-                        @click="removeItem(row.productVariantId)"
+                        @click="removeItem(row.rowKey)"
                       >
                         <i class="bi bi-trash"></i>
                       </button>
@@ -856,6 +865,16 @@ const onUnitCostInput = (index: number, event: Event) => {
   color: #6b7280;
   font-size: 12px;
   word-break: break-word;
+}
+
+.sku-added-count {
+  margin-top: 2px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #374151;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .sku-card-check {

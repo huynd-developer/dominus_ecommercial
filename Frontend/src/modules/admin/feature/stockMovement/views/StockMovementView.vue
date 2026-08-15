@@ -491,7 +491,7 @@ onUnmounted(() => {
               <th>Chứng từ nguồn</th>
               <th>Lý do</th>
               <th>Người thao tác</th>
-              <th>Thời gian</th>
+              <th>Thời gian biến động</th>
               <th>Thao tác</th>
             </tr>
           </thead>

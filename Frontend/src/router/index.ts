@@ -282,20 +282,9 @@ const routes: Array<RouteRecordRaw> = [
         },
       },
       {
-        path: "opening-balances",
-        name: "AdminOpeningBalances",
-        redirect: {
-          path: "/admin/inventory-audit",
-          query: { tab: "opening" },
-        },
-      },
-      {
         path: "stock-adjustments",
         name: "AdminStockAdjustments",
-        redirect: {
-          path: "/admin/inventory-audit",
-          query: { tab: "adjustment" },
-        },
+        redirect: "/admin/inventory-audit",
       },
       {
         path: "expiry-alerts",

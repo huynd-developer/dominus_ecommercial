@@ -6,8 +6,7 @@ import java.util.Arrays;
 
 @Getter
 public enum GoodsReceiptType {
-    NORMAL_RECEIPT((byte) 1, "Nhập kho bình thường"),
-    OPENING_BALANCE((byte) 2, "Tồn đầu kỳ");
+    NORMAL_RECEIPT((byte) 1, "Nhập kho bình thường");
 
     private final byte code;
     private final String label;
@@ -26,7 +25,9 @@ public enum GoodsReceiptType {
                 .filter(value -> value.code == code)
                 .findFirst()
                 .orElseThrow(() ->
-                        new IllegalArgumentException("Loại phiếu nhập không hợp lệ: " + code)
+                        new IllegalArgumentException(
+                                "Loại phiếu nhập không hợp lệ: " + code
+                        )
                 );
     }
 }

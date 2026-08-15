@@ -5,7 +5,7 @@ export type GoodsReceiptStatus =
   | "REJECTED"
   | "CANCELLED";
 
-export type GoodsReceiptType = "NORMAL_RECEIPT" | "OPENING_BALANCE";
+export type GoodsReceiptType = "NORMAL_RECEIPT";
 
 export interface PageMeta {
   size: number;
