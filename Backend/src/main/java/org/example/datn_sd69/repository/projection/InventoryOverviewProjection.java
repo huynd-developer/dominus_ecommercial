@@ -8,6 +8,8 @@ public interface InventoryOverviewProjection {
 
     String getProductName();
 
+    String getImageUrl();
+
     Double getCapacityValue();
 
     String getBottleTypeName();

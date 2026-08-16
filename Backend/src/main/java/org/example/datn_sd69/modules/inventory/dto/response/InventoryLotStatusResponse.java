@@ -23,6 +23,8 @@ public class InventoryLotStatusResponse {
 
     private String productName;
 
+    private String imageUrl;
+
     private String lotCode;
 
     private LocalDate manufacturedDate;

@@ -238,6 +238,9 @@ public class InventoryServiceImpl
                 .productName(
                         projection.getProductName()
                 )
+                .imageUrl(
+                        projection.getImageUrl()
+                )
                 .capacityValue(
                         projection.getCapacityValue()
                 )
@@ -284,6 +287,9 @@ public class InventoryServiceImpl
                 )
                 .productName(
                         projection.getProductName()
+                )
+                .imageUrl(
+                        projection.getImageUrl()
                 )
                 .lotCode(
                         projection.getLotCode()

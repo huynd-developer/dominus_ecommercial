@@ -77,27 +77,19 @@ const effectiveReceivedDate = computed(() => {
 });
 
 const totalSku = computed(
-  () =>
-    new Set(
-      items.value.map((item) => item.productVariantId)
-    ).size
+  () => new Set(items.value.map((item) => item.productVariantId)).size
 );
 
 const totalLots = computed(() => items.value.length);
 
 const totalQuantity = computed(() =>
-  items.value.reduce(
-    (sum, item) => sum + Number(item.quantity ?? 0),
-    0
-  )
+  items.value.reduce((sum, item) => sum + Number(item.quantity ?? 0), 0)
 );
 
 const totalAmount = computed(() =>
   items.value.reduce(
     (sum, item) =>
-      sum +
-      Number(item.quantity ?? 0) *
-        Number(item.unitCost ?? 0),
+      sum + Number(item.quantity ?? 0) * Number(item.unitCost ?? 0),
     0
   )
 );
@@ -139,10 +131,7 @@ const loadSkuOptions = async () => {
     );
 
     const optionMap = new Map(
-      skuOptions.value.map((option) => [
-        option.productVariantId,
-        option,
-      ])
+      skuOptions.value.map((option) => [option.productVariantId, option])
     );
 
     items.value = items.value.map((item) => {
@@ -154,10 +143,8 @@ const loadSkuOptions = async () => {
 
       return {
         ...item,
-        capacityValue:
-          option.capacityValue ?? item.capacityValue ?? null,
-        bottleTypeName:
-          option.bottleTypeName ?? item.bottleTypeName ?? null,
+        capacityValue: option.capacityValue ?? item.capacityValue ?? null,
+        bottleTypeName: option.bottleTypeName ?? item.bottleTypeName ?? null,
       };
     });
   } catch {
@@ -198,18 +185,14 @@ watch(
   { deep: true }
 );
 
-const selectedCountForSku = (productVariantId: number) =>
-  items.value.filter(
-    (item) => item.productVariantId === productVariantId
-  ).length;
+const isSkuSelected = (productVariantId: number) =>
+  items.value.some((item) => item.productVariantId === productVariantId);
 
 const addSkuLot = (option: InventorySkuOption) => {
-  const previousSameSku = [...items.value]
-    .reverse()
-    .find(
-      (item) =>
-        item.productVariantId === option.productVariantId
-    );
+  // Mỗi SKU chỉ được chọn một lần trong cùng một phiếu nhập.
+  if (isSkuSelected(option.productVariantId)) {
+    return;
+  }
 
   items.value.push({
     rowKey: createRowKey(),
@@ -219,11 +202,7 @@ const addSkuLot = (option: InventorySkuOption) => {
     capacityValue: option.capacityValue ?? null,
     bottleTypeName: option.bottleTypeName ?? null,
     quantity: null,
-
-    // Nếu SKU này đã có dòng trước đó thì lấy giá gần nhất làm mặc định.
-    // Người dùng vẫn có thể sửa lại giá ở dòng mới.
-    unitCost: previousSameSku?.unitCost ?? null,
-
+    unitCost: null,
     manufacturedDate: "",
     expirationDate: "",
     note: "",
@@ -231,9 +210,7 @@ const addSkuLot = (option: InventorySkuOption) => {
 };
 
 const removeItem = (rowKey: string) => {
-  items.value = items.value.filter(
-    (item) => item.rowKey !== rowKey
-  );
+  items.value = items.value.filter((item) => item.rowKey !== rowKey);
 };
 
 const validate = async () => {
@@ -245,6 +222,24 @@ const validate = async () => {
     );
 
     return false;
+  }
+
+  const selectedVariantIds = new Set<number>();
+
+  for (const row of items.value) {
+    if (selectedVariantIds.has(row.productVariantId)) {
+      await Swal.fire(
+        "Dữ liệu không hợp lệ",
+        `SKU ${
+          row.sku || row.productVariantId
+        } đã được chọn. Mỗi SKU chỉ được chọn một lần trong cùng một phiếu nhập.`,
+        "warning"
+      );
+
+      return false;
+    }
+
+    selectedVariantIds.add(row.productVariantId);
   }
 
   for (let index = 0; index < items.value.length; index++) {
@@ -312,10 +307,7 @@ const validate = async () => {
       return false;
     }
 
-    if (
-      row.manufacturedDate &&
-      row.manufacturedDate > row.expirationDate
-    ) {
+    if (row.manufacturedDate && row.manufacturedDate > row.expirationDate) {
       await Swal.fire(
         "Dữ liệu không hợp lệ",
         `Dòng ${line}: ngày sản xuất phải nhỏ hơn hoặc bằng hạn sử dụng.`,
@@ -338,8 +330,7 @@ const submit = async () => {
       (row): GoodsReceiptItemRequest => ({
         productVariantId: row.productVariantId,
         quantity: Number(row.quantity),
-        unitCost:
-          row.unitCost == null ? null : Number(row.unitCost),
+        unitCost: row.unitCost == null ? null : Number(row.unitCost),
         manufacturedDate: row.manufacturedDate || null,
         expirationDate: row.expirationDate,
         note: row.note.trim() || null,
@@ -350,9 +341,7 @@ const submit = async () => {
   emit("save", payload);
 };
 
-const formatCapacity = (
-  value: number | null | undefined
-) => {
+const formatCapacity = (value: number | null | undefined) => {
   if (value == null || !Number.isFinite(Number(value))) {
     return "";
   }
@@ -424,14 +413,12 @@ const onUnitCostInput = (index: number, event: Event) => {
               <div>
                 <h4>Chọn sản phẩm / SKU</h4>
                 <p>
-                  Bấm vào SKU để thêm một dòng nhập. Có thể thêm cùng một SKU
-                  nhiều lần khi hàng về có nhiều lô khác nhau.
+                  Bấm vào SKU để thêm vào phiếu. Mỗi SKU chỉ được chọn một lần
+                  trong cùng một phiếu nhập.
                 </p>
               </div>
 
-              <div class="selected-badge">
-                Đã thêm {{ totalLots }} lô
-              </div>
+              <div class="selected-badge">Đã chọn {{ totalSku }} SKU</div>
             </div>
 
             <div class="sku-search">
@@ -475,10 +462,7 @@ const onUnitCostInput = (index: number, event: Event) => {
               Đang tải danh sách SKU...
             </div>
 
-            <div
-              v-else-if="skuOptions.length === 0"
-              class="sku-state"
-            >
+            <div v-else-if="skuOptions.length === 0" class="sku-state">
               Không tìm thấy SKU phù hợp.
             </div>
 
@@ -488,28 +472,33 @@ const onUnitCostInput = (index: number, event: Event) => {
                 :key="option.productVariantId"
                 type="button"
                 class="sku-card"
+                :class="{
+                  selected: isSkuSelected(option.productVariantId),
+                }"
+                :disabled="isSkuSelected(option.productVariantId)"
                 @click="addSkuLot(option)"
               >
                 <span class="sku-card-check">
-                  <i class="bi bi-plus-lg"></i>
+                  <i
+                    v-if="isSkuSelected(option.productVariantId)"
+                    class="bi bi-check-lg"
+                  ></i>
+                  <i v-else class="bi bi-plus-lg"></i>
                 </span>
 
                 <strong>{{ option.productName }}</strong>
 
-                <span
-                  v-if="variantLabel(option)"
-                  class="variant-info"
-                >
+                <span v-if="variantLabel(option)" class="variant-info">
                   {{ variantLabel(option) }}
                 </span>
 
                 <span class="sku-code">{{ option.sku }}</span>
 
                 <span
-                  v-if="selectedCountForSku(option.productVariantId) > 0"
+                  v-if="isSkuSelected(option.productVariantId)"
                   class="sku-added-count"
                 >
-                  Đã thêm {{ selectedCountForSku(option.productVariantId) }} lô
+                  Đã chọn
                 </span>
               </button>
             </div>
@@ -525,10 +514,7 @@ const onUnitCostInput = (index: number, event: Event) => {
               </div>
             </div>
 
-            <div
-              v-if="items.length === 0"
-              class="selected-empty"
-            >
+            <div v-if="items.length === 0" class="selected-empty">
               Chưa có SKU nào được chọn.
             </div>
 
@@ -547,18 +533,12 @@ const onUnitCostInput = (index: number, event: Event) => {
                 </thead>
 
                 <tbody>
-                  <tr
-                    v-for="(row, index) in items"
-                    :key="row.rowKey"
-                  >
+                  <tr v-for="(row, index) in items" :key="row.rowKey">
                     <td>
                       <div class="product-cell">
                         <strong>{{ row.productName }}</strong>
 
-                        <span
-                          v-if="variantLabel(row)"
-                          class="variant-info"
-                        >
+                        <span v-if="variantLabel(row)" class="variant-info">
                           {{ variantLabel(row) }}
                         </span>
 
@@ -581,9 +561,7 @@ const onUnitCostInput = (index: number, event: Event) => {
                     <td>
                       <input
                         :value="
-                          row.unitCost == null
-                            ? ''
-                            : formatMoney(row.unitCost)
+                          row.unitCost == null ? '' : formatMoney(row.unitCost)
                         "
                         class="table-input"
                         inputmode="numeric"
@@ -657,17 +635,9 @@ const onUnitCostInput = (index: number, event: Event) => {
               Hủy
             </button>
 
-            <button
-              type="submit"
-              class="primary-btn"
-              :disabled="saving"
-            >
+            <button type="submit" class="primary-btn" :disabled="saving">
               {{
-                saving
-                  ? "Đang lưu..."
-                  : isEdit
-                    ? "Cập nhật phiếu"
-                    : "Lưu tạm"
+                saving ? "Đang lưu..." : isEdit ? "Cập nhật phiếu" : "Lưu tạm"
               }}
             </button>
           </div>
@@ -838,14 +808,19 @@ const onUnitCostInput = (index: number, event: Event) => {
   transition: 0.15s ease;
 }
 
-.sku-card:hover {
+.sku-card:hover:not(:disabled) {
   border-color: #9ca3af;
   box-shadow: 0 3px 10px rgba(15, 23, 42, 0.05);
+}
+
+.sku-card:disabled {
+  opacity: 1;
 }
 
 .sku-card.selected {
   border-color: #65a30d;
   background: #f7fee7;
+  cursor: default;
 }
 
 .sku-card strong {
@@ -871,10 +846,10 @@ const onUnitCostInput = (index: number, event: Event) => {
   margin-top: 2px;
   padding: 3px 7px;
   border-radius: 999px;
-  background: #f3f4f6;
-  color: #374151;
+  background: #ecfccb;
+  color: #3f6212;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .sku-card-check {

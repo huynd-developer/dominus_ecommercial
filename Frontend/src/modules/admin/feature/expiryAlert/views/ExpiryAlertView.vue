@@ -16,6 +16,13 @@ const store = useExpiryAlertStore();
 
 const detailVisible = ref(false);
 
+const fromDaysInput = ref(
+  store.fromDays === null ? "" : String(store.fromDays)
+);
+const toDaysInput = ref(
+  store.toDays === null ? "" : String(store.toDays)
+);
+
 
 const groupOptions: Array<{
   value: ExpiryAlertGroup;
@@ -127,16 +134,89 @@ const expiryClass = (item: ExpiryAlertListResponse) => {
   return "status-normal";
 };
 
-const setFromDays = (event: Event) => {
-  const value = (event.target as HTMLInputElement).value.trim();
+const blockInvalidDayKey = (event: KeyboardEvent) => {
+  const input = event.target as HTMLInputElement;
 
-  store.fromDays = value === "" ? null : Number(value);
+  const controlKeys = [
+    "Backspace",
+    "Delete",
+    "Tab",
+    "ArrowLeft",
+    "ArrowRight",
+    "ArrowUp",
+    "ArrowDown",
+    "Home",
+    "End",
+    "Enter",
+  ];
+
+  if (controlKeys.includes(event.key)) {
+    return;
+  }
+
+  if (
+    (event.ctrlKey || event.metaKey) &&
+    ["a", "c", "v", "x"].includes(event.key.toLowerCase())
+  ) {
+    return;
+  }
+
+  if (/^\d$/.test(event.key)) {
+    return;
+  }
+
+  if (
+    event.key === "-" &&
+    !input.value.includes("-") &&
+    input.selectionStart === 0
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+};
+
+const sanitizeDayInput = (rawValue: string) => {
+  const value = rawValue.trim();
+
+  if (value === "") {
+    return "";
+  }
+
+  const negative = value.startsWith("-");
+  const digits = value.replace(/\D/g, "");
+
+  if (digits === "") {
+    return negative ? "-" : "";
+  }
+
+  return negative ? `-${digits}` : digits;
+};
+
+const setFromDays = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const value = sanitizeDayInput(input.value);
+
+  input.value = value;
+  fromDaysInput.value = value;
+
+  store.fromDays =
+    value === "" || value === "-"
+      ? null
+      : Number(value);
 };
 
 const setToDays = (event: Event) => {
-  const value = (event.target as HTMLInputElement).value.trim();
+  const input = event.target as HTMLInputElement;
+  const value = sanitizeDayInput(input.value);
 
-  store.toDays = value === "" ? null : Number(value);
+  input.value = value;
+  toDaysInput.value = value;
+
+  store.toDays =
+    value === "" || value === "-"
+      ? null
+      : Number(value);
 };
 
 const validateFilters = async (): Promise<boolean> => {
@@ -242,6 +322,8 @@ const changePageSize = async (event: Event) => {
 
 const resetFilters = async () => {
   store.resetFilters();
+  fromDaysInput.value = "";
+  toDaysInput.value = "";
 
   await loadList();
 };
@@ -414,11 +496,13 @@ onMounted(loadPage);
 
         <div class="days-filter">
           <input
-            :value="store.fromDays ?? ''"
-            type="number"
-            step="1"
+            :value="fromDaysInput"
+            type="text"
+            pattern="-?[0-9]*"
+            autocomplete="off"
             placeholder="Từ ngày"
             title="Có thể nhập số âm để lọc lô đã hết hạn"
+            @keydown="blockInvalidDayKey"
             @input="setFromDays"
             @keyup.enter="search"
           />
@@ -426,11 +510,13 @@ onMounted(loadPage);
           <span>đến</span>
 
           <input
-            :value="store.toDays ?? ''"
-            type="number"
-            step="1"
+            :value="toDaysInput"
+            type="text"
+            pattern="-?[0-9]*"
+            autocomplete="off"
             placeholder="Đến ngày"
             title="Có thể nhập số âm để lọc lô đã hết hạn"
+            @keydown="blockInvalidDayKey"
             @input="setToDays"
             @keyup.enter="search"
           />

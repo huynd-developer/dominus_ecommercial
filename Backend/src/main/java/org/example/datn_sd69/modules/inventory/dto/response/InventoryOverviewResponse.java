@@ -19,6 +19,8 @@ public class InventoryOverviewResponse {
 
     private String productName;
 
+    private String imageUrl;
+
     private Double capacityValue;
 
     private String bottleTypeName;

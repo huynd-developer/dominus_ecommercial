@@ -81,6 +81,7 @@ public interface InventoryQueryRepository
                         v.ProductVariantId AS productVariantId,
                         v.Sku AS sku,
                         v.ProductName AS productName,
+                        productImage.ImageUrl AS imageUrl,
                         c.Value AS capacityValue,
                         bt.Name AS bottleTypeName,
                         v.TotalQuantity AS totalQuantity,
@@ -95,6 +96,15 @@ public interface InventoryQueryRepository
                         ON c.Id = pv.CapacityId
                     LEFT JOIN dbo.BottleType bt
                         ON bt.Id = pv.BottleTypeId
+                    OUTER APPLY (
+                        SELECT TOP 1
+                            pi.ImageUrl
+                        FROM dbo.ProductImage pi
+                        WHERE pi.ProductId = pv.ProductId
+                        ORDER BY
+                            CASE WHEN ISNULL(pi.IsPrimary, 0) = 1 THEN 0 ELSE 1 END,
+                            pi.Id ASC
+                    ) productImage
 
                     WHERE
                         (
@@ -244,41 +254,53 @@ public interface InventoryQueryRepository
     @Query(
             value = """
                     SELECT
-                        InventoryLotId AS inventoryLotId,
-                        ProductVariantId AS productVariantId,
-                        Sku AS sku,
-                        ProductName AS productName,
-                        LotCode AS lotCode,
-                        ManufacturedDate AS manufacturedDate,
-                        ReceivedDate AS receivedDate,
-                        ExpirationDate AS expirationDate,
-                        InitialQuantity AS initialQuantity,
-                        QuantityOnHand AS quantityOnHand,
-                        DaysToExpiry AS daysToExpiry,
-                        IsExpired AS expired,
-                        IsNearExpiry AS nearExpiry,
-                        SellableQuantity AS sellableQuantity
+                        v.InventoryLotId AS inventoryLotId,
+                        v.ProductVariantId AS productVariantId,
+                        v.Sku AS sku,
+                        v.ProductName AS productName,
+                        productImage.ImageUrl AS imageUrl,
+                        v.LotCode AS lotCode,
+                        v.ManufacturedDate AS manufacturedDate,
+                        v.ReceivedDate AS receivedDate,
+                        v.ExpirationDate AS expirationDate,
+                        v.InitialQuantity AS initialQuantity,
+                        v.QuantityOnHand AS quantityOnHand,
+                        v.DaysToExpiry AS daysToExpiry,
+                        v.IsExpired AS expired,
+                        v.IsNearExpiry AS nearExpiry,
+                        v.SellableQuantity AS sellableQuantity
 
-                    FROM dbo.vw_InventoryLotStatus
+                    FROM dbo.vw_InventoryLotStatus v
+                    LEFT JOIN dbo.ProductVariant pv
+                        ON pv.Id = v.ProductVariantId
+                    OUTER APPLY (
+                        SELECT TOP 1
+                            pi.ImageUrl
+                        FROM dbo.ProductImage pi
+                        WHERE pi.ProductId = pv.ProductId
+                        ORDER BY
+                            CASE WHEN ISNULL(pi.IsPrimary, 0) = 1 THEN 0 ELSE 1 END,
+                            pi.Id ASC
+                    ) productImage
 
                     WHERE
-                        IsNearExpiry = 1
-                        AND IsExpired = 0
-                        AND QuantityOnHand > 0
+                        v.IsNearExpiry = 1
+                        AND v.IsExpired = 0
+                        AND v.QuantityOnHand > 0
 
                         AND
                         (
                             :keyword IS NULL
                             OR :keyword = ''
-                            OR Sku LIKE CONCAT('%', :keyword, '%')
-                            OR ProductName LIKE CONCAT('%', :keyword, '%')
-                            OR LotCode LIKE CONCAT('%', :keyword, '%')
+                            OR v.Sku LIKE CONCAT('%', :keyword, '%')
+                            OR v.ProductName LIKE CONCAT('%', :keyword, '%')
+                            OR v.LotCode LIKE CONCAT('%', :keyword, '%')
                         )
 
                     ORDER BY
-                        ExpirationDate ASC,
-                        ProductName ASC,
-                        Sku ASC
+                        v.ExpirationDate ASC,
+                        v.ProductName ASC,
+                        v.Sku ASC
                     """,
 
             countQuery = """
@@ -318,40 +340,52 @@ public interface InventoryQueryRepository
     @Query(
             value = """
                     SELECT
-                        InventoryLotId AS inventoryLotId,
-                        ProductVariantId AS productVariantId,
-                        Sku AS sku,
-                        ProductName AS productName,
-                        LotCode AS lotCode,
-                        ManufacturedDate AS manufacturedDate,
-                        ReceivedDate AS receivedDate,
-                        ExpirationDate AS expirationDate,
-                        InitialQuantity AS initialQuantity,
-                        QuantityOnHand AS quantityOnHand,
-                        DaysToExpiry AS daysToExpiry,
-                        IsExpired AS expired,
-                        IsNearExpiry AS nearExpiry,
-                        SellableQuantity AS sellableQuantity
+                        v.InventoryLotId AS inventoryLotId,
+                        v.ProductVariantId AS productVariantId,
+                        v.Sku AS sku,
+                        v.ProductName AS productName,
+                        productImage.ImageUrl AS imageUrl,
+                        v.LotCode AS lotCode,
+                        v.ManufacturedDate AS manufacturedDate,
+                        v.ReceivedDate AS receivedDate,
+                        v.ExpirationDate AS expirationDate,
+                        v.InitialQuantity AS initialQuantity,
+                        v.QuantityOnHand AS quantityOnHand,
+                        v.DaysToExpiry AS daysToExpiry,
+                        v.IsExpired AS expired,
+                        v.IsNearExpiry AS nearExpiry,
+                        v.SellableQuantity AS sellableQuantity
 
-                    FROM dbo.vw_InventoryLotStatus
+                    FROM dbo.vw_InventoryLotStatus v
+                    LEFT JOIN dbo.ProductVariant pv
+                        ON pv.Id = v.ProductVariantId
+                    OUTER APPLY (
+                        SELECT TOP 1
+                            pi.ImageUrl
+                        FROM dbo.ProductImage pi
+                        WHERE pi.ProductId = pv.ProductId
+                        ORDER BY
+                            CASE WHEN ISNULL(pi.IsPrimary, 0) = 1 THEN 0 ELSE 1 END,
+                            pi.Id ASC
+                    ) productImage
 
                     WHERE
-                        IsExpired = 1
-                        AND QuantityOnHand > 0
+                        v.IsExpired = 1
+                        AND v.QuantityOnHand > 0
 
                         AND
                         (
                             :keyword IS NULL
                             OR :keyword = ''
-                            OR Sku LIKE CONCAT('%', :keyword, '%')
-                            OR ProductName LIKE CONCAT('%', :keyword, '%')
-                            OR LotCode LIKE CONCAT('%', :keyword, '%')
+                            OR v.Sku LIKE CONCAT('%', :keyword, '%')
+                            OR v.ProductName LIKE CONCAT('%', :keyword, '%')
+                            OR v.LotCode LIKE CONCAT('%', :keyword, '%')
                         )
 
                     ORDER BY
-                        ExpirationDate ASC,
-                        ProductName ASC,
-                        Sku ASC
+                        v.ExpirationDate ASC,
+                        v.ProductName ASC,
+                        v.Sku ASC
                     """,
 
             countQuery = """

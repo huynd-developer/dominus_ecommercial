@@ -354,6 +354,12 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                 .map(GoodsReceiptItemRequest::getProductVariantId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
+        if (variantIds.size() != items.size()) {
+            throw badRequest(
+                    "Mỗi SKU chỉ được chọn một lần trong cùng một phiếu nhập."
+            );
+        }
+
         List<ProductVariant> variants = productVariantRepository.findAllById(variantIds);
 
         Map<Integer, ProductVariant> variantMap = variants.stream()
@@ -376,12 +382,6 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
             if (item.getProductVariantId() == null) {
                 throw badRequest("Dòng " + (i + 1) + ": ProductVariantId không được để trống.");
             }
-
-            /*
-             * Cho phép cùng một SKU xuất hiện nhiều dòng trong cùng phiếu.
-             * Mỗi dòng là một lô nhập riêng và saveItems() sẽ tự sinh
-             * một LotCode riêng cho từng dòng.
-             */
 
             if (item.getExpirationDate() == null) {
                 throw badRequest("Dòng " + (i + 1) + ": hạn sử dụng không được để trống.");

@@ -12,6 +12,8 @@ public interface InventoryLotStatusProjection {
 
     String getProductName();
 
+    String getImageUrl();
+
     String getLotCode();
 
     LocalDate getManufacturedDate();

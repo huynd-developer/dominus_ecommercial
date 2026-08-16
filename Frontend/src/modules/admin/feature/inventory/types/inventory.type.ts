@@ -17,6 +17,11 @@ export interface InventoryOverview {
   productVariantId: number;
   sku: string;
   productName: string;
+  imageUrl: string | null;
+
+  capacityValue: number | null;
+  bottleTypeName: string | null;
+
   totalQuantity: number;
   sellableQuantity: number;
   nearExpiryQuantity: number;
@@ -29,6 +34,7 @@ export interface InventoryLotStatus {
 
   sku: string;
   productName: string;
+  imageUrl: string | null;
   lotCode: string;
 
   manufacturedDate: string | null;
