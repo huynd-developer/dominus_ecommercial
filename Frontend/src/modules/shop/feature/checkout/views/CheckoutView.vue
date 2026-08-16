@@ -219,7 +219,6 @@ const successDetails = ref<ResultDetail[]>([]);
 const discountAmount = ref(0);
 const appliedVoucherCode = ref("");
 
-// ĐÃ CẬP NHẬT: Thêm customerId để CheckoutForm hứng được ID và gọi API bảng CustomerAddress
 const orderForm = ref({
   customerId: null as number | null,
   customerName: "",
@@ -258,8 +257,9 @@ const totalAmount = computed(() =>
   cartItems.value.reduce((sum, item) => sum + getItemPrice(item) * Number(item.quantity || 0), 0)
 );
 
+// ĐÃ SỬA: Đảm bảo số tiền tối thiểu bằng tiền ship
 const finalTotal = computed(() =>
-  Math.max(0, Number(totalAmount.value || 0) - Number(discountAmount.value || 0) + Number(shippingFee.value || 0))
+  Math.max(0, Number(totalAmount.value || 0) - Number(discountAmount.value || 0)) + Number(shippingFee.value || 0)
 );
 
 const totalItems = computed(() =>
@@ -388,9 +388,7 @@ const validateCheckoutForm = async (): Promise<any | null> => {
 
 const fetchProductDetail = async (productId: number) => {
   if (!productId) return null;
-  
   try {
-    // THÊM CHỐNG CACHE Ở ĐÂY NỮA
     const t = Date.now();
     let res = await api.get(`/v1/products/${productId}?t=${t}`).catch(() => null);
     if (!res) res = await api.get(`/customer/products/${productId}?t=${t}`).catch(() => null);
@@ -426,7 +424,6 @@ const loadCartSummary = async () => {
           const matchedVariant = variants.find((v: any) => Number(v?.productVariantId || v?.id || v?.Id || 0) === variantId);
 
           if (matchedVariant) {
-            // ĐÃ SỬA: KHÔNG ghi đè giá nữa! Giữ nguyên item.price, item.originalPrice từ giỏ hàng
             return {
                ...item,
                stockQuantity: Number(matchedVariant.stockQuantity ?? matchedVariant.stock ?? item.stockQuantity),
@@ -499,6 +496,9 @@ const handlePlaceOrder = async () => {
     successStatusText.value = getStatusText(Number(res.data?.status ?? 0));
     successMessage.value = res.data?.message || "Cảm ơn bạn đã mua sắm tại Dominus.";
 
+    // ĐÃ SỬA: Đảm bảo số tiền tối thiểu bằng tiền ship
+    const calculatedFinalTotal = Math.max(0, Number(res.data?.totalAmount ?? totalAmount.value) - finalDiscount) + Number(shippingFee.value);
+    
     successDetails.value = [
       { label: "Mã đơn hàng", value: res.data?.orderId ? `#${res.data.orderId}` : "-" },
       { label: "Trạng thái", value: successStatusText.value },
@@ -507,7 +507,7 @@ const handlePlaceOrder = async () => {
       { label: "Tạm tính", value: formatCurrency(Number(res.data?.totalAmount ?? totalAmount.value)), money: true },
       ...(finalDiscount > 0 ? [{ label: "Giảm giá", value: `-${formatCurrency(finalDiscount)}`, money: true }] : []),
       { label: "Phí vận chuyển", value: formatCurrency(Number(shippingFee.value)), money: true },
-      { label: "Tổng thanh toán", value: formatCurrency(Number(res.data?.finalAmount ?? finalTotal.value)), money: true },
+      { label: "Tổng thanh toán", value: formatCurrency(calculatedFinalTotal), money: true },
     ];
 
     if (orderPayload.paymentMethod === "VIETQR" || orderPayload.paymentMethod === "VNPAY") {
@@ -692,7 +692,6 @@ window.addEventListener("pageshow", async (event) => {
 const handleFocus = async () => {
   if (!showPaymentModal.value && !showSuccessModal.value) {
     await loadCartSummary();
-    // Check cả localStorage phòng khi có mã đang áp dụng
     if (localStorage.getItem("applied_voucher") || appliedVoucherCode.value) {
       await loadSavedVoucher();
     }
@@ -724,7 +723,6 @@ onMounted(async () => {
     isPageLoading.value = false;
   }
 
-  // Thêm lắng nghe sự kiện Focus
   window.addEventListener("focus", handleFocus);
 });
 

@@ -94,63 +94,54 @@ public class OrderService { //[cite: 7]
         List<CartItem> cartItems = new ArrayList<>(cart.getCartItems()); //[cite: 7]
         Map<Integer, CheckoutItemPrice> checkoutPriceMap = new LinkedHashMap<>(); //[cite: 7]
 
-        // 1. Tính toán giá tiền cho từng Item
-        for (CartItem item : cartItems) { //[cite: 7]
-            validateCartItem(item); //[cite: 7]
-            ProductVariant variant = item.getProductVariant(); //[cite: 7]
+        // ==========================================
+        // 🛑 CHỐT CHẶN 1: KIỂM TRA VOUCHER (NẾU CÓ)
+        // ==========================================
+        BigDecimal discountAmount = BigDecimal.ZERO;
+        Voucher appliedVoucher = null;
+        LocalDateTime now = LocalDateTime.now();
 
+        if (request.getVoucherCode() != null && !request.getVoucherCode().trim().isEmpty()) {
+            appliedVoucher = voucherRepo.findValidByCode(request.getVoucherCode().trim(), now)
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "Rất tiếc! Mã giảm giá không tồn tại, đã hết hạn, hoặc hết lượt sử dụng."
+                    ));
+        }
+
+        // ==========================================
+        // 🛑 CHỐT CHẶN 2: KIỂM TRA GIÁ TRỊ TỒN KHO & HẠN SỬ DỤNG TỪNG MÓN
+        // ==========================================
+        for (CartItem item : cartItems) {
+            validateCartItem(item);
+            ProductVariant variant = item.getProductVariant();
+
+            // 2.1. Quét xem sản phẩm có vừa bị Job ngầm khóa (Hết hạn HSD/Ngừng bán) không?
+            boolean isExpired = variant.getExpirationDate() != null && variant.getExpirationDate().isBefore(java.time.LocalDate.now());
+            if (variant.getStatus() == 0 || isExpired) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Sản phẩm '" + getSnapshotProductName(variant) + "' (Loại: " + formatVariantName(variant) + ") đã hết hạn sử dụng hoặc ngừng kinh doanh. Vui lòng quay lại giỏ hàng và xóa sản phẩm này!"
+                );
+            }
+
+            // 2.2. Kiểm tra tồn kho (Tránh bị nẫng tay trên)
             if (variant.getStockQuantity() < item.getQuantity()) {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
-                        "Sản phẩm " + variant.getSku() + " chỉ còn " + variant.getStockQuantity() + " trong kho"
-                ); //[cite: 7]
+                        "Sản phẩm '" + getSnapshotProductName(variant) + "' (Loại: " + formatVariantName(variant) + ") không đủ số lượng. Kho chỉ còn " + variant.getStockQuantity() + " sản phẩm!"
+                );
             }
 
-            CheckoutItemPrice itemPrice = calculateCheckoutItemPrice(variant); //[cite: 7]
-            checkoutPriceMap.put(item.getId(), itemPrice); //[cite: 7]
+            // 2.3. Lấy giá Realtime từ DB (Tự động áp dụng hoặc gỡ bỏ Flash Sale theo giờ thực tế)
+            CheckoutItemPrice itemPrice = calculateCheckoutItemPrice(variant);
+            checkoutPriceMap.put(item.getId(), itemPrice);
 
-            // Tính tổng tiền cho Order thì PHẢI nhân với quantity
-            BigDecimal lineTotal = itemPrice.finalUnitPrice()
-                    .multiply(BigDecimal.valueOf(item.getQuantity())); //[cite: 7]
-            totalAmount = totalAmount.add(lineTotal); //[cite: 7]
+            BigDecimal lineTotal = itemPrice.finalUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+            totalAmount = totalAmount.add(lineTotal);
         }
 
-        totalAmount = normalizeMoney(totalAmount); //[cite: 7]
-        BigDecimal discountAmount = BigDecimal.ZERO; //[cite: 7]
-        Voucher appliedVoucher = null; //[cite: 7]
-
-        // 2. Xử lý Voucher toàn đơn
-        if (request.getVoucherCode() != null && !request.getVoucherCode().trim().isEmpty()) { //[cite: 7]
-            appliedVoucher = voucherRepo.findByCode(request.getVoucherCode().trim())
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST,
-                            "Mã giảm giá không tồn tại!"
-                    )); //[cite: 7]
-
-            if (appliedVoucher.getStatus() != 1
-                    || appliedVoucher.getUsedCount() >= appliedVoucher.getUsageLimit()
-                    || totalAmount.compareTo(appliedVoucher.getMinOrderValue()) < 0) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Mã giảm giá không đủ điều kiện áp dụng!"
-                ); //[cite: 7]
-            }
-
-            if ("PERCENT".equalsIgnoreCase(appliedVoucher.getDiscountType())) {
-                BigDecimal percent = appliedVoucher.getDiscountValue()
-                        .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP); //[cite: 7]
-                discountAmount = totalAmount.multiply(percent); //[cite: 7]
-            } else {
-                discountAmount = appliedVoucher.getDiscountValue(); //[cite: 7]
-            }
-
-            if (appliedVoucher.getMaxDiscount() != null
-                    && appliedVoucher.getMaxDiscount().compareTo(BigDecimal.ZERO) > 0) {
-                if (discountAmount.compareTo(appliedVoucher.getMaxDiscount()) > 0) {
-                    discountAmount = appliedVoucher.getMaxDiscount(); //[cite: 7]
-                }
-            }
-        }
+        discountAmount = normalizeMoney(discountAmount);
 
         discountAmount = normalizeMoney(discountAmount); //[cite: 7]
 
@@ -593,35 +584,6 @@ public class OrderService { //[cite: 7]
         return variant.getBottleType().getName(); //[cite: 7]
     }
 
-    @org.springframework.scheduling.annotation.Scheduled(fixedRate = 900000)
-    @Transactional
-    public void autoCancelAbandonedOrders() { //[cite: 7]
-        LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(15); //[cite: 7]
-        List<Order> abandonedOrders = orderRepo.findAll().stream()
-                .filter(o -> o.getStatus() == ORDER_STATUS_PENDING
-                        /*
-                         * Không tự hủy đơn đã thanh toán VNPay/VietQR nhưng còn chờ shop xác nhận.
-                         * isPaymentReported = true được dùng để đánh dấu khách đã thanh toán/báo thanh toán.
-                         */
-                        && !Boolean.TRUE.equals(o.getIsPaymentReported())
-                        && o.getCreatedAt() != null
-                        && o.getCreatedAt().isBefore(cutoffTime))
-                .toList(); //[cite: 7]
-
-        if (!abandonedOrders.isEmpty()) {
-            for (Order order : abandonedOrders) {
-                order.setStatus(ORDER_STATUS_CANCELLED); //[cite: 7]
-            }
-            orderRepo.saveAll(abandonedOrders); //[cite: 7]
-
-            for (Order order : abandonedOrders) {
-                orderMailService.sendOrderAutoCancelled(order);
-            }
-
-            System.out.println("[HỆ THỐNG] Đã tự động hủy " + abandonedOrders.size() + " đơn hàng quá hạn thanh toán."); //[cite: 7]
-        }
-    }
-
     @Transactional
     public Map<String, Object> generateVnPayUrl(Integer orderId) { //[cite: 7]
         Order order = orderRepo.findById(orderId)
@@ -729,4 +691,15 @@ public class OrderService { //[cite: 7]
             BigDecimal finalUnitPrice
     ) {
     } //[cite: 7]
+
+    // Ném hàm này xuống cuối file OrderService.java
+    private String formatVariantName(ProductVariant v) {
+        if (v == null) return "Loại";
+        String capString = getSnapshotCapacityName(v);
+        String bottleString = getSnapshotBottleTypeName(v);
+        if (capString != null && bottleString != null) return capString + " - " + bottleString;
+        if (capString != null) return capString;
+        if (bottleString != null) return bottleString;
+        return "Loại " + v.getId();
+    }
 }

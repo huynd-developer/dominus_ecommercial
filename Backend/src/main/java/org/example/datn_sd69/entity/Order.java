@@ -140,4 +140,7 @@ public class Order extends BaseEntity {
 
     @Column(name = "Shippingfee")
     private BigDecimal shippingFee = BigDecimal.valueOf(30000);
+
+    @jakarta.persistence.OneToMany(mappedBy = "order", cascade = jakarta.persistence.CascadeType.ALL)
+    private java.util.List<OrderItem> items = new java.util.ArrayList<>();
 }

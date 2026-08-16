@@ -52,9 +52,10 @@
           </div>
         </template>
 
+        <!-- ĐÃ SỬA: Chặn số âm và cộng thêm phí ship cho bảng danh sách -->
         <template v-if="column.key === 'finalAmount'">
           <span class="amount-text">
-            {{ money(record.finalAmount) }}
+            {{ money(Math.max(0, Number(record.totalAmount || 0) - Number(record.discountAmount || 0)) + getOrderShippingFee(record)) }}
           </span>
         </template>
 
@@ -142,6 +143,12 @@ function formatDate(date?: string | null) {
     month: "2-digit",
     year: "numeric",
   });
+}
+
+// ĐÃ THÊM: Hàm lấy phí ship để tính lại tổng tiền
+function getOrderShippingFee(order: any) {
+  const num = Number(order?.shippingFee ?? order?.shippingfee ?? order?.shippingFeeAmount ?? order?.shipFee ?? order?.deliveryFee ?? order?.shippingAmount ?? 0);
+  return Number.isFinite(num) ? num : 0;
 }
 
 function formatPaymentMethod(method?: string) {

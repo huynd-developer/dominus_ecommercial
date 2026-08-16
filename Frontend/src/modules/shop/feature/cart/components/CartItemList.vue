@@ -327,7 +327,30 @@ const getVariantsList = (item: CartItem) => {
       p.lstProductVariant, p.LstProductVariant, p.items, p.Items,
     ];
     for (const list of lists) {
-      if (Array.isArray(list) && list.length > 0) return list;
+      if (Array.isArray(list) && list.length > 0) {
+        // Lọc bỏ biến thể hết hạn
+        const rootExp = p.expirationDate || p.expDate || i.expirationDate || i.expDate;
+        return list.filter((v: any) => {
+          const exp = v.expirationDate || v.expDate || rootExp;
+          
+          if (!exp) return true;
+          // Tự convert và kiểm tra y hệt logic ngoài Card
+          let time = 0;
+          if (typeof exp === 'number') time = exp;
+          else {
+              const d = new Date(exp);
+              time = isNaN(d.getTime()) ? 0 : d.getTime();
+          }
+          if (time === 0) return true;
+
+          const today = new Date();
+          today.setHours(0,0,0,0);
+          const expDate = new Date(time);
+          expDate.setHours(0,0,0,0);
+          
+          return expDate.getTime() >= today.getTime();
+        });
+      }
     }
   }
   return [];

@@ -13,18 +13,6 @@ import java.util.Optional;
 @Repository
 public interface VoucherRepository extends JpaRepository<Voucher, Integer> {
 
-    /**
-     * Dùng cho POS / Checkout:
-     * Tìm voucher theo code, không phân biệt hoa thường.
-     *
-     * Không check status/date ở query này vì service sẽ tự validate
-     * để trả đúng lỗi nghiệp vụ:
-     * - mã đã ngừng hoạt động
-     * - chưa đến thời gian dùng
-     * - đã hết hạn
-     * - hết lượt sử dụng
-     * - đơn chưa đủ tối thiểu
-     */
     @Query("""
             SELECT v FROM Voucher v
             WHERE LOWER(v.code) = LOWER(:code)
@@ -32,14 +20,8 @@ public interface VoucherRepository extends JpaRepository<Voucher, Integer> {
             """)
     Optional<Voucher> findByCodeIgnoreCase(@Param("code") String code);
 
-    /**
-     * Dùng cho luồng cũ nếu còn chỗ nào đang gọi.
-     */
     Optional<Voucher> findByCode(String code);
 
-    /**
-     * Dùng cho API khách hàng/apply cũ.
-     */
     @Query("""
             SELECT v FROM Voucher v
             WHERE LOWER(v.code) = LOWER(:code)
@@ -63,7 +45,6 @@ public interface VoucherRepository extends JpaRepository<Voucher, Integer> {
 
     boolean existsByCode(String code);
 
-    // Thêm hàm này vào dưới cùng
     @Query("SELECT v FROM Voucher v WHERE v.isDeleted = false " +
             "AND (:keyword IS NULL OR LOWER(v.code) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
             "AND (:status IS NULL OR v.status = :status) " +
@@ -72,4 +53,22 @@ public interface VoucherRepository extends JpaRepository<Voucher, Integer> {
             @Param("keyword") String keyword,
             @Param("status") Integer status,
             org.springframework.data.domain.Pageable pageable);
+
+    // --- HÀM THÊM MỚI DÀNH CHO JOB BẬT/TẮT VOUCHER TỰ ĐỘNG ---
+    @Query("""
+        SELECT v FROM Voucher v
+        WHERE COALESCE(v.isDeleted, false) = false
+          AND v.status = :currentStatus
+          AND v.startDate <= :now
+          AND v.endDate > :now
+    """)
+    List<Voucher> findToStart(@Param("currentStatus") Integer currentStatus, @Param("now") LocalDateTime now);
+
+    @Query("""
+        SELECT v FROM Voucher v
+        WHERE COALESCE(v.isDeleted, false) = false
+          AND v.status = :currentStatus
+          AND v.endDate <= :now
+    """)
+    List<Voucher> findToEnd(@Param("currentStatus") Integer currentStatus, @Param("now") LocalDateTime now);
 }

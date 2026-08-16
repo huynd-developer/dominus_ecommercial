@@ -16,8 +16,6 @@
             -{{ getDiscountPercent(item) }}%
           </div>
 
-          <!-- ĐÃ GỠ BỎ HUY HIỆU CẢNH BÁO SẢN PHẨM GẦN HẾT HẠN THEO YÊU CẦU -->
-
           <img :src="getProductImage(item)" :alt="item?.name || 'Sản phẩm'" @error="handleImageError" />
           <button class="btn-heart-small" type="button" :class="{ active: isFavorited(item) }" :disabled="isFavoriteLoading(item)" @click.stop="toggleFavorite(item)" :title="isFavorited(item) ? 'Bỏ yêu thích' : 'Thêm vào yêu thích'">
             <span v-if="isFavoriteLoading(item)" class="spinner-border spinner-border-sm"></span>
@@ -146,6 +144,14 @@
                   <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-price-' + i"></td>
                 </tr>
                 <tr>
+                  <th class="spec-label-col">Đơn giá / 1ml</th>
+                  <td v-for="p in compareList" :key="'priceml' + (p.id || p.productId)">
+                    <div class="fw-bold" style="color: #b78d52;">{{ formatPricePerMl(p) }}</div>
+                    <span v-if="isBestValue(p)" class="badge bg-warning bg-opacity-10 text-warning border border-warning mt-2 d-inline-block px-2 py-1">Tiết kiệm nhất</span>
+                  </td>
+                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-priceml-' + i"></td>
+                </tr>
+                <tr>
                   <th class="spec-label-col">Tình trạng kho</th>
                   <td v-for="p in compareList" :key="'stock' + (p.id || p.productId)">
                     <span :class="getCompareStock(p) > 0 ? 'text-success fw-bold' : 'text-danger fw-bold'">
@@ -164,6 +170,8 @@
                   </td>
                   <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-rating-' + i"></td>
                 </tr>
+
+                <!-- BẮT ĐẦU: CÁC TRƯỜNG SO SÁNH NƯỚC HOA ĐÃ TÁCH RIÊNG -->
                 <tr><td colspan="4" class="group-header">Đặc tính sản phẩm</td></tr>
                 <tr>
                   <th class="spec-label-col">Nhóm hương chính</th>
@@ -171,15 +179,32 @@
                   <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-scent-' + i"></td>
                 </tr>
                 <tr>
-                  <th class="spec-label-col">Nồng độ lưu hương</th>
-                  <td v-for="p in compareList" :key="'con' + (p.id || p.productId)">{{ getCompareValue(p, "concentration") }}</td>
+                  <th class="spec-label-col">Nồng độ</th>
+                  <td v-for="p in compareList" :key="'con' + (p.id || p.productId)" class="fw-bold">{{ getCompareValue(p, "concentration") }}</td>
                   <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-con-' + i"></td>
                 </tr>
                 <tr>
-                  <th class="spec-label-col">Giới tính</th>
+                  <th class="spec-label-col">Độ lưu hương</th>
+                  <td v-for="p in compareList" :key="'long' + (p.id || p.productId)" style="color: #b78d52; font-weight: 600;">{{ getLongevityDisplay(p) }}</td>
+                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-long-' + i"></td>
+                </tr>
+                <tr>
+                  <th class="spec-label-col">Đối tượng (Giới tính)</th>
                   <td v-for="p in compareList" :key="'gen' + (p.id || p.productId)">{{ getCompareValue(p, "gender") }}</td>
                   <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-gen-' + i"></td>
                 </tr>
+                <tr>
+                  <th class="spec-label-col">Phong cách</th>
+                  <td v-for="p in compareList" :key="'style' + (p.id || p.productId)">{{ getCompareValue(p, "style") }}</td>
+                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-style-' + i"></td>
+                </tr>
+                <tr>
+                  <th class="spec-label-col">Hoàn cảnh khuyên dùng</th>
+                  <td v-for="p in compareList" :key="'occ' + (p.id || p.productId)">{{ getCompareValue(p, "occasion") }}</td>
+                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-occ-' + i"></td>
+                </tr>
+                <!-- KẾT THÚC -->
+
                 <tr><td colspan="4" class="group-header bg-white border-bottom-0 pt-4"></td></tr>
                 <tr>
                   <th class="spec-label-col border-bottom-0"></th>
@@ -262,9 +287,6 @@
                 </span>
                 <span v-if="calculatedDiscountPercent > 0" class="flash-sale-badge ms-2">-{{ calculatedDiscountPercent }}%</span>
               </div>
-              
-              <!-- ĐÃ GỠ BỎ HIỂN THỊ NSX & HSD BÊN TRONG MODAL THEO YÊU CẦU -->
-
             </div>
           </div>
 
@@ -374,7 +396,6 @@ const isExpiredDate = (dateStr: any): boolean => {
   return getStartOfDay(time) < getStartOfDay(Date.now()); 
 };
 
-// VẪN GIỮ HÀM KIỂM TRA ĐỂ LOẠI BỎ CÁC SẢN PHẨM ĐÃ QUÁ HẠN SỬ DỤNG KHỎI LƯỚI
 const isFullyExpired = (item: any): boolean => {
   if (!item) return false;
   if (!item.variants || item.variants.length === 0) {
@@ -382,13 +403,12 @@ const isFullyExpired = (item: any): boolean => {
     return false;
   }
   const hasValidVariant = item.variants.some((v: any) => {
-    if (!v.expirationDate) return true; 
-    return !isExpiredDate(v.expirationDate); 
+    const exp = v.expirationDate || v.expDate || item.expirationDate;
+    if (!exp) return true; 
+    return !isExpiredDate(exp); 
   });
   return !hasValidVariant;
 };
-
-// ĐÃ GỠ BỎ HÀM isNearExpiry Ở ĐÂY VÌ KHÔNG CẦN DÙNG TỚI NỮA
 
 const validProductList = computed(() => {
   if (!props.productList) return [];
@@ -523,12 +543,20 @@ const getSafeNumber = (val: any) => {
 const getPrimaryVariantObject = (item: any) => {
   if (!item) return null;
   if (Array.isArray(item?.variants) && item.variants.length > 0) {
-    return item.variants.find((variant: any) => {
+    const rootExp = item.expirationDate || item.expDate;
+    const validVariants = item.variants.filter((v: any) => {
+        const exp = v.expirationDate || v.expDate || rootExp;
+        return !isExpiredDate(exp);
+    });
+    
+    if (validVariants.length === 0) return item.variants[0]; 
+    
+    return validVariants.find((variant: any) => {
         const stock = getSafeNumber(variant?.stockQuantity ?? variant?.stock ?? variant?.availableQuantity ?? variant?.quantity);
         const price = getSafeNumber(variant?.salePrice ?? variant?.promotionPrice ?? variant?.price ?? variant?.Price);
         const status = Number(variant?.status ?? 1);
-        return status === 1 && stock > 0 && price > 0 && !isExpiredDate(variant?.expirationDate);
-      }) || item.variants[0];
+        return status === 1 && stock > 0 && price > 0;
+      }) || validVariants[0];
   }
   return item; 
 };
@@ -597,11 +625,117 @@ const getFragranceFamily = (item: any) => {
   if (Array.isArray(item?.scents) && item.scents.length > 0) return item.scents.join(", ");
   return getAttributeText(item, 'fragranceFamily');
 };
+
+// CÁC HÀM XỬ LÝ MỚI CHO THUỘC TÍNH NƯỚC HOA
+const getOccasionText = (item: any) => {
+  // 1. Thử lấy từ Backend nếu có
+  let occasions = [];
+  if (Array.isArray(item?.occasions) && item.occasions.length > 0) {
+    occasions = item.occasions.map((i: any) => (typeof i === "object" ? i?.name : i));
+  } else {
+    const val = getAttributeText(item, "occasion");
+    if (val !== "Đang cập nhật" && val) occasions = [val];
+  }
+
+  let seasons = [];
+  if (Array.isArray(item?.seasons) && item.seasons.length > 0) {
+    seasons = item.seasons.map((i: any) => (typeof i === "object" ? i?.name : i));
+  }
+
+  if (occasions.length > 0 || seasons.length > 0) {
+    const result = [];
+    if (occasions.length > 0) result.push(occasions.filter(Boolean).join(", "));
+    if (seasons.length > 0) result.push(`Mùa: ${seasons.filter(Boolean).join(", ")}`);
+    return result.join(" | ");
+  }
+
+  // 2. Tự động suy luận nếu Backend trống
+  const scent = String(getFragranceFamily(item) || "").toLowerCase();
+  const con = String(getAttributeText(item, "concentration") || "").toLowerCase();
+
+  if (scent.includes("wood") || scent.includes("gỗ") || scent.includes("oriental") || scent.includes("phương đông") || scent.includes("gourmand")) {
+     return "Đi tiệc, Hẹn hò, Sự kiện quan trọng | Hợp Thu - Đông";
+  }
+  if (scent.includes("citrus") || scent.includes("cam chanh") || scent.includes("aquatic") || scent.includes("nước") || con.includes("cologne") || con.includes("edt")) {
+     return "Đi học, Đi làm (Office), Thể thao, Dạo phố | Hợp Xuân - Hè";
+  }
+  if (scent.includes("floral") || scent.includes("hoa") || scent.includes("fruity") || scent.includes("trái cây")) {
+     return "Đi làm, Hẹn hò nhẹ nhàng, Gặp gỡ bạn bè | Hợp Xuân - Thu";
+  }
+
+  return "Đa dụng (Sử dụng hàng ngày mọi thời điểm)";
+};
+
+const getStyleText = (item: any) => {
+  // 1. Thử lấy từ Backend nếu có
+  if (Array.isArray(item?.styles) && item.styles.length > 0) {
+    return item.styles.map((i: any) => (typeof i === "object" ? i?.name : i)).filter(Boolean).join(", ");
+  }
+  const val = getAttributeText(item, "style");
+  if (val !== "Đang cập nhật" && val) return val;
+
+  // 2. Tự động suy luận nếu Backend trống
+  const scent = String(getFragranceFamily(item) || "").toLowerCase();
+  
+  if (scent.includes("wood") || scent.includes("gỗ")) return "Sang trọng, Trưởng thành, Ấm áp";
+  if (scent.includes("floral") || scent.includes("hoa")) return "Nữ tính, Thanh lịch, Quyến rũ";
+  if (scent.includes("citrus") || scent.includes("cam chanh")) return "Năng động, Tươi mát, Trẻ trung";
+  if (scent.includes("oriental") || scent.includes("phương đông")) return "Gợi cảm, Bí ẩn, Cuốn hút";
+  if (scent.includes("fruity") || scent.includes("trái cây")) return "Ngọt ngào, Đáng yêu, Tươi mới";
+  if (scent.includes("aquatic") || scent.includes("nước")) return "Phóng khoáng, Mát mẻ, Thể thao";
+  if (scent.includes("gourmand")) return "Ngọt ngào, Hấp dẫn, Nổi bật";
+
+  return "Thanh lịch, Tinh tế, Dễ sử dụng";
+};
+
+// ĐÃ THÊM CÁC FIELD MỚI VÀO getCompareValue
 const getCompareValue = (p: any, type: string) => {
-  if (type === 'brand') return getBrandName(p); if (type === 'scent') return getFragranceFamily(p);
-  if (type === 'concentration') return getAttributeText(p, 'concentration'); if (type === 'gender') return getGenderText(p);
-  if (type === 'rating') return getRatingScore(p); if (type === 'price') return getComparePrice(p);
-  if (type === 'stock') return getCompareStock(p) > 0 ? 'Còn hàng' : 'Hết hàng'; return '';
+  if (type === 'brand') return getBrandName(p); 
+  if (type === 'scent') return getFragranceFamily(p);
+  if (type === 'concentration') return getAttributeText(p, 'concentration'); 
+  if (type === 'gender') return getGenderText(p);
+  if (type === 'occasion') return getOccasionText(p);
+  if (type === 'style') return getStyleText(p);
+  if (type === 'rating') return getRatingScore(p); 
+  if (type === 'price') return getComparePrice(p);
+  if (type === 'stock') return getCompareStock(p) > 0 ? 'Còn hàng' : 'Hết hàng'; 
+  return '';
+};
+
+// SO SÁNH NÂNG CAO
+const getPricePerMl = (p: any) => {
+  const v = getCompareVariant(p);
+  const price = getComparePrice(p);
+  let cap = v?.capacityName || v?.capacityValue || v?.volume || v?.capacity?.value || v?.capacity?.name || p?.capacity || "";
+  const numericCap = parseFloat(String(cap).replace(/[^0-9.]/g, ""));
+  if (numericCap > 0 && price > 0) {
+    return price / numericCap;
+  }
+  return 0;
+};
+
+const formatPricePerMl = (p: any) => {
+  const val = getPricePerMl(p);
+  if (val > 0) {
+    return new Intl.NumberFormat("vi-VN").format(Math.round(val)) + "đ/ml";
+  }
+  return "-";
+};
+
+const isBestValue = (p: any) => {
+  const validValues = compareList.value.map(item => getPricePerMl(item)).filter(v => v > 0);
+  if (validValues.length === 0) return false;
+  const minValue = Math.min(...validValues);
+  return getPricePerMl(p) === minValue && minValue > 0;
+};
+
+const getLongevityDisplay = (p: any) => {
+  const con = String(getCompareValue(p, "concentration")).toLowerCase();
+  if (con.includes("cologne") || con.includes("edc")) return "2 - 4 tiếng (Nhẹ nhàng)";
+  if (con.includes("toilette") || con.includes("edt")) return "4 - 6 tiếng (Vừa phải)";
+  if ((con.includes("parfum") && !con.includes("extrait")) || con.includes("edp")) return "6 - 8 tiếng (Lâu phai)";
+  if (con.includes("extrait") || con.includes("parfum")) return "Trên 8 tiếng (Đậm đặc)";
+  return "Tùy cơ địa";
 };
 
 const DEFAULT_RATING = 5;
