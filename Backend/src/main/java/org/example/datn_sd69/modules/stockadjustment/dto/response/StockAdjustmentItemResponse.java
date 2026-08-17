@@ -17,6 +17,8 @@ public class StockAdjustmentItemResponse {
 
     private String productName;
 
+    private String imageUrl;
+
     private String lotCode;
 
     /**

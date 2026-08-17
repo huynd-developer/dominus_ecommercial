@@ -80,6 +80,7 @@ export interface StockAdjustmentItemResponse {
   productVariantId: number | null;
   sku: string | null;
   productName: string | null;
+  imageUrl: string | null;
   lotCode: string | null;
   systemQuantity: number;
   actualQuantity: number;

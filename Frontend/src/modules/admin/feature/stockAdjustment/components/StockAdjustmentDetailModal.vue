@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import type { StockAdjustmentDetailResponse } from "../types/stock-adjustment.type";
+import { ref } from "vue";
+import type {
+  StockAdjustmentDetailResponse,
+  StockAdjustmentItemResponse,
+} from "../types/stock-adjustment.type";
 
 defineProps<{
   visible: boolean;
@@ -33,6 +37,53 @@ const differenceClass = (value?: number | null) => {
   if (number > 0) return "diff-up";
   if (number < 0) return "diff-down";
   return "diff-neutral";
+};
+
+const previewImageUrl = ref("");
+const previewProductName = ref("");
+const previewSku = ref("");
+const failedImageUrls = ref<Set<string>>(new Set());
+
+const hasUsableImage = (imageUrl?: string | null) =>
+  Boolean(imageUrl && !failedImageUrls.value.has(imageUrl));
+
+const openImagePreview = (
+  imageUrl?: string | null,
+  productName?: string | null,
+  sku?: string | null
+) => {
+  if (!hasUsableImage(imageUrl)) return;
+
+  previewImageUrl.value = imageUrl!;
+  previewProductName.value = productName || "Sản phẩm";
+  previewSku.value = sku || "";
+};
+
+const closeImagePreview = () => {
+  previewImageUrl.value = "";
+  previewProductName.value = "";
+  previewSku.value = "";
+};
+
+const onImageError = (event: Event) => {
+  const image = event.currentTarget as HTMLImageElement;
+  const src = image.currentSrc || image.src;
+
+  if (src) {
+    const next = new Set(failedImageUrls.value);
+    next.add(src);
+    failedImageUrls.value = next;
+  }
+};
+
+const onPreviewImageError = () => {
+  if (previewImageUrl.value) {
+    const next = new Set(failedImageUrls.value);
+    next.add(previewImageUrl.value);
+    failedImageUrls.value = next;
+  }
+
+  closeImagePreview();
 };
 </script>
 
@@ -153,9 +204,10 @@ const differenceClass = (value?: number | null) => {
               <table>
                 <thead>
                   <tr>
+                    <th class="image-column">Ảnh</th>
+                    <th>Mã lô</th>
                     <th>SKU</th>
                     <th>Sản phẩm</th>
-                    <th>Mã lô</th>
                     <th>Tồn hệ thống</th>
                     <th>Tồn thực tế</th>
                     <th>Chênh lệch</th>
@@ -166,9 +218,39 @@ const differenceClass = (value?: number | null) => {
                 </thead>
                 <tbody>
                   <tr v-for="item in detail.items" :key="item.id">
+                    <td class="image-cell">
+                      <button
+                        type="button"
+                        class="product-thumb"
+                        :class="{ clickable: hasUsableImage(item.imageUrl) }"
+                        :disabled="!hasUsableImage(item.imageUrl)"
+                        :title="
+                          hasUsableImage(item.imageUrl)
+                            ? 'Bấm để xem ảnh lớn'
+                            : 'Sản phẩm chưa có ảnh'
+                        "
+                        @click="
+                          openImagePreview(
+                            item.imageUrl,
+                            item.productName,
+                            item.sku
+                          )
+                        "
+                      >
+                        <i class="bi bi-image"></i>
+
+                        <img
+                          v-if="hasUsableImage(item.imageUrl)"
+                          :src="item.imageUrl || ''"
+                          :alt="item.productName || 'Sản phẩm'"
+                          loading="lazy"
+                          @error="onImageError"
+                        />
+                      </button>
+                    </td>
+                    <td>{{ item.lotCode || "—" }}</td>
                     <td><strong>{{ item.sku || "—" }}</strong></td>
                     <td>{{ item.productName || "—" }}</td>
-                    <td>{{ item.lotCode || "—" }}</td>
                     <td>{{ formatNumber(item.systemQuantity) }}</td>
                     <td>{{ formatNumber(item.actualQuantity) }}</td>
                     <td>
@@ -194,6 +276,36 @@ const differenceClass = (value?: number | null) => {
 
         <div class="detail-footer">
           <button type="button" @click="emit('close')">Đóng</button>
+        </div>
+      </div>
+
+
+      <div
+        v-if="previewImageUrl"
+        class="image-preview-backdrop"
+        @click.self="closeImagePreview"
+      >
+        <div class="image-preview-dialog">
+          <button
+            type="button"
+            class="image-preview-close"
+            aria-label="Đóng ảnh"
+            @click="closeImagePreview"
+          >
+            <i class="bi bi-x-lg"></i>
+          </button>
+
+          <img
+            :src="previewImageUrl"
+            :alt="previewProductName"
+            class="image-preview-img"
+            @error="onPreviewImageError"
+          />
+
+          <div class="image-preview-info">
+            <strong>{{ previewProductName }}</strong>
+            <span v-if="previewSku">{{ previewSku }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -392,7 +504,7 @@ section h4 {
 
 table {
   width: 100%;
-  min-width: 1120px;
+  min-width: 1200px;
   border-collapse: collapse;
 }
 
@@ -410,6 +522,55 @@ th {
   color: #4b5563;
 }
 
+.image-column,
+.image-cell {
+  width: 78px;
+  min-width: 78px;
+  text-align: center;
+}
+
+.product-thumb {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #9ca3af;
+  cursor: default;
+}
+
+.product-thumb:disabled {
+  opacity: 1;
+}
+
+.product-thumb.clickable {
+  cursor: pointer;
+}
+
+.product-thumb.clickable:hover {
+  border-color: #9ca3af;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.1);
+}
+
+.product-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #fff;
+}
+
+.product-thumb i {
+  font-size: 18px;
+}
+
 .state {
   padding: 42px;
   color: #6b7280;
@@ -419,6 +580,78 @@ th {
 .snapshot-note {
   color: #4b5563;
   font-size: 13px;
+}
+
+
+.image-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.image-preview-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(760px, calc(100% - 48px));
+  max-height: calc(100vh - 48px);
+  padding: 18px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+}
+
+.image-preview-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: #333;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.image-preview-img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 170px);
+  object-fit: contain;
+  border-radius: 10px;
+}
+
+.image-preview-info {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+  text-align: center;
+}
+
+.image-preview-info strong {
+  color: #111827;
+  font-size: 14px;
+}
+
+.image-preview-info span {
+  color: #6b7280;
+  font-size: 12px;
 }
 
 @media (max-width: 900px) {

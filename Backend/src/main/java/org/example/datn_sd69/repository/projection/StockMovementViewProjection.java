@@ -14,6 +14,8 @@ public interface StockMovementViewProjection {
 
     String getProductName();
 
+    String getImageUrl();
+
     String getLotCode();
 
     Byte getMovementType();

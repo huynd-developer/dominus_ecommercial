@@ -64,6 +64,7 @@ const onPreviewImageError = () => {
     <table>
       <thead>
         <tr>
+          <th class="image-column">Ảnh</th>
           <th>SKU</th>
           <th>Sản phẩm</th>
           <th class="number">Tổng tồn</th>
@@ -75,13 +76,13 @@ const onPreviewImageError = () => {
 
       <tbody>
         <tr v-if="loading">
-          <td colspan="6" class="empty">
+          <td colspan="7" class="empty">
             Đang tải dữ liệu...
           </td>
         </tr>
 
         <tr v-else-if="items.length === 0">
-          <td colspan="6" class="empty">
+          <td colspan="7" class="empty">
             Không có dữ liệu tồn kho
           </td>
         </tr>
@@ -91,53 +92,60 @@ const onPreviewImageError = () => {
           v-else
           :key="item.productVariantId"
         >
+          <!-- IMAGE -->
+          <td class="image-cell">
+            <button
+              type="button"
+              class="product-thumb"
+              :class="{
+                clickable: hasUsableImage(item.imageUrl),
+              }"
+              :disabled="!hasUsableImage(item.imageUrl)"
+              :title="
+                hasUsableImage(item.imageUrl)
+                  ? 'Bấm để xem ảnh lớn'
+                  : 'Sản phẩm chưa có ảnh'
+              "
+              @click="openImagePreview(item)"
+            >
+              <i class="bi bi-image"></i>
+
+              <img
+                v-if="hasUsableImage(item.imageUrl)"
+                :src="item.imageUrl || ''"
+                :alt="item.productName"
+                loading="lazy"
+                @error="onImageError"
+              />
+            </button>
+          </td>
+
+          <!-- SKU -->
           <td class="sku">
             {{ item.sku }}
           </td>
 
+          <!-- PRODUCT -->
           <td>
-            <div class="product-cell">
-              <button
-                type="button"
-                class="product-thumb"
-                :class="{
-                  clickable: hasUsableImage(item.imageUrl),
-                }"
-                :disabled="!hasUsableImage(item.imageUrl)"
-                :title="
-                  hasUsableImage(item.imageUrl)
-                    ? 'Bấm để xem ảnh lớn'
-                    : 'Sản phẩm chưa có ảnh'
-                "
-                @click="openImagePreview(item)"
-              >
-                <i class="bi bi-image"></i>
-
-                <img
-                  v-if="hasUsableImage(item.imageUrl)"
-                  :src="item.imageUrl || ''"
-                  :alt="item.productName"
-                  loading="lazy"
-                  @error="onImageError"
-                />
-              </button>
-
-              <span>{{ item.productName }}</span>
-            </div>
+            {{ item.productName }}
           </td>
 
+          <!-- TOTAL -->
           <td class="number">
             {{ formatNumber(item.totalQuantity) }}
           </td>
 
+          <!-- SELLABLE -->
           <td class="number sellable">
             {{ formatNumber(item.sellableQuantity) }}
           </td>
 
+          <!-- NEAR EXPIRY -->
           <td class="number warning">
             {{ formatNumber(item.nearExpiryQuantity) }}
           </td>
 
+          <!-- EXPIRED -->
           <td class="number danger">
             {{ formatNumber(item.expiredQuantity) }}
           </td>
@@ -146,6 +154,7 @@ const onPreviewImageError = () => {
     </table>
   </div>
 
+  <!-- IMAGE PREVIEW -->
   <Teleport to="body">
     <div
       v-if="previewImageUrl"
@@ -171,7 +180,9 @@ const onPreviewImageError = () => {
 
         <div class="image-preview-info">
           <strong>{{ previewProductName }}</strong>
-          <span v-if="previewSku">{{ previewSku }}</span>
+          <span v-if="previewSku">
+            {{ previewSku }}
+          </span>
         </div>
       </div>
     </div>
@@ -190,7 +201,7 @@ const onPreviewImageError = () => {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 900px;
+  min-width: 950px;
 }
 
 th,
@@ -212,35 +223,40 @@ td {
   color: #333;
 }
 
-.number {
-  text-align: right;
+/* =========================
+   IMAGE COLUMN
+   ========================= */
+
+.image-column {
+  width: 70px;
+  text-align: center;
 }
 
-.sku {
-  font-weight: 600;
-}
-
-.product-cell {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
+.image-cell {
+  width: 70px;
+  text-align: center;
 }
 
 .product-thumb {
   position: relative;
+
   width: 38px;
   height: 38px;
-  flex: 0 0 38px;
-  display: flex;
+
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+
   padding: 0;
+
   overflow: hidden;
+
   border: 1px solid #e5e7eb;
   border-radius: 8px;
+
   background: #f8f9fa;
   color: #9ca3af;
+
   cursor: default;
 }
 
@@ -250,6 +266,7 @@ td {
 
 .product-thumb.clickable {
   cursor: pointer;
+
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease,
@@ -258,21 +275,39 @@ td {
 
 .product-thumb.clickable:hover {
   border-color: #b6b6b6;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.1);
+
   transform: scale(1.04);
 }
 
 .product-thumb img {
   position: absolute;
   inset: 0;
+
   width: 100%;
   height: 100%;
+
   object-fit: cover;
+
   background: #fff;
 }
 
 .product-thumb i {
   font-size: 16px;
+}
+
+/* =========================
+   TABLE VALUES
+   ========================= */
+
+.number {
+  text-align: right;
+}
+
+.sku {
+  font-weight: 600;
 }
 
 .sellable {
@@ -293,47 +328,70 @@ td {
   color: #999;
 }
 
+/* =========================
+   IMAGE PREVIEW
+   ========================= */
+
 .image-preview-backdrop {
   position: fixed;
   inset: 0;
   z-index: 100000;
+
   display: flex;
   align-items: center;
   justify-content: center;
+
   padding: 24px;
+
   background: rgba(15, 23, 42, 0.72);
 }
 
 .image-preview-dialog {
   position: relative;
+
   display: flex;
   flex-direction: column;
   align-items: center;
+
   width: min(760px, 100%);
   max-height: calc(100vh - 48px);
+
   padding: 18px;
+
   border-radius: 14px;
+
   background: #fff;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.28);
 }
 
 .image-preview-close {
   position: absolute;
   top: 10px;
   right: 10px;
+
   z-index: 2;
+
   width: 36px;
   height: 36px;
+
   display: flex;
   align-items: center;
   justify-content: center;
+
   padding: 0;
+
   border: 0;
   border-radius: 50%;
+
   background: rgba(255, 255, 255, 0.92);
   color: #333;
+
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
 .image-preview-close:hover {
@@ -342,19 +400,26 @@ td {
 
 .image-preview-img {
   display: block;
+
   max-width: 100%;
   max-height: calc(100vh - 170px);
+
   object-fit: contain;
+
   border-radius: 10px;
 }
 
 .image-preview-info {
   width: 100%;
+
   display: flex;
   flex-direction: column;
   align-items: center;
+
   gap: 4px;
+
   margin-top: 12px;
+
   text-align: center;
 }
 

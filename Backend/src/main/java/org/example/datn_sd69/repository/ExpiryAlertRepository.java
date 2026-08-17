@@ -19,6 +19,7 @@ public interface ExpiryAlertRepository
                         LS.ProductVariantId AS productVariantId,
                         LS.Sku AS sku,
                         LS.ProductName AS productName,
+                        ImageData.ImageUrl AS imageUrl,
                         LS.LotCode AS lotCode,
                         LS.QuantityOnHand AS quantityOnHand,
                         LS.SellableQuantity AS sellableQuantity,
@@ -27,6 +28,23 @@ public interface ExpiryAlertRepository
                         LS.IsNearExpiry AS isNearExpiry,
                         LS.IsExpired AS isExpired
                     FROM dbo.vw_InventoryLotStatus LS
+
+                    LEFT JOIN dbo.ProductVariant PV
+                        ON PV.Id = LS.ProductVariantId
+
+                    OUTER APPLY (
+                        SELECT TOP 1
+                            PI.ImageUrl
+                        FROM dbo.ProductImage PI
+                        WHERE PI.ProductId = PV.ProductId
+                        ORDER BY
+                            CASE
+                                WHEN PI.IsPrimary = 1 THEN 0
+                                ELSE 1
+                            END,
+                            PI.Id ASC
+                    ) ImageData
+
                     WHERE
                         (
                             :keyword IS NULL

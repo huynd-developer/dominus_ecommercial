@@ -47,6 +47,7 @@ export interface GoodsReceiptItemResponse {
   productVariantId: number;
   sku: string;
   productName: string;
+  imageUrl: string | null;
 
   // Metadata nhận diện biến thể.
   capacityValue: number | null;
@@ -143,6 +144,7 @@ export interface InventorySkuOption {
   productVariantId: number;
   sku: string;
   productName: string;
+  imageUrl?: string | null;
 
   // Metadata chỉ dùng để nhận diện biến thể khi chọn SKU.
   // Để optional nhằm không ảnh hưởng các chỗ khác nếu có dùng interface này.

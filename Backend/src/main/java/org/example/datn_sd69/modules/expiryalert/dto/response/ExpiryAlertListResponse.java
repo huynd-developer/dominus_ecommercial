@@ -17,6 +17,8 @@ public class ExpiryAlertListResponse {
 
     private String productName;
 
+    private String imageUrl;
+
     private String lotCode;
 
     private Integer quantityOnHand;

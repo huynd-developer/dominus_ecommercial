@@ -33,6 +33,7 @@ export interface InventoryLotListResponse {
   productVariantId: number;
   sku: string;
   productName: string;
+  imageUrl: string | null;
   lotCode: string;
   receivedDate: string;
   expirationDate: string;
@@ -52,6 +53,7 @@ export interface InventoryLotDetailResponse {
   productVariantId: number;
   sku: string;
   productName: string;
+  imageUrl: string | null;
   lotCode: string;
 
   manufacturedDate: string | null;

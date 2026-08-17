@@ -14,6 +14,7 @@ public class InventoryLotListResponse {
     private Integer productVariantId;
     private String sku;
     private String productName;
+    private String imageUrl;
     private String lotCode;
     private LocalDate receivedDate;
     private LocalDate expirationDate;

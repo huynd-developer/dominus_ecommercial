@@ -28,13 +28,67 @@ let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
 const autoFilterEnabled = ref(false);
 
+/* =========================
+   IMAGE PREVIEW
+   ========================= */
+
+const previewImageUrl = ref("");
+const previewProductName = ref("");
+const previewSku = ref("");
+
+const failedImageUrls = ref<Set<string>>(new Set());
+
+const hasUsableImage = (imageUrl?: string | null) =>
+  Boolean(imageUrl && !failedImageUrls.value.has(imageUrl));
+
+const openImagePreview = (item: StockMovementListResponse) => {
+  if (!hasUsableImage(item.imageUrl)) {
+    return;
+  }
+
+  previewImageUrl.value = item.imageUrl!;
+  previewProductName.value = item.productName || "Sản phẩm";
+  previewSku.value = item.sku || "";
+};
+
+const closeImagePreview = () => {
+  previewImageUrl.value = "";
+  previewProductName.value = "";
+  previewSku.value = "";
+};
+
+const markImageFailed = (imageUrl?: string | null) => {
+  if (!imageUrl) {
+    return;
+  }
+
+  const next = new Set(failedImageUrls.value);
+  next.add(imageUrl);
+  failedImageUrls.value = next;
+};
+
+const onImageError = (event: Event, imageUrl?: string | null) => {
+  const image = event.currentTarget as HTMLImageElement;
+
+  markImageFailed(imageUrl || image.currentSrc || image.src);
+};
+
+const onPreviewImageError = () => {
+  markImageFailed(previewImageUrl.value);
+  closeImagePreview();
+};
+
+/* ========================= */
+
 const totalPages = computed(() => {
   const value = Number(store.totalPages);
+
   return Number.isFinite(value) && value > 0 ? value : 0;
 });
 
 const currentPage = computed(() => {
   const value = Number(store.page);
+
   return Number.isFinite(value) && value >= 0 ? value : 0;
 });
 
@@ -76,6 +130,7 @@ const formatNumber = (value?: number | null) =>
 
 const formatSignedNumber = (value?: number | null) => {
   const numberValue = Number(value ?? 0);
+
   const formatted = formatNumber(Math.abs(numberValue));
 
   if (numberValue > 0) {
@@ -381,6 +436,7 @@ watch(
 
 onMounted(async () => {
   applyRouteFilters();
+
   await loadList();
 
   autoFilterEnabled.value = true;
@@ -453,6 +509,7 @@ onUnmounted(() => {
           @click="resetFilters"
         >
           <i class="bi bi-arrow-counterclockwise"></i>
+
           Đặt lại
         </button>
       </div>
@@ -471,8 +528,11 @@ onUnmounted(() => {
 
           <select :value="store.size" @change="changePageSize">
             <option :value="10">10</option>
+
             <option :value="20">20</option>
+
             <option :value="50">50</option>
+
             <option :value="100">100</option>
           </select>
         </div>
@@ -482,74 +542,123 @@ onUnmounted(() => {
         <table>
           <thead>
             <tr>
+              <th class="image-column">Ảnh</th>
+
               <th>Mã lô</th>
+
               <th>SKU / Sản phẩm</th>
+
               <th>Loại biến động</th>
+
               <th>Thay đổi</th>
+
               <th>Tồn trước</th>
+
               <th>Tồn sau</th>
+
               <th>Chứng từ nguồn</th>
+
               <th>Lý do</th>
+
               <th>Người thao tác</th>
+
               <th>Thời gian biến động</th>
+
               <th>Thao tác</th>
             </tr>
           </thead>
 
           <tbody>
             <tr v-if="store.loadingList">
-              <td colspan="11" class="state-row">
+              <td colspan="12" class="state-row">
                 <span class="spinner-border spinner-border-sm"></span>
+
                 Đang tải lịch sử kho...
               </td>
             </tr>
 
             <tr v-else-if="store.movements.length === 0">
-              <td colspan="11" class="state-row">
+              <td colspan="12" class="state-row">
                 <i class="bi bi-inbox"></i>
+
                 <div>Không có biến động phù hợp.</div>
               </td>
             </tr>
 
             <tr v-for="item in store.movements" v-else :key="item.id">
+              <!-- IMAGE -->
+              <td class="image-cell">
+                <button
+                  type="button"
+                  class="product-thumb"
+                  :class="{
+                    clickable: hasUsableImage(item.imageUrl),
+                  }"
+                  :disabled="!hasUsableImage(item.imageUrl)"
+                  :title="
+                    hasUsableImage(item.imageUrl)
+                      ? 'Bấm để xem ảnh lớn'
+                      : 'Sản phẩm chưa có ảnh'
+                  "
+                  @click="openImagePreview(item)"
+                >
+                  <i class="bi bi-image"></i>
+
+                  <img
+                    v-if="hasUsableImage(item.imageUrl)"
+                    :src="item.imageUrl || ''"
+                    :alt="item.productName"
+                    loading="lazy"
+                    @error="onImageError($event, item.imageUrl)"
+                  />
+                </button>
+              </td>
+
+              <!-- LOT -->
               <td>
                 <strong>
                   {{ item.lotCode }}
                 </strong>
               </td>
 
+              <!-- SKU / PRODUCT -->
               <td>
                 <strong class="sku">
                   {{ item.sku }}
                 </strong>
 
-                <span class="product-name">
+                <span class="product-name" :title="item.productName">
                   {{ item.productName }}
                 </span>
               </td>
 
+              <!-- MOVEMENT -->
               <td>
                 <span class="movement-badge" :class="movementClass(item)">
                   {{ movementTypeLabel(item) }}
                 </span>
               </td>
 
+              <!-- CHANGE -->
               <td>
                 <strong class="quantity-change" :class="movementClass(item)">
                   {{ formatSignedNumber(item.quantityChange) }}
                 </strong>
               </td>
 
+              <!-- BEFORE -->
               <td>
                 {{ formatNumber(item.quantityBefore) }}
               </td>
 
+              <!-- AFTER -->
               <td>
                 <strong>
                   {{ formatNumber(item.quantityAfter) }}
                 </strong>
               </td>
 
+              <!-- REFERENCE -->
               <td>
                 <div class="reference-cell">
                   <span>
@@ -558,20 +667,24 @@ onUnmounted(() => {
                 </div>
               </td>
 
+              <!-- REASON -->
               <td class="reason-cell" :title="item.reason || ''">
                 {{ item.reason || "—" }}
               </td>
 
+              <!-- USER -->
               <td>
                 <strong>
                   {{ item.createdByName || "—" }}
                 </strong>
               </td>
 
+              <!-- TIME -->
               <td class="time-cell">
                 {{ formatDateTime(item.createdAt) }}
               </td>
 
+              <!-- ACTION -->
               <td>
                 <div class="actions">
                   <button
@@ -662,6 +775,43 @@ onUnmounted(() => {
       @close="closeDetail"
     />
   </div>
+
+  <!-- IMAGE PREVIEW -->
+  <Teleport to="body">
+    <div
+      v-if="previewImageUrl"
+      class="image-preview-backdrop"
+      @click.self="closeImagePreview"
+    >
+      <div class="image-preview-dialog">
+        <button
+          type="button"
+          class="image-preview-close"
+          aria-label="Đóng ảnh"
+          @click="closeImagePreview"
+        >
+          <i class="bi bi-x-lg"></i>
+        </button>
+
+        <img
+          :src="previewImageUrl"
+          :alt="previewProductName"
+          class="image-preview-img"
+          @error="onPreviewImageError"
+        />
+
+        <div class="image-preview-info">
+          <strong>
+            {{ previewProductName }}
+          </strong>
+
+          <span v-if="previewSku">
+            {{ previewSku }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -851,7 +1001,7 @@ onUnmounted(() => {
 
 table {
   width: 100%;
-  min-width: 1500px;
+  min-width: 1580px;
   border-collapse: collapse;
 }
 
@@ -878,6 +1028,69 @@ tbody tr:hover {
 tbody tr:last-child td {
   border-bottom: 0;
 }
+
+/* =========================
+   PRODUCT IMAGE
+   ========================= */
+
+.image-column {
+  width: 76px;
+  min-width: 76px;
+  text-align: center;
+}
+
+.image-cell {
+  width: 76px;
+  min-width: 76px;
+  text-align: center;
+}
+
+.product-thumb {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 9px;
+  background: #f8f9fa;
+  color: #9ca3af;
+  cursor: default;
+}
+
+.product-thumb:disabled {
+  opacity: 1;
+}
+
+.product-thumb.clickable {
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.product-thumb.clickable:hover {
+  border-color: #b6b6b6;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+  transform: scale(1.04);
+}
+
+.product-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #fff;
+}
+
+.product-thumb i {
+  font-size: 18px;
+}
+
+/* ========================= */
 
 .time-cell {
   white-space: nowrap;
@@ -1051,6 +1264,85 @@ td small {
   cursor: not-allowed;
 }
 
+/* =========================
+   IMAGE PREVIEW
+   ========================= */
+
+.image-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.image-preview-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(760px, 100%);
+  max-height: calc(100vh - 48px);
+  padding: 18px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+}
+
+.image-preview-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: #333;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.image-preview-close:hover {
+  background: #f3f4f6;
+}
+
+.image-preview-img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 170px);
+  object-fit: contain;
+  border-radius: 10px;
+}
+
+.image-preview-info {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+  text-align: center;
+}
+
+.image-preview-info strong {
+  color: #333;
+  font-size: 14px;
+}
+
+.image-preview-info span {
+  color: #6b7280;
+  font-size: 12px;
+}
+
 @media (max-width: 900px) {
   .page-header,
   .table-toolbar,
@@ -1090,6 +1382,18 @@ td small {
   .date-filter {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .image-preview-backdrop {
+    padding: 12px;
+  }
+
+  .image-preview-dialog {
+    padding: 12px;
+  }
+
+  .image-preview-img {
+    max-height: calc(100vh - 140px);
   }
 }
 </style>

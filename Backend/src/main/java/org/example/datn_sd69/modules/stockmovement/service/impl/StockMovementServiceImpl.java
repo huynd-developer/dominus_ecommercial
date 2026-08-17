@@ -187,6 +187,10 @@ public class StockMovementServiceImpl
                         projection.getProductName()
                 )
 
+                .imageUrl(
+                        projection.getImageUrl()
+                )
+
                 .lotCode(
                         projection.getLotCode()
                 )
@@ -275,6 +279,10 @@ public class StockMovementServiceImpl
 
                 .productName(
                         projection.getProductName()
+                )
+
+                .imageUrl(
+                        projection.getImageUrl()
                 )
 
                 .lotCode(

@@ -16,6 +16,10 @@ export interface StockMovementListResponse {
 
   sku: string;
   productName: string;
+
+  // Ảnh đại diện của sản phẩm.
+  imageUrl: string | null;
+
   lotCode: string;
 
   movementType: StockMovementType | null;

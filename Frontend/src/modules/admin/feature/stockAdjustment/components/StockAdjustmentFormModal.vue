@@ -14,6 +14,7 @@ interface EditableItem {
   inventoryLotId: number;
   sku: string;
   productName: string;
+  imageUrl: string | null;
   lotCode: string;
   systemQuantity: number;
   actualQuantity: number | null;
@@ -43,6 +44,53 @@ const lotKeyword = ref("");
 const lotOptions = ref<InventoryLotListResponse[]>([]);
 const loadingLots = ref(false);
 const lotLoadError = ref("");
+
+const previewImageUrl = ref("");
+const previewProductName = ref("");
+const previewSku = ref("");
+const failedImageUrls = ref<Set<string>>(new Set());
+
+const hasUsableImage = (imageUrl?: string | null) =>
+  Boolean(imageUrl && !failedImageUrls.value.has(imageUrl));
+
+const openImagePreview = (
+  imageUrl?: string | null,
+  productName?: string | null,
+  sku?: string | null
+) => {
+  if (!hasUsableImage(imageUrl)) return;
+
+  previewImageUrl.value = imageUrl!;
+  previewProductName.value = productName || "Sản phẩm";
+  previewSku.value = sku || "";
+};
+
+const closeImagePreview = () => {
+  previewImageUrl.value = "";
+  previewProductName.value = "";
+  previewSku.value = "";
+};
+
+const onImageError = (event: Event) => {
+  const image = event.currentTarget as HTMLImageElement;
+  const src = image.currentSrc || image.src;
+
+  if (src) {
+    const next = new Set(failedImageUrls.value);
+    next.add(src);
+    failedImageUrls.value = next;
+  }
+};
+
+const onPreviewImageError = () => {
+  if (previewImageUrl.value) {
+    const next = new Set(failedImageUrls.value);
+    next.add(previewImageUrl.value);
+    failedImageUrls.value = next;
+  }
+
+  closeImagePreview();
+};
 
 const OTHER_REASON = "__OTHER__";
 
@@ -123,6 +171,7 @@ const resetForm = () => {
         inventoryLotId: Number(item.inventoryLotId),
         sku: item.sku ?? "",
         productName: item.productName ?? "",
+        imageUrl: item.imageUrl ?? null,
         lotCode: item.lotCode ?? "",
         systemQuantity,
         actualQuantity,
@@ -194,6 +243,7 @@ const selectLot = (lot: InventoryLotListResponse) => {
     inventoryLotId: lot.id,
     sku: lot.sku,
     productName: lot.productName,
+    imageUrl: lot.imageUrl ?? null,
     lotCode: lot.lotCode,
     systemQuantity: Number(lot.quantityOnHand ?? 0),
     actualQuantity: null,
@@ -491,23 +541,52 @@ const close = () => {
                   ></i>
                 </span>
 
-                <strong>{{ option.productName }}</strong>
-                <span class="sku-code">{{ option.sku }}</span>
-                <span class="lot-code">Lô {{ option.lotCode }}</span>
+                <span
+                  class="lot-card-thumb"
+                  :class="{ clickable: hasUsableImage(option.imageUrl) }"
+                  :title="
+                    hasUsableImage(option.imageUrl)
+                      ? 'Bấm để xem ảnh lớn'
+                      : 'Sản phẩm chưa có ảnh'
+                  "
+                  @click.stop="
+                    openImagePreview(
+                      option.imageUrl,
+                      option.productName,
+                      option.sku
+                    )
+                  "
+                >
+                  <i class="bi bi-image"></i>
 
-                <div class="lot-meta">
-                  <span>
-                    Tồn hệ thống:
-                    <strong>{{ formatNumber(option.quantityOnHand) }}</strong>
-                  </span>
+                  <img
+                    v-if="hasUsableImage(option.imageUrl)"
+                    :src="option.imageUrl || ''"
+                    :alt="option.productName"
+                    loading="lazy"
+                    @error="onImageError"
+                  />
+                </span>
 
-                  <span
-                    v-if="option.isExpired"
-                    class="expired-text"
-                  >
-                    Đã hết hạn
+                <span class="lot-card-body">
+                  <strong>{{ option.productName }}</strong>
+                  <span class="sku-code">{{ option.sku }}</span>
+                  <span class="lot-code">Lô {{ option.lotCode }}</span>
+
+                  <span class="lot-meta">
+                    <span>
+                      Tồn hệ thống:
+                      <strong>{{ formatNumber(option.quantityOnHand) }}</strong>
+                    </span>
+
+                    <span
+                      v-if="option.isExpired"
+                      class="expired-text"
+                    >
+                      Đã hết hạn
+                    </span>
                   </span>
-                </div>
+                </span>
               </button>
             </div>
           </section>
@@ -534,6 +613,7 @@ const close = () => {
               <table class="selected-table">
                 <thead>
                   <tr>
+                    <th class="image-column">Ảnh</th>
                     <th class="product-column">Sản phẩm / lô</th>
                     <th class="quantity-column">Tồn hệ thống</th>
                     <th class="quantity-column">Tồn thực tế *</th>
@@ -548,6 +628,35 @@ const close = () => {
                     v-for="row in items"
                     :key="row.inventoryLotId"
                   >
+                    <td class="image-cell">
+                      <span
+                        class="selected-thumb"
+                        :class="{ clickable: hasUsableImage(row.imageUrl) }"
+                        :title="
+                          hasUsableImage(row.imageUrl)
+                            ? 'Bấm để xem ảnh lớn'
+                            : 'Sản phẩm chưa có ảnh'
+                        "
+                        @click="
+                          openImagePreview(
+                            row.imageUrl,
+                            row.productName,
+                            row.sku
+                          )
+                        "
+                      >
+                        <i class="bi bi-image"></i>
+
+                        <img
+                          v-if="hasUsableImage(row.imageUrl)"
+                          :src="row.imageUrl || ''"
+                          :alt="row.productName"
+                          loading="lazy"
+                          @error="onImageError"
+                        />
+                      </span>
+                    </td>
+
                     <td>
                       <div class="product-cell">
                         <strong>{{ row.productName }}</strong>
@@ -680,6 +789,36 @@ const close = () => {
             </button>
           </div>
         </form>
+      </div>
+
+
+      <div
+        v-if="previewImageUrl"
+        class="image-preview-backdrop"
+        @click.self="closeImagePreview"
+      >
+        <div class="image-preview-dialog">
+          <button
+            type="button"
+            class="image-preview-close"
+            aria-label="Đóng ảnh"
+            @click="closeImagePreview"
+          >
+            <i class="bi bi-x-lg"></i>
+          </button>
+
+          <img
+            :src="previewImageUrl"
+            :alt="previewProductName"
+            class="image-preview-img"
+            @error="onPreviewImageError"
+          />
+
+          <div class="image-preview-info">
+            <strong>{{ previewProductName }}</strong>
+            <span v-if="previewSku">{{ previewSku }}</span>
+          </div>
+        </div>
       </div>
     </div>
   </Teleport>
@@ -838,12 +977,11 @@ const close = () => {
 
 .lot-card {
   position: relative;
-  display: flex;
+  display: grid;
   min-height: 116px;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 5px;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
   padding: 13px 40px 13px 14px;
   border: 1px solid #dfe3e8;
   border-radius: 10px;
@@ -863,9 +1001,59 @@ const close = () => {
   background: #f7fee7;
 }
 
-.lot-card > strong {
+.lot-card-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.lot-card-body > strong {
   color: #111827;
   font-size: 14px;
+}
+
+.lot-card-thumb,
+.selected-thumb {
+  position: relative;
+  display: inline-flex;
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #9ca3af;
+}
+
+.lot-card-thumb.clickable,
+.selected-thumb.clickable {
+  cursor: pointer;
+}
+
+.lot-card-thumb.clickable:hover,
+.selected-thumb.clickable:hover {
+  border-color: #9ca3af;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.1);
+}
+
+.lot-card-thumb img,
+.selected-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #fff;
+}
+
+.lot-card-thumb i,
+.selected-thumb i {
+  font-size: 18px;
 }
 
 .lot-card-check {
@@ -946,7 +1134,7 @@ const close = () => {
 
 .selected-table {
   width: 100%;
-  min-width: 1120px;
+  min-width: 1200px;
   border-collapse: collapse;
 }
 
@@ -968,6 +1156,13 @@ const close = () => {
 
 .selected-table tbody tr:last-child td {
   border-bottom: 0;
+}
+
+.image-column,
+.image-cell {
+  width: 78px;
+  min-width: 78px;
+  text-align: center !important;
 }
 
 .product-column {
@@ -1122,6 +1317,78 @@ const close = () => {
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+
+.image-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.image-preview-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(760px, calc(100% - 48px));
+  max-height: calc(100vh - 48px);
+  padding: 18px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+}
+
+.image-preview-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: #333;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.image-preview-img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 170px);
+  object-fit: contain;
+  border-radius: 10px;
+}
+
+.image-preview-info {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+  text-align: center;
+}
+
+.image-preview-info strong {
+  color: #111827;
+  font-size: 14px;
+}
+
+.image-preview-info span {
+  color: #6b7280;
+  font-size: 12px;
 }
 
 @media (max-width: 1000px) {

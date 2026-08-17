@@ -20,6 +20,8 @@ public class GoodsReceiptItemResponse {
 
     private String productName;
 
+    private String imageUrl;
+
     // Chỉ bổ sung metadata để nhận diện biến thể trên màn chi tiết.
     private Double capacityValue;
 

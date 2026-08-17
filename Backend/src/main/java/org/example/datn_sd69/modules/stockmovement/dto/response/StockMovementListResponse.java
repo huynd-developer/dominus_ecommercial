@@ -24,6 +24,14 @@ public class StockMovementListResponse {
 
     private String productName;
 
+    /*
+     * Ảnh đại diện sản phẩm.
+     *
+     * Ưu tiên ảnh IsPrimary = true.
+     * Nếu không có ảnh primary thì lấy ảnh đầu tiên.
+     */
+    private String imageUrl;
+
     private String lotCode;
 
 

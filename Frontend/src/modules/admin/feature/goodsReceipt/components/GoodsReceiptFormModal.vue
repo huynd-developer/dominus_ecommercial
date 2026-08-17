@@ -14,6 +14,7 @@ interface EditableItem {
   productVariantId: number;
   sku: string;
   productName: string;
+  imageUrl: string | null;
   capacityValue: number | null;
   bottleTypeName: string | null;
   quantity: number | null;
@@ -108,6 +109,7 @@ const resetForm = () => {
       productVariantId: item.productVariantId,
       sku: item.sku,
       productName: item.productName,
+      imageUrl: item.imageUrl ?? null,
       capacityValue: null,
       bottleTypeName: null,
       quantity: item.quantity,
@@ -145,6 +147,7 @@ const loadSkuOptions = async () => {
         ...item,
         capacityValue: option.capacityValue ?? item.capacityValue ?? null,
         bottleTypeName: option.bottleTypeName ?? item.bottleTypeName ?? null,
+        imageUrl: option.imageUrl ?? item.imageUrl ?? null,
       };
     });
   } catch {
@@ -199,6 +202,7 @@ const addSkuLot = (option: InventorySkuOption) => {
     productVariantId: option.productVariantId,
     sku: option.sku,
     productName: option.productName,
+    imageUrl: option.imageUrl ?? null,
     capacityValue: option.capacityValue ?? null,
     bottleTypeName: option.bottleTypeName ?? null,
     quantity: null,
@@ -382,6 +386,11 @@ const onUnitCostInput = (index: number, event: Event) => {
   row.unitCost = raw ? Number(raw) : null;
   input.value = raw ? formatMoney(Number(raw)) : "";
 };
+
+const onImageError = (event: Event) => {
+  const image = event.currentTarget as HTMLImageElement;
+  image.style.display = "none";
+};
 </script>
 
 <template>
@@ -486,6 +495,17 @@ const onUnitCostInput = (index: number, event: Event) => {
                   <i v-else class="bi bi-plus-lg"></i>
                 </span>
 
+                <span class="sku-card-thumb" aria-hidden="true">
+                  <i class="bi bi-image"></i>
+                  <img
+                    v-if="option.imageUrl"
+                    :src="option.imageUrl"
+                    :alt="option.productName"
+                    loading="lazy"
+                    @error="onImageError"
+                  />
+                </span>
+
                 <strong>{{ option.productName }}</strong>
 
                 <span v-if="variantLabel(option)" class="variant-info">
@@ -522,6 +542,7 @@ const onUnitCostInput = (index: number, event: Event) => {
               <table class="selected-table">
                 <thead>
                   <tr>
+                    <th class="image-column">Ảnh</th>
                     <th class="product-column">Sản phẩm / SKU</th>
                     <th class="quantity-column">Số lượng *</th>
                     <th class="cost-column">Đơn giá nhập</th>
@@ -534,6 +555,19 @@ const onUnitCostInput = (index: number, event: Event) => {
 
                 <tbody>
                   <tr v-for="(row, index) in items" :key="row.rowKey">
+                    <td class="image-cell">
+                      <div class="selected-thumb">
+                        <i class="bi bi-image"></i>
+                        <img
+                          v-if="row.imageUrl"
+                          :src="row.imageUrl"
+                          :alt="row.productName"
+                          loading="lazy"
+                          @error="onImageError"
+                        />
+                      </div>
+                    </td>
+
                     <td>
                       <div class="product-cell">
                         <strong>{{ row.productName }}</strong>
@@ -793,19 +827,55 @@ const onUnitCostInput = (index: number, event: Event) => {
 
 .sku-card {
   position: relative;
-  display: flex;
-  min-height: 88px;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 6px;
-  padding: 13px 40px 13px 14px;
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 5px;
+  min-height: 96px;
+  padding: 13px 40px 13px 13px;
   border: 1px solid #dfe3e8;
   border-radius: 10px;
   background: #fff;
   text-align: left;
   cursor: pointer;
   transition: 0.15s ease;
+}
+
+.sku-card-thumb {
+  position: relative;
+  grid-column: 1;
+  grid-row: 1 / span 4;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #9ca3af;
+}
+
+.sku-card-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #fff;
+}
+
+.sku-card-thumb i {
+  font-size: 18px;
+}
+
+.sku-card > strong,
+.sku-card > .variant-info,
+.sku-card > .sku-code,
+.sku-card > .sku-added-count {
+  grid-column: 2;
 }
 
 .sku-card:hover:not(:disabled) {
@@ -905,7 +975,7 @@ const onUnitCostInput = (index: number, event: Event) => {
 
 .selected-table {
   width: 100%;
-  min-width: 1120px;
+  min-width: 1200px;
   border-collapse: collapse;
 }
 
@@ -930,6 +1000,41 @@ const onUnitCostInput = (index: number, event: Event) => {
 
 .selected-table tbody tr:last-child td {
   border-bottom: 0;
+}
+
+.image-column,
+.image-cell {
+  width: 78px;
+  min-width: 78px;
+  text-align: center !important;
+}
+
+.selected-thumb {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #9ca3af;
+}
+
+.selected-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #fff;
+}
+
+.selected-thumb i {
+  font-size: 18px;
 }
 
 .product-column {

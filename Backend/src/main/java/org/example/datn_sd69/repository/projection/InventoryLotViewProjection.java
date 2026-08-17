@@ -9,6 +9,7 @@ public interface InventoryLotViewProjection {
     Integer getProductVariantId();
     String getSku();
     String getProductName();
+    String getImageUrl();
     String getLotCode();
     LocalDate getManufacturedDate();
     LocalDate getReceivedDate();

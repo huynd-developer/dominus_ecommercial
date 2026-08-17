@@ -31,6 +31,8 @@ public interface StockMovementRepository
 
                         P.Name AS ProductName,
 
+                        PIMG.ImageUrl AS ImageUrl,
+
                         IL.LotCode AS LotCode,
 
                         SM.MovementType AS MovementType,
@@ -65,6 +67,20 @@ public interface StockMovementRepository
 
                     INNER JOIN dbo.Product P
                         ON P.Id = PV.ProductId
+
+                    OUTER APPLY
+                    (
+                        SELECT TOP 1
+                            PI.ImageUrl
+                        FROM dbo.ProductImage PI
+                        WHERE PI.ProductId = P.Id
+                        ORDER BY
+                            CASE
+                                WHEN PI.IsPrimary = 1 THEN 0
+                                ELSE 1
+                            END,
+                            PI.Id ASC
+                    ) PIMG
 
                     INNER JOIN dbo.Users U
                         ON U.Id = SM.CreatedBy
@@ -278,6 +294,8 @@ public interface StockMovementRepository
 
                         P.Name AS ProductName,
 
+                        PIMG.ImageUrl AS ImageUrl,
+
                         IL.LotCode AS LotCode,
 
                         SM.MovementType AS MovementType,
@@ -312,6 +330,20 @@ public interface StockMovementRepository
 
                     INNER JOIN dbo.Product P
                         ON P.Id = PV.ProductId
+
+                    OUTER APPLY
+                    (
+                        SELECT TOP 1
+                            PI.ImageUrl
+                        FROM dbo.ProductImage PI
+                        WHERE PI.ProductId = P.Id
+                        ORDER BY
+                            CASE
+                                WHEN PI.IsPrimary = 1 THEN 0
+                                ELSE 1
+                            END,
+                            PI.Id ASC
+                    ) PIMG
 
                     INNER JOIN dbo.Users U
                         ON U.Id = SM.CreatedBy

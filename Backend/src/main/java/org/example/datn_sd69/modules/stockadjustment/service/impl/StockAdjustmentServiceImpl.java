@@ -1106,6 +1106,10 @@ public class StockAdjustmentServiceImpl
                 response.setProductName(
                         display.productName
                 );
+
+                response.setImageUrl(
+                        display.imageUrl
+                );
             }
         }
 
@@ -1130,12 +1134,25 @@ public class StockAdjustmentServiceImpl
                         SELECT
                             IL.ProductVariantId,
                             PV.Sku,
-                            P.Name AS ProductName
+                            P.Name AS ProductName,
+                            ImageData.ImageUrl AS ImageUrl
                         FROM dbo.InventoryLot IL
                         INNER JOIN dbo.ProductVariant PV
                             ON PV.Id = IL.ProductVariantId
                         INNER JOIN dbo.Product P
                             ON P.Id = PV.ProductId
+                        OUTER APPLY (
+                            SELECT TOP 1
+                                PI.ImageUrl
+                            FROM dbo.ProductImage PI
+                            WHERE PI.ProductId = P.Id
+                            ORDER BY
+                                CASE
+                                    WHEN PI.IsPrimary = 1 THEN 0
+                                    ELSE 1
+                                END,
+                                PI.Id ASC
+                        ) ImageData
                         WHERE IL.Id = ?
                         """,
                         inventoryLotId
@@ -1159,6 +1176,9 @@ public class StockAdjustmentServiceImpl
         Object productName =
                 row.get("ProductName");
 
+        Object imageUrl =
+                row.get("ImageUrl");
+
         return new LotDisplay(
                 productVariantId != null
                         ? productVariantId.intValue()
@@ -1168,6 +1188,9 @@ public class StockAdjustmentServiceImpl
                         : null,
                 productName != null
                         ? productName.toString()
+                        : null,
+                imageUrl != null
+                        ? imageUrl.toString()
                         : null
         );
     }
@@ -1175,7 +1198,8 @@ public class StockAdjustmentServiceImpl
     private record LotDisplay(
             Integer productVariantId,
             String sku,
-            String productName
+            String productName,
+            String imageUrl
     ) {
     }
 

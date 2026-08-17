@@ -24,6 +24,10 @@ const mapInventorySkuOption = (item: any): InventorySkuOption => ({
   productVariantId: Number(item.productVariantId),
   sku: String(item.sku ?? ""),
   productName: String(item.productName ?? ""),
+  imageUrl:
+    item.imageUrl == null
+      ? null
+      : String(item.imageUrl),
 
   // Metadata nhận diện biến thể.
   capacityValue:

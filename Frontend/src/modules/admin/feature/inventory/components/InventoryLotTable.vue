@@ -76,9 +76,10 @@ const onPreviewImageError = () => {
     <table>
       <thead>
         <tr>
+          <th class="image-column">Ảnh</th>
+          <th>Mã lô</th>
           <th>SKU</th>
           <th>Sản phẩm</th>
-          <th>Mã lô</th>
           <th class="number">Tồn</th>
           <th>Hạn sử dụng</th>
           <th class="number">Còn lại</th>
@@ -89,14 +90,14 @@ const onPreviewImageError = () => {
       <tbody>
         <!-- LOADING -->
         <tr v-if="loading">
-          <td colspan="7" class="empty">
+          <td colspan="8" class="empty">
             Đang tải dữ liệu...
           </td>
         </tr>
 
         <!-- EMPTY -->
         <tr v-else-if="items.length === 0">
-          <td colspan="7" class="empty">
+          <td colspan="8" class="empty">
             Không có dữ liệu
           </td>
         </tr>
@@ -107,6 +108,39 @@ const onPreviewImageError = () => {
           v-else
           :key="item.inventoryLotId"
         >
+          <!-- IMAGE -->
+          <td class="image-cell">
+            <button
+              type="button"
+              class="product-thumb"
+              :class="{
+                clickable: hasUsableImage(item.imageUrl),
+              }"
+              :disabled="!hasUsableImage(item.imageUrl)"
+              :title="
+                hasUsableImage(item.imageUrl)
+                  ? 'Bấm để xem ảnh lớn'
+                  : 'Sản phẩm chưa có ảnh'
+              "
+              @click="openImagePreview(item)"
+            >
+              <i class="bi bi-image"></i>
+
+              <img
+                v-if="hasUsableImage(item.imageUrl)"
+                :src="item.imageUrl || ''"
+                :alt="item.productName"
+                loading="lazy"
+                @error="onImageError"
+              />
+            </button>
+          </td>
+
+          <!-- LOT -->
+          <td>
+            {{ item.lotCode }}
+          </td>
+
           <!-- SKU -->
           <td class="sku">
             {{ item.sku }}
@@ -114,39 +148,7 @@ const onPreviewImageError = () => {
 
           <!-- PRODUCT -->
           <td>
-            <div class="product-cell">
-              <button
-                type="button"
-                class="product-thumb"
-                :class="{
-                  clickable: hasUsableImage(item.imageUrl),
-                }"
-                :disabled="!hasUsableImage(item.imageUrl)"
-                :title="
-                  hasUsableImage(item.imageUrl)
-                    ? 'Bấm để xem ảnh lớn'
-                    : 'Sản phẩm chưa có ảnh'
-                "
-                @click="openImagePreview(item)"
-              >
-                <i class="bi bi-image"></i>
-
-                <img
-                  v-if="hasUsableImage(item.imageUrl)"
-                  :src="item.imageUrl || ''"
-                  :alt="item.productName"
-                  loading="lazy"
-                  @error="onImageError"
-                />
-              </button>
-
-              <span>{{ item.productName }}</span>
-            </div>
-          </td>
-
-          <!-- LOT -->
-          <td>
-            {{ item.lotCode }}
+            {{ item.productName }}
           </td>
 
           <!-- QUANTITY -->
@@ -255,7 +257,7 @@ const onPreviewImageError = () => {
 
 table {
   width: 100%;
-  min-width: 900px;
+  min-width: 950px;
   border-collapse: collapse;
 }
 
@@ -284,11 +286,10 @@ td {
   font-weight: 600;
 }
 
-.product-cell {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
+.image-column,
+.image-cell {
+  width: 70px;
+  text-align: center;
 }
 
 .product-thumb {

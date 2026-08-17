@@ -127,6 +127,10 @@ public class ExpiryAlertServiceImpl implements ExpiryAlertService {
                         projection.getProductName()
                 )
 
+                .imageUrl(
+                        projection.getImageUrl()
+                )
+
                 .lotCode(
                         projection.getLotCode()
                 )

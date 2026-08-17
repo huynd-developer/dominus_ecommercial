@@ -39,6 +39,9 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
     // Repository này đã có sẵn trong module Product của project.
     private final ProductVariantRepository productVariantRepository;
 
+    // Chỉ dùng để lấy ảnh đại diện sản phẩm cho response chi tiết phiếu nhập.
+    private final ProductImageRepository productImageRepository;
+
     // Repository này đã có sẵn trong project và có findByEmailIgnoreCase(...).
     private final UserRepository userRepository;
 
@@ -471,9 +474,11 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
         ProductVariant variant = item.getProductVariant();
 
         String productName = null;
+        String imageUrl = null;
 
         if (variant != null && variant.getProduct() != null) {
             productName = variant.getProduct().getName();
+            imageUrl = resolveProductImageUrl(variant);
         }
 
         return GoodsReceiptItemResponse.builder()
@@ -481,6 +486,7 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                 .productVariantId(variant == null ? null : variant.getId())
                 .sku(variant == null ? null : variant.getSku())
                 .productName(productName)
+                .imageUrl(imageUrl)
                 .capacityValue(
                         variant != null && variant.getCapacity() != null
                                 ? variant.getCapacity().getValue()
@@ -499,6 +505,28 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                 .expirationDate(item.getExpirationDate())
                 .note(item.getNote())
                 .build();
+    }
+
+    private String resolveProductImageUrl(ProductVariant variant) {
+        if (variant == null
+                || variant.getProduct() == null
+                || variant.getProduct().getId() == null) {
+            return null;
+        }
+
+        Integer productId = variant.getProduct().getId();
+
+        Optional<ProductImage> primaryImage =
+                productImageRepository.findFirstByProduct_IdAndIsPrimaryTrue(productId);
+
+        if (primaryImage.isPresent()) {
+            return primaryImage.get().getImageUrl();
+        }
+
+        return productImageRepository
+                .findFirstByProduct_Id(productId)
+                .map(ProductImage::getImageUrl)
+                .orElse(null);
     }
 
     private GoodsReceiptApprovalHistoryResponse mapHistory(

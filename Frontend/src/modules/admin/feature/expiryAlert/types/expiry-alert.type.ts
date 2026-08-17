@@ -14,6 +14,7 @@ export interface ExpiryAlertListResponse {
 
   sku: string;
   productName: string;
+  imageUrl: string | null;
   lotCode: string;
 
   quantityOnHand: number;
