@@ -352,6 +352,23 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         applyDeliveryFailedRefundInfo(order);
 
+        /*
+         * COD không phát sinh bước "xác nhận hoàn tiền" sau giao hàng thất bại.
+         * Vì hàng đã SALE_OUT khi Admin xác nhận đơn, phải RETURN_IN ngay
+         * về đúng các InventoryLot đã xuất khi ghi nhận giao thất bại.
+         *
+         * Đơn trả trước (VNPay/VietQR/...) giữ NGUYÊN flow cũ:
+         * chỉ hoàn kho tại bước xác nhận hoàn tiền nếu Admin chọn restoreStock.
+         */
+        String paymentMethod = normalizeOptionalText(order.getPaymentMethod());
+        boolean isCodPayment =
+                paymentMethod != null
+                        && paymentMethod.toUpperCase(Locale.ROOT).contains("COD");
+
+        if (isCodPayment) {
+            restoreStockWhenDeliveryRefunded(order);
+        }
+
         Order savedOrder = orderRepository.save(order);
 
         saveDeliveryEvidenceFiles(savedOrder, files, DELIVERY_EVIDENCE_TYPE_FAILED);
@@ -2766,3 +2783,4 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         return count == null ? 0L : count;
     }
 }
+
