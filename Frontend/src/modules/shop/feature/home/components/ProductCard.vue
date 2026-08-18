@@ -1,6 +1,5 @@
 <template>
   <div
-    v-if="!isFullyExpired(activeProduct)"
     class="product-card h-100 position-relative overflow-hidden"
     @click="goToDetail"
   >
@@ -127,8 +126,9 @@
                 class="vm-variant-btn"
                 :class="{
                   selected: (selectedVariant?.productVariantId || selectedVariant?.id) === (v.productVariantId || v.id),
-                  disabled: Number(v.stockQuantity || v.stock || 0) <= 0,
+                  disabled: !isVariantSellable(v),
                 }"
+                :disabled="!isVariantSellable(v)"
                 @click="selectedVariant = v; quantity = 1;"
               >
                 <span class="vm-v-name">{{ v.displayCapacity || formatVariantName(v) }}</span>
@@ -152,7 +152,7 @@
           <div class="vm-actions">
             <button
               class="vm-btn-cart"
-              :disabled="!selectedVariant || actionLoading || isLoadingVariants"
+              :disabled="!selectedVariant || !isVariantSellable(selectedVariant) || actionLoading || isLoadingVariants"
               @click="confirmActionSpecific('CART')"
             >
               <span v-if="actionLoading && actionType === 'CART'" class="spinner-border spinner-border-sm me-2"></span>
@@ -160,7 +160,7 @@
             </button>
             <button
               class="vm-btn-buy"
-              :disabled="!selectedVariant || actionLoading || isLoadingVariants"
+              :disabled="!selectedVariant || !isVariantSellable(selectedVariant) || actionLoading || isLoadingVariants"
               @click="confirmActionSpecific('BUY')"
             >
               <span v-if="actionLoading && actionType === 'BUY'" class="spinner-border spinner-border-sm me-2"></span>
@@ -420,7 +420,7 @@ interface ProductVariant {
   salePrice?: number | string; promotionPrice?: number | string; flashSalePrice?: number | string;
   currentPrice?: number | string; displayPrice?: number | string; finalPrice?: number | string;
   minPrice?: number | string; discountPercent?: number | string; stock?: number;
-  stockQuantity?: number; availableQuantity?: number; quantity?: number; status?: number;
+  stockQuantity?: number; sellableQuantity?: number; availableQuantity?: number; quantity?: number; status?: number;
   capacity?: string | number | any; capacityName?: string | number; capacityValue?: string | number;
   volume?: string | number; bottleType?: string | any; bottleTypeName?: string;
   imageUrl?: string; ImageUrl?: string; image?: string; Image?: string;
@@ -441,7 +441,7 @@ interface Product {
   MainImageUrl?: string; thumbnailUrl?: string; ThumbnailUrl?: string; images?: any[]; Images?: any[];
   imageList?: any[]; ImageList?: any[]; galleryImages?: any[]; GalleryImages?: any[];
   productImages?: any[]; ProductImages?: any[]; productImageList?: any[]; ProductImageList?: any[];
-  stock?: number; stockQuantity?: number; availableQuantity?: number; status?: number;
+  stock?: number; stockQuantity?: number; sellableQuantity?: number; availableQuantity?: number; status?: number;
   isFlashSale?: boolean; manufacturingDate?: string; mfgDate?: string; expirationDate?: string;
   expDate?: string; variants?: ProductVariant[];
 }
@@ -479,16 +479,25 @@ const activeProduct = computed(() => {
 const getCheapestVariant = (p: any) => {
   const variants = p?.variants || p?.productVariants || p?.productVariantList || [];
   if (!variants || variants.length === 0) return null;
-  
-  const rootExp = p.expirationDate || p.expDate;
-  
-  // Lọc bỏ triệt để mấy chai bị status = 0 hoặc hết hạn
-  const validVariants = variants.filter((v: any) => {
-      return getProductPrices(v).sale > 0 && !isVariantExpired(v, rootExp);
+
+  /*
+   * Ưu tiên biến thể đang bán và còn tồn có thể bán thật.
+   * Nếu tất cả đã hết hàng, vẫn giữ biến thể active có giá để card còn hiển thị giá.
+   */
+  const activePricedVariants = variants.filter((v: any) => {
+    const status = Number(v?.status ?? v?.variantStatus ?? 1);
+    return status === 1 && getProductPrices(v).sale > 0;
   });
-  
+
+  const sellableVariants = activePricedVariants.filter((v: any) =>
+    isVariantSellable(v)
+  );
+
+  const validVariants =
+    sellableVariants.length > 0 ? sellableVariants : activePricedVariants;
+
   if (validVariants.length === 0) return null;
-  
+
   return validVariants.reduce((min: any, v: any) => {
     const vSale = getProductPrices(v).sale;
     const minSale = getProductPrices(min).sale;
@@ -566,75 +575,20 @@ const syncProductData = async () => {
 
 const formatCurrency = (value: number) => new Intl.NumberFormat("vi-VN").format(Number(value || 0)) + " đ";
 
-const getStartOfDay = (time: number) => {
-  const d = new Date(time);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
+/**
+ * Tồn có thể bán thật của SKU từ InventoryLot.
+ * Không dùng stockQuantity / NSX / HSD legacy của ProductVariant để quyết định bán.
+ */
+const getSellableQuantity = (variant: any) => {
+  const value = Number(variant?.sellableQuantity ?? 0);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.trunc(value);
 };
 
-const parseSafeDate = (dateString: any): number | null => {
-  if (!dateString) return null;
-  if (typeof dateString === 'number') return dateString;
-  const str = String(dateString).trim();
-  if (str.includes('T')) {
-     const d = new Date(str);
-     return isNaN(d.getTime()) ? null : d.getTime();
-  }
-  if (str.includes('-') && str.split('-')[0]?.length === 4) {
-    const d = new Date(str);
-    return isNaN(d.getTime()) ? null : d.getTime();
-  }
-  const parts = str.split(/[\/\-]/);
-  if (parts.length >= 3 && parts[0] && parts[1] && parts[2]) {
-    if (parts[0].length === 4) {
-      const d = new Date(str);
-      return isNaN(d.getTime()) ? null : d.getTime();
-    }
-    const day = parseInt(parts[0] as string, 10);
-    const month = parseInt(parts[1] as string, 10) - 1;
-    let year = parseInt(parts[2] as string, 10);
-    if (year < 100) year += 2000;
-    const d = new Date(year, month, day);
-    return isNaN(d.getTime()) ? null : d.getTime();
-  }
-  const fallback = new Date(str);
-  return isNaN(fallback.getTime()) ? null : fallback.getTime();
-};
-
-const isExpiredDate = (dateStr: any): boolean => {
-  const time = parseSafeDate(dateStr);
-  if (time === null) return false;
-  return getStartOfDay(time) < getStartOfDay(Date.now()); 
-};
-
-const isVariantExpired = (v: any, rootExp?: any): boolean => {
-  if (!v) return false;
-  // Chặn hết hạn, ngừng kinh doanh, cờ expired
-  if (v.expired === true || v.isExpired === true || v.status === 0 || v.variantStatus === 0) return true;
-  const exp = v.expirationDate || v.expDate || rootExp;
-  if (!exp) return false;
-  return isExpiredDate(exp);
-};
-
-const isFullyExpired = (item: any): boolean => {
-  if (!item) return false;
-  
-  const rootExp = item.expirationDate || item.expDate || fullProductData.value?.expirationDate || fullProductData.value?.expDate;
-  
-  const allVariants = [
-    ...(item.variants || []),
-    ...(item.productVariants || []),
-    ...(fullProductData.value?.variants || []),
-    ...(fullProductData.value?.productVariants || [])
-  ];
-
-  if (allVariants.length === 0) {
-    return isVariantExpired(item, rootExp);
-  }
-
-  const hasValidVariant = allVariants.some((v: any) => !isVariantExpired(v, rootExp));
-
-  return !hasValidVariant;
+const isVariantSellable = (variant: any) => {
+  if (!variant) return false;
+  const status = Number(variant?.status ?? variant?.variantStatus ?? 1);
+  return status === 1 && getSellableQuantity(variant) > 0;
 };
 
 const getSafeNumber = (val: any) => {
@@ -762,9 +716,20 @@ const hasVariantPriceRange = computed(() => {
   const p = activeProduct.value as any;
   const variants = Array.isArray(p?.variants) ? p.variants : [];
   if (variants.length <= 1) return false;
-  const rootExp = p.expirationDate || p.expDate;
-  // Dùng isVariantExpired để tính toán khoảng giá (Từ...)
-  const prices = variants.filter((v: any) => !isVariantExpired(v, rootExp)).map((v: any) => getProductPrices(v).sale).filter((price: number) => price > 0);
+
+  const activeVariants = variants.filter(
+    (v: any) => Number(v?.status ?? v?.variantStatus ?? 1) === 1
+  );
+  const sellableVariants = activeVariants.filter((v: any) =>
+    isVariantSellable(v)
+  );
+  const priceVariants =
+    sellableVariants.length > 0 ? sellableVariants : activeVariants;
+
+  const prices = priceVariants
+    .map((v: any) => getProductPrices(v).sale)
+    .filter((price: number) => price > 0);
+
   return new Set(prices).size > 1;
 });
 
@@ -911,22 +876,30 @@ const getProductIdNum = (item: any) => Number(item?.id || item?.productId || 0);
 
 const getPrimaryVariantObject = (item: any) => {
   if (!item) return null;
+
   if (Array.isArray(item?.variants) && item.variants.length > 0) {
-    const rootExp = item.expirationDate || item.expDate;
-    
-    // Lọc bỏ hết mấy biến thể hết hạn/ngừng bán trước
-    const validVariants = item.variants.filter((v: any) => !isVariantExpired(v, rootExp));
-    
-    if (validVariants.length === 0) return item.variants[0]; 
-    
-    return validVariants.find((variant: any) => {
-        const stock = getSafeNumber(variant?.stockQuantity ?? variant?.stock ?? variant?.availableQuantity ?? variant?.quantity);
-        const price = getProductPrices(variant).sale;
-        const status = Number(variant?.status ?? 1);
-        return status === 1 && stock > 0 && price > 0;
-      }) || validVariants[0];
+    const activeVariants = item.variants.filter(
+      (variant: any) =>
+        Number(variant?.status ?? variant?.variantStatus ?? 1) === 1
+    );
+
+    const sellableVariant = activeVariants.find(
+      (variant: any) =>
+        isVariantSellable(variant) && getProductPrices(variant).sale > 0
+    );
+
+    if (sellableVariant) return sellableVariant;
+
+    return (
+      activeVariants.find(
+        (variant: any) => getProductPrices(variant).sale > 0
+      ) ||
+      activeVariants[0] ||
+      item.variants[0]
+    );
   }
-  return item; 
+
+  return item;
 };
 
 const getCompareVariant = (p: any) => {
@@ -956,7 +929,7 @@ const getCompareOriginalPrice = (p: any) => {
   return pOrig > sale ? pOrig : sale;
 };
 
-const getCompareStock = (p: any) => getSafeNumber(getCompareVariant(p)?.stockQuantity ?? getCompareVariant(p)?.stock ?? getCompareVariant(p)?.availableQuantity ?? getCompareVariant(p)?.quantity);
+const getCompareStock = (p: any) => getSellableQuantity(getCompareVariant(p));
 
 const getCompareDiscount = (p: any) => {
   const v = getCompareVariant(p);
@@ -1346,23 +1319,35 @@ const openVariantModal = async (type: "CART" | "BUY", customProduct: any = null,
         discountPercent: finalDisc, // Lưu lại % giảm
         displayCapacity: displayCap,
         numericCapacity: numericCap,
-        manufacturingDate: v.manufacturingDate || v.mfgDate || tp.manufacturingDate,
-        expirationDate: v.expirationDate || v.expDate || tp.expirationDate,
       };
-    }).filter((v: any) => !isVariantExpired(v, tp.expirationDate || tp.expDate));
+    });
 
     processedVariants.sort((a: any, b: any) => a.numericCapacity - b.numericCapacity);
     fullVariants.value = processedVariants;
 
     if (fullVariants.value.length > 0) {
       const targetVId = preselectedVariantId || cardRepresentativeVariantId.value;
-      selectedVariant.value = fullVariants.value.find((v: any) => v.productVariantId === targetVId) || fullVariants.value[0];
+      const targetVariant = fullVariants.value.find(
+        (v: any) => v.productVariantId === targetVId
+      );
+
+      selectedVariant.value =
+        (targetVariant && isVariantSellable(targetVariant)
+          ? targetVariant
+          : null) ||
+        fullVariants.value.find((v: any) => isVariantSellable(v)) ||
+        targetVariant ||
+        fullVariants.value[0];
     }
   } catch (error) {
     console.error("Lỗi lấy chi tiết biến thể:", error);
     const fallbackVariants = currentTargetProduct.value.variants || [currentTargetProduct.value];
     fullVariants.value = fallbackVariants.map((v: any) => ({ ...v, displayCapacity: formatVariantName(v), numericCapacity: 0 }));
-    if (fullVariants.value.length > 0) selectedVariant.value = fullVariants.value[0];
+    if (fullVariants.value.length > 0) {
+      selectedVariant.value =
+        fullVariants.value.find((v: any) => isVariantSellable(v)) ||
+        fullVariants.value[0];
+    }
   } finally {
     isLoadingVariants.value = false;
   }
@@ -1393,8 +1378,18 @@ const confirmAction = async () => {
       if (existingItem) currentQty = Number(existingItem.quantity || 0);
     }
     
-    const stock = Number(selectedVariant.value.stockQuantity || selectedVariant.value.stock || 0);
-    const maxAllow = Math.min(stock > 0 ? stock : 10, 10);
+    const stock = getSellableQuantity(selectedVariant.value);
+
+    if (!isVariantSellable(selectedVariant.value) || stock <= 0) {
+      showToast(
+        "warning",
+        "Tạm hết hàng",
+        "Phân loại này hiện không còn tồn có thể bán."
+      );
+      return;
+    }
+
+    const maxAllow = Math.min(stock, 10);
     
     if (currentQty + quantity.value > maxAllow) {
       if (currentQty >= maxAllow) {
@@ -1500,7 +1495,7 @@ const goToDetail = () => {
   else router.push("/product");
 };
 
-const maxQuantity = computed(() => selectedVariant.value ? getSafeNumber(selectedVariant.value.stockQuantity || selectedVariant.value.stock || 0) : 0);
+const maxQuantity = computed(() => selectedVariant.value ? getSellableQuantity(selectedVariant.value) : 0);
 
 const calculatedDiscountPercent = computed(() => {
   if (selectedVariant.value) {

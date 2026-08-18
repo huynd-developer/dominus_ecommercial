@@ -179,6 +179,7 @@ interface FlashSaleProductResponse {
   discountPercent: number;
   salePrice: number;
   stockQuantity: number | null;
+  sellableQuantity?: number | null;
 
   imageUrl?: string | null;
   image?: string | null;
@@ -198,6 +199,7 @@ interface ProductCardVariant {
   promotionPrice?: number;
   flashSalePrice?: number;
   stockQuantity?: number;
+  sellableQuantity?: number;
   status?: number;
   capacity?: string | null;
   bottleType?: string | null;
@@ -230,6 +232,7 @@ interface ProductCardItem {
   reviewCount: number;
 
   stockQuantity?: number;
+  sellableQuantity?: number;
   isFlashSale?: boolean;
   endDate?: string;
 
@@ -461,6 +464,14 @@ const mapNormalProduct = (p: any): ProductCardItem => {
   const rawVariants = p?.variants || p?.productVariants || p?.productVariantList || [];
   const variantList = Array.isArray(rawVariants) ? rawVariants : [];
   const firstVariant = variantList.length > 0 ? variantList[0] : null;
+  const representativeVariant =
+    variantList.find(
+      (variant: any) =>
+        Number(variant?.status ?? 1) === 1 &&
+        toNumber(variant?.sellableQuantity, 0) > 0
+    ) ||
+    variantList.find((variant: any) => Number(variant?.status ?? 1) === 1) ||
+    firstVariant;
 
   const minVariantPrice = resolveMinVariantPrice(variantList);
   const discountPercent = toNumber(p.discountPercent ?? p.discount, 0);
@@ -482,11 +493,25 @@ const mapNormalProduct = (p: any): ProductCardItem => {
 
   const productId = toNumber(p.productId ?? p.id, 0);
   const productVariantId = toNumber(
-    p.productVariantId ?? p.variantId ?? firstVariant?.productVariantId ?? firstVariant?.variantId ?? firstVariant?.id,
+    p.productVariantId ??
+      p.variantId ??
+      representativeVariant?.productVariantId ??
+      representativeVariant?.variantId ??
+      representativeVariant?.id,
     0
   );
-  
-  const stockQuantity = toNumber(p.stockQuantity ?? p.stock ?? firstVariant?.stockQuantity ?? firstVariant?.stock, 1);
+
+  const sellableQuantity = variantList.reduce(
+    (sum: number, variant: any) =>
+      sum + Math.max(0, toNumber(variant?.sellableQuantity, 0)),
+    0
+  );
+
+  const representativeSellableQuantity = Math.max(
+    0,
+    toNumber(representativeVariant?.sellableQuantity, 0)
+  );
+
   const productImages = resolveProductImages(p);
   const productImage = productImages[0] || "";
 
@@ -508,7 +533,10 @@ const mapNormalProduct = (p: any): ProductCardItem => {
     discountPercent,
     rating: toNumber(p.rating, 5),
     reviewCount: toNumber(p.reviewCount ?? p.reviews, 0),
-    stockQuantity,
+    sellableQuantity,
+
+    // Compatibility: không còn là nguồn tồn thật.
+    stockQuantity: sellableQuantity,
     variants: productVariantId ? [{
       id: productVariantId,
       productVariantId,
@@ -518,8 +546,9 @@ const mapNormalProduct = (p: any): ProductCardItem => {
       salePrice,
       promotionPrice: discountPercent > 0 ? salePrice : undefined,
       flashSalePrice: undefined,
-      stockQuantity,
-      status: toNumber(firstVariant?.status, 1),
+      sellableQuantity: representativeSellableQuantity,
+      stockQuantity: representativeSellableQuantity,
+      status: toNumber(representativeVariant?.status, 1),
       imageUrl: productImage,
       image: productImage,
       images: productImages,
@@ -531,7 +560,7 @@ const mapNormalProduct = (p: any): ProductCardItem => {
 const mapFlashSaleProduct = (item: FlashSaleProductResponse): ProductCardItem => {
   const productVariantId = toNumber(item.productVariantId, 0);
   const productId = toNumber(item.productId ?? item.productVariantId, 0);
-  const stockQuantity = toNumber(item.stockQuantity, 0);
+  const sellableQuantity = Math.max(0, toNumber(item.sellableQuantity, 0));
   const salePrice = toNumber(item.salePrice, 0);
   const originalPrice = toNumber(item.originalPrice, 0);
 
@@ -565,7 +594,8 @@ const mapFlashSaleProduct = (item: FlashSaleProductResponse): ProductCardItem =>
     rating: 5,
     reviewCount: 0,
 
-    stockQuantity,
+    sellableQuantity,
+    stockQuantity: sellableQuantity,
     isFlashSale: true,
     endDate: item.endDate,
 
@@ -579,7 +609,8 @@ const mapFlashSaleProduct = (item: FlashSaleProductResponse): ProductCardItem =>
         salePrice,
         promotionPrice: salePrice,
         flashSalePrice: salePrice,
-        stockQuantity,
+        sellableQuantity,
+        stockQuantity: sellableQuantity,
         status: 1,
         capacity: item.capacity,
         bottleType: item.bottleType,
@@ -661,15 +692,47 @@ const mergeFlashSaleIntoProduct = (
       ? flashSale.variants
       : [];
 
+  const productVariants =
+    Array.isArray(product.variants) && product.variants.length > 0
+      ? product.variants
+      : [];
+
+  /*
+   * Flash Sale chỉ ghi đè giá/metadata khuyến mãi.
+   * Tồn sellable của variant luôn được giữ từ /v1/products.
+   */
   const mergedVariants =
-    flashSaleVariants.length > 0
-      ? flashSaleVariants.map((variant) => {
+    productVariants.length > 0
+      ? productVariants.map((variant) => {
+          const variantId = toNumber(
+            variant.productVariantId ?? variant.variantId ?? variant.id,
+            0
+          );
+
+          const flashVariant = flashSaleVariants.find(
+            (item) =>
+              toNumber(
+                item.productVariantId ?? item.variantId ?? item.id,
+                0
+              ) === variantId
+          );
+
+          if (!flashVariant) {
+            return variant;
+          }
+
           const variantOriginalPrice = toNumber(
-            variant.originalPrice ?? variant.price,
+            flashVariant.originalPrice ??
+              flashVariant.price ??
+              variant.originalPrice ??
+              variant.price,
             originalPrice
           );
+
           const variantSalePrice = toNumber(
-            variant.salePrice ?? variant.promotionPrice ?? variant.flashSalePrice,
+            flashVariant.salePrice ??
+              flashVariant.promotionPrice ??
+              flashVariant.flashSalePrice,
             salePrice
           );
 
@@ -688,16 +751,10 @@ const mergeFlashSaleIntoProduct = (
                 : productImages,
           };
         })
-      : product.variants?.map((variant) => ({
+      : flashSaleVariants.map((variant) => ({
           ...variant,
-          price: toNumber(variant.originalPrice ?? variant.price, originalPrice),
-          originalPrice: toNumber(
-            variant.originalPrice ?? variant.price,
-            originalPrice
-          ),
-          salePrice,
-          promotionPrice: salePrice,
-          flashSalePrice: salePrice,
+          sellableQuantity: toNumber(variant.sellableQuantity, 0),
+          stockQuantity: toNumber(variant.sellableQuantity, 0),
         }));
 
   return {
@@ -709,7 +766,8 @@ const mergeFlashSaleIntoProduct = (
     endDate: flashSale.endDate,
     productVariantId: flashSale.productVariantId || product.productVariantId,
     variantId: flashSale.variantId || product.variantId,
-    stockQuantity: flashSale.stockQuantity ?? product.stockQuantity,
+    sellableQuantity: product.sellableQuantity,
+    stockQuantity: product.sellableQuantity ?? 0,
     imageUrl: productImage,
     image: productImage,
     mainImage: productImage,
@@ -797,7 +855,7 @@ const fetchFlashSaleProducts = async () => {
         const vId = toNumber(v.productVariantId, 0);
         const vSalePrice = toNumber(v.salePrice, 0);
         const vOriginalPrice = toNumber(v.originalPrice, 0);
-        const vStock = toNumber(v.stockQuantity, 0);
+        const vStock = Math.max(0, toNumber(v.sellableQuantity, 0));
 
         return {
           id: vId,
@@ -806,6 +864,7 @@ const fetchFlashSaleProducts = async () => {
           price: vOriginalPrice,
           originalPrice: vOriginalPrice,
           salePrice: vSalePrice,
+          sellableQuantity: vStock,
           stockQuantity: vStock,
           status: 1,
           capacity: v.capacity,
@@ -843,7 +902,14 @@ const fetchFlashSaleProducts = async () => {
         rating: 5,
         reviewCount: 0,
 
-        stockQuantity: mappedVariants.reduce((sum, v) => sum + (v.stockQuantity || 0), 0),
+        sellableQuantity: mappedVariants.reduce(
+          (sum, v) => sum + (v.sellableQuantity || 0),
+          0
+        ),
+        stockQuantity: mappedVariants.reduce(
+          (sum, v) => sum + (v.sellableQuantity || 0),
+          0
+        ),
         isFlashSale: true,
         endDate: firstItem?.endDate,
 

@@ -323,14 +323,13 @@ const extractCapacity = (variant: any) => {
 };
 
 const normalizeStock = (variant: any) => {
-  return Number(
-    variant?.stock ??
-      variant?.stockQuantity ??
-      variant?.StockQuantity ??
-      variant?.quantity ??
-      variant?.availableQuantity ??
-      0
-  );
+  const value = Number(variant?.sellableQuantity ?? 0);
+
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+
+  return Math.trunc(value);
 };
 
 const getDiscountPercentFromPrice = (
@@ -460,6 +459,9 @@ const mapVariant = (variant: any) => {
     listPrice: originalPrice || salePrice,
     basePrice: originalPrice || salePrice,
 
+    sellableQuantity: stock,
+
+    // Compatibility cho code cũ.
     stock,
     stockQuantity: stock,
     bottleType:
@@ -654,7 +656,7 @@ const mapFlashSaleGroupedProducts = (rows: any[]) => {
       const vId = Number(v.productVariantId || v.variantId || v.id || 0);
       const vSalePrice = toNumber(v.salePrice, 0);
       const vOriginalPrice = toNumber(v.originalPrice, vSalePrice);
-      const vStock = toNumber(v.stockQuantity, 0);
+      const vStock = toNumber(v.sellableQuantity, 0);
       const vDiscountPercent =
         toNumber(v.discountPercent, 0) ||
         getDiscountPercentFromPrice(vSalePrice, vOriginalPrice);
@@ -683,6 +685,7 @@ const mapFlashSaleGroupedProducts = (rows: any[]) => {
         isFlashSale: true,
         flashSale: true,
 
+        sellableQuantity: vStock,
         stockQuantity: vStock,
         stock: vStock,
         status: 1,
@@ -749,8 +752,12 @@ const mapFlashSaleGroupedProducts = (rows: any[]) => {
       rating: 5,
       reviewCount: 0,
 
+      sellableQuantity: mappedVariants.reduce(
+        (sum, v) => sum + (v.sellableQuantity || 0),
+        0
+      ),
       stockQuantity: mappedVariants.reduce(
-        (sum, v) => sum + (v.stockQuantity || 0),
+        (sum, v) => sum + (v.sellableQuantity || 0),
         0
       ),
       isFlashSale: true,
@@ -966,8 +973,37 @@ const fetchProducts = async () => {
     const isFlashSaleQuery = route.query.flashSale === "true";
 
     if (isFlashSaleQuery) {
-      const flashSaleProducts = await fetchActiveFlashSaleGroupedProducts();
-      productList.value = flashSaleProducts;
+      /*
+       * Flash Sale API chỉ dùng metadata khuyến mãi/giá.
+       * Tồn bán được luôn lấy từ /v1/products -> InventoryLot.
+       */
+      const [productRes, flashSaleProducts] = await Promise.all([
+        api.get("/v1/products", {
+          params: {
+            brandId: selectedBrandId.value || undefined,
+            size: 200,
+          },
+        }),
+        fetchActiveFlashSaleGroupedProducts(),
+      ]);
+
+      const rawData = extractArrayData(productRes.data);
+      const normalProducts = Array.isArray(rawData)
+        ? rawData.map((item: any) => mapProduct(item))
+        : [];
+
+      const flashSaleProductIds = new Set(
+        flashSaleProducts
+          .map((item: any) => getProductIdValue(item))
+          .filter((id: number) => id > 0)
+      );
+
+      productList.value = mergeFlashSaleIntoProducts(
+        normalProducts,
+        flashSaleProducts
+      ).filter((item: any) =>
+        flashSaleProductIds.has(getProductIdValue(item))
+      );
     } else {
       const [productRes, flashSaleProducts] = await Promise.all([
         api.get("/v1/products", {

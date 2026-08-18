@@ -35,7 +35,7 @@ const formatPrice = (price: number) => {
 };
 
 const calculateTotalStock = (variants?: ProductVariant[]) =>
-  variants?.reduce((sum, item) => sum + (item.stockQuantity || 0), 0) ?? 0;
+  variants?.reduce((sum, item) => sum + Number(item.totalQuantity ?? 0), 0) ?? 0;
 
 const getStockClass = (stock: number) => {
   if (stock === 0) return "danger";
@@ -79,43 +79,14 @@ const handleDelete = (product: Product) => {
   });
 };
 
-const isExpiredDate = (dateStr: any): boolean => {
-  if (!dateStr) return false;
-  const expDate = new Date(dateStr);
-  expDate.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return expDate.getTime() < today.getTime();
-};
-
 const rows = computed(() =>
   props.paginatedData.map((product) => {
-    let finalStatus = product.status;
-    
-    // Kiểm tra xem có biến thể nào còn hạn không
-    const hasValidVariant = product.variants?.some(v => !isExpiredDate(v.expirationDate));
-    const isAllExpired = !hasValidVariant && product.variants && product.variants.length > 0;
-    
-    // Nếu tất cả đều hết hạn thì ép trạng thái hiển thị của sản phẩm về 0
-    if (isAllExpired) {
-        finalStatus = 0; 
-    }
+    const stock = calculateTotalStock(product.variants);
 
-    const updatedVariants = product.variants?.map(v => {
-        return {
-            ...v,
-            status: isExpiredDate(v.expirationDate) ? 0 : v.status
-        };
-    });
-
-    const stock = calculateTotalStock(updatedVariants);
     return {
       ...product,
-      variants: updatedVariants,
-      status: finalStatus,
       stock,
       stockClass: getStockClass(stock),
-      isAllExpired // Thêm cờ này để disable nút ngoài danh sách
     };
   }),
 );
@@ -198,7 +169,7 @@ const rows = computed(() =>
                 class="status"
                 :class="product.status === 1 ? 'active' : 'inactive'"
               >
-                {{ product.status === 1 ? "Đang bán" : (product.isAllExpired ? "Đã hết hạn" : "Ngừng bán") }}
+                {{ product.status === 1 ? "Đang bán" : "Ngừng bán" }}
               </span>
             </td>
             <td>
@@ -230,9 +201,8 @@ const rows = computed(() =>
                 <button
                   v-else
                   class="icon-btn toggle-status-on"
-                  :class="{ 'opacity-50': product.isAllExpired }"
-                  :title="product.isAllExpired ? 'Sản phẩm đã hết hạn' : 'Mở bán'"
-                  @click="!product.isAllExpired && emit('start-selling', product.id)"
+                  title="Mở bán"
+                  @click="emit('start-selling', product.id)"
                 >
                   <i class="bi bi-eye"></i>
                 </button>
@@ -280,10 +250,10 @@ const rows = computed(() =>
                         <span
                           class="badge px-3 py-1.5"
                           :class="
-                            v.stockQuantity > 0 ? 'bg-success' : 'bg-danger'
+                            Number(v.totalQuantity ?? 0) > 0 ? 'bg-success' : 'bg-danger'
                           "
                         >
-                          {{ v.stockQuantity }}
+                          {{ v.totalQuantity ?? 0 }}
                         </span>
                       </td>
                       <td class="text-center">
@@ -291,14 +261,14 @@ const rows = computed(() =>
                         <span
                           class="status"
                           :class="[
-                            v.status === 1 ? 'active' : 'inactive', 
-                            { 'clickable-status': !isExpiredDate(v.expirationDate) }
+                            v.status === 1 ? 'active' : 'inactive',
+                            'clickable-status'
                           ]"
-                          :title="isExpiredDate(v.expirationDate) ? 'Biến thể đã hết hạn' : 'Bấm để chuyển đổi nhanh trạng thái biến thể'"
-                          @click="!isExpiredDate(v.expirationDate) && emit('toggle-variant-status', product, v)"
+                          title="Bấm để chuyển đổi nhanh trạng thái biến thể"
+                          @click="emit('toggle-variant-status', product, v)"
                         >
-                          {{ v.status === 1 ? "Đang bán" : (isExpiredDate(v.expirationDate) ? "Đã hết hạn" : "Ngừng bán") }}
-                          <i v-if="!isExpiredDate(v.expirationDate)" class="bi bi-arrow-repeat ms-1 fs-7"></i>
+                          {{ v.status === 1 ? "Đang bán" : "Ngừng bán" }}
+                          <i class="bi bi-arrow-repeat ms-1 fs-7"></i>
                         </span>
                       </td>
                     </tr>

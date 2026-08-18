@@ -57,20 +57,39 @@ public class CartItemResponse {
 
     private LocalDateTime promotionEndDate;
 
+    /**
+     * LEGACY compatibility.
+     * CartService map field này = sellableQuantity từ InventoryLot.
+     */
     private Integer stockQuantity;
+
+    /**
+     * Tồn có thể bán thật của SKU từ InventoryLot.
+     */
+    private Integer sellableQuantity;
 
     private String note;
 
-    // ĐÃ XÓA: Biến imageUrl bị lặp lần 2 ở đây
-
     private String thumbnailUrl;
 
+    /**
+     * Compatibility: ngày của lot FEFO bán tiếp theo nếu có.
+     * Không dùng làm business rule ở Cart.
+     */
     private LocalDate manufacturingDate;
 
+    /**
+     * Compatibility: HSD của lot FEFO bán tiếp theo nếu có.
+     * Không dùng làm business rule ở Cart.
+     */
     private LocalDate expirationDate;
 
     private Integer variantStatus;
 
+    /**
+     * Compatibility:
+     * true khi không còn lot bán được nhưng vẫn còn tồn ở lot đã hết hạn.
+     */
     private Boolean expired;
 
     /**
@@ -79,7 +98,7 @@ public class CartItemResponse {
     private Boolean available;
 
     /**
-     * Field mới đồng bộ với POS/Product/Promotion.
+     * Đồng bộ với POS/Product/Checkout.
      */
     private Boolean sellable;
 

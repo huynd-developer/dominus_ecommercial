@@ -129,7 +129,6 @@ import OrderFilter from "../components/OrderFilter.vue";
 import OrderTable from "../components/OrderTable.vue";
 import OrderDetailModal from "../components/OrderDetailModal.vue";
 import { orderService } from "../services/order.service";
-import api from "@/common/api";
 import type { AdminCancelOrderRequest, AdminOrderResponse, MarkDeliveryFailedRequest } from "../types/order.type";
 
 const orders = ref<AdminOrderResponse[]>([]);
@@ -1608,8 +1607,6 @@ type RefundRestockItemView = {
   quantity: number;
 };
 
-const REFUND_RESTOCK_PARAM_NAME = "restoreStock";
-
 function toPositiveInteger(value: unknown) {
   const numberValue = Number(value);
 
@@ -1792,24 +1789,6 @@ async function askRestoreStockAfterRefund(
   return null;
 }
 
-async function runRefundActionWithRestockParam<T>(
-  restoreStock: boolean,
-  action: () => Promise<T>
-): Promise<T> {
-  const previousParams = api.defaults.params;
-
-  api.defaults.params = {
-    ...(previousParams || {}),
-    [REFUND_RESTOCK_PARAM_NAME]: restoreStock ? "true" : "false",
-  };
-
-  try {
-    return await action();
-  } finally {
-    api.defaults.params = previousParams;
-  }
-}
-
 
 async function confirmMarkDeliveryRefunded(order: AdminOrderResponse) {
   if (!order || !order.orderId) {
@@ -1862,8 +1841,9 @@ async function confirmMarkDeliveryRefunded(order: AdminOrderResponse) {
   loading.value = true;
 
   try {
-    await runRefundActionWithRestockParam(shouldRestoreStock, () =>
-      orderService.markDeliveryRefunded(order.orderId)
+    await orderService.markDeliveryRefunded(
+      order.orderId,
+      shouldRestoreStock
     );
 
     await Swal.fire({
@@ -2015,8 +1995,9 @@ async function confirmMarkReturnRefunded(order: AdminOrderResponse) {
   loading.value = true;
 
   try {
-    await runRefundActionWithRestockParam(shouldRestoreStock, () =>
-      orderService.markReturnRefunded(order.orderId)
+    await orderService.markReturnRefunded(
+      order.orderId,
+      shouldRestoreStock
     );
 
     await Swal.fire({

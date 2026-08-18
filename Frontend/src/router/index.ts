@@ -163,7 +163,7 @@ const routes: Array<RouteRecordRaw> = [
           allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
         },
       },
-      
+
       {
         path: "products",
         name: "AdminProducts",
@@ -236,15 +236,90 @@ const routes: Array<RouteRecordRaw> = [
         },
       },
       {
-      path: "reviews",
-      name: "AdminReviews",
-      component: () =>
-        import("@/modules/admin/feature/review/views/ReviewView.vue"), 
-      meta: {
-        requiresAuth: true,
-        allowedRoles: ["OWNER", "MANAGER"],
+        path: "inventory",
+        name: "AdminInventory",
+        component: () =>
+          import("@/modules/admin/feature/inventory/views/InventoryView.vue"),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
       },
-    },
+      {
+        path: "goods-receipts",
+        name: "AdminGoodsReceipts",
+        component: () =>
+          import(
+            "@/modules/admin/feature/goodsReceipt/views/GoodsReceiptView.vue"
+          ),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
+      },
+      {
+        path: "inventory-lots",
+        name: "AdminInventoryLots",
+        component: () =>
+          import(
+            "@/modules/admin/feature/inventoryLot/views/InventoryLotView.vue"
+          ),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
+      },
+      {
+        path: "inventory-audit",
+        name: "AdminInventoryAudit",
+        component: () =>
+          import(
+            "@/modules/admin/feature/inventoryAudit/views/InventoryAuditView.vue"
+          ),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
+      },
+      {
+        path: "stock-adjustments",
+        name: "AdminStockAdjustments",
+        redirect: "/admin/inventory-audit",
+      },
+      {
+        path: "expiry-alerts",
+        name: "AdminExpiryAlerts",
+        component: () =>
+          import(
+            "@/modules/admin/feature/expiryAlert/views/ExpiryAlertView.vue"
+          ),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
+      },
+      {
+        path: "stock-movements",
+        name: "AdminStockMovements",
+        component: () =>
+          import(
+            "@/modules/admin/feature/stockMovement/views/StockMovementView.vue"
+          ),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
+        },
+      },
+      {
+        path: "reviews",
+        name: "AdminReviews",
+        component: () =>
+          import("@/modules/admin/feature/review/views/ReviewView.vue"),
+        meta: {
+          requiresAuth: true,
+          allowedRoles: ["OWNER", "MANAGER"],
+        },
+      },
       {
         path: "vouchers",
         name: "AdminVouchers",

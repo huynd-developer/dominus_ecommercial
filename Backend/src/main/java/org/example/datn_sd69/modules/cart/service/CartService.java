@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.Cart;
 import org.example.datn_sd69.entity.CartItem;
 import org.example.datn_sd69.entity.Customer;
+import org.example.datn_sd69.entity.InventoryLot;
 import org.example.datn_sd69.entity.ProductImage;
 import org.example.datn_sd69.entity.ProductVariant;
 import org.example.datn_sd69.entity.PromotionVariant;
@@ -11,6 +12,7 @@ import org.example.datn_sd69.modules.cart.dto.response.CartItemResponse;
 import org.example.datn_sd69.repository.CartItemRepository;
 import org.example.datn_sd69.repository.CartRepository;
 import org.example.datn_sd69.repository.CustomerRepository;
+import org.example.datn_sd69.repository.InventoryLotRepository;
 import org.example.datn_sd69.repository.ProductVariantRepository;
 import org.example.datn_sd69.repository.PromotionVariantRepository;
 import org.springframework.http.HttpStatus;
@@ -37,6 +39,7 @@ public class CartService {
     private final CartItemRepository cartItemRepo;
     private final ProductVariantRepository variantRepo;
     private final CustomerRepository customerRepo;
+    private final InventoryLotRepository inventoryLotRepository;
     private final jakarta.persistence.EntityManager entityManager;
 
     @Transactional
@@ -215,9 +218,33 @@ public class CartService {
         res.setImageUrl(cartImageUrl);
         res.setThumbnailUrl(cartImageUrl);
 
-        res.setStockQuantity(variant.getStockQuantity());
-        res.setManufacturingDate(variant.getManufacturingDate());
-        res.setExpirationDate(variant.getExpirationDate());
+        /*
+         * Tồn thật lấy từ InventoryLot.
+         * stockQuantity vẫn giữ compatibility cho FE cũ, nhưng giá trị được map
+         * bằng sellableQuantity để không còn dùng ProductVariant.StockQuantity.
+         */
+        int sellableQuantity = getSellableQuantity(variant);
+        InventoryLot nextSellableLot = getNextSellableLot(variant);
+
+        res.setStockQuantity(sellableQuantity);
+        res.setSellableQuantity(sellableQuantity);
+
+        /*
+         * Hai field ngày giữ compatibility:
+         * nếu có hàng bán được thì lấy ngày của lot FEFO tiếp theo.
+         * Business logic không còn dùng ngày trên ProductVariant.
+         */
+        res.setManufacturingDate(
+                nextSellableLot != null
+                        ? nextSellableLot.getManufacturedDate()
+                        : null
+        );
+        res.setExpirationDate(
+                nextSellableLot != null
+                        ? nextSellableLot.getExpirationDate()
+                        : null
+        );
+
         res.setVariantStatus(variant.getStatus());
         res.setExpired(isVariantExpired(variant));
 
@@ -434,42 +461,35 @@ public class CartService {
             return "Giá sản phẩm [" + sku + "] không hợp lệ";
         }
 
-        if (variant.getStockQuantity() == null || variant.getStockQuantity() <= 0) {
-            return "Sản phẩm [" + sku + "] đã hết hàng";
-        }
-
         if (quantity != null && quantity <= 0) {
             return "Số lượng sản phẩm [" + sku + "] không hợp lệ";
         }
 
-        if (quantity != null && quantity > variant.getStockQuantity()) {
+        /*
+         * Tồn bán được thật nằm ở InventoryLot:
+         * QuantityOnHand > 0 và ExpirationDate >= hôm nay.
+         *
+         * Không dùng:
+         * - ProductVariant.StockQuantity
+         * - ProductVariant.ManufacturingDate
+         * - ProductVariant.ExpirationDate
+         */
+        int sellableQuantity = getSellableQuantity(variant);
+
+        if (sellableQuantity <= 0) {
+            if (isVariantExpired(variant)) {
+                return "Sản phẩm [" + sku + "] không còn lô còn hạn để bán";
+            }
+
+            return "Sản phẩm [" + sku + "] đã hết hàng";
+        }
+
+        if (quantity != null && quantity > sellableQuantity) {
             return "Số lượng trong giỏ vượt quá tồn kho hiện tại. Sản phẩm ["
                     + sku
                     + "] chỉ còn "
-                    + variant.getStockQuantity()
-                    + " trong kho";
-        }
-
-        LocalDate today = LocalDate.now();
-
-        if (variant.getManufacturingDate() == null) {
-            return "Sản phẩm [" + sku + "] chưa có ngày sản xuất";
-        }
-
-        if (variant.getExpirationDate() == null) {
-            return "Sản phẩm [" + sku + "] chưa có hạn sử dụng";
-        }
-
-        if (variant.getManufacturingDate().isAfter(today)) {
-            return "Sản phẩm [" + sku + "] chưa tới ngày được bán";
-        }
-
-        if (variant.getExpirationDate().isBefore(today)) {
-            return "Sản phẩm [" + sku + "] đã hết hạn sử dụng";
-        }
-
-        if (!variant.getExpirationDate().isAfter(variant.getManufacturingDate())) {
-            return "Sản phẩm [" + sku + "] có hạn sử dụng không hợp lệ";
+                    + sellableQuantity
+                    + " sản phẩm có thể bán";
         }
 
         return null;
@@ -486,10 +506,56 @@ public class CartService {
         }
     }
 
+    /**
+     * Tổng tồn có thể bán thật của SKU từ InventoryLot.
+     */
+    private int getSellableQuantity(ProductVariant variant) {
+        if (variant == null || variant.getId() == null) {
+            return 0;
+        }
+
+        Integer quantity =
+                inventoryLotRepository.getSellableQuantityByVariantId(
+                        variant.getId()
+                );
+
+        return quantity == null
+                ? 0
+                : Math.max(quantity, 0);
+    }
+
+    /**
+     * Lot bán tiếp theo theo FEFO, chỉ dùng map ngày compatibility cho response.
+     */
+    private InventoryLot getNextSellableLot(ProductVariant variant) {
+        if (variant == null || variant.getId() == null) {
+            return null;
+        }
+
+        return inventoryLotRepository
+                .findNextSellableLot(variant.getId())
+                .orElse(null);
+    }
+
+    /**
+     * Giữ field expired cho FE cũ:
+     * true khi SKU không còn lot bán được nhưng vẫn còn tồn trong lot đã hết hạn.
+     */
     private boolean isVariantExpired(ProductVariant variant) {
-        return variant != null
-                && variant.getExpirationDate() != null
-                && variant.getExpirationDate().isBefore(LocalDate.now());
+        if (variant == null || variant.getId() == null) {
+            return false;
+        }
+
+        if (getSellableQuantity(variant) > 0) {
+            return false;
+        }
+
+        Integer expiredQuantity =
+                inventoryLotRepository.getExpiredOnHandQuantityByVariantId(
+                        variant.getId()
+                );
+
+        return expiredQuantity != null && expiredQuantity > 0;
     }
 
     private void validateCartItemOwner(CartItem item, Integer customerId) {

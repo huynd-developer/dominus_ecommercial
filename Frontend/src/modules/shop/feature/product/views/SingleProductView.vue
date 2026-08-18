@@ -61,6 +61,7 @@ interface FlashSaleProductResponse {
   discountPercent: number;
   salePrice: number;
   stockQuantity: number | null;
+  sellableQuantity?: number | null;
 }
 
 interface FlashSaleIndex {
@@ -275,17 +276,15 @@ const extractCapacity = (
 
 const normalizeStock = (
   variant: any,
-  flashSale?: FlashSaleProductResponse | null
+  _flashSale?: FlashSaleProductResponse | null
 ) => {
-  return Number(
-    flashSale?.stockQuantity ??
-      variant?.stock ??
-      variant?.stockQuantity ??
-      variant?.StockQuantity ??
-      variant?.quantity ??
-      variant?.availableQuantity ??
-      0
-  );
+  const value = Number(variant?.sellableQuantity ?? 0);
+
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+
+  return Math.trunc(value);
 };
 
 const getVariantId = (variant: any) => {
@@ -433,6 +432,9 @@ const mapVariant = (
     promotionName: flashSale?.promotionName ?? null,
     promotionEndDate: flashSale?.endDate ?? null,
 
+    sellableQuantity: stock,
+
+    // Compatibility cho code cũ; tồn thật vẫn là sellableQuantity.
     stock,
     stockQuantity: stock,
 

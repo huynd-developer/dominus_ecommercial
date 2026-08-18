@@ -9,6 +9,8 @@ import org.example.datn_sd69.entity.Order;
 import org.example.datn_sd69.entity.OrderDeliveryEvidence;
 import org.example.datn_sd69.entity.OrderItem;
 import org.example.datn_sd69.entity.ProductVariant;
+import org.example.datn_sd69.entity.InventoryLot;
+import org.example.datn_sd69.entity.StockMovement;
 import org.example.datn_sd69.entity.ReturnRequest;
 import org.example.datn_sd69.entity.ReturnRequestItem;
 import org.example.datn_sd69.entity.ReturnRequestMedia;
@@ -24,6 +26,8 @@ import org.example.datn_sd69.modules.order.service.AdminOrderService;
 import org.example.datn_sd69.modules.order.service.OrderMailService;
 import org.example.datn_sd69.repository.OrderDeliveryEvidenceRepository;
 import org.example.datn_sd69.repository.OrderItemRepository;
+import org.example.datn_sd69.repository.InventoryLotRepository;
+import org.example.datn_sd69.repository.StockMovementRepository;
 import org.example.datn_sd69.repository.OrderRepository;
 import org.example.datn_sd69.repository.ReturnRequestItemRepository;
 import org.example.datn_sd69.repository.ReturnRequestMediaRepository;
@@ -32,6 +36,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -50,6 +55,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -120,6 +126,22 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
     private static final String DELIVERY_EVIDENCE_CLOUDINARY_FOLDER = "order-delivery-evidence";
 
+    /*
+     * InventoryLot / StockMovement
+     *
+     * 3 = SALE_OUT
+     * 4 = RETURN_IN
+     *
+     * Đơn ONLINE chỉ xuất kho khi Admin xác nhận đơn.
+     * Hủy khi còn PENDING không hoàn kho vì chưa có SALE_OUT.
+     */
+    private static final byte MOVEMENT_SALE_OUT = 3;
+    private static final byte MOVEMENT_RETURN_IN = 4;
+
+    private static final String STOCK_REFERENCE_ONLINE_ORDER = "ONLINE_ORDER";
+    private static final String STOCK_REFERENCE_ONLINE_RETURN = "ONLINE_ORDER_RETURN";
+
+
     private static final Set<Integer> VALID_ORDER_STATUSES = Set.of(
             STATUS_PENDING,
             STATUS_CONFIRMED,
@@ -151,12 +173,15 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private final OrderRepository orderRepository;
     private final OrderDeliveryEvidenceRepository orderDeliveryEvidenceRepository;
     private final OrderItemRepository orderItemRepository;
+    private final InventoryLotRepository inventoryLotRepository;
+    private final StockMovementRepository stockMovementRepository;
     private final ReturnRequestRepository returnRequestRepository;
     private final ReturnRequestItemRepository returnRequestItemRepository;
     private final ReturnRequestMediaRepository returnRequestMediaRepository;
     private final UserRepository userRepository;
     private final Cloudinary cloudinary;
     private final EntityManager entityManager;
+    private final JdbcTemplate jdbcTemplate;
     private final OrderMailService orderMailService;
 
     private record KeywordDateRange(
@@ -326,6 +351,23 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         order.setDeliveryFailedByName(getCurrentAdminDisplayName());
 
         applyDeliveryFailedRefundInfo(order);
+
+        /*
+         * COD không phát sinh bước "xác nhận hoàn tiền" sau giao hàng thất bại.
+         * Vì hàng đã SALE_OUT khi Admin xác nhận đơn, phải RETURN_IN ngay
+         * về đúng các InventoryLot đã xuất khi ghi nhận giao thất bại.
+         *
+         * Đơn trả trước (VNPay/VietQR/...) giữ NGUYÊN flow cũ:
+         * chỉ hoàn kho tại bước xác nhận hoàn tiền nếu Admin chọn restoreStock.
+         */
+        String paymentMethod = normalizeOptionalText(order.getPaymentMethod());
+        boolean isCodPayment =
+                paymentMethod != null
+                        && paymentMethod.toUpperCase(Locale.ROOT).contains("COD");
+
+        if (isCodPayment) {
+            restoreStockWhenDeliveryRefunded(order);
+        }
 
         Order savedOrder = orderRepository.save(order);
 
@@ -705,6 +747,13 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     }
 
 
+    /**
+     * Xác nhận đơn ONLINE:
+     * - Không dùng ProductVariant.StockQuantity.
+     * - Lấy tồn bán được từ InventoryLot.
+     * - Phân bổ SALE_OUT theo FEFO.
+     * - ReferenceLineId của SALE_OUT = OrderItemId để truy vết line hàng.
+     */
     private void deductStockWhenConfirm(Order order) {
         if (order == null || order.getId() == null) {
             throw new ResponseStatusException(
@@ -713,7 +762,8 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             );
         }
 
-        List<OrderItem> orderItems = orderItemRepository.findDetailByOrderId(order.getId());
+        List<OrderItem> orderItems =
+                orderItemRepository.findDetailByOrderId(order.getId());
 
         if (orderItems == null || orderItems.isEmpty()) {
             throw new ResponseStatusException(
@@ -722,8 +772,14 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             );
         }
 
+        Integer createdBy = getCurrentAdminUserId();
+
         for (OrderItem item : orderItems) {
-            if (item == null || item.getProductVariant() == null) {
+            if (item == null
+                    || item.getId() == null
+                    || item.getProductVariant() == null
+                    || item.getProductVariant().getId() == null) {
+
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
                         "Đơn hàng có sản phẩm không hợp lệ"
@@ -731,7 +787,9 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             }
 
             ProductVariant variant = item.getProductVariant();
-            int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+            int quantity = item.getQuantity() == null
+                    ? 0
+                    : item.getQuantity();
 
             if (quantity <= 0) {
                 throw new ResponseStatusException(
@@ -740,114 +798,485 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                 );
             }
 
-            int currentStock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
-
-            if (currentStock < quantity) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Sản phẩm " + resolveOrderItemSku(item, variant)
-                                + " chỉ còn " + currentStock
-                                + " trong kho, không đủ để xác nhận đơn"
-                );
-            }
-        }
-
-        for (OrderItem item : orderItems) {
-            ProductVariant variant = item.getProductVariant();
-            int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
-            int currentStock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
-
-            variant.setStockQuantity(currentStock - quantity);
-            entityManager.merge(variant);
+            deductOrderItemStockByFefo(
+                    order,
+                    item,
+                    variant,
+                    quantity,
+                    createdBy
+            );
         }
     }
 
-    private String resolveOrderItemSku(OrderItem item, ProductVariant variant) {
-        String itemSku = item == null ? null : normalizeOptionalText(item.getSku());
+    /**
+     * Xuất đúng quantity của một OrderItem theo FEFO.
+     *
+     * Repository dùng UPDLOCK + ROWLOCK + HOLDLOCK nên các lần xác nhận
+     * đồng thời không cùng lấy một lượng tồn.
+     */
+    private void deductOrderItemStockByFefo(
+            Order order,
+            OrderItem item,
+            ProductVariant variant,
+            int quantity,
+            Integer createdBy
+    ) {
+        List<InventoryLot> lots =
+                inventoryLotRepository.findSellableLotsForUpdateFefo(
+                        variant.getId()
+                );
+
+        int totalSellable = lots.stream()
+                .map(InventoryLot::getQuantityOnHand)
+                .filter(value -> value != null && value > 0)
+                .mapToInt(Integer::intValue)
+                .sum();
+
+        if (totalSellable < quantity) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Sản phẩm " + resolveOrderItemSku(item, variant)
+                            + " chỉ còn " + totalSellable
+                            + " sản phẩm có thể bán, không đủ để xác nhận đơn"
+            );
+        }
+
+        int remaining = quantity;
+
+        for (InventoryLot lot : lots) {
+            if (remaining <= 0) {
+                break;
+            }
+
+            int onHand = lot.getQuantityOnHand() == null
+                    ? 0
+                    : lot.getQuantityOnHand();
+
+            if (onHand <= 0) {
+                continue;
+            }
+
+            int take = Math.min(onHand, remaining);
+
+            postStockMovement(
+                    lot.getId(),
+                    MOVEMENT_SALE_OUT,
+                    -take,
+                    createdBy,
+                    STOCK_REFERENCE_ONLINE_ORDER,
+                    order.getId().longValue(),
+                    item.getId().longValue(),
+                    "Xuất kho xác nhận đơn online theo FEFO"
+                            + " - Order #" + order.getId()
+                            + " - OrderItem #" + item.getId()
+            );
+
+            remaining -= take;
+        }
+
+        if (remaining != 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Không thể phân bổ đủ tồn kho FEFO cho sản phẩm "
+                            + resolveOrderItemSku(item, variant)
+            );
+        }
+    }
+
+    private String resolveOrderItemSku(
+            OrderItem item,
+            ProductVariant variant
+    ) {
+        String itemSku =
+                item == null
+                        ? null
+                        : normalizeOptionalText(item.getSku());
 
         if (itemSku != null) {
             return itemSku;
         }
 
-        String variantSku = variant == null ? null : normalizeOptionalText(variant.getSku());
+        String variantSku =
+                variant == null
+                        ? null
+                        : normalizeOptionalText(variant.getSku());
 
-        return variantSku == null ? "không xác định" : variantSku;
+        return variantSku == null
+                ? "không xác định"
+                : variantSku;
     }
 
-    private void restoreStockWhenAdminCancel(Order order) {
-        if (order == null || order.getId() == null) {
-            return;
-        }
-
-        List<OrderItem> orderItems = orderItemRepository.findDetailByOrderId(order.getId());
-
-        if (orderItems == null || orderItems.isEmpty()) {
-            return;
-        }
-
-        for (OrderItem item : orderItems) {
-            restoreStockByOrderItemQuantity(item);
-        }
-    }
-
+    /**
+     * Giao hàng thất bại và nghiệp vụ đã chọn nhập lại kho:
+     * hoàn phần tồn CHƯA được hoàn của chính các lot đã SALE_OUT.
+     *
+     * Không chạy FEFO lại khi hoàn.
+     */
     private void restoreStockWhenDeliveryRefunded(Order order) {
         if (order == null || order.getId() == null) {
             return;
         }
 
-        List<OrderItem> orderItems = orderItemRepository.findDetailByOrderId(order.getId());
+        Integer createdBy = getCurrentAdminUserId();
 
-        if (orderItems == null || orderItems.isEmpty()) {
-            return;
-        }
-
-        for (OrderItem item : orderItems) {
-            restoreStockByOrderItemQuantity(item);
-        }
+        restoreRemainingSaleMovements(
+                order.getId(),
+                createdBy,
+                "Hoàn kho do giao hàng thất bại"
+                        + " - Order #" + order.getId()
+        );
     }
 
-    private void restoreStockWhenReturnRefunded(List<ReturnRequestItem> returnItems) {
+    /**
+     * Hoàn hàng theo từng ReturnRequestItem.
+     *
+     * Chỉ RETURN_IN vào các InventoryLot đã thực sự SALE_OUT của đúng OrderItem.
+     * Với hoàn một phần, hệ thống hoàn lần lượt trên các movement đã xuất của
+     * OrderItem đó; tuyệt đối không chọn lot mới bằng FEFO.
+     */
+    private void restoreStockWhenReturnRefunded(
+            List<ReturnRequestItem> returnItems
+    ) {
         if (returnItems == null || returnItems.isEmpty()) {
             return;
         }
 
+        OrderItem firstOrderItem = returnItems.stream()
+                .filter(item -> item != null && item.getOrderItem() != null)
+                .map(ReturnRequestItem::getOrderItem)
+                .findFirst()
+                .orElse(null);
+
+        Integer orderId =
+                firstOrderItem != null
+                        && firstOrderItem.getOrder() != null
+                        ? firstOrderItem.getOrder().getId()
+                        : null;
+
+        if (orderId == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Không xác định được đơn hàng cần hoàn kho"
+            );
+        }
+
+        Integer createdBy = getCurrentAdminUserId();
+
+        List<StockMovement> saleOutMovements =
+                stockMovementRepository.findByReference(
+                        STOCK_REFERENCE_ONLINE_ORDER,
+                        orderId.longValue(),
+                        MOVEMENT_SALE_OUT
+                );
+
+        if (saleOutMovements.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Không tìm thấy lịch sử xuất kho của đơn #"
+                            + orderId
+                            + " để hoàn hàng"
+            );
+        }
+
+        Map<Long, Integer> returnedQuantityBySaleMovementId =
+                loadReturnedQuantityBySaleMovementId(orderId);
+
         for (ReturnRequestItem returnItem : returnItems) {
-            if (returnItem == null || returnItem.getOrderItem() == null) {
+            if (returnItem == null
+                    || returnItem.getOrderItem() == null
+                    || returnItem.getOrderItem().getId() == null) {
                 continue;
             }
 
             OrderItem orderItem = returnItem.getOrderItem();
 
-            if (orderItem.getProductVariant() == null) {
+            if (orderItem.getOrder() == null
+                    || !orderId.equals(orderItem.getOrder().getId())) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Yêu cầu hoàn hàng có sản phẩm không cùng một đơn"
+                );
+            }
+
+            int quantityToReturn =
+                    returnItem.getReturnQuantity() == null
+                            ? 0
+                            : returnItem.getReturnQuantity();
+
+            if (quantityToReturn <= 0) {
                 continue;
             }
 
-            int quantity = returnItem.getReturnQuantity() == null ? 0 : returnItem.getReturnQuantity();
+            int remaining = quantityToReturn;
 
-            if (quantity <= 0) {
-                continue;
+            for (StockMovement saleMovement : saleOutMovements) {
+                if (remaining <= 0) {
+                    break;
+                }
+
+                if (saleMovement == null
+                        || saleMovement.getId() == null
+                        || saleMovement.getInventoryLot() == null
+                        || saleMovement.getInventoryLot().getId() == null
+                        || saleMovement.getReferenceLineId() == null
+                        || !saleMovement.getReferenceLineId()
+                        .equals(orderItem.getId().longValue())) {
+                    continue;
+                }
+
+                long saleMovementId =
+                        saleMovement.getId().longValue();
+
+                int soldQuantity =
+                        saleMovement.getQuantityChange() == null
+                                ? 0
+                                : Math.abs(saleMovement.getQuantityChange());
+
+                int alreadyReturned =
+                        returnedQuantityBySaleMovementId
+                                .getOrDefault(saleMovementId, 0);
+
+                int availableToReturn =
+                        Math.max(soldQuantity - alreadyReturned, 0);
+
+                if (availableToReturn <= 0) {
+                    continue;
+                }
+
+                int take =
+                        Math.min(availableToReturn, remaining);
+
+                postStockMovement(
+                        saleMovement.getInventoryLot().getId(),
+                        MOVEMENT_RETURN_IN,
+                        take,
+                        createdBy,
+                        STOCK_REFERENCE_ONLINE_RETURN,
+                        orderId.longValue(),
+                        saleMovementId,
+                        "Hoàn kho do khách trả hàng"
+                                + " - Order #" + orderId
+                                + " - OrderItem #" + orderItem.getId()
+                );
+
+                returnedQuantityBySaleMovementId.merge(
+                        saleMovementId,
+                        take,
+                        Integer::sum
+                );
+
+                remaining -= take;
             }
 
-            ProductVariant variant = orderItem.getProductVariant();
-            int currentStock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
-            variant.setStockQuantity(currentStock + quantity);
+            if (remaining > 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Số lượng hoàn của sản phẩm "
+                                + resolveOrderItemSku(
+                                orderItem,
+                                orderItem.getProductVariant()
+                        )
+                                + " vượt quá số lượng đã xuất kho hoặc phần có thể hoàn"
+                );
+            }
         }
     }
 
-    private void restoreStockByOrderItemQuantity(OrderItem item) {
-        if (item == null || item.getProductVariant() == null) {
-            return;
+    /**
+     * Hoàn toàn bộ phần còn lại của các SALE_OUT thuộc Order.
+     *
+     * RETURN_IN.ReferenceLineId = StockMovement.Id của SALE_OUT gốc.
+     * Nhờ vậy cùng một movement không bị hoàn hai lần.
+     */
+    private void restoreRemainingSaleMovements(
+            Integer orderId,
+            Integer createdBy,
+            String reason
+    ) {
+        List<StockMovement> saleOutMovements =
+                stockMovementRepository.findByReference(
+                        STOCK_REFERENCE_ONLINE_ORDER,
+                        orderId.longValue(),
+                        MOVEMENT_SALE_OUT
+                );
+
+        if (saleOutMovements.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Không tìm thấy lịch sử xuất kho của đơn #"
+                            + orderId
+                            + " để hoàn kho"
+            );
         }
 
-        ProductVariant variant = item.getProductVariant();
-        int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+        Map<Long, Integer> returnedQuantityBySaleMovementId =
+                loadReturnedQuantityBySaleMovementId(orderId);
 
-        if (quantity <= 0) {
-            return;
+        for (StockMovement saleMovement : saleOutMovements) {
+            if (saleMovement == null
+                    || saleMovement.getId() == null
+                    || saleMovement.getInventoryLot() == null
+                    || saleMovement.getInventoryLot().getId() == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Lịch sử xuất kho của đơn #"
+                                + orderId
+                                + " không còn liên kết InventoryLot"
+                );
+            }
+
+            long saleMovementId =
+                    saleMovement.getId().longValue();
+
+            int soldQuantity =
+                    saleMovement.getQuantityChange() == null
+                            ? 0
+                            : Math.abs(saleMovement.getQuantityChange());
+
+            int alreadyReturned =
+                    returnedQuantityBySaleMovementId
+                            .getOrDefault(saleMovementId, 0);
+
+            int quantityToReturn =
+                    Math.max(soldQuantity - alreadyReturned, 0);
+
+            if (quantityToReturn <= 0) {
+                continue;
+            }
+
+            postStockMovement(
+                    saleMovement.getInventoryLot().getId(),
+                    MOVEMENT_RETURN_IN,
+                    quantityToReturn,
+                    createdBy,
+                    STOCK_REFERENCE_ONLINE_RETURN,
+                    orderId.longValue(),
+                    saleMovementId,
+                    reason
+            );
+
+            returnedQuantityBySaleMovementId.merge(
+                    saleMovementId,
+                    quantityToReturn,
+                    Integer::sum
+            );
+        }
+    }
+
+    /**
+     * Tổng số lượng đã RETURN_IN cho từng SALE_OUT gốc.
+     *
+     * Chỉ các movement mới theo chuẩn này có ReferenceLineId trỏ tới
+     * StockMovement.Id của SALE_OUT. Dữ liệu legacy null không được suy đoán.
+     */
+    private Map<Long, Integer> loadReturnedQuantityBySaleMovementId(
+            Integer orderId
+    ) {
+        List<StockMovement> returnMovements =
+                stockMovementRepository.findByReference(
+                        STOCK_REFERENCE_ONLINE_RETURN,
+                        orderId.longValue(),
+                        MOVEMENT_RETURN_IN
+                );
+
+        Map<Long, Integer> returned = new HashMap<>();
+
+        for (StockMovement movement : returnMovements) {
+            if (movement == null
+                    || movement.getReferenceLineId() == null
+                    || movement.getQuantityChange() == null
+                    || movement.getQuantityChange() <= 0) {
+                continue;
+            }
+
+            returned.merge(
+                    movement.getReferenceLineId(),
+                    movement.getQuantityChange(),
+                    Integer::sum
+            );
         }
 
-        int currentStock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
-        variant.setStockQuantity(currentStock + quantity);
+        return returned;
+    }
+
+    /**
+     * Dùng stored procedure chuẩn của module kho:
+     * - cập nhật InventoryLot.QuantityOnHand
+     * - ghi StockMovement
+     * trong cùng transaction hiện tại.
+     */
+    private void postStockMovement(
+            Integer inventoryLotId,
+            byte movementType,
+            int quantityChange,
+            Integer createdBy,
+            String referenceType,
+            Long referenceId,
+            Long referenceLineId,
+            String reason
+    ) {
+        jdbcTemplate.update(
+                """
+                EXEC dbo.usp_PostStockMovement
+                    @InventoryLotId = ?,
+                    @MovementType = ?,
+                    @QuantityChange = ?,
+                    @CreatedBy = ?,
+                    @ReferenceType = ?,
+                    @ReferenceId = ?,
+                    @ReferenceLineId = ?,
+                    @Reason = ?
+                """,
+                inventoryLotId,
+                movementType,
+                quantityChange,
+                createdBy,
+                referenceType,
+                referenceId,
+                referenceLineId,
+                reason
+        );
+    }
+
+    /**
+     * StockMovement.CreatedBy bắt buộc phải là Users.Id hiện tại.
+     */
+    private Integer getCurrentAdminUserId() {
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
+
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication.getName() == null
+                || authentication.getName().isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Không xác định được người dùng hiện tại"
+            );
+        }
+
+        String email =
+                authentication.getName().trim();
+
+        User user =
+                userRepository.findByEmailIgnoreCase(email)
+                        .orElseThrow(() ->
+                                new ResponseStatusException(
+                                        HttpStatus.UNAUTHORIZED,
+                                        "Không tìm thấy tài khoản quản trị hiện tại"
+                                )
+                        );
+
+        if (user.getId() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Tài khoản quản trị hiện tại không hợp lệ"
+            );
+        }
+
+        return user.getId();
     }
 
     private String normalizeRejectReason(RejectReturnRequest request) {
@@ -2354,3 +2783,4 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         return count == null ? 0L : count;
     }
 }
+

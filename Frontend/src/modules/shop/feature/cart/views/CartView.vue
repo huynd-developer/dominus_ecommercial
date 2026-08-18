@@ -59,7 +59,12 @@ interface CartItem {
   promotionId?: number | null;
   promotionName?: string | null;
   promotionEndDate?: string | null;
+  /** LEGACY compatibility. FE Cart không dùng để quyết định tồn. */
   stockQuantity?: number | null;
+
+  /** Tồn có thể bán thật từ InventoryLot. */
+  sellableQuantity?: number | null;
+
   note?: string | null;
   image?: string | null;
   imageUrl?: string | null;
@@ -87,38 +92,33 @@ const isUpdating = ref(false);
 const discountAmount = ref(0);
 const appliedVoucherCode = ref("");
 
-const toDateOnly = (value?: string | null) => value ? String(value).substring(0, 10) : null;
-const isBeforeToday = (value?: string | null) => {
-  const dateOnly = toDateOnly(value);
-  if (!dateOnly) return false;
-  const date = new Date(`${dateOnly}T00:00:00`);
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  return !Number.isNaN(date.getTime()) && date.getTime() < today.getTime();
-};
-const isAfterToday = (value?: string | null) => {
-  const dateOnly = toDateOnly(value);
-  if (!dateOnly) return false;
-  const date = new Date(`${dateOnly}T00:00:00`);
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  return !Number.isNaN(date.getTime()) && date.getTime() > today.getTime();
-};
-
 const getItemPrice = (item: CartItem) => Number(item?.price || 0);
 const getItemQuantity = (item: CartItem) => Number(item?.quantity || 0);
-const isItemExpired = (item: CartItem) => Boolean(item?.expired) || isBeforeToday(item?.expirationDate);
+
+const getSellableQuantity = (item: CartItem | any) => {
+  const value = Number(
+    item?.sellableQuantity ??
+      item?.productVariant?.sellableQuantity ??
+      0
+  );
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.trunc(value);
+};
 
 const getUnavailableReason = (item: CartItem) => {
   if (!item) return "Sản phẩm không hợp lệ.";
   if (item.unavailableReason) return item.unavailableReason;
   if (item.available === false || item.sellable === false) return "Sản phẩm hiện không khả dụng.";
   if (item.variantStatus != null && Number(item.variantStatus) !== 1) return "Sản phẩm đang ngừng bán.";
+
   const quantity = getItemQuantity(item);
-  const stockQuantity = Number(item?.stockQuantity || 0);
+  const sellableQuantity = getSellableQuantity(item);
+
   if (quantity <= 0) return "Số lượng sản phẩm không hợp lệ.";
-  if (stockQuantity <= 0) return "Sản phẩm đã hết hàng.";
-  if (quantity > stockQuantity) return `Số lượng trong giỏ vượt quá tồn kho. Sản phẩm chỉ còn ${stockQuantity}.`;
-  if (isAfterToday(item.manufacturingDate)) return "Sản phẩm chưa tới ngày được bán.";
-  if (isItemExpired(item)) return "Sản phẩm đã hết hạn sử dụng.";
+  if (sellableQuantity <= 0) return "Sản phẩm đã hết hàng.";
+  if (quantity > sellableQuantity) {
+    return `Số lượng trong giỏ vượt quá tồn kho. Sản phẩm chỉ còn ${sellableQuantity} sản phẩm có thể bán.`;
+  }
   return "Sản phẩm hiện không khả dụng.";
 };
 
@@ -126,12 +126,11 @@ const isItemAvailable = (item: CartItem) => {
   if (!item) return false;
   if (item.available === false || item.sellable === false) return false;
   if (item.variantStatus != null && Number(item.variantStatus) !== 1) return false;
+
   const quantity = getItemQuantity(item);
-  const stockQuantity = Number(item?.stockQuantity || 0);
-  if (quantity <= 0 || stockQuantity <= 0 || quantity > stockQuantity) return false;
-  if (isAfterToday(item.manufacturingDate)) return false;
-  if (isItemExpired(item)) return false;
-  return true;
+  const sellableQuantity = getSellableQuantity(item);
+
+  return quantity > 0 && sellableQuantity > 0 && quantity <= sellableQuantity;
 };
 
 const totalAmount = computed(() => cartItems.value.reduce((sum, item) => isItemAvailable(item) ? sum + getItemPrice(item) * getItemQuantity(item) : sum, 0));
@@ -315,23 +314,51 @@ const loadCart = async (options: { preserveOrder?: boolean } = {}) => {
           if (!productId) return item;
           
           const productData = await fetchProductDetail(productId);
-          if (!productData) return { ...item, variantStatus: 0, stockQuantity: 0, sellable: false };
-          
-          const matchedVariant = findMatchingVariant(productData, variantId);
-          
-          if (matchedVariant) {
-             // ĐÃ SỬA: KHÔNG ghi đè giá nữa! Giữ nguyên item.price, item.originalPrice từ giỏ hàng (vì backend đã tính sẵn Flash Sale)
-             return {
-                ...item,
-                stockQuantity: Number(matchedVariant.stockQuantity ?? matchedVariant.stock ?? item.stockQuantity),
-                variantStatus: Number(matchedVariant.status ?? item.variantStatus),
-                expirationDate: matchedVariant.expirationDate ?? item.expirationDate,
-                product: productData,
-                productVariant: matchedVariant
-             };
+
+          if (!productData) {
+            return {
+              ...item,
+              variantStatus: 0,
+              sellableQuantity: 0,
+              stockQuantity: 0,
+              sellable: false,
+            };
           }
-          
-          return { ...item, variantStatus: 0, stockQuantity: 0, sellable: false };
+
+          const matchedVariant = findMatchingVariant(productData, variantId);
+
+          if (matchedVariant) {
+            // Giữ nguyên price/discount từ Cart BE, chỉ enrich metadata + tồn bán được.
+            const sellableQuantity = Math.max(
+              Number(
+                matchedVariant?.sellableQuantity ??
+                  item?.sellableQuantity ??
+                  0
+              ) || 0,
+              0
+            );
+
+            return {
+              ...item,
+              sellableQuantity,
+              stockQuantity: sellableQuantity,
+              variantStatus: Number(
+                matchedVariant?.status ??
+                  item?.variantStatus ??
+                  0
+              ),
+              product: productData,
+              productVariant: matchedVariant,
+            };
+          }
+
+          return {
+            ...item,
+            variantStatus: 0,
+            sellableQuantity: 0,
+            stockQuantity: 0,
+            sellable: false,
+          };
         } catch (e) {
           return item;
         }
@@ -351,14 +378,16 @@ const loadCart = async (options: { preserveOrder?: boolean } = {}) => {
 
 const updateQty = async (item: CartItem, newQty: number) => {
   if (!item?.cartItemId || newQty < 1) return;
-  const stockQuantity = Number(item?.stockQuantity || 0);
 
-  if (stockQuantity <= 0) {
-    showToast("warning", "Sản phẩm đã hết hàng");
+  const sellableQuantity = getSellableQuantity(item);
+
+  if (sellableQuantity <= 0) {
+    showToast("warning", "Sản phẩm đã hết tồn có thể bán");
     return;
   }
-  if (newQty > stockQuantity) {
-    showToast("warning", `Sản phẩm chỉ còn ${stockQuantity} trong kho`);
+
+  if (newQty > sellableQuantity) {
+    showToast("warning", `Sản phẩm chỉ còn ${sellableQuantity} sản phẩm có thể bán`);
     return;
   }
 

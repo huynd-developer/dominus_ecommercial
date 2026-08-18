@@ -2,6 +2,8 @@ package org.example.datn_sd69.modules.pos.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.Customer;
+import org.example.datn_sd69.entity.InventoryLot;
+import org.example.datn_sd69.entity.StockMovement;
 import org.example.datn_sd69.entity.Employee;
 import org.example.datn_sd69.entity.Order;
 import org.example.datn_sd69.entity.OrderItem;
@@ -29,10 +31,13 @@ import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
 import org.example.datn_sd69.repository.ProductImageRepository;
 import org.example.datn_sd69.repository.ProductVariantRepository;
+import org.example.datn_sd69.repository.InventoryLotRepository;
+import org.example.datn_sd69.repository.StockMovementRepository;
 import org.example.datn_sd69.repository.RoleRepository;
 import org.example.datn_sd69.repository.UserRepository;
 import org.example.datn_sd69.repository.VoucherRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.example.datn_sd69.modules.pos.dto.request.PosTransferHeldOrderRequest;
@@ -42,7 +47,6 @@ import org.example.datn_sd69.modules.vietqr.service.VietQrService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -79,7 +83,25 @@ public class PosServiceImpl implements PosService {
     private static final String PAYMENT_HOLD = "HOLD";
     private static final BigDecimal POINT_RATE_AMOUNT = BigDecimal.valueOf(10_000);
 
+    /*
+     * InventoryLot / StockMovement
+     *
+     * 3 = SALE_OUT
+     * 4 = RETURN_IN
+     */
+    private static final byte MOVEMENT_SALE_OUT = 3;
+    private static final byte MOVEMENT_RETURN_IN = 4;
+
+    /*
+     * ReferenceType riêng cho POS để có thể truy vết và hoàn đúng
+     * các lot đã xuất khi payment pending bị hủy.
+     */
+    private static final String STOCK_REFERENCE_POS_ORDER = "POS_ORDER";
+    private static final String STOCK_REFERENCE_POS_ROLLBACK = "POS_ORDER_ROLLBACK";
+
     private final ProductVariantRepository variantRepository;
+    private final InventoryLotRepository inventoryLotRepository;
+    private final StockMovementRepository stockMovementRepository;
     private final ProductImageRepository productImageRepository;
     private final CustomerRepository customerRepository;
     private final UserRepository userRepository;
@@ -91,6 +113,7 @@ public class PosServiceImpl implements PosService {
     private final VNPayService vnPayService;
     private final VietQrService vietQrService;
     private final PasswordEncoder passwordEncoder;
+    private final JdbcTemplate jdbcTemplate;
 
     @Override
     @Transactional(readOnly = true)
@@ -111,7 +134,35 @@ public class PosServiceImpl implements PosService {
 
         String unavailableReason = getVariantUnavailableReason(variant, 1);
 
-        return ProductVariantPosResponse.builder().variantId(variant.getId()).sku(variant.getSku()).productName(product != null ? product.getName() : null).brandName(product != null && product.getBrand() != null ? product.getBrand().getName() : null).capacityLabel(buildCapacityLabel(variant)).bottleTypeName(variant.getBottleType() != null ? variant.getBottleType().getName() : null).price(variant.getPrice()).stockQuantity(variant.getStockQuantity()).manufacturingDate(variant.getManufacturingDate()).expirationDate(variant.getExpirationDate()).status(variant.getStatus()).expired(isVariantExpired(variant)).sellable(unavailableReason == null).unavailableReason(unavailableReason).imageUrl(imageUrl).build();
+        int sellableQuantity = getSellableQuantity(variant);
+        InventoryLot nextFefoLot = getNextSellableLot(variant);
+
+        return ProductVariantPosResponse.builder()
+                .variantId(variant.getId())
+                .sku(variant.getSku())
+                .productName(product != null ? product.getName() : null)
+                .brandName(product != null && product.getBrand() != null ? product.getBrand().getName() : null)
+                .capacityLabel(buildCapacityLabel(variant))
+                .bottleTypeName(variant.getBottleType() != null ? variant.getBottleType().getName() : null)
+                .price(variant.getPrice())
+                /*
+                 * stockQuantity giữ để FE POS hiện tại chưa bị vỡ contract,
+                 * nhưng giá trị là tồn CÓ THỂ BÁN thật từ InventoryLot.
+                 */
+                .stockQuantity(sellableQuantity)
+                .sellableQuantity(sellableQuantity)
+                /*
+                 * Hai field ngày giữ compatibility.
+                 * Nếu có hàng bán được, đây là ngày của lot FEFO tiếp theo.
+                 */
+                .manufacturingDate(nextFefoLot != null ? nextFefoLot.getManufacturedDate() : null)
+                .expirationDate(nextFefoLot != null ? nextFefoLot.getExpirationDate() : null)
+                .status(variant.getStatus())
+                .expired(isSkuUnavailableBecauseExpired(variant))
+                .sellable(unavailableReason == null)
+                .unavailableReason(unavailableReason)
+                .imageUrl(imageUrl)
+                .build();
     }
 
     @Override
@@ -221,11 +272,19 @@ public class PosServiceImpl implements PosService {
             orderItemRepository.save(orderItem);
 
             /*
-             * Với VNPAY/MIXED, đây được hiểu là giữ hàng.
-             * Nếu thanh toán VNPay thất bại/hết hạn thì callback/hủy đơn phải hoàn kho.
+             * Với CASH: xuất kho ngay.
+             * Với VNPAY/VIETQR/MIXED pending: giữ hàng theo nghiệp vụ cũ
+             * bằng SALE_OUT ngay; nếu payment bị hủy sẽ RETURN_IN đúng lot.
+             *
+             * Không trừ ProductVariant.StockQuantity.
+             * InventoryLot được phân bổ theo FEFO.
              */
-            variant.setStockQuantity(variant.getStockQuantity() - line.quantity());
-            variantRepository.save(variant);
+            postSaleOutByFefo(
+                    variant,
+                    line.quantity(),
+                    savedOrder.getId(),
+                    cashier.getUserId()
+            );
 
             invoiceItems.add(PosOrderResponse.InvoiceItem.builder().productName(variant.getProduct() != null ? variant.getProduct().getName() : null).sku(variant.getSku()).capacityLabel(buildCapacityLabel(variant)).bottleTypeName(variant.getBottleType() != null ? variant.getBottleType().getName() : null).quantity(line.quantity()).unitPrice(line.unitPrice()).lineTotal(line.lineTotal()).build());
         }
@@ -912,8 +971,16 @@ public class PosServiceImpl implements PosService {
         for (OrderItem item : orderItems) {
             ProductVariant variant = item.getProductVariant();
 
-            variant.setStockQuantity(variant.getStockQuantity() - item.getQuantity());
-            variantRepository.save(variant);
+            /*
+             * Phiếu treo chưa trừ kho.
+             * Khi thanh toán mới xuất InventoryLot theo FEFO.
+             */
+            postSaleOutByFefo(
+                    variant,
+                    item.getQuantity(),
+                    order.getId(),
+                    currentEmployee.getUserId()
+            );
         }
 
         boolean completedImmediately = paymentSummary.completedImmediately();
@@ -1165,6 +1232,14 @@ public class PosServiceImpl implements PosService {
         }
     }
 
+    /**
+     * POS kiểm tra tồn từ InventoryLot.
+     *
+     * Không dùng:
+     * - ProductVariant.StockQuantity
+     * - ProductVariant.ManufacturingDate
+     * - ProductVariant.ExpirationDate
+     */
     private String getVariantUnavailableReason(ProductVariant variant, int quantity) {
         if (variant == null) {
             return "Sản phẩm không hợp lệ.";
@@ -1188,31 +1263,252 @@ public class PosServiceImpl implements PosService {
             return "Biến thể sản phẩm đang ngừng bán.";
         }
 
-        if (variant.getStockQuantity() == null || variant.getStockQuantity() <= 0) {
-            return "Sản phẩm " + variant.getSku() + " đã hết hàng trong kho.";
-        }
-
         if (quantity <= 0) {
             return "Số lượng sản phẩm phải lớn hơn 0.";
         }
 
-        if (variant.getStockQuantity() < quantity) {
-            return "Sản phẩm " + variant.getSku() + " không đủ tồn kho. Còn " + variant.getStockQuantity() + " sản phẩm.";
+        int sellableQuantity = getSellableQuantity(variant);
+
+        if (sellableQuantity <= 0) {
+            if (isSkuUnavailableBecauseExpired(variant)) {
+                return "Sản phẩm " + variant.getSku() + " không còn lô còn hạn để bán.";
+            }
+
+            return "Sản phẩm " + variant.getSku() + " đã hết hàng trong kho.";
         }
 
-        if (variant.getManufacturingDate() != null && variant.getManufacturingDate().isAfter(LocalDate.now())) {
-            return "Sản phẩm " + variant.getSku() + " chưa tới ngày được bán.";
-        }
-
-        if (isVariantExpired(variant)) {
-            return "Sản phẩm " + variant.getSku() + " đã hết hạn sử dụng.";
+        if (sellableQuantity < quantity) {
+            return "Sản phẩm " + variant.getSku()
+                    + " không đủ tồn kho. Còn "
+                    + sellableQuantity
+                    + " sản phẩm có thể bán.";
         }
 
         return null;
     }
 
-    private boolean isVariantExpired(ProductVariant variant) {
-        return variant != null && variant.getExpirationDate() != null && variant.getExpirationDate().isBefore(LocalDate.now());
+    private int getSellableQuantity(ProductVariant variant) {
+        if (variant == null || variant.getId() == null) {
+            return 0;
+        }
+
+        Integer quantity = inventoryLotRepository
+                .getSellableQuantityByVariantId(variant.getId());
+
+        return quantity != null ? quantity : 0;
+    }
+
+    private InventoryLot getNextSellableLot(ProductVariant variant) {
+        if (variant == null || variant.getId() == null) {
+            return null;
+        }
+
+        return inventoryLotRepository
+                .findNextSellableLot(variant.getId())
+                .orElse(null);
+    }
+
+    /**
+     * true khi không còn lot bán được nhưng vẫn còn tồn ở lot đã hết hạn.
+     */
+    private boolean isSkuUnavailableBecauseExpired(ProductVariant variant) {
+        if (variant == null || variant.getId() == null) {
+            return false;
+        }
+
+        if (getSellableQuantity(variant) > 0) {
+            return false;
+        }
+
+        Integer expiredQuantity = inventoryLotRepository
+                .getExpiredOnHandQuantityByVariantId(variant.getId());
+
+        return expiredQuantity != null && expiredQuantity > 0;
+    }
+
+    /**
+     * Xuất kho theo FEFO:
+     * ExpirationDate ASC -> ReceivedDate ASC -> InventoryLot.Id ASC.
+     *
+     * Lot hết hạn và lot hết tồn không được chọn.
+     */
+    private void postSaleOutByFefo(
+            ProductVariant variant,
+            int quantity,
+            Integer orderId,
+            Integer createdBy
+    ) {
+        if (variant == null || variant.getId() == null) {
+            throw new RuntimeException("Biến thể sản phẩm không hợp lệ.");
+        }
+
+        if (quantity <= 0) {
+            throw new RuntimeException("Số lượng sản phẩm phải lớn hơn 0.");
+        }
+
+        if (orderId == null) {
+            throw new RuntimeException("Không xác định được hóa đơn để xuất kho.");
+        }
+
+        if (createdBy == null) {
+            throw new RuntimeException("Không xác định được nhân viên xuất kho.");
+        }
+
+        List<InventoryLot> lots = inventoryLotRepository
+                .findSellableLotsForUpdateFefo(variant.getId());
+
+        int totalSellable = lots.stream()
+                .map(InventoryLot::getQuantityOnHand)
+                .filter(q -> q != null && q > 0)
+                .mapToInt(Integer::intValue)
+                .sum();
+
+        if (totalSellable < quantity) {
+            throw new RuntimeException(
+                    "Sản phẩm " + variant.getSku()
+                            + " không đủ tồn kho. Còn "
+                            + totalSellable
+                            + " sản phẩm có thể bán."
+            );
+        }
+
+        int remaining = quantity;
+
+        for (InventoryLot lot : lots) {
+            if (remaining <= 0) {
+                break;
+            }
+
+            int onHand = lot.getQuantityOnHand() != null
+                    ? lot.getQuantityOnHand()
+                    : 0;
+
+            if (onHand <= 0) {
+                continue;
+            }
+
+            int take = Math.min(onHand, remaining);
+
+            postStockMovement(
+                    lot.getId(),
+                    MOVEMENT_SALE_OUT,
+                    -take,
+                    createdBy,
+                    STOCK_REFERENCE_POS_ORDER,
+                    orderId.longValue(),
+                    null,
+                    "POS xuất bán theo FEFO - Order #" + orderId
+            );
+
+            remaining -= take;
+        }
+
+        if (remaining != 0) {
+            throw new RuntimeException(
+                    "Không thể phân bổ đủ tồn kho FEFO cho SKU "
+                            + variant.getSku()
+            );
+        }
+    }
+
+    /**
+     * Hoàn đúng các InventoryLot đã SALE_OUT của POS order.
+     * Không chạy FEFO lại khi hoàn.
+     */
+    private void restorePosOrderStock(
+            Integer orderId,
+            Integer createdBy,
+            String reason
+    ) {
+        if (orderId == null) {
+            throw new RuntimeException("Mã hóa đơn không hợp lệ.");
+        }
+
+        if (createdBy == null) {
+            throw new RuntimeException("Không xác định được nhân viên hoàn kho.");
+        }
+
+        List<StockMovement> saleOutMovements =
+                stockMovementRepository.findByReference(
+                        STOCK_REFERENCE_POS_ORDER,
+                        orderId.longValue(),
+                        MOVEMENT_SALE_OUT
+                );
+
+        if (saleOutMovements.isEmpty()) {
+            throw new RuntimeException(
+                    "Không tìm thấy lịch sử xuất kho của hóa đơn #"
+                            + orderId
+                            + " để hoàn kho."
+            );
+        }
+
+        for (StockMovement movement : saleOutMovements) {
+            if (movement.getInventoryLot() == null
+                    || movement.getInventoryLot().getId() == null) {
+                throw new RuntimeException(
+                        "Lịch sử xuất kho của hóa đơn #"
+                                + orderId
+                                + " không còn liên kết InventoryLot."
+                );
+            }
+
+            int quantityToReturn = movement.getQuantityChange() != null
+                    ? Math.abs(movement.getQuantityChange())
+                    : 0;
+
+            if (quantityToReturn <= 0) {
+                continue;
+            }
+
+            postStockMovement(
+                    movement.getInventoryLot().getId(),
+                    MOVEMENT_RETURN_IN,
+                    quantityToReturn,
+                    createdBy,
+                    STOCK_REFERENCE_POS_ROLLBACK,
+                    orderId.longValue(),
+                    movement.getReferenceLineId(),
+                    reason
+            );
+        }
+    }
+
+    /**
+     * Dùng procedure chuẩn của module kho để cập nhật lot + ghi movement
+     * trong cùng transaction hiện tại.
+     */
+    private void postStockMovement(
+            Integer inventoryLotId,
+            byte movementType,
+            int quantityChange,
+            Integer createdBy,
+            String referenceType,
+            Long referenceId,
+            Long referenceLineId,
+            String reason
+    ) {
+        jdbcTemplate.update(
+                """
+                EXEC dbo.usp_PostStockMovement
+                    @InventoryLotId = ?,
+                    @MovementType = ?,
+                    @QuantityChange = ?,
+                    @CreatedBy = ?,
+                    @ReferenceType = ?,
+                    @ReferenceId = ?,
+                    @ReferenceLineId = ?,
+                    @Reason = ?
+                """,
+                inventoryLotId,
+                movementType,
+                quantityChange,
+                createdBy,
+                referenceType,
+                referenceId,
+                referenceLineId,
+                reason
+        );
     }
 
     private Voucher resolveVoucher(String voucherCode, BigDecimal totalAmount) {
@@ -1770,7 +2066,35 @@ public class PosServiceImpl implements PosService {
 
         String unavailableReason = getVariantUnavailableReason(variant, 1);
 
-        return ProductVariantPosResponse.builder().variantId(variant.getId()).sku(variant.getSku()).productName(product != null ? product.getName() : null).brandName(product != null && product.getBrand() != null ? product.getBrand().getName() : null).capacityLabel(buildCapacityLabel(variant)).bottleTypeName(variant.getBottleType() != null ? variant.getBottleType().getName() : null).price(variant.getPrice()).stockQuantity(variant.getStockQuantity()).manufacturingDate(variant.getManufacturingDate()).expirationDate(variant.getExpirationDate()).status(variant.getStatus()).expired(isVariantExpired(variant)).sellable(unavailableReason == null).unavailableReason(unavailableReason).imageUrl(imageUrl).build();
+        int sellableQuantity = getSellableQuantity(variant);
+        InventoryLot nextFefoLot = getNextSellableLot(variant);
+
+        return ProductVariantPosResponse.builder()
+                .variantId(variant.getId())
+                .sku(variant.getSku())
+                .productName(product != null ? product.getName() : null)
+                .brandName(product != null && product.getBrand() != null ? product.getBrand().getName() : null)
+                .capacityLabel(buildCapacityLabel(variant))
+                .bottleTypeName(variant.getBottleType() != null ? variant.getBottleType().getName() : null)
+                .price(variant.getPrice())
+                /*
+                 * stockQuantity giữ để FE POS hiện tại chưa bị vỡ contract,
+                 * nhưng giá trị là tồn CÓ THỂ BÁN thật từ InventoryLot.
+                 */
+                .stockQuantity(sellableQuantity)
+                .sellableQuantity(sellableQuantity)
+                /*
+                 * Hai field ngày giữ compatibility.
+                 * Nếu có hàng bán được, đây là ngày của lot FEFO tiếp theo.
+                 */
+                .manufacturingDate(nextFefoLot != null ? nextFefoLot.getManufacturedDate() : null)
+                .expirationDate(nextFefoLot != null ? nextFefoLot.getExpirationDate() : null)
+                .status(variant.getStatus())
+                .expired(isSkuUnavailableBecauseExpired(variant))
+                .sellable(unavailableReason == null)
+                .unavailableReason(unavailableReason)
+                .imageUrl(imageUrl)
+                .build();
     }
 
     @Override
@@ -1863,24 +2187,14 @@ public class PosServiceImpl implements PosService {
         }
 
         /*
-         * Khi tạo thanh toán online, checkout/checkoutHeldOrder đã giữ hàng bằng cách trừ kho.
-         * Quay lại HOLD thì phải hoàn kho để phiếu treo về đúng bản chất: chưa trừ kho.
+         * Quay lại HOLD phải RETURN_IN đúng các InventoryLot
+         * đã SALE_OUT lúc bắt đầu payment online.
          */
-        for (OrderItem item : orderItems) {
-            ProductVariant variant = item.getProductVariant();
-            Integer quantity = item.getQuantity();
-
-            if (variant == null || quantity == null || quantity <= 0) {
-                continue;
-            }
-
-            int currentStock = variant.getStockQuantity() != null
-                    ? variant.getStockQuantity()
-                    : 0;
-
-            variant.setStockQuantity(currentStock + quantity);
-            variantRepository.save(variant);
-        }
+        restorePosOrderStock(
+                order.getId(),
+                currentEmployee.getUserId(),
+                "Hoàn kho POS do hủy thanh toán online - Order #" + order.getId()
+        );
 
         order.setPaymentMethod(PAYMENT_HOLD);
         order.setStatus(ORDER_STATUS_PENDING);
@@ -1964,24 +2278,14 @@ public class PosServiceImpl implements PosService {
         }
 
         /*
-         * Hóa đơn MIXED pending đã giữ/trừ kho khi tạo thanh toán online.
-         * Hủy hóa đơn phải hoàn kho đúng một lần.
+         * Hóa đơn MIXED pending đã SALE_OUT InventoryLot theo FEFO.
+         * Hủy hóa đơn phải RETURN_IN đúng các lot đã xuất.
          */
-        for (OrderItem item : orderItems) {
-            ProductVariant variant = item.getProductVariant();
-            Integer quantity = item.getQuantity();
-
-            if (variant == null || quantity == null || quantity <= 0) {
-                continue;
-            }
-
-            int currentStock = variant.getStockQuantity() != null
-                    ? variant.getStockQuantity()
-                    : 0;
-
-            variant.setStockQuantity(currentStock + quantity);
-            variantRepository.save(variant);
-        }
+        restorePosOrderStock(
+                order.getId(),
+                currentEmployee.getUserId(),
+                "Hoàn kho POS do hủy hóa đơn thanh toán một phần - Order #" + order.getId()
+        );
 
         /*
          * Voucher chỉ tăng usedCount khi đơn hoàn thành,

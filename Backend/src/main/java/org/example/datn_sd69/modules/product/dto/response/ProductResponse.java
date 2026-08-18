@@ -3,9 +3,9 @@ package org.example.datn_sd69.modules.product.dto.response;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
-import java.time.LocalDate;
 
 @Data
 public class ProductResponse {
@@ -43,34 +43,37 @@ public class ProductResponse {
 
     @Data
     public static class FragranceFamilyDTO {
-
         private Integer id;
-
         private String name;
     }
 
     @Data
     public static class VariantDTO {
-
         private Integer id;
-
         private Integer capacityId;
-
         private String capacityName;
-
         private Integer bottleTypeId;
-
         private String bottleTypeName;
-
         private String sku;
-
         private BigDecimal price;
 
+        /**
+         * LEGACY: giữ để không làm vỡ client/module cũ.
+         * Không dùng làm nguồn tồn kho thật.
+         */
         private Integer stockQuantity;
 
+        /** LEGACY: NSX thật thuộc InventoryLot/GoodsReceiptItem. */
         private LocalDate manufacturingDate;
 
+        /** LEGACY: HSD thật thuộc InventoryLot/GoodsReceiptItem. */
         private LocalDate expirationDate;
+
+        /** Tổng tồn vật lý thật của SKU. */
+        private Long totalQuantity;
+
+        /** Số lượng hiện có thể bán của SKU. */
+        private Long sellableQuantity;
 
         private Integer status;
     }

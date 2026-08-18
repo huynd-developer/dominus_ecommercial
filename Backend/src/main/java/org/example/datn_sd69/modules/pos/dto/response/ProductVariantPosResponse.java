@@ -20,13 +20,35 @@ public class ProductVariantPosResponse {
     private String bottleTypeName;
 
     private BigDecimal price;
+
+    /**
+     * Compatibility cho FE POS hiện tại.
+     * Giá trị thực tế được map từ InventoryLot sellable quantity.
+     */
     private Integer stockQuantity;
 
+    /**
+     * Tồn có thể bán thật của SKU từ InventoryLot.
+     */
+    private Integer sellableQuantity;
+
+    /**
+     * Compatibility: NSX của lot FEFO tiếp theo nếu có.
+     */
     private LocalDate manufacturingDate;
+
+    /**
+     * Compatibility: HSD của lot FEFO tiếp theo nếu có.
+     */
     private LocalDate expirationDate;
 
     private Integer status;
+
+    /**
+     * true khi không còn lot bán được nhưng vẫn còn tồn ở lot đã hết hạn.
+     */
     private Boolean expired;
+
     private Boolean sellable;
     private String unavailableReason;
 

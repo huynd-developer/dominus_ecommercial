@@ -83,9 +83,7 @@ public class ProductRequest {
         @NotNull(message = "Loại chai không được để trống")
         private Integer bottleTypeId;
 
-        // @NotBlank(message = "SKU không được để trống")
-        // @Size(max = 100, message = "SKU không được vượt quá 100 ký tự")
-        private String sku; // BẮT BUỘC phải giữ lại dòng này để Service còn đọc được dữ liệu
+        private String sku;
 
         @NotNull(message = "Giá không được để trống")
         @DecimalMin(
@@ -95,17 +93,23 @@ public class ProductRequest {
         )
         private BigDecimal price;
 
-        @NotNull(message = "Số lượng tồn không được để trống")
-        @Min(
-                value = 0,
-                message = "Tồn kho không được âm"
-        )
+        /**
+         * LEGACY.
+         * Không dùng ProductVariant.StockQuantity làm tồn kho thực tế nữa.
+         * Tồn kho được quản lý theo InventoryLot.
+         */
         private Integer stockQuantity;
 
-        @NotNull(message = "Ngày sản xuất không được để trống")
+        /**
+         * LEGACY.
+         * NSX thuộc từng lô nhập, không thuộc SKU.
+         */
         private LocalDate manufacturingDate;
 
-        @NotNull(message = "Hạn sử dụng không được để trống")
+        /**
+         * LEGACY.
+         * HSD thuộc từng lô nhập, không thuộc SKU.
+         */
         private LocalDate expirationDate;
 
         private Integer status = 1;
