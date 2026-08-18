@@ -1,6 +1,7 @@
 package org.example.datn_sd69.repository;
 
 import org.example.datn_sd69.entity.ProductVariant;
+import org.example.datn_sd69.repository.projection.ProductVariantInventoryProjection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -16,23 +17,33 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
 
     // ================= CRUD =================
 
+    /**
+     * Giữ method cũ vì có thể module khác vẫn đang dùng.
+     * Method này có thể trả cả variant đã xóa mềm.
+     */
     List<ProductVariant> findByProduct_Id(Integer productId);
 
-    @Modifying
-    @Query("DELETE FROM ProductVariant v WHERE v.product.id = :productId")
+    /**
+     * Giữ nguyên signature để không làm vỡ caller cũ,
+     * nhưng không hard delete ProductVariant nữa.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE ProductVariant v
+        SET v.isDeleted = true,
+            v.status = 0
+        WHERE v.product.id = :productId
+    """)
     void deleteByProduct_Id(@Param("productId") Integer productId);
 
     // ================= SKU =================
 
     /**
-     * Kiểm tra SKU đã tồn tại chưa.
-     * Dùng khi backend tự sinh SKU.
+     * Không loại SKU đã xóa mềm để tránh tái sử dụng mã SKU
+     * đã có lịch sử kho/chứng từ.
      */
     boolean existsBySku(String sku);
 
-    /**
-     * Dùng nếu sau này cho phép sửa SKU.
-     */
     boolean existsBySkuAndIdNot(String sku, Integer id);
 
     // ================= Paging =================
@@ -80,6 +91,26 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     })
     Optional<ProductVariant> findBySkuAndIsDeletedFalse(String sku);
 
+    // ================= Inventory =================
+
+    /**
+     * Đọc tồn kho thật từ view kho.
+     * Không ghi ngược về ProductVariant.StockQuantity.
+     */
+    @Query(
+            value = """
+                SELECT
+                    CAST(COALESCE(V.TotalQuantity, 0) AS BIGINT) AS totalQuantity,
+                    CAST(COALESCE(V.SellableQuantity, 0) AS BIGINT) AS sellableQuantity
+                FROM dbo.vw_ProductVariantInventory V
+                WHERE V.ProductVariantId = :variantId
+                """,
+            nativeQuery = true
+    )
+    ProductVariantInventoryProjection findInventoryByVariantId(
+            @Param("variantId") Integer variantId
+    );
+
     // ================= Promotion =================
 
     @EntityGraph(attributePaths = {
@@ -91,7 +122,8 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
         SELECT v
         FROM ProductVariant v
         JOIN v.product p
-        WHERE COALESCE(p.isDeleted, false) = false
+        WHERE COALESCE(v.isDeleted, false) = false
+          AND COALESCE(p.isDeleted, false) = false
           AND (:keyword IS NULL
                OR LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
                OR LOWER(v.sku) LIKE LOWER(CONCAT('%', :keyword, '%')))
@@ -113,11 +145,8 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     // ================= POS =================
 
     /**
-     * Danh sách biến thể hiển thị tại POS.
-     *
-     * Lý do phải lọc cả Product cha:
-     * - Khi xóa mềm Product, ProductVariant có thể vẫn còn IsDeleted = false.
-     * - Nếu POS chỉ lọc ProductVariant.IsDeleted thì sản phẩm cha đã xóa vẫn bị lọt ra quầy.
+     * Giữ nguyên logic lọc soft-delete hiện tại.
+     * Tồn kho POS sẽ sửa riêng ở module POS.
      */
     @EntityGraph(attributePaths = {
             "product",
@@ -135,9 +164,6 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     """)
     List<ProductVariant> findVisibleVariantsForPos();
 
-    /**
-     * Tìm SKU tại POS, không cho lấy biến thể thuộc Product cha đã xóa mềm.
-     */
     @EntityGraph(attributePaths = {
             "product",
             "product.brand",
@@ -154,11 +180,39 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     """)
     Optional<ProductVariant> findPosVisibleBySku(@Param("sku") String sku);
 
-    // Tìm biến thể hết hạn
-    @Query("SELECT v FROM ProductVariant v WHERE v.expirationDate <= :now AND v.status = :status")
-    List<ProductVariant> findExpiredVariants(@Param("now") java.time.LocalDate now, @Param("status") Integer status);
+    // ================= Legacy =================
 
-    // Tìm giá rẻ nhất của các biến thể CÒN HẠN (Sửa chữ salePrice thành price hoặc tên cột giá chuẩn của m)
-    @Query("SELECT MIN(v.price) FROM ProductVariant v WHERE v.product.id = :productId AND v.status = :status")
-    Double findMinSalePriceByProductIdAndStatus(@Param("productId") Integer productId, @Param("status") Integer status);
+    /**
+     * LEGACY: tạm giữ nguyên signature/query để không làm vỡ caller
+     * ở module khác trong lúc migrate từng module.
+     * Không dùng method này cho logic kho mới.
+     */
+    @Deprecated
+    @Query("""
+        SELECT v
+        FROM ProductVariant v
+        WHERE v.expirationDate <= :now
+          AND v.status = :status
+    """)
+    List<ProductVariant> findExpiredVariants(
+            @Param("now") java.time.LocalDate now,
+            @Param("status") Integer status
+    );
+
+    /**
+     * Giá thấp nhất chỉ tính variant chưa xóa mềm.
+     * Không liên quan tồn kho.
+     */
+    @Query("""
+        SELECT MIN(v.price)
+        FROM ProductVariant v
+        WHERE v.product.id = :productId
+          AND v.status = :status
+          AND COALESCE(v.isDeleted, false) = false
+          AND COALESCE(v.product.isDeleted, false) = false
+    """)
+    Double findMinSalePriceByProductIdAndStatus(
+            @Param("productId") Integer productId,
+            @Param("status") Integer status
+    );
 }

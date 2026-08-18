@@ -249,7 +249,7 @@
               <div class="section-header">
                 <div>
                   <h4>Danh sách biến thể</h4>
-                  <span>Quản lý dung tích, loại chai, giá bán và tồn kho</span>
+                  <span>Quản lý dung tích, loại chai, giá bán và trạng thái SKU</span>
                 </div>
                 <button
                   type="button"
@@ -272,15 +272,6 @@
                         </th>
                         <th width="180">
                           Giá bán <span class="text-danger">*</span>
-                        </th>
-                        <th width="120">
-                          Tồn kho <span class="text-danger">*</span>
-                        </th>
-                        <th width="160">
-                          NSX <span class="text-danger">*</span>
-                        </th>
-                        <th width="160">
-                          HSD <span class="text-danger">*</span>
                         </th>
                         <th width="140">Trạng thái</th>
                         <th width="60" class="text-center">
@@ -335,31 +326,6 @@
                               placeholder="0"
                             />
                           </div>
-                        </td>
-                        <td>
-                          <input
-                            :value="variant.stockQuantity"
-                            @input="onStockInput(index, $event)"
-                            type="text"
-                            class="form-control text-center"
-                            placeholder="0"
-                          />
-                        </td>
-                        <td>
-                          <input
-                            v-model="variant.manufacturingDate"
-                            type="date"
-                            class="form-control"
-                            :max="today"
-                          />
-                        </td>
-                        <td>
-                          <input
-                            v-model="variant.expirationDate"
-                            type="date"
-                            class="form-control"
-                            :min="today"
-                          />
                         </td>
                         <td>
                           <select
@@ -513,7 +479,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from "vue";
+import { ref, watch } from "vue";
 import Swal from "sweetalert2";
 import { productService } from "../services/productService";
 import { useAppStore } from "@/common/store/app.store";
@@ -549,7 +515,6 @@ const appStore = useAppStore();
 const productStore = useProductStore();
 const isEdit = ref(false);
 const API_URL = import.meta.env.VITE_API_URL || "";
-const today = computed(() => new Date().toISOString().split("T")[0]);
 const isCloningImages = ref(false); 
 
 interface ProductImageItem {
@@ -600,13 +565,6 @@ const resetForm = () => {
       capacityId: foundCap ? foundCap.id : 0,
       bottleTypeId: props.bottleTypeList?.[0]?.id ?? 0,
       price: 100,
-      stockQuantity: 10,
-      manufacturingDate: today.value,
-      expirationDate: new Date(
-        new Date().setFullYear(new Date().getFullYear() + 3),
-      )
-        .toISOString()
-        .split("T")[0],
       status: 1,
     });
   });
@@ -621,9 +579,6 @@ const addVariant = () => {
     capacityId: 0,
     bottleTypeId: 0,
     price: 0,
-    stockQuantity: 0,
-    manufacturingDate: "",
-    expirationDate: "",
     status: 1,
   });
 };
@@ -667,25 +622,6 @@ const onPriceInput = (index: any, event: Event) => {
     : "";
 };
 
-// Hàm xử lý chặn nhập tồn kho
-const onStockInput = (index: any, event: Event) => {
-  const input = event.target as HTMLInputElement;
-  const rawValue = input.value.replace(/\D/g, ""); // Xóa bỏ chữ, dấu thập phân, dấu âm
-  let numericValue = rawValue ? parseInt(rawValue, 10) : 0;
-
-  // Giới hạn max là 1000
-  if (numericValue > 1000) {
-    numericValue = 1000;
-  }
-
-  formData.value.variants[index].stockQuantity = numericValue;
-  input.value = rawValue ? String(numericValue) : "";
-};
-
-const formatDateForInput = (dateString?: string) => {
-  if (!dateString) return "";
-  return dateString.substring(0, 10);
-};
 
 const fillForm = async (product: Product, isClone = false) => {
   let newName = product.name;
@@ -709,9 +645,6 @@ const fillForm = async (product: Product, isClone = false) => {
         capacityId: v.capacityId,
         bottleTypeId: v.bottleTypeId,
         price: v.price,
-        stockQuantity: v.stockQuantity,
-        manufacturingDate: formatDateForInput(v.manufacturingDate),
-        expirationDate: formatDateForInput(v.expirationDate),
         status: v.status ?? 1,
         sku: isClone ? undefined : (v as any).sku,
       })) ?? [],
@@ -986,13 +919,6 @@ const saveData = async () => {
         capacityId: Number(v.capacityId),
         bottleTypeId: Number(v.bottleTypeId),
         price: Number(v.price),
-        stockQuantity: Number(v.stockQuantity),
-        manufacturingDate: v.manufacturingDate
-          ? String(v.manufacturingDate).substring(0, 10)
-          : "",
-        expirationDate: v.expirationDate
-          ? String(v.expirationDate).substring(0, 10)
-          : "",
         status: Number(v.status ?? 1),
         sku: v.sku ? String(v.sku).trim() : undefined,
       })),

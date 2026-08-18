@@ -134,9 +134,6 @@ const toggleProductStatus = async (product: Product, newStatus: number) => {
         capacityId: v.capacityId || v.capacity?.id || 0,
         bottleTypeId: v.bottleTypeId || v.bottleType?.id || 0,
         price: v.price,
-        stockQuantity: v.stockQuantity,
-        manufacturingDate: v.manufacturingDate ? String(v.manufacturingDate).substring(0, 10) : '',
-        expirationDate: v.expirationDate ? String(v.expirationDate).substring(0, 10) : '',
         status: v.status,
         sku: v.sku ? String(v.sku).trim() : undefined
       })) || []
@@ -187,9 +184,6 @@ const handleToggleVariantStatus = async (product: Product, variant: ProductVaria
         capacityId: v.capacityId || v.capacity?.id || 0,
         bottleTypeId: v.bottleTypeId || v.bottleType?.id || 0,
         price: v.price,
-        stockQuantity: v.stockQuantity,
-        manufacturingDate: v.manufacturingDate ? String(v.manufacturingDate).substring(0, 10) : '',
-        expirationDate: v.expirationDate ? String(v.expirationDate).substring(0, 10) : '',
         // Đổi trạng thái của biến thể đang click
         status: v.id === variant.id ? newStatus : v.status,
         sku: v.sku ? String(v.sku).trim() : undefined

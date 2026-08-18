@@ -9,6 +9,7 @@ import org.example.datn_sd69.modules.product.dto.response.ProductImageResponse;
 import org.example.datn_sd69.modules.product.dto.response.ProductResponse;
 import org.example.datn_sd69.modules.product.service.ProductService;
 import org.example.datn_sd69.repository.*;
+import org.example.datn_sd69.repository.projection.ProductVariantInventoryProjection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -16,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.data.domain.Sort;
 
-import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -110,22 +110,11 @@ public class ProductServiceImpl implements ProductService {
             variant.setSku(sku);
 
             variant.setPrice(dto.getPrice());
-            variant.setStockQuantity(dto.getStockQuantity());
 
-            if (dto.getExpirationDate()
-                    .isBefore(dto.getManufacturingDate())) {
-                throw new RuntimeException(
-                        "Hạn sử dụng phải sau ngày sản xuất"
-                );
-            }
-
-            variant.setManufacturingDate(
-                    dto.getManufacturingDate()
-            );
-
-            variant.setExpirationDate(
-                    dto.getExpirationDate()
-            );
+            /* ProductVariant chỉ mô tả SKU; tồn + NSX/HSD thật thuộc InventoryLot. */
+            variant.setStockQuantity(0);
+            variant.setManufacturingDate(null);
+            variant.setExpirationDate(null);
 
             variant.setStatus(dto.getStatus());
             variant.setIsDeleted(false);
@@ -179,8 +168,9 @@ public class ProductServiceImpl implements ProductService {
 
         productRepository.save(product);
 
-        // ĐÃ SỬA: Lấy danh sách biến thể cũ để cập nhật thay vì xóa trắng
-        List<ProductVariant> existingVariants = productVariantRepository.findByProduct_Id(id);
+        /* Chỉ sửa variant chưa xóa mềm; variant cũ vẫn giữ để bảo toàn FK/lịch sử kho. */
+        List<ProductVariant> existingVariants =
+                productVariantRepository.findByProduct_IdAndIsDeletedFalse(id);
         Map<Integer, ProductVariant> existingVariantMap = existingVariants.stream()
                 .collect(Collectors.toMap(ProductVariant::getId, v -> v));
 
@@ -205,15 +195,16 @@ public class ProductServiceImpl implements ProductService {
             }
 
             ProductVariant variant;
+            boolean isNewVariant;
 
-            // NẾU CÓ ID TỨC LÀ BIẾN THỂ CŨ -> CẬP NHẬT (Giữ nguyên ID để không bị mất trong Giỏ hàng)
             if (dto.getId() != null && existingVariantMap.containsKey(dto.getId())) {
                 variant = existingVariantMap.get(dto.getId());
-                existingVariantMap.remove(dto.getId()); // Đánh dấu đã xử lý
+                existingVariantMap.remove(dto.getId());
+                isNewVariant = false;
             } else {
-                // NẾU KHÔNG CÓ ID TỨC LÀ ADMIN VỪA BẤM NÚT "THÊM BIẾN THỂ" MỚI
                 variant = new ProductVariant();
                 variant.setProduct(product);
+                isNewVariant = true;
             }
 
             variant.setCapacity(capacity);
@@ -225,22 +216,13 @@ public class ProductServiceImpl implements ProductService {
             variant.setSku(sku);
 
             variant.setPrice(dto.getPrice());
-            variant.setStockQuantity(dto.getStockQuantity());
 
-            if (dto.getExpirationDate()
-                    .isBefore(dto.getManufacturingDate())) {
-                throw new RuntimeException(
-                        "Hạn sử dụng phải sau ngày sản xuất"
-                );
+            /* Không cập nhật tồn/NSX/HSD từ Product. Variant cũ giữ legacy; variant mới khởi tạo rỗng. */
+            if (isNewVariant) {
+                variant.setStockQuantity(0);
+                variant.setManufacturingDate(null);
+                variant.setExpirationDate(null);
             }
-
-            variant.setManufacturingDate(
-                    dto.getManufacturingDate()
-            );
-
-            variant.setExpirationDate(
-                    dto.getExpirationDate()
-            );
 
             variant.setStatus(dto.getStatus());
             variant.setIsDeleted(false);
@@ -248,8 +230,14 @@ public class ProductServiceImpl implements ProductService {
             variantsToSave.add(variant);
         }
 
-        // Xóa cứng các biến thể mà Admin đã bấm thùng rác xóa đi
-        productVariantRepository.deleteAll(existingVariantMap.values());
+        /* Không hard delete vì ProductVariant có thể đã được tham chiếu bởi dữ liệu kho/khuyến mãi. */
+        if (!existingVariantMap.isEmpty()) {
+            existingVariantMap.values().forEach(variant -> {
+                variant.setIsDeleted(true);
+                variant.setStatus(0);
+            });
+            productVariantRepository.saveAll(existingVariantMap.values());
+        }
 
         productVariantRepository.saveAll(variantsToSave);
 
@@ -592,7 +580,7 @@ public class ProductServiceImpl implements ProductService {
                                 img.getImageUrl()
                         ));
         List<ProductVariant> variants =
-                productVariantRepository.findByProduct_Id(
+                productVariantRepository.findByProduct_IdAndIsDeletedFalse(
                         product.getId()
                 );
 
@@ -645,6 +633,21 @@ public class ProductServiceImpl implements ProductService {
 
                             dto.setStatus(
                                     v.getStatus()
+                            );
+
+                            ProductVariantInventoryProjection inventory =
+                                    productVariantRepository.findInventoryByVariantId(v.getId());
+
+                            dto.setTotalQuantity(
+                                    inventory != null && inventory.getTotalQuantity() != null
+                                            ? inventory.getTotalQuantity()
+                                            : 0L
+                            );
+
+                            dto.setSellableQuantity(
+                                    inventory != null && inventory.getSellableQuantity() != null
+                                            ? inventory.getSellableQuantity()
+                                            : 0L
                             );
 
                             return dto;
