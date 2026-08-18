@@ -6,17 +6,39 @@ import java.util.Arrays;
 
 @Getter
 public enum GoodsReceiptType {
-    NORMAL_RECEIPT((byte) 1, "Nhập kho bình thường");
+
+    /**
+     * Phiếu nhập kho bình thường.
+     */
+    NORMAL_RECEIPT(
+            (byte) 1,
+            "Nhập kho bình thường"
+    ),
+
+    /**
+     * Phiếu tạo tồn đầu kỳ.
+     *
+     * Dữ liệu cũ trong DB đang sử dụng ReceiptType = 2,
+     * vì vậy enum phải hỗ trợ code này.
+     */
+    OPENING_BALANCE(
+            (byte) 2,
+            "Tồn đầu kỳ"
+    );
 
     private final byte code;
     private final String label;
 
-    GoodsReceiptType(byte code, String label) {
+    GoodsReceiptType(
+            byte code,
+            String label
+    ) {
         this.code = code;
         this.label = label;
     }
 
     public static GoodsReceiptType fromCode(Byte code) {
+
         if (code == null) {
             return null;
         }
