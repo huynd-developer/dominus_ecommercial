@@ -153,4 +153,12 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
           AND COALESCE(p.isDeleted, false) = false
     """)
     Optional<ProductVariant> findPosVisibleBySku(@Param("sku") String sku);
+
+    // Tìm biến thể hết hạn
+    @Query("SELECT v FROM ProductVariant v WHERE v.expirationDate <= :now AND v.status = :status")
+    List<ProductVariant> findExpiredVariants(@Param("now") java.time.LocalDate now, @Param("status") Integer status);
+
+    // Tìm giá rẻ nhất của các biến thể CÒN HẠN (Sửa chữ salePrice thành price hoặc tên cột giá chuẩn của m)
+    @Query("SELECT MIN(v.price) FROM ProductVariant v WHERE v.product.id = :productId AND v.status = :status")
+    Double findMinSalePriceByProductIdAndStatus(@Param("productId") Integer productId, @Param("status") Integer status);
 }

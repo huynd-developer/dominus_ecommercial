@@ -1,7 +1,9 @@
 package org.example.datn_sd69.repository;
 
+import jakarta.transaction.Transactional;
 import org.example.datn_sd69.entity.CartItem;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -42,4 +44,9 @@ public interface CartItemRepository extends JpaRepository<CartItem, Integer> {
     Optional<String> findFirstProductImageUrlByVariantId(
             @Param("productVariantId") Integer productVariantId
     );
+
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM CartItem c WHERE c.productVariant.id = :productVariantId")
+    void deleteByProductVariantId(@Param("productVariantId") Integer productVariantId);
 }

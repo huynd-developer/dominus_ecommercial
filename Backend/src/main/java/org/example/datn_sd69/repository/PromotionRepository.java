@@ -6,8 +6,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public interface PromotionRepository extends JpaRepository<Promotion, Integer> {
 
@@ -25,12 +27,6 @@ public interface PromotionRepository extends JpaRepository<Promotion, Integer> {
             Pageable pageable
     );
 
-    /**
-     * Background Job dùng method này để tự tắt chiến dịch hết hạn.
-     *
-     * Chỉ đổi Promotion.Status = 0.
-     * Không sửa ProductVariant.Price để tránh sai báo cáo/doanh thu/lịch sử đơn.
-     */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         UPDATE Promotion p
@@ -40,4 +36,22 @@ public interface PromotionRepository extends JpaRepository<Promotion, Integer> {
           AND p.endDate <= :now
     """)
     int disableExpiredPromotions(LocalDateTime now);
+
+    // --- HÀM THÊM MỚI DÀNH CHO JOB BẬT/TẮT FLASH SALE TỰ ĐỘNG ---
+    @Query("""
+        SELECT p FROM Promotion p
+        WHERE COALESCE(p.isDeleted, false) = false
+          AND p.status = :currentStatus
+          AND p.startDate <= :now
+          AND p.endDate > :now
+    """)
+    List<Promotion> findToStart(@Param("currentStatus") Integer currentStatus, @Param("now") LocalDateTime now);
+
+    @Query("""
+        SELECT p FROM Promotion p
+        WHERE COALESCE(p.isDeleted, false) = false
+          AND p.status = :currentStatus
+          AND p.endDate <= :now
+    """)
+    List<Promotion> findToEnd(@Param("currentStatus") Integer currentStatus, @Param("now") LocalDateTime now);
 }
