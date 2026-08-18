@@ -14,6 +14,7 @@ import org.example.datn_sd69.modules.promotion.service.FlashSalePriceService;
 import org.example.datn_sd69.repository.CartItemRepository;
 import org.example.datn_sd69.repository.CartRepository;
 import org.example.datn_sd69.repository.CustomerRepository;
+import org.example.datn_sd69.repository.InventoryLotRepository;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
 import org.example.datn_sd69.repository.ProductVariantRepository;
@@ -48,6 +49,7 @@ public class OrderService { //[cite: 7]
     private final ProductVariantRepository variantRepo; //[cite: 7]
     private final CartItemRepository cartItemRepository; //[cite: 7]
     private final CustomerRepository customerRepo; //[cite: 7]
+    private final InventoryLotRepository inventoryLotRepository;
     private final VoucherRepository voucherRepo; //[cite: 7]
     private final FlashSalePriceService flashSalePriceService; //[cite: 7]
     private final OrderMailService orderMailService;
@@ -116,20 +118,39 @@ public class OrderService { //[cite: 7]
             validateCartItem(item);
             ProductVariant variant = item.getProductVariant();
 
-            // 2.1. Quét xem sản phẩm có vừa bị Job ngầm khóa (Hết hạn HSD/Ngừng bán) không?
-            boolean isExpired = variant.getExpirationDate() != null && variant.getExpirationDate().isBefore(java.time.LocalDate.now());
-            if (variant.getStatus() == 0 || isExpired) {
+            /*
+             * 2.1. ProductVariant chỉ quyết định SKU còn được phép bán hay không.
+             * NSX/HSD không còn nằm ở ProductVariant vì một SKU có thể có nhiều lot.
+             */
+            if (!Integer.valueOf(1).equals(variant.getStatus())) {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
-                        "Sản phẩm '" + getSnapshotProductName(variant) + "' (Loại: " + formatVariantName(variant) + ") đã hết hạn sử dụng hoặc ngừng kinh doanh. Vui lòng quay lại giỏ hàng và xóa sản phẩm này!"
+                        "Sản phẩm '" + getSnapshotProductName(variant)
+                                + "' (Loại: " + formatVariantName(variant)
+                                + ") đang ngừng kinh doanh. Vui lòng quay lại giỏ hàng và xóa sản phẩm này!"
                 );
             }
 
-            // 2.2. Kiểm tra tồn kho (Tránh bị nẫng tay trên)
-            if (variant.getStockQuantity() < item.getQuantity()) {
+            /*
+             * 2.2. Kiểm tra tồn CÓ THỂ BÁN thật từ InventoryLot.
+             *
+             * sellableQuantity = tổng QuantityOnHand của các lot:
+             * - còn số lượng
+             * - chưa hết hạn (ExpirationDate >= hôm nay)
+             *
+             * Không trừ kho ở đây. Đơn ONLINE mới vẫn ở PENDING;
+             * AdminOrderServiceImpl.confirmOrder() mới FEFO + SALE_OUT.
+             */
+            int sellableQuantity = getSellableQuantity(variant);
+
+            if (sellableQuantity < item.getQuantity()) {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
-                        "Sản phẩm '" + getSnapshotProductName(variant) + "' (Loại: " + formatVariantName(variant) + ") không đủ số lượng. Kho chỉ còn " + variant.getStockQuantity() + " sản phẩm!"
+                        "Sản phẩm '" + getSnapshotProductName(variant)
+                                + "' (Loại: " + formatVariantName(variant)
+                                + ") không đủ số lượng. Kho chỉ còn "
+                                + sellableQuantity
+                                + " sản phẩm có thể bán!"
                 );
             }
 
@@ -482,6 +503,27 @@ public class OrderService { //[cite: 7]
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Địa chỉ công ty không được để trống"); //[cite: 7]
             }
         }
+    }
+
+    /**
+     * Tồn bán được thật của một SKU từ InventoryLot.
+     *
+     * Cùng quy tắc với POS/Admin confirm:
+     * QuantityOnHand > 0 và ExpirationDate >= hôm nay.
+     */
+    private int getSellableQuantity(ProductVariant variant) {
+        if (variant == null || variant.getId() == null) {
+            return 0;
+        }
+
+        Integer quantity =
+                inventoryLotRepository.getSellableQuantityByVariantId(
+                        variant.getId()
+                );
+
+        return quantity == null
+                ? 0
+                : Math.max(quantity, 0);
     }
 
     private void validateCartItem(CartItem item) { //[cite: 7]

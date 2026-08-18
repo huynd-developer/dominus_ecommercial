@@ -253,6 +253,29 @@ const getProductVariantId = (item: any) => Number(item?.productVariantId || item
 const getCartItemId = (item: any) => Number(item?.cartItemId || item?.id || 0);
 const getItemPrice = (item: any) => Number(item?.price ?? item?.salePrice ?? item?.finalPrice ?? item?.originalPrice ?? 0);
 
+/**
+ * Tồn có thể bán thật mà Checkout FE sử dụng.
+ *
+ * Chỉ lấy sellableQuantity đã được BE Product map từ InventoryLot.
+ * Không dùng ProductVariant.stockQuantity / NSX / HSD legacy để quyết định bán.
+ */
+const getItemSellableQuantity = (item: any) => {
+  const quantity = Number(
+    item?.sellableQuantity ??
+      item?.productVariant?.sellableQuantity ??
+      0
+  );
+
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return 0;
+  }
+
+  return Math.trunc(quantity);
+};
+
+const getItemDisplayName = (item: any) =>
+  String(item?.productName || item?.sku || "Sản phẩm");
+
 const totalAmount = computed(() =>
   cartItems.value.reduce((sum, item) => sum + getItemPrice(item) * Number(item.quantity || 0), 0)
 );
@@ -360,6 +383,43 @@ const validateCheckoutForm = async (): Promise<any | null> => {
     return null;
   }
 
+  /*
+   * Validate UX bằng tồn sellable thật đã load từ InventoryLot.
+   * BE /v1/orders/checkout vẫn re-check lần cuối nên FE không phải nguồn sự thật.
+   */
+  for (const item of cartItems.value) {
+    const requestedQuantity = Number(item?.quantity || 0);
+    const sellableQuantity = getItemSellableQuantity(item);
+    const variantStatus = Number(
+      item?.variantStatus ??
+        item?.productVariant?.status ??
+        1
+    );
+
+    if (variantStatus !== 1 || item?.sellable === false) {
+      await showWarning(
+        "Sản phẩm không thể đặt hàng",
+        String(
+          item?.unavailableReason ||
+            `${getItemDisplayName(item)} hiện đang ngừng bán hoặc không còn khả dụng.`
+        )
+      );
+      return null;
+    }
+
+    if (
+      !Number.isFinite(requestedQuantity) ||
+      requestedQuantity <= 0 ||
+      requestedQuantity > sellableQuantity
+    ) {
+      await showWarning(
+        "Số lượng không còn đủ",
+        `${getItemDisplayName(item)} chỉ còn ${sellableQuantity} sản phẩm có thể bán. Vui lòng cập nhật lại số lượng.`
+      );
+      return null;
+    }
+  }
+
   if (customerName.length < 2) {
     await showWarning("Tên người nhận không hợp lệ", "Tên người nhận phải từ 2 ký tự trở lên.");
     return null;
@@ -410,32 +470,135 @@ const loadCartSummary = async () => {
           const productId = Number(item?.productId || item?.ProductId || item?.product?.id || item?.product?.productId || item?.Product?.id || item?.Product?.productId || item?.productVariant?.productId || item?.productVariant?.product?.id || item?.ProductVariant?.ProductId || item?.ProductVariant?.Product?.Id || item?.variant?.productId || item?.variant?.product?.id || 0);
           const variantId = Number(item?.productVariantId || item?.ProductVariantId || item?.variantId || item?.VariantId || item?.productVariant?.id || item?.ProductVariant?.Id || item?.productVariant?.productVariantId || item?.variant?.id || item?.Variant?.Id || 0);
           
-          if (!productId) return item;
+          /*
+           * Checkout cần Product detail để lấy sellableQuantity mới nhất.
+           * Nếu không xác định được Product thì không được fallback sang stock legacy.
+           */
+          if (!productId) {
+            const sellableQuantity = Math.max(
+              Number(item?.sellableQuantity ?? 0) || 0,
+              0
+            );
 
-          const productData = await fetchProductDetail(productId);
-          if (!productData) return { ...item, variantStatus: 0, stockQuantity: 0, sellable: false };
-
-          const candidates = [productData?.variants, productData?.Variants, productData?.productVariants, productData?.ProductVariants, productData?.productVariantList, productData?.ProductVariantList, productData?.productVariantResponses, productData?.productVariantDTOs];
-          let variants = [];
-          for (const candidate of candidates) {
-            if (Array.isArray(candidate)) { variants = candidate; break; }
-          }
-
-          const matchedVariant = variants.find((v: any) => Number(v?.productVariantId || v?.id || v?.Id || 0) === variantId);
-
-          if (matchedVariant) {
             return {
-               ...item,
-               stockQuantity: Number(matchedVariant.stockQuantity ?? matchedVariant.stock ?? item.stockQuantity),
-               variantStatus: Number(matchedVariant.status ?? item.variantStatus),
-               expirationDate: matchedVariant.expirationDate ?? item.expirationDate,
-               product: productData,
-               productVariant: matchedVariant
+              ...item,
+              sellableQuantity,
+              // compatibility cho component/code cũ trong lúc migrate
+              stockQuantity: sellableQuantity,
+              sellable:
+                item?.sellable ??
+                (
+                  Number(item?.variantStatus ?? 1) === 1 &&
+                  sellableQuantity > 0
+                ),
             };
           }
-          return { ...item, variantStatus: 0, stockQuantity: 0, sellable: false };
+
+          const productData = await fetchProductDetail(productId);
+
+          if (!productData) {
+            return {
+              ...item,
+              variantStatus: 0,
+              sellableQuantity: 0,
+              stockQuantity: 0,
+              sellable: false,
+              unavailableReason: "Không thể xác minh tồn kho hiện tại của sản phẩm.",
+            };
+          }
+
+          const candidates = [
+            productData?.variants,
+            productData?.Variants,
+            productData?.productVariants,
+            productData?.ProductVariants,
+            productData?.productVariantList,
+            productData?.ProductVariantList,
+            productData?.productVariantResponses,
+            productData?.productVariantDTOs,
+          ];
+
+          let variants = [];
+
+          for (const candidate of candidates) {
+            if (Array.isArray(candidate)) {
+              variants = candidate;
+              break;
+            }
+          }
+
+          const matchedVariant = variants.find(
+            (v: any) =>
+              Number(v?.productVariantId || v?.id || v?.Id || 0) === variantId
+          );
+
+          if (matchedVariant) {
+            const sellableQuantity = Math.max(
+              Number(
+                matchedVariant?.sellableQuantity ??
+                  item?.sellableQuantity ??
+                  0
+              ) || 0,
+              0
+            );
+
+            const variantStatus = Number(
+              matchedVariant?.status ??
+                item?.variantStatus ??
+                0
+            );
+
+            const sellable =
+              matchedVariant?.sellable ??
+              (
+                variantStatus === 1 &&
+                sellableQuantity > 0
+              );
+
+            return {
+              ...item,
+
+              /*
+               * sellableQuantity là field nghiệp vụ thật.
+               * stockQuantity chỉ map cùng giá trị để không làm vỡ code compatibility.
+               */
+              sellableQuantity,
+              stockQuantity: sellableQuantity,
+
+              variantStatus,
+              sellable: Boolean(sellable),
+              unavailableReason:
+                matchedVariant?.unavailableReason ??
+                item?.unavailableReason ??
+                (
+                  variantStatus !== 1
+                    ? "Sản phẩm đang ngừng bán."
+                    : sellableQuantity <= 0
+                      ? "Sản phẩm hiện không còn tồn có thể bán."
+                      : null
+                ),
+
+              product: productData,
+              productVariant: matchedVariant,
+            };
+          }
+
+          return {
+            ...item,
+            variantStatus: 0,
+            sellableQuantity: 0,
+            stockQuantity: 0,
+            sellable: false,
+            unavailableReason: "Không tìm thấy biến thể sản phẩm hiện tại.",
+          };
         } catch (e) {
-          return item;
+          return {
+            ...item,
+            sellableQuantity: 0,
+            stockQuantity: 0,
+            sellable: false,
+            unavailableReason: "Không thể xác minh tồn kho hiện tại của sản phẩm.",
+          };
         }
       }));
     }
@@ -464,6 +627,17 @@ const loadSavedVoucher = async () => {
 
 const handleUpdateQuantity = async (item: any, quantity: number) => {
   if (isSubmitting.value || updatingItemKey.value || quantity < 1) return;
+
+  const sellableQuantity = getItemSellableQuantity(item);
+
+  if (quantity > sellableQuantity) {
+    await showWarning(
+      "Không đủ tồn kho",
+      `${getItemDisplayName(item)} chỉ còn ${sellableQuantity} sản phẩm có thể bán.`
+    );
+    return;
+  }
+
   try {
     updatingItemKey.value = getCartItemKey(item);
     await updateCartQuantityApi(item, quantity);
