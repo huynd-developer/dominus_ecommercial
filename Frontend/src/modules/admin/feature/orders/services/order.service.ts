@@ -173,10 +173,22 @@ export const orderService = {
 
   /**
    * Admin xác nhận đã hoàn tiền thực tế cho đơn giao hàng thất bại.
+   *
+   * restoreStock=true:
+   *   BE RETURN_IN đúng các InventoryLot đã SALE_OUT của đơn.
+   *
+   * restoreStock=false:
+   *   Chỉ ghi nhận hoàn tiền, không nhập lại kho.
    */
-  async markDeliveryRefunded(orderId: number) {
+  async markDeliveryRefunded(orderId: number, restoreStock: boolean) {
     const response = await api.patch<AdminOrderResponse>(
-      `${ORDER_ADMIN_API}/${orderId}/delivery-refunded`
+      `${ORDER_ADMIN_API}/${orderId}/delivery-refunded`,
+      null,
+      {
+        params: {
+          restoreStock,
+        },
+      }
     );
 
     return response.data;
@@ -184,7 +196,10 @@ export const orderService = {
 
   /**
    * Admin xác nhận đã hoàn tiền thực tế cho đơn hủy có thanh toán trước.
-   * Chuyển từ Status 8 (Chờ hoàn tiền) -> 4 (Đã hủy). Tuyệt đối không cộng kho.
+   * Chuyển từ Status 8 (Chờ hoàn tiền) -> 4 (Đã hủy).
+   *
+   * Không truyền restoreStock vì luồng hủy này không phải nghiệp vụ
+   * nhập lại hàng hoàn vào kho.
    */
   async markCancelRefunded(orderId: number) {
     const response = await api.patch<AdminOrderResponse>(
@@ -221,18 +236,31 @@ export const orderService = {
 
   /**
    * Admin xác nhận đã hoàn tiền thực tế cho khách.
-   * BE chỉ cho chạy khi yêu cầu hoàn đã được chấp nhận.
+   *
+   * restoreStock=true:
+   *   BE RETURN_IN đúng lot đã SALE_OUT của các OrderItem được hoàn.
+   *
+   * restoreStock=false:
+   *   Chỉ hoàn tiền, không nhập lại kho.
    */
-  async markReturnRefunded(orderId: number) {
+  async markReturnRefunded(orderId: number, restoreStock: boolean) {
     const response = await api.patch<AdminOrderResponse>(
-      `${ORDER_ADMIN_API}/${orderId}/return-refunded`
+      `${ORDER_ADMIN_API}/${orderId}/return-refunded`,
+      null,
+      {
+        params: {
+          restoreStock,
+        },
+      }
     );
 
     return response.data;
   },
 
   /**
-   * Admin xác nhận đã hoàn tiền cho đơn hủy.
+   * Legacy compatibility.
+   * Endpoint này không thuộc phần InventoryLot vừa migrate.
+   * Giữ nguyên để không ảnh hưởng caller cũ.
    */
   async confirmCancelRefund(orderId: number, restoreStock: boolean) {
     const response = await api.patch<AdminOrderResponse>(
