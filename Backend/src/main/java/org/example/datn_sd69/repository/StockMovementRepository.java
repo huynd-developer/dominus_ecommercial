@@ -12,11 +12,33 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface StockMovementRepository
         extends JpaRepository<StockMovement, Integer> {
+
+    // ================= POS rollback =================
+
+    /**
+     * Lấy đúng các SALE_OUT theo chứng từ để hoàn về chính lot đã xuất.
+     */
+    @Query("""
+            SELECT sm
+            FROM StockMovement sm
+            JOIN FETCH sm.inventoryLot lot
+            WHERE sm.referenceType = :referenceType
+              AND sm.referenceId = :referenceId
+              AND sm.movementType = :movementType
+            ORDER BY sm.id ASC
+            """)
+    List<StockMovement> findByReference(
+            @Param("referenceType") String referenceType,
+            @Param("referenceId") Long referenceId,
+            @Param("movementType") Byte movementType
+    );
+
 
     @Query(
             value = """

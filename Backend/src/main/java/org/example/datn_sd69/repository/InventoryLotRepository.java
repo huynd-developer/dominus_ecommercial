@@ -9,10 +9,93 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 public interface InventoryLotRepository
         extends JpaRepository<InventoryLot, Integer> {
+
+    // ================= POS / FEFO =================
+
+    /**
+     * Tồn có thể bán thật của SKU.
+     * ExpirationDate hôm nay vẫn được coi là còn hạn.
+     */
+    @Query(
+            value = """
+                    SELECT COALESCE(SUM(L.QuantityOnHand), 0)
+                    FROM dbo.InventoryLot L
+                    WHERE L.ProductVariantId = :productVariantId
+                      AND L.QuantityOnHand > 0
+                      AND L.ExpirationDate >= CAST(GETDATE() AS DATE)
+                    """,
+            nativeQuery = true
+    )
+    Integer getSellableQuantityByVariantId(
+            @Param("productVariantId") Integer productVariantId
+    );
+
+    /**
+     * Tồn còn nằm trong lot đã hết hạn.
+     * Chỉ dùng để hiển thị lý do không bán được ở POS.
+     */
+    @Query(
+            value = """
+                    SELECT COALESCE(SUM(L.QuantityOnHand), 0)
+                    FROM dbo.InventoryLot L
+                    WHERE L.ProductVariantId = :productVariantId
+                      AND L.QuantityOnHand > 0
+                      AND L.ExpirationDate < CAST(GETDATE() AS DATE)
+                    """,
+            nativeQuery = true
+    )
+    Integer getExpiredOnHandQuantityByVariantId(
+            @Param("productVariantId") Integer productVariantId
+    );
+
+    /**
+     * Lot bán tiếp theo theo FEFO để map ngày compatibility cho POS.
+     */
+    @Query(
+            value = """
+                    SELECT TOP 1 L.*
+                    FROM dbo.InventoryLot L
+                    WHERE L.ProductVariantId = :productVariantId
+                      AND L.QuantityOnHand > 0
+                      AND L.ExpirationDate >= CAST(GETDATE() AS DATE)
+                    ORDER BY
+                        L.ExpirationDate ASC,
+                        L.ReceivedDate ASC,
+                        L.Id ASC
+                    """,
+            nativeQuery = true
+    )
+    Optional<InventoryLot> findNextSellableLot(
+            @Param("productVariantId") Integer productVariantId
+    );
+
+    /**
+     * FEFO có khóa để checkout đồng thời không cùng phân bổ một lượng tồn.
+     */
+    @Query(
+            value = """
+                    SELECT L.*
+                    FROM dbo.InventoryLot L
+                    WITH (UPDLOCK, ROWLOCK, HOLDLOCK)
+                    WHERE L.ProductVariantId = :productVariantId
+                      AND L.QuantityOnHand > 0
+                      AND L.ExpirationDate >= CAST(GETDATE() AS DATE)
+                    ORDER BY
+                        L.ExpirationDate ASC,
+                        L.ReceivedDate ASC,
+                        L.Id ASC
+                    """,
+            nativeQuery = true
+    )
+    List<InventoryLot> findSellableLotsForUpdateFefo(
+            @Param("productVariantId") Integer productVariantId
+    );
+
 
     @Query(
             value = """

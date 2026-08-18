@@ -7,7 +7,19 @@ export interface PosProduct {
   name: string;
   subName?: string;
   price: number;
+
+  /**
+   * Compatibility cho code FE cũ.
+   * Backend hiện map field này = sellableQuantity thật từ InventoryLot.
+   */
   stockQuantity: number;
+
+  /**
+   * Tồn có thể bán thật của SKU từ InventoryLot.
+   * FE POS dùng field này cho mọi nghiệp vụ số lượng.
+   */
+  sellableQuantity: number;
+
   image: string;
   category: string;
   manufacturingDate?: string | null;
@@ -220,14 +232,30 @@ const formatMoney = (value: number): string => {
   return new Intl.NumberFormat("vi-VN").format(Number(value || 0));
 };
 
-const getMaxBuyQuantity = (product?: PosProduct | null): number => {
-  const stockQuantity = Number(product?.stockQuantity || 0);
+/**
+ * Nguồn tồn duy nhất dùng cho nghiệp vụ FE POS.
+ *
+ * Ưu tiên sellableQuantity từ InventoryLot.
+ * stockQuantity chỉ giữ làm fallback compatibility trong giai đoạn migrate.
+ */
+const getProductSellableQuantity = (
+  product?: PosProduct | null
+): number => {
+  const quantity = Number(
+    product?.sellableQuantity ??
+      product?.stockQuantity ??
+      0
+  );
 
-  if (!Number.isFinite(stockQuantity) || stockQuantity <= 0) {
+  if (!Number.isFinite(quantity) || quantity <= 0) {
     return 0;
   }
 
-  return Math.trunc(stockQuantity);
+  return Math.trunc(quantity);
+};
+
+const getMaxBuyQuantity = (product?: PosProduct | null): number => {
+  return getProductSellableQuantity(product);
 };
 
 const getMaxBuyQuantityMessage = (product?: PosProduct | null): string => {
@@ -258,6 +286,23 @@ const normalizeCartQuantity = (
   }
 
   return Math.min(Math.max(safeQuantity, 1), maxQuantity);
+};
+
+/**
+ * Dùng khi mở lại Order/phiếu treo đã lưu trên DB.
+ *
+ * Phiếu treo KHÔNG reserve kho, nên số lượng trong phiếu có thể lớn hơn
+ * sellableQuantity hiện tại. Không được âm thầm cắt số lượng khi mở phiếu.
+ * Checkout/update sau đó vẫn được validate bằng sellableQuantity thật.
+ */
+const normalizeExistingOrderQuantity = (quantity: unknown): number => {
+  const numberValue = Number(quantity || 0);
+
+  if (!Number.isFinite(numberValue) || numberValue <= 0) {
+    return 0;
+  }
+
+  return Math.trunc(numberValue);
 };
 
 const normalizeCartItems = (items: unknown): CartItem[] => {
@@ -375,23 +420,23 @@ const getProductUnavailableReason = (
   product?: PosProduct | null
 ): string | null => {
   if (!product) return "Sản phẩm không hợp lệ.";
+
+  /*
+   * BE là nguồn quyết định SKU có bán được hay không.
+   * Không tự suy luận HSD/NSX từ ProductVariant ở FE nữa.
+   */
   if (product.unavailableReason) return product.unavailableReason;
-  if (product.sellable === false) return "Sản phẩm hiện không được bán.";
+
+  if (product.sellable === false) {
+    return "Sản phẩm hiện không được bán.";
+  }
 
   if (product.status != null && Number(product.status) !== 1) {
     return "Sản phẩm đang ngừng bán.";
   }
 
-  if (Number(product.stockQuantity || 0) <= 0) {
+  if (getProductSellableQuantity(product) <= 0) {
     return `Sản phẩm ${product.name} đã hết hàng trong kho!`;
-  }
-
-  if (isDateAfterToday(product.manufacturingDate)) {
-    return `Sản phẩm ${product.name} chưa tới ngày được bán.`;
-  }
-
-  if (product.expired || isDateBeforeToday(product.expirationDate)) {
-    return `Sản phẩm ${product.name} đã hết hạn sử dụng.`;
   }
 
   return null;
@@ -418,20 +463,36 @@ const mapPosProductFromBackend = (
       productName || "Product"
     )}&background=random&color=fff&size=200`;
 
+  /*
+   * sellableQuantity là tồn nghiệp vụ thật từ InventoryLot.
+   * stockQuantity chỉ map cùng giá trị để giữ compatibility.
+   */
+  const sellableQuantity = Math.max(
+    Number(
+      raw.sellableQuantity ??
+        raw.stockQuantity ??
+        raw.stock ??
+        0
+    ) || 0,
+    0
+  );
+
   const manufacturingDate = toDateOnly(raw.manufacturingDate);
   const expirationDate = toDateOnly(raw.expirationDate);
   const status = raw.status ?? raw.variantStatus ?? null;
-  const stockQuantity = Number(raw.stockQuantity ?? raw.stock ?? 0);
-  const expired = Boolean(raw.expired ?? isDateBeforeToday(expirationDate));
+
+  /*
+   * expired/sellable lấy trực tiếp từ BE.
+   * Không tự tính expired bằng expirationDate compatibility.
+   */
+  const expired = Boolean(raw.expired ?? false);
 
   let sellable = raw.sellable;
 
   if (sellable == null) {
     sellable =
       Number(status ?? 1) === 1 &&
-      stockQuantity > 0 &&
-      !expired &&
-      !isDateAfterToday(manufacturingDate);
+      sellableQuantity > 0;
   }
 
   return {
@@ -442,7 +503,10 @@ const mapPosProductFromBackend = (
     name: productName,
     subName: buildVariantText(raw),
     price: Number(raw.price || raw.unitPrice || 0),
-    stockQuantity,
+
+    stockQuantity: sellableQuantity,
+    sellableQuantity,
+
     image,
     category:
       raw.brandName ||
@@ -451,8 +515,14 @@ const mapPosProductFromBackend = (
       parent.categoryName ||
       parent.category ||
       "Tất cả",
+
+    /*
+     * Hai field ngày chỉ giữ để tương thích/hiển thị lot FEFO tiếp theo.
+     * Không dùng để quyết định bán hàng ở FE.
+     */
     manufacturingDate,
     expirationDate,
+
     status,
     expired,
     sellable: Boolean(sellable),
@@ -1565,6 +1635,12 @@ export const usePosStore = defineStore("posStore", {
           `/admin/pos/orders/${targetOrderId}/cancel-pending-payment`
         );
 
+        /*
+         * BE vừa RETURN_IN đúng các lot đã giữ.
+         * Tải lại POS trước khi map cart để sellableQuantity phản ánh tồn thật.
+         */
+        await this.fetchProducts();
+
         const responseOrderId = data?.orderId || data?.id || targetOrderId;
         const responseItems = Array.isArray(data?.items) ? data.items : [];
 
@@ -2610,6 +2686,12 @@ export const usePosStore = defineStore("posStore", {
             this.activeHeldOrderCashierName = "";
 
             this.savePendingCheckoutDraft();
+
+            /*
+             * Checkout online pending đã SALE_OUT/giữ kho ở BE.
+             * Refresh danh sách để cột tồn POS phản ánh sellableQuantity mới.
+             */
+            await this.fetchProducts();
             await this.fetchHeldOrders();
 
             return {
@@ -2851,23 +2933,24 @@ export const usePosStore = defineStore("posStore", {
 
     mapOrderItemToCartItem(item: any): CartItem {
       const sku = String(item.sku || item.productSku || "");
-      const itemQuantity = getOrderItemQuantity(item);
+      const itemQuantity = normalizeExistingOrderQuantity(
+        getOrderItemQuantity(item)
+      );
+
       const latestProduct = this.allProducts.find(
         (product) => product.sku.toLowerCase() === sku.toLowerCase()
       );
 
       if (latestProduct) {
-        const product = {
-          ...latestProduct,
-          stockQuantity: Math.max(
-            Number(latestProduct.stockQuantity || 0),
-            itemQuantity
-          ),
-        };
-
+        /*
+         * Không nâng giả tồn lên bằng quantity của phiếu treo.
+         * Giữ tồn hiện tại đúng từ InventoryLot.
+         */
         return {
-          product,
-          quantity: normalizeCartQuantity(itemQuantity, product),
+          product: {
+            ...latestProduct,
+          },
+          quantity: itemQuantity,
         };
       }
 
@@ -2878,6 +2961,26 @@ export const usePosStore = defineStore("posStore", {
       ]
         .filter(Boolean)
         .join(" - ");
+
+      const status = item.variantStatus ?? item.status ?? null;
+
+      const sellableQuantity = Math.max(
+        Number(
+          item.sellableQuantity ??
+            item.stockQuantity ??
+            item.availableStock ??
+            item.productStock ??
+            0
+        ) || 0,
+        0
+      );
+
+      const sellable =
+        item.sellable ??
+        (
+          Number(status ?? 1) === 1 &&
+          sellableQuantity > 0
+        );
 
       const product: PosProduct = {
         id: Number(item.variantId || item.productVariantId || item.id || 0),
@@ -2892,16 +2995,10 @@ export const usePosStore = defineStore("posStore", {
             item.originalPrice ||
             0
         ),
-        stockQuantity: Math.max(
-          Number(
-            item.stockQuantity ||
-              item.availableStock ||
-              item.productStock ||
-              itemQuantity ||
-              1
-          ),
-          itemQuantity
-        ),
+
+        stockQuantity: sellableQuantity,
+        sellableQuantity,
+
         image:
           item.image ||
           item.imageUrl ||
@@ -2909,19 +3006,23 @@ export const usePosStore = defineStore("posStore", {
             productName
           )}&background=random&color=fff&size=200`,
         category: item.brandName || item.categoryName || "Đơn lưu tạm",
+
         manufacturingDate: toDateOnly(item.manufacturingDate),
         expirationDate: toDateOnly(item.expirationDate),
-        status: item.variantStatus ?? item.status ?? null,
-        expired: Boolean(
-          item.expired ?? isDateBeforeToday(item.expirationDate)
-        ),
-        sellable: item.sellable ?? true,
-        unavailableReason: item.unavailableReason || null,
+
+        status,
+        expired: Boolean(item.expired ?? false),
+        sellable: Boolean(sellable),
+        unavailableReason:
+          item.unavailableReason ||
+          (sellableQuantity <= 0
+            ? `Sản phẩm ${sku || productName} đã hết hàng trong kho.`
+            : null),
       };
 
       return {
         product,
-        quantity: normalizeCartQuantity(itemQuantity, product),
+        quantity: itemQuantity,
       };
     },
 
