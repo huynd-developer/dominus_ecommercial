@@ -695,38 +695,38 @@
               </div>
             </div>
 
+            <!-- CHỈNH SỬA: SỬA LẠI ĐOẠN HIỂN THỊ TỔNG TIỀN ĐỂ CHẶN SỐ ÂM -->
             <div class="row justify-content-end mt-3">
               <div class="col-md-4">
-                <div class="border rounded p-3">
+                <div class="order-total-box border rounded p-3">
                   <div class="d-flex justify-content-between mb-2">
-                    <span>Tổng tiền hàng:</span>
+                    <span>Tạm tính:</span>
                     <strong>{{ formatMoney(order.totalAmount) }}</strong>
                   </div>
 
-                  <div
-                    v-if="getOrderShippingFee(order) > 0"
-                    class="d-flex justify-content-between mb-2"
-                  >
-                    <span>Phí vận chuyển:</span>
-                    <strong>{{
-                      formatMoney(getOrderShippingFee(order))
-                    }}</strong>
-                  </div>
-
-                  <div class="d-flex justify-content-between mb-2">
+                  <div v-if="order.discountAmount > 0" class="d-flex justify-content-between mb-2">
                     <span>Giảm giá:</span>
-                    <strong>{{ formatMoney(order.discountAmount) }}</strong>
+                    <strong class="text-danger">
+                      -{{ formatMoney(order.discountAmount) }}
+                    </strong>
                   </div>
 
-                  <div class="d-flex justify-content-between fs-5">
+                  <div v-if="getOrderShippingFee(order) > 0" class="d-flex justify-content-between mb-2">
+                    <span>Phí vận chuyển:</span>
+                    <strong>{{ formatMoney(getOrderShippingFee(order)) }}</strong>
+                  </div>
+
+                  <div class="d-flex justify-content-between fs-5 mt-2 pt-2 border-top">
                     <span>Thanh toán:</span>
                     <strong class="text-danger">
-                      {{ formatMoney(order.finalAmount) }}
+                      {{ formatMoney(Math.max(0, Number(order.totalAmount || 0) - Number(order.discountAmount || 0)) + getOrderShippingFee(order)) }}
                     </strong>
                   </div>
                 </div>
               </div>
             </div>
+            <!-- KẾT THÚC CHỈNH SỬA -->
+            
           </template>
         </div>
 
@@ -761,7 +761,6 @@
             Đã chuyển tiền
           </button>
 
-          <!-- NÚT MỚI: XÁC NHẬN HOÀN TIỀN KHI HỦY -->
           <button
             v-if="order && order.status === 8"
             class="btn btn-success"
@@ -834,7 +833,7 @@ const emit = defineEmits<{
   "reject-return": [order: AdminOrderResponse];
   "mark-return-refunded": [order: AdminOrderResponse];
   "mark-delivery-refunded": [order: AdminOrderResponse];
-  "mark-cancel-refunded": [order: AdminOrderResponse]; // BỔ SUNG KHAI BÁO EVENT
+  "mark-cancel-refunded": [order: AdminOrderResponse]; 
 }>();
 
 void props;

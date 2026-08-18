@@ -123,7 +123,7 @@
                 </span>
 
                 <div class="fw-bold mt-1 order-header-total">
-                  {{ formatMoney(order.finalAmount) }}
+                  {{ formatMoney(Math.max(0, Number(order.totalAmount || 0) - Number(order.discountAmount || 0)) + getOrderShippingFee(order)) }}
                 </div>
               </div>
 
@@ -1122,15 +1122,13 @@
 
                     <div v-if="getOrderShippingFee(order) > 0">
                       <span>Phí vận chuyển:</span>
-                      <strong>{{
-                        formatMoney(getOrderShippingFee(order))
-                      }}</strong>
+                      <strong>{{ formatMoney(getOrderShippingFee(order)) }}</strong>
                     </div>
 
-                    <div>
+                    <div class="d-flex justify-content-between fs-5 mt-2 pt-2 border-top">
                       <span>Tổng thanh toán:</span>
-                      <strong class="fs-5">
-                        {{ formatMoney(order.finalAmount) }}
+                      <strong class="text-danger">
+                        {{ formatMoney(Math.max(0, Number(order.totalAmount || 0) - Number(order.discountAmount || 0)) + getOrderShippingFee(order)) }}
                       </strong>
                     </div>
                   </div>
@@ -1138,10 +1136,6 @@
 
                 <!-- KHỐI CÁC NÚT THAO TÁC -->
                 <div class="text-end mt-3 d-flex justify-content-end gap-2">
-                  <!-- 1. THANH TOÁN VNPAY & VIETQR -->
-                  <!-- Do đã đổi sang luồng Hủy/Back là tự động trả đồ lại giỏ hàng,
-                       Nên ở đây các nút "Thanh toán lại" cũng ko cần thiết nữa vì làm gì có đơn rác mà thanh toán lại.
-                       Tớ vẫn giữ logic gốc ở đây cho đồng bộ form giao diện -->
                   <template
                     v-if="
                       order.status === 0 &&
@@ -1551,7 +1545,6 @@ const openCancelRefundBankModal = async (order: CustomerOrderResponse) => {
   try {
     store.orderLoading = true;
     
-    // Đã xóa chữ "customer/" trong đường dẫn này để khớp với OrderController bên Backend
     await api.post(`/v1/orders/${order.orderId}/cancel-bank-info`, {
       bankName: result.value.bankName,
       bankAccountNumber: result.value.bankAccountNumber,
@@ -1588,7 +1581,6 @@ const setCancelRefundBankListHtml = (keyword = "", selectedBank?: string | null)
   });
 };
 // KẾT THÚC CÁC HÀM MỚI
-
 
 const isOrderPendingVerification = (order: any) => {
   if (!order) return false;
@@ -2656,6 +2648,18 @@ const hasArrayData = (value: unknown) => {
 
 const hasPositiveMoneyValue = (...values: unknown[]) => {
   return values.some((value) => toMoneyNumber(value) > 0);
+};
+
+// ĐÃ THÊM: Lấy phí vận chuyển
+const getOrderShippingFee = (order: any) => {
+  return pickMoneyValue(
+    order?.shippingFee,
+    order?.shippingfee,
+    order?.shippingFeeAmount,
+    order?.shipFee,
+    order?.deliveryFee,
+    order?.shippingAmount
+  );
 };
 
 const hasRealReturnRequestObject = (request: any) => {
@@ -4019,17 +4023,6 @@ const toPositiveNumberOrNull = (value: unknown) => {
   const numberValue = Number(value);
 
   return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null;
-};
-
-const getOrderShippingFee = (order: any) => {
-  return pickMoneyValue(
-    order?.shippingFee,
-    order?.shippingfee,
-    order?.shippingFeeAmount,
-    order?.shipFee,
-    order?.deliveryFee,
-    order?.shippingAmount
-  );
 };
 
 const getOrderReturnShippingFee = (order: any) => {

@@ -245,7 +245,7 @@
             <div class="voucher-desc">
               Giảm
               <strong>{{ formatVoucherDiscount(voucher) }}</strong>
-              <span v-if="getMaxDiscount(voucher) > 0">
+              <span v-if="(getVoucherDiscountType(voucher) === 'PERCENT' || getVoucherDiscountType(voucher) === 'PERCENTAGE') && getMaxDiscount(voucher) > 0">
                 · tối đa {{ formatCurrency(getMaxDiscount(voucher)) }}
               </span>
             </div>
@@ -696,7 +696,7 @@ const getMinOrderValue = (voucher: any) => {
 };
 
 const getMaxDiscount = (voucher: any) => {
-  return Number(voucher?.maxDiscountAmount ?? voucher?.maximumDiscountAmount ?? 0);
+  return Number(voucher?.maxDiscountAmount ?? voucher?.maximumDiscountAmount ?? voucher?.maxDiscount ?? 0);
 };
 
 const canUseVoucherLocally = (voucher: any) => {
@@ -804,6 +804,9 @@ onMounted(async () => {
   if (savedVoucher && props.totalAmount > 0) {
     voucherCode.value = savedVoucher;
     await handleApplyVoucher();
+  } else if (props.totalAmount > 0 && !isVoucherApplied.value) {
+    // Tự động chọn mã ngon nhất nếu khách chưa chọn mã nào
+    await autoApplyBestVoucher();
   }
 });
 </script>
