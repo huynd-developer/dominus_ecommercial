@@ -114,14 +114,40 @@ public interface PosService {
             BigDecimal totalAmount
     );
 
-    PosOrderResponse updateHeldOrder(Integer orderId, PosHoldRequest request, String cashierEmail);
-    PosOrderResponse confirmVietQrPayment(Integer orderId, String cashierEmail);
+    PosOrderResponse updateHeldOrder(
+            Integer orderId,
+            PosHoldRequest request,
+            String cashierEmail
+    );
+
+    PosOrderResponse confirmVietQrPayment(
+            Integer orderId,
+            String cashierEmail
+    );
+
     PosOrderResponse retryPendingPayment(
             Integer orderId,
             PosHeldOrderCheckoutRequest request,
             String cashierEmail,
             String clientIp
     );
-    PosOrderResponse cancelPendingPayment(Integer orderId, String cashierEmail);
-    Map<String, Object> cancelPartialPaidOrder(Integer orderId, String cashierEmail);
+
+    PosOrderResponse cancelPendingPayment(
+            Integer orderId,
+            String cashierEmail
+    );
+
+    Map<String, Object> cancelPartialPaidOrder(
+            Integer orderId,
+            String cashierEmail
+    );
+
+    /**
+     * Chỉ dùng cho callback VNPay server-to-server của đơn POS/IN_STORE.
+     *
+     * POS đã SALE_OUT InventoryLot ngay khi bắt đầu thanh toán online,
+     * nên khi VNPay báo thất bại phải RETURN_IN đúng các lot đã xuất.
+     * Hàm này không đổi trạng thái đơn, không xử lý voucher/điểm.
+     */
+    void restoreStockAfterVnpayFailure(Integer orderId);
 }

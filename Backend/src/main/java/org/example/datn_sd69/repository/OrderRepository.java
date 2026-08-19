@@ -411,10 +411,12 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
             @Param("toDate") LocalDateTime toDate
     );
 
-    // --- HÀM THÊM MỚI DÀNH CHO JOB TỰ ĐỘNG HỦY ĐƠN TREO ONLINE ---
+    // --- JOB TỰ ĐỘNG HỦY ĐƠN ONLINE TRẢ TRƯỚC CHƯA THANH TOÁN ---
     @Query("""
         SELECT o FROM Order o
         WHERE o.status = 0
+          AND UPPER(o.orderType) = 'ONLINE'
+          AND (o.isPaymentReported IS NULL OR o.isPaymentReported = false)
           AND UPPER(o.paymentMethod) IN ('VNPAY', 'VIETQR', 'MIXED_VNPAY', 'MIXED_VIETQR')
           AND o.createdAt <= :timeoutThreshold
     """)

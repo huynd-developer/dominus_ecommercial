@@ -7,13 +7,14 @@ import org.example.datn_sd69.entity.Order;
 import org.example.datn_sd69.entity.OrderItem;
 import org.example.datn_sd69.entity.ProductVariant;
 import org.example.datn_sd69.entity.Voucher;
+import org.example.datn_sd69.modules.pos.service.PosService;
 import org.example.datn_sd69.modules.vnpay.service.VNPayService;
 import org.example.datn_sd69.repository.CustomerRepository;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
-import org.example.datn_sd69.repository.ProductVariantRepository;
 import org.example.datn_sd69.repository.VoucherRepository;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -49,14 +50,16 @@ public class VNPayController {
 
     private static final String ORDER_TYPE_ONLINE = "ONLINE";
 
+
     private static final BigDecimal POINT_RATE_AMOUNT = BigDecimal.valueOf(10_000);
 
     private final VNPayService vnPayService;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
-    private final ProductVariantRepository variantRepository;
+    private final PosService posService;
     private final CustomerRepository customerRepository;
     private final VoucherRepository voucherRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     /**
      * VNPay IPN server-to-server.
@@ -84,6 +87,8 @@ public class VNPayController {
         if (orderId == null) {
             return ResponseEntity.ok(Map.of("RspCode", "01", "Message", "Order Not Found"));
         }
+
+        lockOrderRow(orderId);
 
         Order order = orderRepository.findById(orderId).orElse(null);
 
@@ -156,6 +161,8 @@ public class VNPayController {
             return ResponseEntity.ok(result);
         }
 
+        lockOrderRow(orderId);
+
         Order order = orderRepository.findById(orderId).orElse(null);
 
         if (order == null) {
@@ -184,7 +191,16 @@ public class VNPayController {
         boolean success = isPaymentSuccessStatus(freshOrder);
 
         result.put("success", success);
-        result.put("message", success ? "Thanh toán thành công" : "Thanh toán chưa hoàn tất");
+
+        if (success
+                && isOnlineOrder(freshOrder)
+                && freshOrder.getStatus() != null
+                && freshOrder.getStatus() == ORDER_STATUS_PENDING
+                && Boolean.TRUE.equals(freshOrder.getIsPaymentReported())) {
+            result.put("message", "Thanh toán thành công. Đơn hàng đang chờ xác nhận.");
+        } else {
+            result.put("message", success ? "Thanh toán thành công" : "Thanh toán chưa hoàn tất");
+        }
 
         appendOrderDetailToResult(result, freshOrder, vnpAmount);
 
@@ -242,8 +258,26 @@ public class VNPayController {
         }
 
         /*
-         * ONLINE: thanh toán xong -> CONFIRMED = 1.
-         * POS/MIXED cũ: thanh toán xong có thể -> COMPLETED = 3.
+         * ONLINE:
+         * - Thanh toán VNPay thành công KHÔNG đồng nghĩa với shop đã xác nhận đơn.
+         * - Đơn vẫn PENDING = 0 và đánh dấu isPaymentReported = true.
+         * - Sau đó admin xác nhận đơn mới FEFO + SALE_OUT và chuyển CONFIRMED = 1.
+         *
+         * Nếu admin đã xác nhận/hoàn thành sau đó thì vẫn là một giao dịch
+         * thanh toán thành công, miễn isPaymentReported đã được ghi nhận.
+         */
+        if (isOnlineOrder(order)) {
+            return Boolean.TRUE.equals(order.getIsPaymentReported())
+                    && (
+                    order.getStatus() == ORDER_STATUS_PENDING
+                            || order.getStatus() == ORDER_STATUS_CONFIRMED
+                            || order.getStatus() == ORDER_STATUS_COMPLETED
+            );
+        }
+
+        /*
+         * POS/MIXED giữ nguyên nghiệp vụ cũ:
+         * thanh toán thành công có thể chuyển trực tiếp COMPLETED.
          */
         return order.getStatus() == ORDER_STATUS_CONFIRMED
                 || order.getStatus() == ORDER_STATUS_COMPLETED;
@@ -611,21 +645,39 @@ public class VNPayController {
 
         /*
          * ONLINE:
-         * Thanh toán VNPay thành công chỉ xác nhận đơn.
-         * Không cộng điểm ở đây.
-         * Điểm chỉ cộng khi đơn hoàn thành sau giao hàng.
+         * VNPay success chỉ có nghĩa là khách ĐÃ THANH TOÁN.
+         * Không được tự xác nhận đơn và không được xuất kho tại callback payment.
+         *
+         * Flow chuẩn:
+         * PENDING + isPaymentReported=false
+         *   -> VNPay success
+         * PENDING + isPaymentReported=true
+         *   -> admin xác nhận
+         * FEFO + SALE_OUT + CONFIRMED.
          */
         if (isOnlineOrder(order)) {
-            order.setStatus(ORDER_STATUS_CONFIRMED);
+            if (Boolean.TRUE.equals(order.getIsPaymentReported())) {
+                log.info(
+                        "[VNPay] Đơn ONLINE #{} đã được ghi nhận thanh toán trước đó, giữ trạng thái Chờ xác nhận.",
+                        order.getId()
+                );
+                return;
+            }
+
+            order.setStatus(ORDER_STATUS_PENDING);
+            order.setIsPaymentReported(true);
             orderRepository.save(order);
 
-            log.info("[VNPay] Đơn ONLINE #{} đã thanh toán thành công, chuyển sang Đã xác nhận.", order.getId());
+            log.info(
+                    "[VNPay] Đơn ONLINE #{} thanh toán thành công, giữ trạng thái Chờ xác nhận.",
+                    order.getId()
+            );
             return;
         }
 
         /*
          * POS / MIXED / logic cũ:
-         * Giữ hành vi cũ: thanh toán xong thì hoàn thành đơn.
+         * Giữ nguyên hành vi hiện tại: thanh toán xong thì hoàn thành đơn.
          */
         order.setStatus(ORDER_STATUS_COMPLETED);
         order.setCompletedAt(LocalDateTime.now());
@@ -718,10 +770,32 @@ public class VNPayController {
             return;
         }
 
+        /*
+         * ONLINE đã được VNPay ghi nhận thanh toán thành công vẫn giữ PENDING
+         * để chờ admin xác nhận. Nếu Return/IPN lặp hoặc đến khác thứ tự với
+         * response lỗi thì tuyệt đối không được hủy một đơn đã trả tiền.
+         */
+        if (isOnlineOrder(order) && Boolean.TRUE.equals(order.getIsPaymentReported())) {
+            log.warn(
+                    "[VNPay] Bỏ qua callback thất bại cho đơn ONLINE #{} vì giao dịch đã được ghi nhận thanh toán.",
+                    order.getId()
+            );
+            return;
+        }
+
+        /*
+         * ONLINE khi còn PENDING chưa SALE_OUT InventoryLot, vì vậy payment fail
+         * tuyệt đối không được cộng kho.
+         *
+         * POS/IN_STORE thì ngược lại: checkout đã SALE_OUT theo FEFO để giữ hàng,
+         * nên phải RETURN_IN đúng các lot đã xuất thông qua PosService.
+         */
+        if (!isOnlineOrder(order)) {
+            posService.restoreStockAfterVnpayFailure(order.getId());
+        }
+
         order.setStatus(ORDER_STATUS_CANCELLED);
         orderRepository.save(order);
-
-        restoreStock(order);
 
         /*
          * ONLINE checkout mới đã giữ lượt voucher khi tạo đơn pending,
@@ -738,31 +812,23 @@ public class VNPayController {
                 order.getId(), responseCode);
     }
 
-    private void restoreStock(Order order) {
-        if (order == null || order.getId() == null) {
+    /**
+     * Khóa row Orders trong transaction callback hiện tại.
+     *
+     * VNPay có thể gọi IPN và Return gần như đồng thời. Khóa này đảm bảo chỉ
+     * một callback xử lý trạng thái/kho của cùng một order tại một thời điểm,
+     * tránh SALE_OUT hoặc RETURN_IN hai lần.
+     */
+    private void lockOrderRow(Integer orderId) {
+        if (orderId == null) {
             return;
         }
 
-        List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
-
-        for (OrderItem oi : items) {
-            ProductVariant variant = oi.getProductVariant();
-
-            if (variant == null) {
-                continue;
-            }
-
-            int currentStock = variant.getStockQuantity() != null
-                    ? variant.getStockQuantity()
-                    : 0;
-
-            int quantity = oi.getQuantity() != null
-                    ? oi.getQuantity()
-                    : 0;
-
-            variant.setStockQuantity(currentStock + quantity);
-            variantRepository.save(variant);
-        }
+        jdbcTemplate.queryForList(
+                "SELECT Id FROM dbo.[Orders] WITH (UPDLOCK, ROWLOCK, HOLDLOCK) WHERE Id = ?",
+                Integer.class,
+                orderId
+        );
     }
 
     private void restoreVoucherUsage(Order order) {

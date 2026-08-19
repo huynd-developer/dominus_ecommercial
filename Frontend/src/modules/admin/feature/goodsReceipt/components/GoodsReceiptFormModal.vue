@@ -77,6 +77,23 @@ const effectiveReceivedDate = computed(() => {
   return today();
 });
 
+const addYearsToDate = (dateValue: string, years: number) => {
+  const [year, month, day] = dateValue.split("-").map(Number);
+
+  if (!year || !month || !day) {
+    return "";
+  }
+
+  const date = new Date(year, month - 1, day);
+  date.setFullYear(date.getFullYear() + years);
+
+  const resultYear = date.getFullYear();
+  const resultMonth = String(date.getMonth() + 1).padStart(2, "0");
+  const resultDay = String(date.getDate()).padStart(2, "0");
+
+  return `${resultYear}-${resultMonth}-${resultDay}`;
+};
+
 const totalSku = computed(
   () => new Set(items.value.map((item) => item.productVariantId)).size
 );
@@ -193,7 +210,11 @@ const isSkuSelected = (productVariantId: number) =>
 
 const addSkuLot = (option: InventorySkuOption) => {
   // Mỗi SKU chỉ được chọn một lần trong cùng một phiếu nhập.
+  // Bấm lại SKU đang chọn thì bỏ chọn SKU đó khỏi phiếu.
   if (isSkuSelected(option.productVariantId)) {
+    items.value = items.value.filter(
+      (item) => item.productVariantId !== option.productVariantId
+    );
     return;
   }
 
@@ -207,8 +228,8 @@ const addSkuLot = (option: InventorySkuOption) => {
     bottleTypeName: option.bottleTypeName ?? null,
     quantity: null,
     unitCost: null,
-    manufacturedDate: "",
-    expirationDate: "",
+    manufacturedDate: effectiveReceivedDate.value,
+    expirationDate: addYearsToDate(effectiveReceivedDate.value, 2),
     note: "",
   });
 };
@@ -484,7 +505,6 @@ const onImageError = (event: Event) => {
                 :class="{
                   selected: isSkuSelected(option.productVariantId),
                 }"
-                :disabled="isSkuSelected(option.productVariantId)"
                 @click="addSkuLot(option)"
               >
                 <span class="sku-card-check">
@@ -890,7 +910,7 @@ const onImageError = (event: Event) => {
 .sku-card.selected {
   border-color: #65a30d;
   background: #f7fee7;
-  cursor: default;
+  cursor: pointer;
 }
 
 .sku-card strong {

@@ -1412,6 +1412,75 @@ public class PosServiceImpl implements PosService {
     }
 
     /**
+     * Callback VNPay không có Authentication của thu ngân.
+     *
+     * Vì POS/IN_STORE đã SALE_OUT InventoryLot ngay khi bắt đầu thanh toán
+     * VNPAY/MIXED_VNPAY, callback thất bại phải hoàn đúng lot đã xuất.
+     *
+     * Chỉ xử lý tồn kho. Trạng thái đơn, voucher và các nghiệp vụ thanh toán
+     * vẫn do VNPayController xử lý như trước.
+     */
+    @Override
+    @Transactional
+    public void restoreStockAfterVnpayFailure(Integer orderId) {
+        if (orderId == null) {
+            throw new RuntimeException("Mã hóa đơn không hợp lệ.");
+        }
+
+        Order order = orderRepository.findDetailById(orderId)
+                .orElseThrow(() -> new RuntimeException(
+                        "Không tìm thấy hóa đơn POS cần hoàn kho sau VNPay thất bại."
+                ));
+
+        if (!isCounterOrder(order)) {
+            throw new RuntimeException(
+                    "Chỉ đơn POS/IN_STORE mới được hoàn kho bằng luồng VNPay POS."
+            );
+        }
+
+        /*
+         * Callback lặp sau khi đơn đã rời PENDING không được hoàn kho lần nữa.
+         * VNPayController cũng khóa row Orders trước khi xử lý callback.
+         */
+        if (order.getStatus() == null
+                || order.getStatus() != ORDER_STATUS_PENDING) {
+            return;
+        }
+
+        String paymentMethod = order.getPaymentMethod() == null
+                ? ""
+                : order.getPaymentMethod().trim().toUpperCase(Locale.ROOT);
+
+        boolean isVnpayPendingOrder = PAYMENT_VNPAY.equals(paymentMethod)
+                || PAYMENT_MIXED_VNPAY.equals(paymentMethod)
+                || PAYMENT_MIXED.equals(paymentMethod);
+
+        if (!isVnpayPendingOrder) {
+            throw new RuntimeException(
+                    "Hóa đơn này không phải hóa đơn POS đang chờ thanh toán VNPay."
+            );
+        }
+
+        Employee cashier = order.getCashier();
+        Integer createdBy = cashier != null
+                ? cashier.getUserId()
+                : null;
+
+        if (createdBy == null) {
+            throw new RuntimeException(
+                    "Không xác định được nhân viên để ghi lịch sử hoàn kho POS."
+            );
+        }
+
+        restorePosOrderStock(
+                order.getId(),
+                createdBy,
+                "Hoàn kho POS do VNPay báo thanh toán thất bại - Order #"
+                        + order.getId()
+        );
+    }
+
+    /**
      * Hoàn đúng các InventoryLot đã SALE_OUT của POS order.
      * Không chạy FEFO lại khi hoàn.
      */

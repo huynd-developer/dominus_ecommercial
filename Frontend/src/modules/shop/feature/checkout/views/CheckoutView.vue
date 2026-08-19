@@ -775,6 +775,7 @@ const handleBrowserBackDuringPayment = async () => {
 
 const goToVnpayGateway = () => {
   stopPaymentTimer();
+  sessionStorage.removeItem("pending_vnpay_outcome");
   sessionStorage.setItem("pending_vnpay_cart", JSON.stringify(cartSnapshot.value));
   sessionStorage.setItem("pending_vnpay_order", String(createdOrderId.value));
   sessionStorage.setItem("pending_vnpay_form", JSON.stringify(orderForm.value));
@@ -809,50 +810,190 @@ const goToCart = () => router.push("/cart");
 const goToHome = () => { showSuccessModal.value = false; router.push("/"); };
 const goToOrders = () => { showSuccessModal.value = false; router.push({ path: "/customer/profile", query: { tab: "orders" } }); };
 
+interface PendingVnpayOutcome {
+  orderId?: string | number | null;
+  status?: number | null;
+  success?: boolean;
+  message?: string;
+  processedAt?: string;
+}
+
+const PENDING_VNPAY_OUTCOME_KEY = "pending_vnpay_outcome";
+
+const readPendingVnpayOutcome = (): PendingVnpayOutcome | null => {
+  const raw = sessionStorage.getItem(PENDING_VNPAY_OUTCOME_KEY);
+
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object"
+      ? (parsed as PendingVnpayOutcome)
+      : null;
+  } catch {
+    sessionStorage.removeItem(PENDING_VNPAY_OUTCOME_KEY);
+    return null;
+  }
+};
+
+const clearPendingVnpayBackup = () => {
+  sessionStorage.removeItem("pending_vnpay_order");
+  sessionStorage.removeItem("pending_vnpay_cart");
+  sessionStorage.removeItem("pending_vnpay_form");
+  sessionStorage.removeItem("pending_vnpay_voucher");
+  sessionStorage.removeItem(PENDING_VNPAY_OUTCOME_KEY);
+};
+
+const restorePendingVnpayFormAndVoucher = () => {
+  const pendingForm = sessionStorage.getItem("pending_vnpay_form");
+
+  if (pendingForm) {
+    try {
+      Object.assign(orderForm.value, JSON.parse(pendingForm));
+      formKey.value++;
+    } catch {
+      // Draft form hỏng thì bỏ qua, không ảnh hưởng việc restore cart.
+    }
+  }
+
+  const pendingVoucher = sessionStorage.getItem("pending_vnpay_voucher");
+
+  if (pendingVoucher) {
+    localStorage.setItem("applied_voucher", pendingVoucher);
+    appliedVoucherCode.value = pendingVoucher;
+  }
+};
+
+const restorePendingVnpayCart = async (items: any[]) => {
+  if (!Array.isArray(items) || items.length === 0) {
+    return;
+  }
+
+  for (const item of items) {
+    const variantId = Number(
+      item?.productVariantId ||
+        item?.variantId ||
+        item?.productVariant?.id ||
+        item?.id ||
+        0
+    );
+
+    const quantity = Number(item?.quantity || 1);
+
+    if (!variantId || !Number.isFinite(quantity) || quantity <= 0) {
+      continue;
+    }
+
+    await api.post("/v1/customer/cart/add", {
+      productVariantId: variantId,
+      quantity: Math.trunc(quantity),
+    });
+  }
+};
+
 const checkAndRestoreVnpayBackup = async () => {
   const pendingOrder = sessionStorage.getItem("pending_vnpay_order");
   const pendingCart = sessionStorage.getItem("pending_vnpay_cart");
 
-  if (pendingOrder && pendingCart) {
-    isPageLoading.value = true;
-    showPaymentModal.value = false;
-    sessionStorage.removeItem("pending_vnpay_order");
-    sessionStorage.removeItem("pending_vnpay_cart");
+  if (!pendingOrder || !pendingCart) {
+    return false;
+  }
 
-    const pendingForm = sessionStorage.getItem("pending_vnpay_form");
-    if (pendingForm) {
-      Object.assign(orderForm.value, JSON.parse(pendingForm));
-      sessionStorage.removeItem("pending_vnpay_form");
-      formKey.value++;
+  isPageLoading.value = true;
+  showPaymentModal.value = false;
+
+  try {
+    const outcome = readPendingVnpayOutcome();
+
+    const sameOrder =
+      !outcome?.orderId ||
+      String(outcome.orderId) === String(pendingOrder);
+
+    const outcomeStatus =
+      outcome?.status === null || outcome?.status === undefined
+        ? null
+        : Number(outcome.status);
+
+    /*
+     * Nếu BE đã xác nhận thanh toán thành công thì tuyệt đối KHÔNG restore
+     * cart snapshot. Làm vậy sẽ khiến sản phẩm đã mua bị add lại vào giỏ.
+     */
+    const alreadyPaidOrCompleted =
+      sameOrder &&
+      (
+        outcome?.success === true ||
+        outcomeStatus === 1 ||
+        outcomeStatus === 3
+      );
+
+    if (alreadyPaidOrCompleted) {
+      clearPendingVnpayBackup();
+      localStorage.removeItem("applied_voucher");
+      return false;
     }
 
-    const pendingVoucher = sessionStorage.getItem("pending_vnpay_voucher");
-    if (pendingVoucher) {
-      localStorage.setItem("applied_voucher", pendingVoucher);
-      appliedVoucherCode.value = pendingVoucher;
-      sessionStorage.removeItem("pending_vnpay_voucher");
+    /*
+     * Chỉ restore cart khi BE /api/vnpay/return đã xác nhận thất bại
+     * và order đã chuyển CANCELLED (status = 4).
+     *
+     * Không tự PATCH cancel khi chưa biết kết quả VNPay:
+     * request browser-back/network-error có thể xảy ra trong lúc IPN đang
+     * xác nhận giao dịch thành công. Tự cancel ở đây có thể hủy nhầm đơn đã trả tiền.
+     */
+    const confirmedCancelled =
+      sameOrder &&
+      outcome?.success === false &&
+      outcomeStatus === 4;
+
+    if (!confirmedCancelled) {
+      await showWarning(
+        "Đang chờ xác minh VNPay",
+        "Chưa có kết quả thất bại chính thức từ máy chủ nên hệ thống chưa tự khôi phục giỏ hàng để tránh tạo đơn trùng sau khi khách đã thanh toán. Vui lòng kiểm tra lại kết quả giao dịch hoặc lịch sử đơn hàng."
+      );
+      return false;
     }
 
-    try {
-      const items = JSON.parse(pendingCart);
-      cartItems.value = items;
-      await api.patch(`/customer/orders/${createdOrderId.value || pendingOrder}/cancel`, { cancelReason: "Khác" }).catch(() => {});
+    const items = JSON.parse(pendingCart);
+    const safeItems = Array.isArray(items) ? items : [];
 
-      if (items && items.length > 0) {
-        const addPromises = items.map((item: any) => {
-          const variantId = item.productVariantId || item.variantId || item.id;
-          return api.post("/v1/customer/cart/add", { productVariantId: Number(variantId), quantity: Number(item.quantity || 1) });
-        });
-        await Promise.all(addPromises);
-      }
+    restorePendingVnpayFormAndVoucher();
 
-      window.dispatchEvent(new Event("cart-updated"));
-      await loadCartSummary();
-      if (appliedVoucherCode.value) await loadSavedVoucher();
-    } catch (e) {
-    } finally {
-      isPageLoading.value = false;
+    /*
+     * Đơn VNPay ONLINE thất bại chưa SALE_OUT.
+     * BE đã hủy order, vì vậy FE chỉ phục hồi cart snapshot đúng một lần.
+     */
+    await restorePendingVnpayCart(safeItems);
+
+    cartSnapshot.value = safeItems;
+    createdOrderId.value = null;
+    currentPaymentMethod.value = "";
+    vnpayUrl.value = "";
+    qrCodeUrl.value = "";
+
+    clearPendingVnpayBackup();
+
+    window.dispatchEvent(new Event("cart-updated"));
+    await loadCartSummary();
+
+    if (appliedVoucherCode.value) {
+      await loadSavedVoucher();
     }
+
+    return true;
+  } catch (error: any) {
+    await showError(
+      "Không thể khôi phục giỏ hàng",
+      getErrorMessage(
+        error,
+        "Đơn VNPay đã được hủy nhưng chưa thể khôi phục đầy đủ giỏ hàng. Vui lòng tải lại trang và thử lại."
+      )
+    );
+
+    return false;
+  } finally {
+    isPageLoading.value = false;
   }
 };
 

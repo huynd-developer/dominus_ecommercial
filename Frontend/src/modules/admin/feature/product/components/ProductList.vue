@@ -37,6 +37,9 @@ const formatPrice = (price: number) => {
 const calculateTotalStock = (variants?: ProductVariant[]) =>
   variants?.reduce((sum, item) => sum + Number(item.totalQuantity ?? 0), 0) ?? 0;
 
+const calculateTotalSellableStock = (variants?: ProductVariant[]) =>
+  variants?.reduce((sum, item) => sum + Number(item.sellableQuantity ?? 0), 0) ?? 0;
+
 const getStockClass = (stock: number) => {
   if (stock === 0) return "danger";
   if (stock < 10) return "warning";
@@ -82,11 +85,14 @@ const handleDelete = (product: Product) => {
 const rows = computed(() =>
   props.paginatedData.map((product) => {
     const stock = calculateTotalStock(product.variants);
+    const sellableStock = calculateTotalSellableStock(product.variants);
 
     return {
       ...product,
       stock,
+      sellableStock,
       stockClass: getStockClass(stock),
+      sellableStockClass: getStockClass(sellableStock),
     };
   }),
 );
@@ -102,14 +108,15 @@ const rows = computed(() =>
           <th>Thương hiệu</th>
           <th>Danh mục</th>
           <th>Nồng độ</th>
-          <th class="text-center">Tồn kho</th>
+          <th class="text-center">Tồn thực tế</th>
+          <th class="text-center">Có thể bán</th>
           <th class="text-center">Trạng thái</th>
           <th width="180" class="text-center">Thao tác</th>
         </tr>
       </thead>
       <tbody>
         <tr v-if="rows.length === 0">
-          <td colspan="8" class="empty">
+          <td colspan="9" class="empty">
             <i class="bi bi-box-seam"></i>
             <p>Chưa có sản phẩm</p>
           </td>
@@ -159,8 +166,21 @@ const rows = computed(() =>
             <td>{{ product.categoryName }}</td>
             <td>{{ product.concentrationName }}</td>
             <td class="text-center">
-              <span class="stock-badge" :class="product.stockClass">
+              <span
+                class="stock-badge"
+                :class="product.stockClass"
+                title="Tổng số lượng thực tế đang có trong các lô kho"
+              >
                 {{ product.stock }}
+              </span>
+            </td>
+            <td class="text-center">
+              <span
+                class="stock-badge"
+                :class="product.sellableStockClass"
+                title="Số lượng còn có thể bán, không tính hàng hết hạn"
+              >
+                {{ product.sellableStock }}
               </span>
             </td>
             <td class="text-center">
@@ -221,7 +241,7 @@ const rows = computed(() =>
           <!-- Dòng phụ hiển thị chi tiết biến thể -->
           <tr v-if="expandedRowIds.includes(product.id)" class="variant-row">
             <td class="p-0 border-0 bg-transparent"></td>
-            <td colspan="7" class="p-0 border-0">
+            <td colspan="8" class="p-0 border-0">
               <div class="variant-container slide-down">
                 <div class="variant-arrow"></div>
                 <div class="px-4 py-2 bg-light border-bottom fw-bold text-dark d-flex align-items-center gap-2" style="font-size: 13px;">
@@ -233,7 +253,8 @@ const rows = computed(() =>
                       <th width="120">Dung tích</th>
                       <th width="200">Loại chai</th>
                       <th class="text-end" width="150">Giá bán</th>
-                      <th class="text-center" width="100">Tồn kho</th>
+                      <th class="text-center" width="110">Tồn thực tế</th>
+                      <th class="text-center" width="110">Có thể bán</th>
                       <th class="text-center" width="150">Trạng thái biến thể</th>
                     </tr>
                   </thead>
@@ -252,8 +273,20 @@ const rows = computed(() =>
                           :class="
                             Number(v.totalQuantity ?? 0) > 0 ? 'bg-success' : 'bg-danger'
                           "
+                          title="Tổng số lượng thực tế đang có trong các lô kho"
                         >
                           {{ v.totalQuantity ?? 0 }}
+                        </span>
+                      </td>
+                      <td class="text-center">
+                        <span
+                          class="badge px-3 py-1.5"
+                          :class="
+                            Number(v.sellableQuantity ?? 0) > 0 ? 'bg-success' : 'bg-danger'
+                          "
+                          title="Số lượng còn có thể bán, không tính hàng hết hạn"
+                        >
+                          {{ v.sellableQuantity ?? 0 }}
                         </span>
                       </td>
                       <td class="text-center">
@@ -330,7 +363,7 @@ const rows = computed(() =>
 .variant-row { background: #f8fafc; }
 
 .variant-container {
-  max-width: 750px;
+  max-width: 900px;
   margin: 6px 0 16px 5px;
   background: #ffffff;
   border: 1px solid #cbd5e1;

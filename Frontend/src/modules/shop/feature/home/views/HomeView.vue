@@ -560,7 +560,7 @@ const mapNormalProduct = (p: any): ProductCardItem => {
 const mapFlashSaleProduct = (item: FlashSaleProductResponse): ProductCardItem => {
   const productVariantId = toNumber(item.productVariantId, 0);
   const productId = toNumber(item.productId ?? item.productVariantId, 0);
-  const sellableQuantity = Math.max(0, toNumber(item.sellableQuantity, 0));
+  const sellableQuantity = Math.max(0, toNumber(item.sellableQuantity ?? item.stockQuantity, 0));
   const salePrice = toNumber(item.salePrice, 0);
   const originalPrice = toNumber(item.originalPrice, 0);
 
@@ -855,7 +855,7 @@ const fetchFlashSaleProducts = async () => {
         const vId = toNumber(v.productVariantId, 0);
         const vSalePrice = toNumber(v.salePrice, 0);
         const vOriginalPrice = toNumber(v.originalPrice, 0);
-        const vStock = Math.max(0, toNumber(v.sellableQuantity, 0));
+        const vStock = Math.max(0, toNumber(v.sellableQuantity ?? v.stockQuantity, 0));
 
         return {
           id: vId,

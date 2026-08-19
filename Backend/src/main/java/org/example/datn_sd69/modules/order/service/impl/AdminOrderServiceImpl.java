@@ -810,7 +810,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
     /**
      * Xuất đúng quantity của một OrderItem theo FEFO.
-     *
+     * <p>
      * Repository dùng UPDLOCK + ROWLOCK + HOLDLOCK nên các lần xác nhận
      * đồng thời không cùng lấy một lượng tồn.
      */
@@ -909,7 +909,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     /**
      * Giao hàng thất bại và nghiệp vụ đã chọn nhập lại kho:
      * hoàn phần tồn CHƯA được hoàn của chính các lot đã SALE_OUT.
-     *
+     * <p>
      * Không chạy FEFO lại khi hoàn.
      */
     private void restoreStockWhenDeliveryRefunded(Order order) {
@@ -929,7 +929,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
     /**
      * Hoàn hàng theo từng ReturnRequestItem.
-     *
+     * <p>
      * Chỉ RETURN_IN vào các InventoryLot đã thực sự SALE_OUT của đúng OrderItem.
      * Với hoàn một phần, hệ thống hoàn lần lượt trên các movement đã xuất của
      * OrderItem đó; tuyệt đối không chọn lot mới bằng FEFO.
@@ -1084,7 +1084,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
     /**
      * Hoàn toàn bộ phần còn lại của các SALE_OUT thuộc Order.
-     *
+     * <p>
      * RETURN_IN.ReferenceLineId = StockMovement.Id của SALE_OUT gốc.
      * Nhờ vậy cùng một movement không bị hoàn hai lần.
      */
@@ -1165,7 +1165,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
     /**
      * Tổng số lượng đã RETURN_IN cho từng SALE_OUT gốc.
-     *
+     * <p>
      * Chỉ các movement mới theo chuẩn này có ReferenceLineId trỏ tới
      * StockMovement.Id của SALE_OUT. Dữ liệu legacy null không được suy đoán.
      */
@@ -1217,16 +1217,16 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     ) {
         jdbcTemplate.update(
                 """
-                EXEC dbo.usp_PostStockMovement
-                    @InventoryLotId = ?,
-                    @MovementType = ?,
-                    @QuantityChange = ?,
-                    @CreatedBy = ?,
-                    @ReferenceType = ?,
-                    @ReferenceId = ?,
-                    @ReferenceLineId = ?,
-                    @Reason = ?
-                """,
+                        EXEC dbo.usp_PostStockMovement
+                            @InventoryLotId = ?,
+                            @MovementType = ?,
+                            @QuantityChange = ?,
+                            @CreatedBy = ?,
+                            @ReferenceType = ?,
+                            @ReferenceId = ?,
+                            @ReferenceLineId = ?,
+                            @Reason = ?
+                        """,
                 inventoryLotId,
                 movementType,
                 quantityChange,
