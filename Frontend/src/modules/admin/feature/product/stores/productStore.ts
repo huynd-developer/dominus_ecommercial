@@ -33,7 +33,7 @@ export const useProductStore = defineStore(
     try {
 
         const res =
-            await productService.getProducts()
+            await productService.getProducts(0, 999)
 
         const data =
             res?.content ??

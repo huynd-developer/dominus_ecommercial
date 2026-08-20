@@ -1482,6 +1482,13 @@ public class PosServiceImpl implements PosService {
 
     /**
      * Hoàn đúng các InventoryLot đã SALE_OUT của POS order.
+     *
+     * Mỗi RETURN_IN mới phải trỏ:
+     * ReferenceLineId = StockMovement.Id của SALE_OUT gốc.
+     *
+     * Nhờ vậy cùng một SALE_OUT không bị hoàn lặp khi order đi qua nhiều vòng:
+     * SALE_OUT -> RETURN_IN -> SALE_OUT -> RETURN_IN.
+     *
      * Không chạy FEFO lại khi hoàn.
      */
     private void restorePosOrderStock(
@@ -1512,9 +1519,17 @@ public class PosServiceImpl implements PosService {
             );
         }
 
-        for (StockMovement movement : saleOutMovements) {
-            if (movement.getInventoryLot() == null
-                    || movement.getInventoryLot().getId() == null) {
+        Map<Long, Integer> returnedQuantityBySaleMovementId =
+                loadPosReturnedQuantityBySaleMovementId(
+                        orderId,
+                        saleOutMovements
+                );
+
+        for (StockMovement saleMovement : saleOutMovements) {
+            if (saleMovement == null
+                    || saleMovement.getId() == null
+                    || saleMovement.getInventoryLot() == null
+                    || saleMovement.getInventoryLot().getId() == null) {
                 throw new RuntimeException(
                         "Lịch sử xuất kho của hóa đơn #"
                                 + orderId
@@ -1522,25 +1537,108 @@ public class PosServiceImpl implements PosService {
                 );
             }
 
-            int quantityToReturn = movement.getQuantityChange() != null
-                    ? Math.abs(movement.getQuantityChange())
-                    : 0;
+            long saleMovementId =
+                    saleMovement.getId().longValue();
+
+            int soldQuantity =
+                    saleMovement.getQuantityChange() != null
+                            ? Math.abs(saleMovement.getQuantityChange())
+                            : 0;
+
+            if (soldQuantity <= 0) {
+                continue;
+            }
+
+            int alreadyReturned =
+                    returnedQuantityBySaleMovementId
+                            .getOrDefault(saleMovementId, 0);
+
+            int quantityToReturn =
+                    Math.max(soldQuantity - alreadyReturned, 0);
 
             if (quantityToReturn <= 0) {
                 continue;
             }
 
             postStockMovement(
-                    movement.getInventoryLot().getId(),
+                    saleMovement.getInventoryLot().getId(),
                     MOVEMENT_RETURN_IN,
                     quantityToReturn,
                     createdBy,
                     STOCK_REFERENCE_POS_ROLLBACK,
                     orderId.longValue(),
-                    movement.getReferenceLineId(),
+                    saleMovementId,
                     reason
             );
+
+            returnedQuantityBySaleMovementId.merge(
+                    saleMovementId,
+                    quantityToReturn,
+                    Integer::sum
+            );
         }
+    }
+
+    /**
+     * Tổng số lượng POS đã RETURN_IN cho từng SALE_OUT gốc.
+     *
+     * Chỉ movement theo chuẩn mới:
+     * POS_ORDER_ROLLBACK + RETURN_IN
+     * với ReferenceLineId trỏ tới StockMovement.Id của SALE_OUT.
+     *
+     * Nếu gặp dữ liệu rollback legacy không thể truy ngược chính xác SALE_OUT,
+     * dừng lại thay vì tự suy đoán và có nguy cơ cộng tồn hai lần.
+     */
+    private Map<Long, Integer> loadPosReturnedQuantityBySaleMovementId(
+            Integer orderId,
+            List<StockMovement> saleOutMovements
+    ) {
+        List<StockMovement> returnMovements =
+                stockMovementRepository.findByReference(
+                        STOCK_REFERENCE_POS_ROLLBACK,
+                        orderId.longValue(),
+                        MOVEMENT_RETURN_IN
+                );
+
+        Map<Long, Integer> returned = new LinkedHashMap<>();
+
+        for (StockMovement movement : returnMovements) {
+            if (movement == null
+                    || movement.getQuantityChange() == null
+                    || movement.getQuantityChange() <= 0) {
+                continue;
+            }
+
+            Long referenceLineId = movement.getReferenceLineId();
+
+            boolean referencesSaleMovement =
+                    referenceLineId != null
+                            && saleOutMovements.stream()
+                            .anyMatch(saleMovement ->
+                                    saleMovement != null
+                                            && saleMovement.getId() != null
+                                            && referenceLineId.equals(
+                                            saleMovement.getId().longValue()
+                                    )
+                            );
+
+            if (!referencesSaleMovement) {
+                throw new RuntimeException(
+                        "Hóa đơn #"
+                                + orderId
+                                + " có lịch sử hoàn kho POS legacy không xác định được SALE_OUT gốc. "
+                                + "Cần đối soát StockMovement trước khi hoàn kho tiếp."
+                );
+            }
+
+            returned.merge(
+                    referenceLineId,
+                    movement.getQuantityChange(),
+                    Integer::sum
+            );
+        }
+
+        return returned;
     }
 
     /**

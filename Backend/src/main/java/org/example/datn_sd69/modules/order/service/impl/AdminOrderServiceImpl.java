@@ -264,6 +264,18 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     public AdminOrderResponse confirmOrder(Integer orderId) {
         Order order = findOrderOrThrow(orderId);
 
+        /*
+         * Generic Admin confirm chỉ dành cho đơn ONLINE.
+         * POS/IN_STORE đã có workflow tồn kho riêng và có thể đã SALE_OUT,
+         * nên tuyệt đối không được đi qua deductStockWhenConfirm() lần nữa.
+         */
+        if (!"ONLINE".equalsIgnoreCase(normalizeOptionalText(order.getOrderType()))) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chức năng xác nhận đơn này chỉ áp dụng cho đơn ONLINE"
+            );
+        }
+
         if (safeStatus(order) != STATUS_PENDING) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -430,6 +442,18 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     @Transactional
     public AdminOrderResponse cancelOrder(Integer orderId, AdminCancelOrderRequest request) {
         Order order = findOrderOrThrow(orderId);
+
+        /*
+         * Generic Admin cancel chỉ dành cho đơn ONLINE.
+         * PENDING ONLINE chưa SALE_OUT nên hủy không hoàn kho.
+         * POS/IN_STORE phải đi qua POS workflow để xử lý đúng các lot đã xuất.
+         */
+        if (!"ONLINE".equalsIgnoreCase(normalizeOptionalText(order.getOrderType()))) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chức năng hủy đơn này chỉ áp dụng cho đơn ONLINE"
+            );
+        }
 
         if (safeStatus(order) != STATUS_PENDING) {
             throw new ResponseStatusException(
@@ -2783,4 +2807,3 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         return count == null ? 0L : count;
     }
 }
-

@@ -287,7 +287,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 ));
 
         if (!canCancelOrder(order)) {
-            throw badRequest("Chỉ được hủy đơn hàng khi đơn đang ở trạng thái chờ xác nhận");
+            throw badRequest("Chỉ được hủy đơn ONLINE khi đơn đang ở trạng thái chờ xác nhận");
         }
 
         List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
@@ -339,6 +339,10 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                         HttpStatus.NOT_FOUND,
                         "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn."
                 ));
+
+        if (!isOnlineOrder(order)) {
+            throw badRequest("Chức năng yêu cầu hoàn hàng này chỉ áp dụng cho đơn ONLINE");
+        }
 
         if (order.getStatus() == null || order.getStatus() != STATUS_COMPLETED) {
             throw badRequest("Chỉ có thể yêu cầu hoàn hàng đối với đơn hàng đã hoàn thành.");
@@ -487,6 +491,10 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                         HttpStatus.NOT_FOUND,
                         "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn."
                 ));
+
+        if (!isOnlineOrder(order)) {
+            throw badRequest("Chức năng hủy yêu cầu hoàn hàng này chỉ áp dụng cho đơn ONLINE");
+        }
 
         if (order.getStatus() == null || order.getStatus() != STATUS_RETURN_REQUESTED) {
             throw badRequest("Đơn hàng không ở trạng thái yêu cầu hoàn hàng.");
@@ -981,11 +989,19 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     }
 
     private boolean canCancelOrder(Order order) {
-        if (order == null || order.getStatus() == null) {
+        if (!isOnlineOrder(order) || order.getStatus() == null) {
             return false;
         }
 
         return Integer.valueOf(STATUS_PENDING).equals(order.getStatus());
+    }
+
+    private boolean isOnlineOrder(Order order) {
+        if (order == null || order.getOrderType() == null) {
+            return false;
+        }
+
+        return "ONLINE".equalsIgnoreCase(order.getOrderType().trim());
     }
 
     private String getStatusText(Integer status) {

@@ -201,6 +201,14 @@ function getAvailableActions(order: any) {
 
   switch (status) {
     case 0:
+      /*
+       * Xác nhận/Hủy generic của Admin chỉ dành cho đơn ONLINE.
+       * POS/IN_STORE có workflow riêng, không được đi qua luồng này.
+       */
+      if (String(order?.orderType ?? "").trim().toUpperCase() !== "ONLINE") {
+        return [];
+      }
+
       return [
         { status: 1, label: "Xác nhận", type: "primary", danger: false },
         { status: 4, label: "Hủy", type: "primary", danger: true },

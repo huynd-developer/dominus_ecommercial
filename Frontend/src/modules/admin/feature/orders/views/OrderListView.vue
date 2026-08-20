@@ -607,6 +607,16 @@ async function confirmChangeStatus(
 async function confirmAdminConfirmOrder(order: AdminOrderResponse) {
   if (!order || !order.orderId) return;
 
+  if (String(order.orderType ?? "").trim().toUpperCase() !== "ONLINE") {
+    await Swal.fire({
+      icon: "warning",
+      title: "Không thể xác nhận đơn",
+      text: "Chức năng xác nhận tại đây chỉ áp dụng cho đơn Online. Đơn tại quầy phải được xử lý trong luồng POS.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
+
   if (Number(order.status) !== 0) {
     await Swal.fire({
       icon: "warning",
@@ -945,6 +955,16 @@ async function confirmDeliveryFailed(order: AdminOrderResponse) {
 
 async function confirmAdminCancelOrder(order: AdminOrderResponse) {
   if (!order || !order.orderId) return;
+
+  if (String(order.orderType ?? "").trim().toUpperCase() !== "ONLINE") {
+    await Swal.fire({
+      icon: "warning",
+      title: "Không thể hủy đơn",
+      text: "Chức năng hủy tại đây chỉ áp dụng cho đơn Online. Đơn tại quầy phải được xử lý trong luồng POS.",
+      confirmButtonColor: "#bd9a5f",
+    });
+    return;
+  }
 
   if (Number(order.status) !== 0) {
     await Swal.fire({
