@@ -10,44 +10,34 @@
           style="width: 14px; margin-right: 4px; vertical-align: middle"
         >
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-
           <polyline points="9 22 9 12 15 12 15 22" />
         </svg>
       </span>
-
       <span class="divider">/</span>
-
       <span class="breadcrumb-item clickable" @click="navigateToShop('all')"
         >Nước hoa</span
       >
-
       <template v-if="genderText && genderText !== 'Đang cập nhật'">
         <span class="divider">/</span>
-
         <span
           class="breadcrumb-item clickable"
           @click="navigateToShop('gender', product?.gender)"
           >{{ genderText }}</span
         >
       </template>
-
       <template v-if="brandText && brandText !== 'Đang cập nhật'">
         <span class="divider">/</span>
-
         <span
           class="breadcrumb-item clickable"
           @click="navigateToShop('brand', product?.brand)"
           >{{ brandText }}</span
         >
       </template>
-
       <span class="divider">/</span>
-
       <span class="active">
         {{ product?.name || "Đang cập nhật" }}
       </span>
     </nav>
-
     <div class="product-content" v-if="product">
       <div class="product-gallery">
         <div class="main-image-wrapper">
@@ -57,7 +47,6 @@
             :alt="product?.name || 'Sản phẩm'"
             @error="handleImageError"
           />
-
           <button
             class="btn-heart"
             type="button"
@@ -70,7 +59,6 @@
               v-if="isFavoriteLoading"
               class="spinner-border spinner-border-sm"
             ></i>
-
             <i
               v-else
               class="bi"
@@ -227,7 +215,6 @@
               type="button"
               :class="[
                 'cap-btn',
-
                 {
                   active:
                     getVariantIdFromVariant(selectedVariant) ===
@@ -238,7 +225,6 @@
               @click="selectVariant(variant)"
             >
               <span>{{ getCapacityText(variant) }}</span>
-
               <span
                 v-if="
                   getVariantIdFromVariant(selectedVariant) ===
@@ -250,7 +236,6 @@
               </span>
             </button>
           </div>
-
           <div
             v-else
             style="color: #e53e3e; font-size: 14px; margin-bottom: 20px"
@@ -258,23 +243,19 @@
             Sản phẩm hiện chưa có dung tích nào
           </div>
         </div>
-
         <div class="stock-status mb-3" v-if="selectedVariant">
           <span
             v-if="normalizeStock(selectedVariant) > 0"
             style="color: #2e7d32; font-size: 14px; font-weight: 500"
           >
             <i class="bi bi-box-seam me-1"></i>
-
             Kho còn: {{ normalizeStock(selectedVariant) }} sản phẩm
           </span>
-
           <span
             v-else
             style="color: #d32f2f; font-size: 14px; font-weight: 500"
           >
             <i class="bi bi-x-circle me-1"></i>
-
             Đã hết hàng
           </span>
         </div>
@@ -284,23 +265,16 @@
           v-if="selectedVariant"
           style="
             display: flex;
-
             align-items: center;
-
             gap: 20px;
-
             margin-bottom: 30px;
-
             flex-wrap: wrap;
           "
         >
           <h4 style="margin: 0; min-width: 80px">Số lượng</h4>
-
           <!-- Ghi đè margin-bottom: 0 để input không bị đẩy lên cao -->
-
           <div class="qty-control" style="margin-bottom: 0">
             <!-- Nút trừ: Gọi hàm decreaseQty và bị mờ đi nếu số lượng <= 1 -->
-
             <button
               type="button"
               @click="decreaseQty"
@@ -308,7 +282,6 @@
             >
               -
             </button>
-
             <input
               type="number"
               v-model="quantity"
@@ -316,13 +289,10 @@
               @blur="validateQuantity"
               @keyup.enter="validateQuantity"
             />
-
             <!-- Nút cộng: Gọi hàm increaseQty (để nó tự văng thông báo nếu > 10) -->
-
             <button type="button" @click="increaseQty">+</button>
           </div>
         </div>
-
         <div class="actions">
           <button
             class="btn-add-cart"
@@ -343,12 +313,9 @@
               class="btn-icon"
             >
               <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
-
               <line x1="3" y1="6" x2="21" y2="6" />
-
               <path d="M16 10a4 4 0 01-8 0" />
             </svg>
-
             {{
               isVariantInvalidPrice
                 ? "LIÊN HỆ ĐỂ MUA"
@@ -359,7 +326,6 @@
                 : "THÊM VÀO GIỎ HÀNG"
             }}
           </button>
-
           <button
             class="btn-buy-now"
             type="button"
@@ -378,7 +344,6 @@
                 ? "TẠM HẾT HÀNG"
                 : "MUA NGAY"
             }}
-
             <svg
               v-if="
                 selectedVariant &&
@@ -392,12 +357,10 @@
               class="btn-icon-right"
             >
               <line x1="5" y1="12" x2="19" y2="12" />
-
               <polyline points="12 5 19 12 12 19" />
             </svg>
           </button>
         </div>
-
         <div class="policy-footer">
           <div class="policy-item">
             <svg
@@ -408,17 +371,13 @@
               stroke-width="1.5"
             >
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-
               <polyline points="22 4 12 14.01 9 11.01" />
             </svg>
-
             <div>
               <strong>Cam kết chính hãng</strong><br />
-
               100% Authentic
             </div>
           </div>
-
           <div class="policy-item">
             <svg
               class="icon-policy"
@@ -428,21 +387,16 @@
               stroke-width="1.5"
             >
               <polyline points="1 4 1 10 7 10" />
-
               <polyline points="23 20 23 14 17 14" />
-
               <path
                 d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"
               />
             </svg>
-
             <div>
               <strong>Đổi trả dễ dàng</strong><br />
-
               Trong 7 ngày
             </div>
           </div>
-
           <div class="policy-item">
             <svg
               class="icon-policy"
@@ -452,30 +406,23 @@
               stroke-width="1.5"
             >
               <rect x="1" y="3" width="15" height="13" />
-
               <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
-
               <circle cx="5.5" cy="18.5" r="2.5" />
-
               <circle cx="18.5" cy="18.5" r="2.5" />
             </svg>
-
             <div>
               <strong>Giao hàng miễn phí</strong><br />
-
               Đơn từ 1.000.000đ
             </div>
           </div>
         </div>
       </div>
     </div>
-
     <ProductReviews
       v-if="product?.id"
       :product-id="Number(product.id)"
       @summary-loaded="handleReviewSummaryLoaded"
     />
-
     <div class="luxury-toast" :class="{ show: showToast }">
       <div class="toast-content">
         <div class="icon-circle-toast">
@@ -488,14 +435,11 @@
             <polyline points="20 6 9 17 4 12" />
           </svg>
         </div>
-
         <div class="toast-text">
           <strong>Thêm thành công</strong>
-
           <span>Đã thêm {{ lastAddedQuantity }} sản phẩm vào giỏ.</span>
         </div>
       </div>
-
       <button class="toast-action" type="button" @click="goToCart">
         Xem giỏ hàng ➔
       </button>
@@ -505,53 +449,33 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-
 import { useRouter } from "vue-router";
-
 import Swal from "sweetalert2";
-
 import api from "@/common/api";
-
 import ProductReviews from "./ProductReviews.vue";
-
 import type { ProductReviewSummaryResponse } from "../types/product-review.type";
-
 import { favoriteService } from "../services/favorite.service";
 
 const router = useRouter();
-
 const props = defineProps<{
   product: any;
 }>();
-
 const emit = defineEmits<{
   (e: "back"): void;
-
   (e: "buy-now"): void;
-
   (e: "filter-category", filter: { type: string; value: any }): void;
-
   (e: "navigate-shop", filter: { type: string; value: any }): void;
 }>();
 
 const selectedVariant = ref<any>(null);
-
 const quantity = ref<number>(1);
-
 const lastAddedQuantity = ref<number>(1);
-
 const showToast = ref(false);
-
 const isAdding = ref(false);
-
 const reviewSummary = ref<ProductReviewSummaryResponse | null>(null);
-
 const isFavorited = ref(false);
-
 const isFavoriteLoading = ref(false);
-
 const selectedImageUrl = ref("");
-
 const BACKEND_URL = "http://localhost:8080";
 
 const getCurrentRole = () => {
@@ -559,9 +483,7 @@ const getCurrentRole = () => {
     localStorage.getItem("role") || localStorage.getItem("userRole") || ""
   )
     .replace("ROLE_", "")
-
     .toUpperCase()
-
     .trim();
 };
 
@@ -577,32 +499,22 @@ const getPlaceholderImage = () => {
   return (
     "data:image/svg+xml;utf8," +
     encodeURIComponent(`
-
       <svg xmlns="http://www.w3.org/2000/svg" width="400" height="400">
-
         <rect width="100%" height="100%" fill="#f3f4f6"/>
-
         <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
-
           fill="#9ca3af" font-family="Arial" font-size="24">
-
           Không có ảnh
-
         </text>
-
       </svg>
-
     `)
   );
 };
 
 const normalizeImageUrl = (url: unknown) => {
   const rawUrl = String(url || "").trim();
-
   if (!rawUrl) {
     return "";
   }
-
   if (
     rawUrl.startsWith("http://") ||
     rawUrl.startsWith("https://") ||
@@ -611,11 +523,9 @@ const normalizeImageUrl = (url: unknown) => {
   ) {
     return rawUrl;
   }
-
   if (rawUrl.startsWith("/")) {
     return `${BACKEND_URL}${rawUrl}`;
   }
-
   return `${BACKEND_URL}/${rawUrl}`;
 };
 
@@ -623,11 +533,9 @@ const getImageUrlFromObject = (value: any) => {
   if (!value) {
     return "";
   }
-
   if (typeof value === "string") {
     return normalizeImageUrl(value);
   }
-
   return normalizeImageUrl(
     value?.imageUrl ??
       value?.ImageUrl ??
@@ -645,7 +553,6 @@ const getImageUrlFromObject = (value: any) => {
 
 const appendImage = (images: string[], value: any) => {
   const imageUrl = getImageUrlFromObject(value);
-
   if (imageUrl && !images.includes(imageUrl)) {
     images.push(imageUrl);
   }
@@ -655,105 +562,71 @@ const appendImageList = (images: string[], value: any) => {
   if (!value) {
     return;
   }
-
   if (Array.isArray(value)) {
     value.forEach((item) => appendImage(images, item));
-
     return;
   }
-
   appendImage(images, value);
 };
 
 const getVariantImageList = (variant: any) => {
   const images: string[] = [];
-
   appendImage(images, variant?.mainImage);
-
   appendImage(images, variant?.mainImageUrl);
-
   appendImage(images, variant?.thumbnailUrl);
-
   appendImage(images, variant?.imageUrl);
-
   appendImage(images, variant?.ImageUrl);
-
   appendImage(images, variant?.image);
-
   appendImageList(images, variant?.images);
-
   appendImageList(images, variant?.Images);
-
   appendImageList(images, variant?.imageList);
-
   appendImageList(images, variant?.ImageList);
-
   appendImageList(images, variant?.productImages);
-
   appendImageList(images, variant?.ProductImages);
-
   return images;
 };
 
 const productGalleryImages = computed(() => {
   const images: string[] = [];
-
   const productData = props.product;
-
   const addUnique = (url: unknown) => {
     const formatted = getImageUrlFromObject(url);
-
     if (formatted && !images.includes(formatted)) {
       images.push(formatted);
     }
   };
-
   if (productData?.primaryImageUrl) {
     addUnique(productData.primaryImageUrl);
   }
-
   if (Array.isArray(productData?.images)) {
     const primaryObj = productData.images.find((img: any) =>
       Boolean(img?.isPrimary)
     );
-
     if (primaryObj) {
       addUnique(primaryObj?.imageUrl || primaryObj);
     }
-
     productData.images.forEach((img: any) => {
       addUnique(img?.imageUrl || img);
     });
   }
-
   addUnique(productData?.mainImage);
-
   addUnique(productData?.mainImageUrl);
-
   addUnique(productData?.thumbnailUrl);
-
   addUnique(productData?.imageUrl);
-
   addUnique(productData?.image);
-
   appendImageList(images, productData?.galleryImages);
-
   appendImageList(images, productData?.imageList);
-
   appendImageList(images, productData?.productImages);
-
   if (selectedVariant.value) {
     getVariantImageList(selectedVariant.value).forEach((imageUrl) =>
       addUnique(imageUrl)
     );
   }
-
   if (Array.isArray(productData?.variants)) {
     productData.variants.forEach((variant: any) => {
       getVariantImageList(variant).forEach((imageUrl) => addUnique(imageUrl));
     });
   }
-
   return images;
 });
 
@@ -764,7 +637,6 @@ const productImage = computed(() => {
   ) {
     return selectedImageUrl.value;
   }
-
   return productGalleryImages.value[0] || getPlaceholderImage();
 });
 
@@ -774,13 +646,10 @@ const selectGalleryImage = (imageUrl: string) => {
 
 const handleImageError = (event: Event) => {
   const target = event.target as HTMLImageElement | null;
-
   if (!target) {
     return;
   }
-
   target.onerror = null;
-
   target.src = getPlaceholderImage();
 };
 
@@ -796,23 +665,17 @@ const brandText = computed(() => {
   if (typeof props.product?.brand === "object") {
     return props.product?.brand?.name || "Đang cập nhật";
   }
-
   return props.product?.brandName || props.product?.brand || "Đang cập nhật";
 });
 
 const genderText = computed(() => {
   const gender = props.product?.gender;
-
   if (gender === 1 || gender === "1") return "Nam";
-
   if (gender === 2 || gender === "2") return "Nữ";
-
   if (gender === 0 || gender === "0") return "Unisex";
-
   if (typeof gender === "object") {
     return gender?.name || "Đang cập nhật";
   }
-
   return gender || "Đang cập nhật";
 });
 
@@ -820,7 +683,6 @@ const concentrationText = computed(() => {
   if (typeof props.product?.concentration === "object") {
     return props.product?.concentration?.name || "Đang cập nhật";
   }
-
   return (
     props.product?.concentrationName ||
     props.product?.concentration ||
@@ -832,23 +694,17 @@ const fragranceFamilyText = computed(() => {
   if (Array.isArray(props.product?.scents) && props.product.scents.length > 0) {
     return props.product.scents.join(", ");
   }
-
   if (Array.isArray(props.product?.fragranceFamilies)) {
     const names = props.product.fragranceFamilies
-
       .map((item: any) => (typeof item === "object" ? item?.name : item))
-
       .filter(Boolean);
-
     if (names.length > 0) {
       return names.join(", ");
     }
   }
-
   if (typeof props.product?.fragranceFamily === "object") {
     return props.product?.fragranceFamily?.name || "Đang cập nhật";
   }
-
   return (
     props.product?.fragranceFamilyName ||
     props.product?.fragranceFamily ||
@@ -860,7 +716,6 @@ const selectedCapacityText = computed(() => {
   if (!selectedVariant.value) {
     return "Chưa chọn";
   }
-
   return getCapacityText(selectedVariant.value);
 });
 
@@ -868,7 +723,6 @@ const bottleTypeText = computed(() => {
   if (!selectedVariant.value) {
     return "Đang cập nhật";
   }
-
   return getBottleTypeText(selectedVariant.value);
 });
 
@@ -879,12 +733,10 @@ const selectedSkuText = computed(() => {
 });
 
 const DEFAULT_RATING = 5;
-
 const MAX_RATING = 5;
 
 const toFiniteNumber = (value: unknown, fallback = 0) => {
   const numberValue = Number(value);
-
   return Number.isFinite(numberValue) ? numberValue : fallback;
 };
 
@@ -898,7 +750,6 @@ const reviewCount = computed(() => {
 
     0
   );
-
   return Math.max(0, Math.floor(count));
 });
 
@@ -924,7 +775,6 @@ const hasActualReviews = computed(() => {
   if (hasReviewCountSource.value) {
     return reviewCount.value > 0;
   }
-
   return rawAverageRating.value > 0;
 });
 
@@ -942,19 +792,15 @@ const roundedAverage = computed(() => {
 
 const normalizeStock = (variant: any) => {
   const value = Number(variant?.sellableQuantity ?? 0);
-
   if (!Number.isFinite(value) || value <= 0) {
     return 0;
   }
-
   return Math.trunc(value);
 };
 
 const isVariantSellable = (variant: any) => {
   if (!variant) return false;
-
   const status = Number(variant?.status ?? variant?.variantStatus ?? 1);
-
   return status === 1 && normalizeStock(variant) > 0;
 };
 
@@ -972,9 +818,7 @@ const isEmptyDisplayValue = (value: any) => {
   if (value === null || value === undefined) {
     return true;
   }
-
   const text = String(value).trim();
-
   return (
     text === "" ||
     text.toUpperCase() === "N/A" ||
@@ -986,109 +830,76 @@ const isEmptyDisplayValue = (value: any) => {
 
 const formatCapacityNumber = (value: any) => {
   const text = String(value || "").trim();
-
   if (!text) {
     return "";
   }
-
   const lowerText = text.toLowerCase().replace(/\s+/g, "");
-
   if (lowerText.endsWith("ml")) {
     const numberPart = lowerText.replace("ml", "");
-
     const numberValue = Number(numberPart);
-
     if (Number.isFinite(numberValue)) {
       return `${
         Number.isInteger(numberValue) ? numberValue : numberValue.toString()
       }ml`;
     }
-
     return text;
   }
-
   const numberValue = Number(text);
-
   if (Number.isFinite(numberValue)) {
     return `${
       Number.isInteger(numberValue) ? numberValue : numberValue.toString()
     }ml`;
   }
-
   return text.toLowerCase().includes("ml") ? text : `${text}ml`;
 };
 
 const getCapacityText = (variant: any) => {
   const candidates = [
     variant?.capacityName,
-
     variant?.capacityText,
-
     variant?.capacityValue,
-
     variant?.volume,
-
     variant?.volumeValue,
-
     variant?.capacity?.name,
-
     variant?.capacity?.value,
-
     variant?.capacity,
   ];
-
   for (const value of candidates) {
     if (!isEmptyDisplayValue(value)) {
       return formatCapacityNumber(value);
     }
   }
-
   const sku = String(variant?.sku || variant?.SKU || "").toUpperCase();
-
   const match = sku.match(/-(\d+(?:\.\d+)?)-/);
-
   if (match?.[1]) {
     return formatCapacityNumber(match[1]);
   }
-
   return "Đang cập nhật";
 };
 
 const getBottleTypeText = (variant: any) => {
   const candidates = [
     variant?.bottleTypeName,
-
     variant?.bottleTypeText,
-
     variant?.variantBottleType,
-
     variant?.bottleName,
-
     variant?.bottleType?.name,
-
     variant?.bottleType,
-
     props.product?.bottleTypeName,
-
     props.product?.bottleType,
   ];
-
   for (const value of candidates) {
     if (!isEmptyDisplayValue(value)) {
       return String(value).trim();
     }
   }
-
   const sku = String(variant?.sku || variant?.SKU || "").toUpperCase();
-
   if (sku.includes("FULL")) {
     return "Chai gốc Fullbox";
   }
-
   if (sku.includes("CHIET") || sku.includes("DECANT")) {
     return "Chai chiết";
   }
-
   return "Đang cập nhật";
 };
 
@@ -1100,11 +911,8 @@ const isVariantFlashSale = (variant: any) => {
   const originalPrice = Number(
     variant?.originalPrice ?? variant?.oldPrice ?? variant?.price ?? 0
   );
-
   const salePrice = Number(variant?.salePrice ?? variant?.price ?? 0);
-
   const discountPercent = Number(variant?.discountPercent ?? 0);
-
   return (
     Boolean(variant?.isFlashSale || variant?.hasPromotion) &&
     discountPercent > 0 &&
@@ -1116,7 +924,6 @@ const selectedOriginalPrice = computed(() => {
   if (!selectedVariant.value) {
     return 0;
   }
-
   return Number(
     selectedVariant.value.originalPrice ??
       selectedVariant.value.oldPrice ??
@@ -1129,13 +936,11 @@ const selectedDisplayPrice = computed(() => {
   if (!selectedVariant.value) {
     return 0;
   }
-
   if (isVariantFlashSale(selectedVariant.value)) {
     return Number(
       selectedVariant.value.salePrice ?? selectedVariant.value.price ?? 0
     );
   }
-
   return Number(selectedVariant.value.price ?? 0);
 });
 
@@ -1151,7 +956,6 @@ const isVariantOutOfStock = computed(() => {
   if (!selectedVariant.value) {
     return true;
   }
-
   return !isVariantSellable(selectedVariant.value);
 });
 
@@ -1159,7 +963,6 @@ const stockStatusText = computed(() => {
   if (!selectedVariant.value) {
     return "Chưa chọn dung tích";
   }
-
   return isVariantOutOfStock.value ? "Hết hàng" : "Còn hàng";
 });
 
@@ -1167,7 +970,6 @@ const isVariantInvalidPrice = computed(() => {
   if (!selectedVariant.value) {
     return true;
   }
-
   return selectedDisplayPrice.value <= 0;
 });
 
@@ -1175,47 +977,37 @@ const formatCurrency = (value: number) => {
   if (value == null || Number.isNaN(Number(value))) {
     return "0 đ";
   }
-
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
-
     currency: "VND",
   }).format(Number(value));
 };
 
 const formatDiscount = (value?: number | null) => {
   const numberValue = Number(value || 0);
-
   if (Number.isInteger(numberValue)) {
     return String(numberValue);
   }
-
   return numberValue.toFixed(2).replace(/\.?0+$/, "");
 };
 
 const getErrorMessage = (error: any) => {
   const data = error?.response?.data;
-
   if (!data) {
     return "Có lỗi xảy ra, vui lòng thử lại.";
   }
-
   if (typeof data === "string") {
     return data;
   }
-
   if (data.message) {
     return data.message;
   }
-
   if (data.errors && typeof data.errors === "object") {
     const firstError = Object.values(data.errors)[0];
-
     if (firstError) {
       return String(firstError);
     }
   }
-
   return "Có lỗi xảy ra, vui lòng thử lại.";
 };
 
@@ -1227,17 +1019,12 @@ const selectVariant = (variant: any) => {
   if (!isVariantSellable(variant)) {
     return;
   }
-
   selectedVariant.value = variant;
-
   quantity.value = 1;
-
   const variantImages = getVariantImageList(variant);
-
   const firstVariantImage = variantImages.find((imageUrl): imageUrl is string =>
     Boolean(imageUrl)
   );
-
   if (firstVariantImage) {
     selectedImageUrl.value = firstVariantImage;
   } else if (
@@ -1246,11 +1033,8 @@ const selectVariant = (variant: any) => {
   ) {
     selectedImageUrl.value = productGalleryImages.value[0] || "";
   }
-
   loadFavoriteStatus();
 };
-
-// Hàm validate số lượng khi khách tự nhập tay
 
 const validateQuantity = () => {
   let val = Number(quantity.value);
@@ -1270,7 +1054,6 @@ const validateQuantity = () => {
     );
   } else if (val > stock) {
     quantity.value = stock;
-
     showWarning("Vượt quá tồn kho", `Sản phẩm chỉ còn ${stock} trong kho.`);
   } else {
     quantity.value = Math.floor(val);
@@ -1287,38 +1070,28 @@ const increaseQty = () => {
   if (!selectedVariant.value) {
     return;
   }
-
   const stock = normalizeStock(selectedVariant.value);
-
   if (quantity.value >= 10) {
     showWarning(
       "Vượt quá giới hạn",
 
       "Bạn chỉ có thể mua tối đa 10 sản phẩm cho mỗi phân loại."
     );
-
     return;
   }
-
   if (quantity.value >= stock) {
     showWarning("Vượt quá tồn kho", `Sản phẩm chỉ còn ${stock} trong kho.`);
-
     return;
   }
-
   quantity.value++;
 };
 
 const showWarning = async (title: string, text: string) => {
   await Swal.fire({
     icon: "warning",
-
     title,
-
     text,
-
     confirmButtonText: "Đã hiểu",
-
     confirmButtonColor: "#bd9a5f",
   });
 };
@@ -1326,13 +1099,9 @@ const showWarning = async (title: string, text: string) => {
 const showWarningHtml = async (title: string, html: string) => {
   await Swal.fire({
     icon: "warning",
-
     title,
-
     html,
-
     confirmButtonText: "Đã hiểu",
-
     confirmButtonColor: "#bd9a5f",
   });
 };
@@ -1340,13 +1109,9 @@ const showWarningHtml = async (title: string, html: string) => {
 const showError = async (title: string, text: string) => {
   await Swal.fire({
     icon: "error",
-
     title,
-
     text,
-
     confirmButtonText: "Đóng",
-
     confirmButtonColor: "#bd9a5f",
   });
 };
@@ -1356,26 +1121,17 @@ const askLogin = async (
 ) => {
   const result = await Swal.fire({
     icon: "info",
-
     title: "Bạn chưa đăng nhập",
-
     text: message,
-
     showCancelButton: true,
-
     confirmButtonText: "Đăng nhập ngay",
-
     cancelButtonText: "Ở lại xem tiếp",
-
     confirmButtonColor: "#bd9a5f",
-
     cancelButtonColor: "#6b7280",
   });
-
   if (result.isConfirmed) {
     router.push({
       name: "Login",
-
       query: {
         redirect: router.currentRoute.value.fullPath,
       },
@@ -1385,98 +1141,72 @@ const askLogin = async (
 
 const loadFavoriteStatus = async () => {
   const variantId = getVariantId();
-
   if (!variantId || Number.isNaN(variantId)) {
     isFavorited.value = false;
-
     return;
   }
-
   if (!isCustomerLoggedIn()) {
     isFavorited.value = false;
-
     return;
   }
-
   try {
     const res = await favoriteService.checkFavorite(variantId);
-
     isFavorited.value = Boolean(res.data?.favorited);
   } catch (error) {
     console.error("Lỗi kiểm tra yêu thích:", error);
-
     isFavorited.value = false;
   }
 };
 
 const toggleFavorite = async () => {
   const variantId = getVariantId();
-
   if (!variantId || Number.isNaN(variantId)) {
     await showWarning(
       "Chưa chọn dung tích",
 
       "Vui lòng chọn dung tích trước khi thêm yêu thích."
     );
-
     return;
   }
-
   if (!hasToken()) {
     await askLogin(
       "Vui lòng đăng nhập để thêm sản phẩm vào danh sách yêu thích."
     );
-
     return;
   }
-
   if (!isCustomerLoggedIn()) {
     await showWarning(
       "Không thể sử dụng chức năng này",
 
       "Chỉ tài khoản khách hàng mới được thêm sản phẩm yêu thích."
     );
-
     return;
   }
-
   try {
     isFavoriteLoading.value = true;
-
     const res = await favoriteService.toggleFavorite(variantId);
-
     isFavorited.value = Boolean(res.data?.favorited);
-
     window.dispatchEvent(
       new CustomEvent("favorite-updated", {
         detail: {
           productVariantId: variantId,
-
           favorited: isFavorited.value,
         },
       })
     );
-
     await Swal.fire({
       toast: true,
-
       position: "top-end",
-
       icon: isFavorited.value ? "success" : "info",
-
       title:
         res.data?.message ||
         (isFavorited.value ? "Đã thêm vào yêu thích" : "Đã bỏ yêu thích"),
-
       showConfirmButton: false,
-
       timer: 1600,
-
       timerProgressBar: true,
     });
   } catch (error: any) {
     console.error("Lỗi yêu thích sản phẩm:", error);
-
     await showError("Không thể xử lý yêu thích", getErrorMessage(error));
   } finally {
     isFavoriteLoading.value = false;
@@ -1486,17 +1216,13 @@ const toggleFavorite = async () => {
 const getCurrentCartQuantity = async (productVariantId: number) => {
   try {
     const res = await api.get("/v1/customer/cart/my-cart");
-
     const items = Array.isArray(res.data) ? res.data : [];
-
     const cartItem = items.find(
       (item: any) => Number(item.productVariantId) === Number(productVariantId)
     );
-
     return Number(cartItem?.quantity || 0);
   } catch (error) {
     console.error("Không kiểm tra được giỏ hàng hiện tại:", error);
-
     return 0;
   }
 };
@@ -1508,100 +1234,71 @@ const validateBeforeCartAction = async () => {
 
       "Vui lòng chọn dung tích trước khi mua hàng."
     );
-
     return false;
   }
-
   const variantId = getVariantId();
-
   if (!variantId || Number.isNaN(variantId)) {
     await showError(
       "Biến thể không hợp lệ",
 
       "Không xác định được biến thể sản phẩm. Vui lòng tải lại trang."
     );
-
     return false;
   }
-
   if (isVariantInvalidPrice.value) {
     await showWarning(
       "Sản phẩm chưa có giá",
 
       "Sản phẩm chưa có giá bán. Vui lòng liên hệ cửa hàng."
     );
-
     return false;
   }
-
   if (isVariantOutOfStock.value) {
     await showWarning("Tạm hết hàng", "Sản phẩm này hiện đã hết hàng.");
-
     return false;
   }
-
   if (!hasToken()) {
     await askLogin("Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng.");
-
     return false;
   }
-
   if (!isCustomerLoggedIn()) {
     await showWarning(
       "Không thể mua hàng",
 
       "Chỉ tài khoản khách hàng mới được thêm sản phẩm vào giỏ hàng."
     );
-
     return false;
   }
-
   const stockQuantity = normalizeStock(selectedVariant.value);
-
   const quantityToAdd = Number(quantity.value || 1);
-
   if (quantityToAdd <= 0) {
     await showWarning("Số lượng không hợp lệ", "Số lượng phải lớn hơn 0.");
-
     return false;
   }
-
   if (quantityToAdd > stockQuantity) {
     await showWarning(
       "Vượt quá tồn kho",
 
       `Sản phẩm chỉ còn ${stockQuantity} trong kho.`
     );
-
     return false;
   }
-
   const currentCartQuantity = await getCurrentCartQuantity(variantId);
-
   const totalAfterAdd = currentCartQuantity + quantityToAdd;
-
-  // THÊM ĐOẠN NÀY ĐỂ CHẶN MUA QUÁ 10 SẢN PHẨM / 1 LOẠI
-
   if (totalAfterAdd > 10) {
     await showWarningHtml(
       "Vượt quá giới hạn",
 
       `Bạn chỉ có thể mua tối đa <b>10</b> sản phẩm cho mỗi phân loại.<br/>Trong giỏ hàng của bạn hiện đã có <b>${currentCartQuantity}</b> sản phẩm.`
     );
-
     return false;
   }
-
   if (totalAfterAdd > stockQuantity) {
     await showWarningHtml(
       "Vượt quá tồn kho",
-
       `
-
         Sản phẩm này chỉ còn <b>${stockQuantity}</b> trong kho.<br/>
-
         Trong giỏ hàng của bạn hiện đã có <b>${currentCartQuantity}</b> sản phẩm.<br/>
-
         Bạn chỉ có thể thêm tối đa <b>${Math.max(
           stockQuantity - currentCartQuantity,
 
@@ -1610,45 +1307,32 @@ const validateBeforeCartAction = async () => {
 
       `
     );
-
     return false;
   }
-
   return true;
 };
 
 const addToCart = async () => {
   const valid = await validateBeforeCartAction();
-
   if (!valid) {
     return;
   }
-
   try {
     isAdding.value = true;
-
     const variantId = getVariantId();
-
     const quantityToAdd = Number(quantity.value || 1);
-
     await api.post("/v1/customer/cart/add", {
       productVariantId: variantId,
-
       quantity: quantityToAdd,
     });
-
     lastAddedQuantity.value = quantityToAdd;
-
     window.dispatchEvent(new Event("cart-updated"));
-
     showToast.value = true;
-
     window.setTimeout(() => {
       showToast.value = false;
     }, 3000);
   } catch (error: any) {
     console.error("Lỗi khi thêm vào giỏ hàng:", error);
-
     await showError("Không thể thêm vào giỏ", getErrorMessage(error));
   } finally {
     isAdding.value = false;
@@ -1657,32 +1341,22 @@ const addToCart = async () => {
 
 const buyNow = async () => {
   const valid = await validateBeforeCartAction();
-
   if (!valid) {
     return;
   }
-
   try {
     isAdding.value = true;
-
     const variantId = getVariantId();
-
     const quantityToAdd = Number(quantity.value || 1);
-
     await api.post("/v1/customer/cart/add", {
       productVariantId: variantId,
-
       quantity: quantityToAdd,
     });
-
     lastAddedQuantity.value = quantityToAdd;
-
     window.dispatchEvent(new Event("cart-updated"));
-
     emit("buy-now");
   } catch (error: any) {
     console.error("Lỗi khi xử lý Mua ngay:", error);
-
     await showError("Không thể mua ngay", getErrorMessage(error));
   } finally {
     isAdding.value = false;
@@ -1936,6 +1610,42 @@ watch(
   opacity: 0.65;
 
   cursor: not-allowed;
+}
+
+.btn-compare {
+  position: absolute;
+  top: 70px;
+  right: 15px;
+  background: #ffffff;
+  border: 1px solid #eaeaea;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  font-size: 20px;
+  cursor: pointer;
+  color: #718096;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.2s;
+  z-index: 2;
+}
+
+.btn-compare:hover {
+  color: #c69c6d;
+  border-color: #c69c6d;
+}
+
+.btn-compare.active {
+  color: #c69c6d;
+  border-color: #c69c6d;
+  background: #fdfaf6;
+}
+
+.btn-compare svg {
+  width: 22px;
+  height: 22px;
 }
 
 .thumbnail-list {
