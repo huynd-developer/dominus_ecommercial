@@ -345,6 +345,8 @@
                 </tr>
               </tbody>
             </table>
+
+
           </div>
         </div>
       </div>
@@ -403,6 +405,16 @@ const sharedCompareVariantIds = ref<Record<number, number>>({});
 const allProductsStore = ref<any[]>([]);
 const pickerLoading = ref(false);
 const pickerSearchKeyword = ref("");
+
+type CompareInsight = {
+  productId: number;
+  longevity?: string;
+  style?: string;
+  occasion?: string;
+};
+
+const sharedCompareInsights = ref<Record<number, CompareInsight>>({});
+
 
 let currentCompareRendererId: string | null = null;
 </script>
@@ -950,92 +962,116 @@ const buyFromCompare = (p: any) => {
   sharedShowCompareModal.value = false;
 };
 
+const toCompareText = (value: any): string => {
+  if (value === null || value === undefined || value === "") return "";
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item: any) => toCompareText(item))
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  if (typeof value === "object") {
+    return String(
+      value?.name ??
+      value?.value ??
+      value?.label ??
+      value?.displayName ??
+      ""
+    ).trim();
+  }
+
+  return String(value).trim();
+};
+
 const getGenderText = (item: any) => {
-  const g = item?.gender;
-  if (g === 1 || String(g) === "1" || String(g).toLowerCase() === "nam") return "Nam";
-  if (g === 2 || String(g) === "2" || String(g).toLowerCase() === "nữ") return "Nữ";
-  if (g === 0 || String(g) === "0" || String(g).toLowerCase() === "unisex") return "Unisex";
-  return typeof g === "object" && g !== null ? g?.name || "Đang cập nhật" : g || "Đang cập nhật";
+  const raw = item?.genderName ?? item?.gender;
+  const g = toCompareText(raw);
+  const normalized = g.toLowerCase();
+
+  if (g === "1" || normalized === "nam" || normalized === "male") return "Nam";
+  if (g === "2" || normalized === "nữ" || normalized === "nu" || normalized === "female") return "Nữ";
+  if (g === "0" || normalized === "unisex") return "Unisex";
+
+  return g || "Đang cập nhật";
 };
 
 const getAttributeText = (item: any, field: string) => {
-  const obj = item[field];
-  const nameField = item[`${field}Name`];
-  if (typeof obj === "object" && obj !== null) return obj.name || obj.value || "Đang cập nhật";
-  return nameField || obj || "Đang cập nhật";
+  if (!item) return "Đang cập nhật";
+
+  const candidates = [
+    item?.[`${field}Name`],
+    item?.[field],
+  ];
+
+  for (const candidate of candidates) {
+    const text = toCompareText(candidate);
+    if (text) return text;
+  }
+
+  return "Đang cập nhật";
 };
 
 const getFragranceFamily = (item: any) => {
-  if (Array.isArray(item?.scents) && item.scents.length > 0) return item.scents.join(", ");
-  if (Array.isArray(item?.fragranceFamilies) && item.fragranceFamilies.length > 0) {
-    const names = item.fragranceFamilies.map((i: any) => (typeof i === "object" ? i?.name : i)).filter(Boolean);
-    if (names.length > 0) return names.join(", ");
+  if (!item) return "Đang cập nhật";
+
+  const candidates = [
+    item?.scents,
+    item?.fragranceFamilies,
+    item?.scentGroups,
+    item?.scentGroup,
+    item?.fragranceFamily,
+    item?.fragranceFamilyName,
+    item?.scent,
+    item?.scentName,
+    item?.mainScent,
+    item?.mainScentName,
+  ];
+
+  for (const candidate of candidates) {
+    const text = toCompareText(candidate);
+    if (text) return text;
   }
-  const obj = item?.fragranceFamily;
-  if (typeof obj === "object" && obj !== null) return obj.name || obj.value || "Đang cập nhật";
-  return item?.fragranceFamilyName || obj || "Đang cập nhật";
+
+  return "Đang cập nhật";
 };
 
 // CÁC HÀM XỬ LÝ MỚI CHO THUỘC TÍNH NƯỚC HOA
+const getCompareInsight = (item: any): CompareInsight | null => {
+  const productId = getProductIdNum(item);
+  if (!productId) return null;
+  return sharedCompareInsights.value[productId] || null;
+};
+
 const getOccasionText = (item: any) => {
-  // 1. Thử lấy từ Backend nếu có
-  let occasions = [];
-  if (Array.isArray(item?.occasions) && item.occasions.length > 0) {
-    occasions = item.occasions.map((i: any) => (typeof i === "object" ? i?.name : i));
-  } else {
-    const val = getAttributeText(item, "occasion");
-    if (val !== "Đang cập nhật" && val) occasions = [val];
+  const directCandidates = [
+    item?.occasions,
+    item?.occasionName,
+    item?.occasion,
+  ];
+
+  for (const candidate of directCandidates) {
+    const text = toCompareText(candidate);
+    if (text) return text;
   }
 
-  let seasons = [];
-  if (Array.isArray(item?.seasons) && item.seasons.length > 0) {
-    seasons = item.seasons.map((i: any) => (typeof i === "object" ? i?.name : i));
-  }
-
-  if (occasions.length > 0 || seasons.length > 0) {
-    const result = [];
-    if (occasions.length > 0) result.push(occasions.filter(Boolean).join(", "));
-    if (seasons.length > 0) result.push(`Mùa: ${seasons.filter(Boolean).join(", ")}`);
-    return result.join(" | ");
-  }
-
-  // 2. Tự động suy luận nếu Backend trống
-  const scent = String(getFragranceFamily(item) || "").toLowerCase();
-  const con = String(getAttributeText(item, "concentration") || "").toLowerCase();
-
-  if (scent.includes("wood") || scent.includes("gỗ") || scent.includes("oriental") || scent.includes("phương đông") || scent.includes("gourmand")) {
-     return "Đi tiệc, Hẹn hò, Sự kiện quan trọng | Hợp Thu - Đông";
-  }
-  if (scent.includes("citrus") || scent.includes("cam chanh") || scent.includes("aquatic") || scent.includes("nước") || con.includes("cologne") || con.includes("edt")) {
-     return "Đi học, Đi làm (Office), Thể thao, Dạo phố | Hợp Xuân - Hè";
-  }
-  if (scent.includes("floral") || scent.includes("hoa") || scent.includes("fruity") || scent.includes("trái cây")) {
-     return "Đi làm, Hẹn hò nhẹ nhàng, Gặp gỡ bạn bè | Hợp Xuân - Thu";
-  }
-
-  return "Đa dụng (Sử dụng hàng ngày mọi thời điểm)";
+  return getCompareInsight(item)?.occasion || "Chưa có dữ liệu";
 };
 
 const getStyleText = (item: any) => {
-  // 1. Thử lấy từ Backend nếu có
-  if (Array.isArray(item?.styles) && item.styles.length > 0) {
-    return item.styles.map((i: any) => (typeof i === "object" ? i?.name : i)).filter(Boolean).join(", ");
+  const directCandidates = [
+    item?.styles,
+    item?.styleName,
+    item?.style,
+  ];
+
+  for (const candidate of directCandidates) {
+    const text = toCompareText(candidate);
+    if (text) return text;
   }
-  const val = getAttributeText(item, "style");
-  if (val !== "Đang cập nhật" && val) return val;
 
-  // 2. Tự động suy luận nếu Backend trống
-  const scent = String(getFragranceFamily(item) || "").toLowerCase();
-  
-  if (scent.includes("wood") || scent.includes("gỗ")) return "Sang trọng, Trưởng thành, Ấm áp";
-  if (scent.includes("floral") || scent.includes("hoa")) return "Nữ tính, Thanh lịch, Quyến rũ";
-  if (scent.includes("citrus") || scent.includes("cam chanh")) return "Năng động, Tươi mát, Trẻ trung";
-  if (scent.includes("oriental") || scent.includes("phương đông")) return "Gợi cảm, Bí ẩn, Cuốn hút";
-  if (scent.includes("fruity") || scent.includes("trái cây")) return "Ngọt ngào, Đáng yêu, Tươi mới";
-  if (scent.includes("aquatic") || scent.includes("nước")) return "Phóng khoáng, Mát mẻ, Thể thao";
-  if (scent.includes("gourmand")) return "Ngọt ngào, Hấp dẫn, Nổi bật";
-
-  return "Thanh lịch, Tinh tế, Dễ sử dụng";
+  return getCompareInsight(item)?.style || "Chưa có dữ liệu";
 };
 
 const getBrandNameGlobal = (item: any) => {
@@ -1078,33 +1114,67 @@ const isBestValue = (p: any) => {
 };
 
 const getLongevityDisplay = (p: any) => {
-  const con = String(getCompareValue(p, "concentration")).toLowerCase();
-  if (con.includes("cologne") || con.includes("edc")) return "2 - 4 tiếng (Nhẹ nhàng)";
-  if (con.includes("toilette") || con.includes("edt")) return "4 - 6 tiếng (Vừa phải)";
-  if ((con.includes("parfum") && !con.includes("extrait")) || con.includes("edp")) return "6 - 8 tiếng (Lâu phai)";
-  if (con.includes("extrait") || con.includes("parfum")) return "Trên 8 tiếng (Đậm đặc)";
-  return "Tùy cơ địa";
+  const v = getCompareVariant(p);
+
+  const actualLongevity = [
+    p?.longevityName,
+    p?.longevity,
+    p?.lastingTime,
+    p?.lastingDuration,
+    v?.longevityName,
+    v?.longevity,
+    v?.lastingTime,
+    v?.lastingDuration,
+  ]
+    .map((value) => toCompareText(value))
+    .find(Boolean);
+
+  if (actualLongevity) return actualLongevity;
+
+  return getCompareInsight(p)?.longevity || "Chưa có dữ liệu";
 };
 
 const getCompareBottleType = (p: any) => {
   const v = getCompareVariant(p);
-  if (v) {
-    const bottleCandidates = [ v.bottleTypeName, v.bottleType?.name, typeof v.bottleType === "string" ? v.bottleType : null ];
-    let bottleString = bottleCandidates.find((b) => b != null && b !== "");
-    return bottleString || "Đang cập nhật";
+  const bottleCandidates = [
+    v?.bottleTypeName,
+    v?.bottleType,
+    p?.bottleTypeName,
+    p?.bottleType,
+  ];
+
+  for (const candidate of bottleCandidates) {
+    const text = toCompareText(candidate);
+    if (text) return text;
   }
+
   return "Đang cập nhật";
 };
 
-// ĐÃ THÊM CÁC FIELD MỚI VÀO getCompareValue
 const getCompareValue = (p: any, type: string) => {
+  const v = getCompareVariant(p);
+
   if (type === "brand") return getBrandNameGlobal(p);
   if (type === "scent") return getFragranceFamily(p);
-  if (type === "concentration") return getAttributeText(p, "concentration");
-  if (type === "gender") return getGenderText(p);
+
+  if (type === "concentration") {
+    const productValue = getAttributeText(p, "concentration");
+    return productValue !== "Đang cập nhật"
+      ? productValue
+      : getAttributeText(v, "concentration");
+  }
+
+  if (type === "gender") {
+    const productValue = getGenderText(p);
+    return productValue !== "Đang cập nhật"
+      ? productValue
+      : getGenderText(v);
+  }
+
   if (type === "occasion") return getOccasionText(p);
   if (type === "style") return getStyleText(p);
-  return "";
+
+  return "Đang cập nhật";
 };
 
 const openPickerModal = async () => {
@@ -1182,6 +1252,60 @@ const toggleItemInPicker = (item: any) => {
   }
 };
 
+const loadStructuredCompareInsights = async () => {
+  const productIds = Array.from(
+    new Set(
+      sharedCompareList.value
+        .map((item: any) => getProductIdNum(item))
+        .filter((id: number) => Number.isFinite(id) && id > 0)
+    )
+  );
+
+  if (productIds.length < 2 || productIds.length > 3) {
+    sharedCompareInsights.value = {};
+    return;
+  }
+
+  try {
+    const res = await api.post("/v1/products/compare/ai", {
+      productIds,
+    });
+
+    const data = res?.data?.data ?? res?.data;
+    const rows = Array.isArray(data?.insights) ? data.insights : [];
+
+    const map: Record<number, CompareInsight> = {};
+
+    rows.forEach((row: any) => {
+      const productId = Number(row?.productId);
+
+      if (!Number.isFinite(productId) || productId <= 0) {
+        return;
+      }
+
+      map[productId] = {
+        productId,
+        longevity: String(row?.longevity || "").trim() || "Chưa có dữ liệu",
+        style: String(row?.style || "").trim() || "Chưa có dữ liệu",
+        occasion: String(row?.occasion || "").trim() || "Chưa có dữ liệu",
+      };
+    });
+
+    sharedCompareInsights.value = map;
+  } catch (error: any) {
+    /*
+     * AI là dữ liệu bổ sung cho 3 field mềm.
+     * Không được làm hỏng bảng compare nếu Gemini hết quota / lỗi mạng.
+     * Các field đó sẽ hiển thị "Chưa có dữ liệu", còn giá/tồn/variant vẫn dùng API sản phẩm.
+     */
+    console.warn(
+      "Không lấy được structured compare insights:",
+      error?.response?.data?.message || error?.message || error
+    );
+    sharedCompareInsights.value = {};
+  }
+};
+
 const goToDetailFromCompare = (p: any) => {
   sharedShowCompareModal.value = false;
   const productId = getProductIdNum(p);
@@ -1234,8 +1358,10 @@ watch(sharedShowCompareModal, async (val) => {
             });
           }
           updatedList[i] = { 
-            ...fullData,
+            // Card chỉ giữ dữ liệu hiển thị/khuyến mãi; detail là nguồn metadata cho bảng so sánh.
             ...p,
+            ...fullData,
+            // Không để detail ghi đè giá khuyến mãi đang hiển thị trên card.
             flashSalePrice: p.flashSalePrice ?? fullData.flashSalePrice,
             salePrice: p.salePrice ?? fullData.salePrice,
             discountPercent: p.discountPercent ?? fullData.discountPercent,
@@ -1247,6 +1373,10 @@ watch(sharedShowCompareModal, async (val) => {
       } catch (e) {}
     }
     sharedCompareList.value = updatedList;
+
+    // AI chỉ bổ sung longevity/style/occasion vào chính các dòng của bảng.
+    // Không render panel "Phân tích bằng AI".
+    await loadStructuredCompareInsights();
   }
 });
 

@@ -59,6 +59,16 @@ public class SecurityConfig {
                         .requestMatchers("/api/vnpay/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/orders/payment/vnpay-return").permitAll()
 
+                        /*
+                         * AI compare là chức năng public của trang sản phẩm.
+                         * Chỉ mở đúng endpoint này cho POST,
+                         * không mở toàn bộ POST /api/v1/products/**.
+                         */
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/products/compare/ai"
+                        ).permitAll()
+
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/brands/**",
@@ -102,7 +112,10 @@ public class SecurityConfig {
 
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(
+                        jwtAuthFilter,
+                        UsernamePasswordAuthenticationFilter.class
+                );
 
         return http.build();
     }
@@ -121,7 +134,12 @@ public class SecurityConfig {
         ));
 
         configuration.setAllowedMethods(List.of(
-                "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"
+                "GET",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE",
+                "OPTIONS"
         ));
 
         configuration.setAllowedHeaders(List.of(
@@ -132,8 +150,13 @@ public class SecurityConfig {
 
         configuration.setAllowCredentials(true);
 
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
+        UrlBasedCorsConfigurationSource source =
+                new UrlBasedCorsConfigurationSource();
+
+        source.registerCorsConfiguration(
+                "/**",
+                configuration
+        );
 
         return source;
     }
