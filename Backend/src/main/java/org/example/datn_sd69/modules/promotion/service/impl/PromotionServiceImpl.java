@@ -26,7 +26,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
@@ -152,12 +151,10 @@ public class PromotionServiceImpl implements PromotionService {
     @Transactional(readOnly = true)
     public Page<FlashSaleProductResponse> getActiveFlashSaleProducts(Pageable pageable) {
         LocalDateTime now = LocalDateTime.now();
-        LocalDate today = LocalDate.now();
 
         return promotionVariantRepository
-                .findActiveFlashSaleVariants(
+                .findActiveFlashSaleVariantsByPromotionTime(
                         now,
-                        today,
                         normalizePageable(pageable, 8, 24)
                 )
                 .map(this::toFlashSaleProductResponse);
@@ -240,11 +237,7 @@ public class PromotionServiceImpl implements PromotionService {
                             "Không tìm thấy biến thể sản phẩm"
                     ));
 
-            validateVariantCanJoinPromotion(
-                    productVariant,
-                    request.getStartDate(),
-                    request.getEndDate()
-            );
+            validateVariantCanJoinPromotion(productVariant);
 
             long overlapCount = promotionVariantRepository.countOverlapPromotion(
                     productVariantId,
@@ -277,13 +270,12 @@ public class PromotionServiceImpl implements PromotionService {
         }
     }
 
-    private void validateVariantCanJoinPromotion(
-            ProductVariant productVariant,
-            LocalDateTime startDate,
-            LocalDateTime endDate
-    ) {
+    private void validateVariantCanJoinPromotion(ProductVariant productVariant) {
         if (productVariant == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Biến thể sản phẩm không tồn tại");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Biến thể sản phẩm không tồn tại"
+            );
         }
 
         if (Boolean.TRUE.equals(productVariant.getIsDeleted())) {
@@ -309,74 +301,24 @@ public class PromotionServiceImpl implements PromotionService {
             );
         }
 
-        if (productVariant.getPrice() == null || productVariant.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
+        if (productVariant.getPrice() == null
+                || productVariant.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Biến thể " + productVariant.getSku() + " chưa có giá bán hợp lệ"
             );
         }
 
-        if (productVariant.getStockQuantity() == null || productVariant.getStockQuantity() <= 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Biến thể " + productVariant.getSku() + " đã hết hàng, không thể thêm vào khuyến mãi"
-            );
-        }
-
-        validateProductVariantDate(productVariant, startDate, endDate);
-    }
-
-    private void validateProductVariantDate(
-            ProductVariant productVariant,
-            LocalDateTime startDate,
-            LocalDateTime endDate
-    ) {
-        if (productVariant.getManufacturingDate() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Biến thể " + productVariant.getSku() + " chưa có ngày sản xuất"
-            );
-        }
-
-        if (productVariant.getExpirationDate() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Biến thể " + productVariant.getSku() + " chưa có hạn sử dụng"
-            );
-        }
-
-        if (!productVariant.getExpirationDate().isAfter(productVariant.getManufacturingDate())) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Biến thể " + productVariant.getSku() + " có hạn sử dụng không hợp lệ"
-            );
-        }
-
-        LocalDateTime manufacturingDateTime = productVariant.getManufacturingDate().atStartOfDay();
-        LocalDateTime expirationDateTime = productVariant.getExpirationDate().atTime(23, 59, 59);
-
-        if (LocalDateTime.now().isAfter(expirationDateTime)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Biến thể " + productVariant.getSku() + " đã hết hạn sử dụng, không thể thêm vào khuyến mãi"
-            );
-        }
-
-        if (startDate.isBefore(manufacturingDateTime)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Chiến dịch không được bắt đầu trước ngày sản xuất của biến thể "
-                            + productVariant.getSku()
-            );
-        }
-
-        if (endDate.isAfter(expirationDateTime)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Chiến dịch không được kết thúc sau hạn sử dụng của biến thể "
-                            + productVariant.getSku()
-            );
-        }
+        /*
+         * Promotion chỉ quản lý:
+         * - SKU áp dụng
+         * - phần trăm / giá khuyến mãi
+         * - khoảng thời gian chiến dịch
+         *
+         * Không dùng ProductVariant.stockQuantity, manufacturingDate,
+         * expirationDate để quyết định SKU có được tham gia Promotion hay không.
+         * Tồn vật lý và HSD thực thuộc InventoryLot.
+         */
     }
 
     private void validateExistingPromotionBeforeEnable(Promotion promotion) {
@@ -393,11 +335,7 @@ public class PromotionServiceImpl implements PromotionService {
         for (PromotionVariant promotionVariant : variants) {
             ProductVariant productVariant = promotionVariant.getProductVariant();
 
-            validateVariantCanJoinPromotion(
-                    productVariant,
-                    promotion.getStartDate(),
-                    promotion.getEndDate()
-            );
+            validateVariantCanJoinPromotion(productVariant);
 
             long overlapCount = promotionVariantRepository.countOverlapPromotion(
                     productVariant.getId(),
@@ -487,7 +425,7 @@ public class PromotionServiceImpl implements PromotionService {
                 .originalPrice(originalPrice)
                 .discountPercent(promotionVariant.getDiscountPercent())
                 .salePrice(salePrice)
-                .stockQuantity(variant.getStockQuantity())
+                .stockQuantity(getSellableQuantity(variant))
                 .build();
     }
 
@@ -527,7 +465,7 @@ public class PromotionServiceImpl implements PromotionService {
                 .originalPrice(originalPrice)
                 .discountPercent(promotionVariant.getDiscountPercent())
                 .salePrice(salePrice)
-                .stockQuantity(variant.getStockQuantity())
+                .stockQuantity(getSellableQuantity(variant))
                 .imageUrl(imageUrl) // <-- GÁN ẢNH VÀO ĐÂY LÀ XONG
                 .build();
     }
@@ -558,63 +496,33 @@ public class PromotionServiceImpl implements PromotionService {
             unavailableReason = "Sản phẩm đang ngừng bán";
         }
 
-        if (available && (variant.getPrice() == null || variant.getPrice().compareTo(BigDecimal.ZERO) <= 0)) {
+        if (available && (variant.getPrice() == null
+                || variant.getPrice().compareTo(BigDecimal.ZERO) <= 0)) {
             available = false;
             unavailableReason = "Biến thể chưa có giá bán hợp lệ";
         }
 
-        if (available && (variant.getStockQuantity() == null || variant.getStockQuantity() <= 0)) {
-            available = false;
-            unavailableReason = "Biến thể đã hết hàng";
-        }
-
-        if (available && variant.getManufacturingDate() == null) {
-            available = false;
-            unavailableReason = "Biến thể chưa có ngày sản xuất";
-        }
-
-        if (available && variant.getExpirationDate() == null) {
-            available = false;
-            unavailableReason = "Biến thể chưa có hạn sử dụng";
-        }
-
-        if (available && !variant.getExpirationDate().isAfter(variant.getManufacturingDate())) {
-            available = false;
-            unavailableReason = "Hạn sử dụng không hợp lệ";
-        }
-
-        if (available && variant.getExpirationDate().isBefore(LocalDate.now())) {
-            available = false;
-            unavailableReason = "Biến thể đã hết hạn sử dụng";
-        }
+        /*
+         * Không dùng stock / NSX / HSD của ProductVariant để khóa lựa chọn Promotion.
+         * Promotion không sở hữu tồn kho. stockQuantity trả về bên dưới chỉ là
+         * compatibility field và được map từ sellableQuantity thật của InventoryLot.
+         */
 
         if (available && startDate != null && endDate != null) {
             if (!endDate.isAfter(startDate)) {
                 available = false;
                 unavailableReason = "Khoảng thời gian khuyến mãi không hợp lệ";
             } else {
-                if (startDate.isBefore(variant.getManufacturingDate().atStartOfDay())) {
+                long overlapCount = promotionVariantRepository.countOverlapPromotion(
+                        variant.getId(),
+                        startDate,
+                        endDate,
+                        ignorePromotionId
+                );
+
+                if (overlapCount > 0) {
                     available = false;
-                    unavailableReason = "Ngày bắt đầu trước ngày sản xuất";
-                }
-
-                if (available && endDate.isAfter(variant.getExpirationDate().atTime(23, 59, 59))) {
-                    available = false;
-                    unavailableReason = "Ngày kết thúc sau hạn sử dụng";
-                }
-
-                if (available) {
-                    long overlapCount = promotionVariantRepository.countOverlapPromotion(
-                            variant.getId(),
-                            startDate,
-                            endDate,
-                            ignorePromotionId
-                    );
-
-                    if (overlapCount > 0) {
-                        available = false;
-                        unavailableReason = "Biến thể đã thuộc chiến dịch khác trong cùng thời gian";
-                    }
+                    unavailableReason = "Biến thể đã thuộc chiến dịch khác trong cùng thời gian";
                 }
             }
         }
@@ -627,13 +535,43 @@ public class PromotionServiceImpl implements PromotionService {
                 .capacity(formatCapacity(variant))
                 .bottleType(variant.getBottleType() != null ? variant.getBottleType().getName() : null)
                 .price(variant.getPrice())
-                .stockQuantity(variant.getStockQuantity())
+                .stockQuantity(getSellableQuantity(variant))
                 .status(variant.getStatus())
+                /*
+                 * Giữ nguyên 2 field DTO để không phá contract FE hiện tại.
+                 * Đây chỉ là compatibility/display legacy, KHÔNG dùng cho business rule Promotion.
+                 */
                 .manufacturingDate(variant.getManufacturingDate())
                 .expirationDate(variant.getExpirationDate())
                 .availableForPromotion(available)
                 .unavailableReason(unavailableReason)
                 .build();
+    }
+
+    /**
+     * Tồn có thể bán thật của SKU từ InventoryLot thông qua
+     * vw_ProductVariantInventory.
+     *
+     * Không đọc và không đồng bộ ProductVariant.stockQuantity.
+     */
+    private int getSellableQuantity(ProductVariant variant) {
+        if (variant == null || variant.getId() == null) {
+            return 0;
+        }
+
+        var inventory = productVariantRepository.findInventoryByVariantId(variant.getId());
+
+        if (inventory == null || inventory.getSellableQuantity() == null) {
+            return 0;
+        }
+
+        long sellableQuantity = Math.max(0L, inventory.getSellableQuantity());
+
+        if (sellableQuantity > Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+
+        return (int) sellableQuantity;
     }
 
     private BigDecimal calculateSalePrice(BigDecimal originalPrice, Double discountPercent) {

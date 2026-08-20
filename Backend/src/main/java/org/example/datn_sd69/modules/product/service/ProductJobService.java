@@ -36,45 +36,24 @@ public class ProductJobService {
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void processExpiredProductsJob() {
-        System.out.println("Bắt đầu quét nước hoa hết hạn: " + LocalDate.now());
-
-        // 1. Tìm các phân loại (variant) đã qua ngày hết hạn mà vẫn đang mở bán (status = 1)
-        List<ProductVariant> expiredVariants = variantRepository.findExpiredVariants(LocalDate.now(), 1);
-
-        if (expiredVariants.isEmpty()) {
-            System.out.println("Không có phân loại nào hết hạn hôm nay.");
-            return;
-        }
-
-        // Lấy danh sách ID của các Sản phẩm gốc (Product) bị ảnh hưởng để tẹo nữa tính lại giá
-        Set<Integer> affectedProductIds = expiredVariants.stream()
-                .map(v -> v.getProduct().getId())
-                .collect(Collectors.toSet());
-
-        // 2. Chuyển trạng thái các variant này thành 0 (Ngừng bán) và dọn giỏ hàng
-        for (ProductVariant variant : expiredVariants) {
-            variant.setStatus(0);
-            // Xóa luôn các item trong giỏ hàng khách đang chứa cái ID variant này
-            cartItemRepository.deleteByProductVariantId(variant.getId());
-        }
-        variantRepository.saveAll(expiredVariants);
-
-        // 3. Kiểm tra xem sản phẩm gốc có còn biến thể nào sống sót không, nếu hết sạch thì ẩn Product
-        for (Integer productId : affectedProductIds) {
-            Product product = productRepository.findById(productId).orElse(null);
-            if (product != null) {
-                // Kiểm tra xem còn variant nào CÒN HẠN (status = 1) không
-                Double minActivePrice = variantRepository.findMinSalePriceByProductIdAndStatus(productId, 1);
-
-                if (minActivePrice == null) {
-                    // Nếu trả về null nghĩa là KHÔNG CÒN biến thể nào sống sót -> Ẩn luôn sản phẩm gốc
-                    product.setStatus(0);
-                    productRepository.save(product);
-                    System.out.println("Đã ẩn sản phẩm ID: " + productId + " do tất cả biến thể đã hết hạn.");
-                }
-            }
-        }
-
-        System.out.println("Hoàn tất dọn dẹp nước hoa hết hạn!");
+        /*
+         * InventoryLot là nguồn NSX/HSD và tồn kho vật lý duy nhất.
+         *
+         * ProductVariant.expirationDate là legacy/compatibility nên job này
+         * tuyệt đối không được:
+         * - tìm variant hết hạn bằng ProductVariant.expirationDate;
+         * - tự set ProductVariant.status = 0;
+         * - xóa CartItem;
+         * - tự ẩn Product chỉ vì ngày HSD legacy.
+         *
+         * SKU còn bán được hay không được xác định động từ InventoryLot:
+         * QuantityOnHand > 0 AND ExpirationDate >= ngày hiện tại.
+         *
+         * Giữ nguyên method + lịch chạy để không ảnh hưởng wiring/caller cũ,
+         * nhưng không còn thực hiện mutation nghiệp vụ legacy.
+         */
+        System.out.println(
+                "Bỏ qua ProductVariant expiration legacy job; sellability được xác định từ InventoryLot."
+        );
     }
 }

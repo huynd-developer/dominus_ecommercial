@@ -619,10 +619,6 @@ public class ProductServiceImpl implements ProductService {
                                     v.getPrice()
                             );
 
-                            dto.setStockQuantity(
-                                    v.getStockQuantity()
-                            );
-
                             dto.setManufacturingDate(
                                     v.getManufacturingDate()
                             );
@@ -644,10 +640,21 @@ public class ProductServiceImpl implements ProductService {
                                             : 0L
                             );
 
-                            dto.setSellableQuantity(
+                            long sellableQuantity =
                                     inventory != null && inventory.getSellableQuantity() != null
                                             ? inventory.getSellableQuantity()
-                                            : 0L
+                                            : 0L;
+
+                            dto.setSellableQuantity(sellableQuantity);
+
+                            /*
+                             * Compatibility: field cũ vẫn giữ để không phá API/client,
+                             * nhưng dữ liệu tồn phải lấy từ InventoryLot sellable.
+                             */
+                            dto.setStockQuantity(
+                                    sellableQuantity > Integer.MAX_VALUE
+                                            ? Integer.MAX_VALUE
+                                            : (int) sellableQuantity
                             );
 
                             return dto;

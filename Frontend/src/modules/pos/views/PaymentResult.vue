@@ -17,6 +17,7 @@
         </div>
 
         <p>Địa chỉ: 123 Đường ABC, Quận Hoàn Kiếm, Hà Nội</p>
+
         <p>Hotline: 0987.654.321</p>
       </div>
 
@@ -27,41 +28,49 @@
       <div class="info-section">
         <div class="info-row">
           <span class="label">Số HD:</span>
+
           <span class="value font-bold">{{ orderId }}</span>
         </div>
 
         <div class="info-row">
           <span class="label">Thời gian:</span>
+
           <span class="value">{{ formatDateTime(orderTime) }}</span>
         </div>
 
         <div class="info-row">
           <span class="label">Khách hàng:</span>
+
           <span class="value">{{ customerName || "Khách mua tại quầy" }}</span>
         </div>
 
         <div class="info-row" v-if="customerPhone">
           <span class="label">SĐT:</span>
+
           <span class="value">{{ customerPhone }}</span>
         </div>
 
         <div class="info-row" v-if="customerEmail">
           <span class="label">Email:</span>
+
           <span class="value">{{ customerEmail }}</span>
         </div>
 
         <div class="info-row">
           <span class="label">Phương thức:</span>
+
           <span class="value font-bold">{{ paymentMethodText }}</span>
         </div>
 
         <div class="info-row" v-if="vietQrContent">
           <span class="label">Nội dung CK:</span>
+
           <span class="value">{{ vietQrContent }}</span>
         </div>
 
         <div class="info-row" v-if="transactionNo">
           <span class="label">Mã GD VNPay:</span>
+
           <span class="value">{{ transactionNo }}</span>
         </div>
       </div>
@@ -70,7 +79,9 @@
         <thead>
           <tr>
             <th align="left">TÊN SẢN PHẨM</th>
+
             <th align="center" style="width: 40px">SL</th>
+
             <th align="right" style="width: 100px">THÀNH TIỀN</th>
           </tr>
         </thead>
@@ -110,6 +121,7 @@
             </td>
 
             <td align="center">1</td>
+
             <td align="right">{{ formatCurrency(amount) }}</td>
           </tr>
         </tbody>
@@ -120,47 +132,56 @@
       <div class="price-details">
         <div class="info-row">
           <span>Tổng cộng:</span>
+
           <span>{{ formatCurrency(totalAmount) }}</span>
         </div>
 
         <div class="info-row" v-if="discountAmount > 0">
           <span>Giảm giá:</span>
+
           <span>-{{ formatCurrency(discountAmount) }}</span>
         </div>
 
         <div class="info-row font-bold">
           <span>Khách cần thanh toán:</span>
+
           <span>{{ formatCurrency(amount) }}</span>
         </div>
 
         <div class="info-row" v-if="cashGiven > 0">
           <span>Tiền mặt:</span>
+
           <span>{{ formatCurrency(cashGiven) }}</span>
         </div>
 
         <div class="info-row" v-if="transferAmount > 0">
           <span>{{ transferLabel }}:</span>
+
           <span>{{ formatCurrency(transferAmount) }}</span>
         </div>
 
         <div class="info-row" v-if="changeAmount > 0">
           <span>Tiền thừa:</span>
+
           <span>{{ formatCurrency(changeAmount) }}</span>
         </div>
 
         <div class="info-row" v-if="paidAmount > 0">
           <span>Đã thanh toán:</span>
+
           <span>{{ formatCurrency(paidAmount) }}</span>
         </div>
 
         <div class="info-row" v-if="remainingAmount > 0">
           <span>Còn thiếu:</span>
+
           <span>{{ formatCurrency(remainingAmount) }}</span>
         </div>
       </div>
 
       <div class="footer">
         <p>Cảm ơn quý khách và hẹn gặp lại!</p>
+
         <p class="powered">Powered by Scent Haven POS</p>
       </div>
     </div>
@@ -185,6 +206,7 @@
         </div>
 
         <h3>Thanh toán thành công!</h3>
+
         <p>
           Hệ thống đã lưu hóa đơn thành công. Bạn có thể in hóa đơn khi cần.
         </p>
@@ -192,6 +214,7 @@
         <div class="d-flex gap-2 justify-content-center flex-wrap">
           <button @click="printInvoice" class="btn-print">
             <i class="bi bi-printer"></i>
+
             In hóa đơn
           </button>
 
@@ -222,10 +245,13 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+
 import { useRoute, useRouter } from "vue-router";
+
 import api from "@/common/api";
 
 const route = useRoute();
+
 const router = useRouter();
 
 const getQueryValue = (value: unknown): string => {
@@ -262,9 +288,11 @@ const parseVnpayQueryAmount = (value: unknown): number => {
 
 const normalizePossibleRawVnpayAmount = (
   value: unknown,
+
   compareTotal = 0
 ): number => {
   const numberValue = toMoneyNumber(value);
+
   const totalValue = toMoneyNumber(compareTotal);
 
   if (numberValue <= 0) {
@@ -305,6 +333,7 @@ const transactionNo = ref(
 );
 
 const orderInfo = ref(getQueryValue(route.query.vnp_OrderInfo));
+
 const vietQrContent = ref("");
 
 const amount = ref(
@@ -314,26 +343,39 @@ const amount = ref(
 );
 
 const totalAmount = ref(amount.value);
+
 const discountAmount = ref(0);
+
 const cashGiven = ref(0);
+
 const transferAmount = ref(0);
+
 const paidAmount = ref(0);
+
 const remainingAmount = ref(0);
+
 const changeAmount = ref(0);
 
 const isProcessing = ref(true);
+
 const isSuccess = ref(false);
+
 const errorMessage = ref("");
 
 const customerName = ref("");
+
 const customerPhone = ref("");
+
 const customerEmail = ref("");
+
 const orderTime = ref("");
+
 const orderItems = ref<any[]>([]);
 
 const normalizeOrderKey = (value: unknown): string => {
   return String(value || "")
     .replace(/^#/, "")
+
     .trim();
 };
 
@@ -345,11 +387,13 @@ const getInvoiceOrderKey = (data: any = {}): string => {
 
 const shouldAutoPrint = computed(() => {
   const printValue = getQueryValue(route.query.print).trim().toLowerCase();
+
   return printValue === "1" || printValue === "true" || printValue === "yes";
 });
 
 const isEmbeddedPrint = computed(() => {
   const embedValue = getQueryValue(route.query.embed).trim().toLowerCase();
+
   return embedValue === "1" || embedValue === "true" || embedValue === "yes";
 });
 
@@ -358,8 +402,10 @@ const notifyParentPrintDone = (type = "POS_RECEIPT_PRINT_DONE") => {
     window.parent.postMessage(
       {
         type,
+
         orderId: orderId.value,
       },
+
       window.location.origin
     );
   }
@@ -432,9 +478,12 @@ const formatCurrency = (value: unknown): string => {
 
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
+
     currency: "VND",
   })
+
     .format(numberValue)
+
     .replace("₫", "đ");
 };
 
@@ -451,9 +500,13 @@ const formatDateTime = (dateString: string): string => {
 
   return date.toLocaleString("vi-VN", {
     day: "2-digit",
+
     month: "2-digit",
+
     year: "numeric",
+
     hour: "2-digit",
+
     minute: "2-digit",
   });
 };
@@ -472,8 +525,10 @@ const normalizeItems = (items: any[] = []) => {
 
     return {
       sku: item.sku || item.productSku || item.product?.sku || "",
+
       productName:
         item.productName || item.name || item.product?.name || "Sản phẩm",
+
       variantName:
         item.variantName ||
         [item.capacityLabel, item.bottleTypeName].filter(Boolean).join(" - ") ||
@@ -481,8 +536,11 @@ const normalizeItems = (items: any[] = []) => {
         item.size ||
         item.variant?.name ||
         "",
+
       price,
+
       quantity,
+
       lineTotal,
     };
   });
@@ -607,20 +665,28 @@ const applyInvoiceData = (data: any = {}) => {
 
 const loadLocalPosInvoice = async (): Promise<boolean> => {
   const cachedInvoiceRaw = sessionStorage.getItem("pos_latest_invoice");
+
   const requestedOrderId = normalizeOrderKey(orderId.value);
 
   if (cachedInvoiceRaw) {
     try {
       const cachedInvoice = JSON.parse(cachedInvoiceRaw);
+
       const cachedOrderId = getInvoiceOrderKey(cachedInvoice);
 
-      if (!requestedOrderId || !cachedOrderId || requestedOrderId === cachedOrderId) {
+      if (
+        !requestedOrderId ||
+        !cachedOrderId ||
+        requestedOrderId === cachedOrderId
+      ) {
         applyInvoiceData(cachedInvoice);
+
         return true;
       }
     } catch (error) {
       console.warn(
         "Không đọc được dữ liệu hóa đơn trong sessionStorage:",
+
         error
       );
     }
@@ -628,11 +694,57 @@ const loadLocalPosInvoice = async (): Promise<boolean> => {
 
   if (orderId.value) {
     const response = await api.get(`/admin/pos/order/${orderId.value}`);
+
     applyInvoiceData(response.data);
+
     return true;
   }
 
   return false;
+};
+
+const prepareCancelledVnpayDraftForRetry = () => {
+  const raw = sessionStorage.getItem("pos_pending_checkout_draft");
+
+  if (!raw) {
+    return {
+      hadPartialCash: false,
+    };
+  }
+
+  try {
+    const draft = JSON.parse(raw);
+
+    const hadPartialCash = Number(draft?.cashPaid || 0) > 0;
+
+    /*
+     * BE đã CANCELLED order và RETURN_IN đúng các lot SALE_OUT.
+     * Giữ cart/customer/voucher để thu ngân có thể tạo giao dịch mới,
+     * nhưng cắt toàn bộ liên kết tới order thanh toán cũ.
+     */
+    draft.paymentMethod = "CASH";
+    draft.transferProvider = "";
+    draft.cashPaid = 0;
+    draft.pendingVietQrOrderId = null;
+    draft.pendingVietQrAmount = 0;
+    draft.activePendingPaymentOrderId = null;
+    draft.activePendingPaymentTransferProvider = "";
+    draft.lastOrderId = null;
+    draft.activeHeldOrderId = null;
+    draft.activeHeldOrderCashierName = "";
+
+    sessionStorage.setItem("pos_pending_checkout_draft", JSON.stringify(draft));
+
+    return {
+      hadPartialCash,
+    };
+  } catch {
+    sessionStorage.removeItem("pos_pending_checkout_draft");
+
+    return {
+      hadPartialCash: false,
+    };
+  }
 };
 
 const loadVnpayInvoice = async (): Promise<boolean> => {
@@ -644,6 +756,7 @@ const loadVnpayInvoice = async (): Promise<boolean> => {
 
   if (response.status !== 200) {
     errorMessage.value = "Không xác thực được giao dịch VNPay.";
+
     return false;
   }
 
@@ -652,15 +765,38 @@ const loadVnpayInvoice = async (): Promise<boolean> => {
 
   applyInvoiceData({
     ...backendData,
+
     orderId: backendData.orderId || backendData.id || route.query.vnp_TxnRef,
+
     paymentMethod: backendData.paymentMethod || paymentMethod.value,
+
     transferProvider: backendData.transferProvider || transferProvider.value,
+
     finalAmount:
       backendData.finalAmount ??
       backendData.payAmount ??
       backendData.totalPay ??
       amount.value,
   });
+
+  const backendStatusRaw =
+    backendData.status ?? backendData.orderStatus ?? null;
+
+  const backendStatus =
+    backendStatusRaw === null || backendStatusRaw === undefined
+      ? null
+      : Number(backendStatusRaw);
+
+  if (backendData.success !== true && backendStatus === 4) {
+    const { hadPartialCash } = prepareCancelledVnpayDraftForRetry();
+
+    errorMessage.value = hadPartialCash
+      ? "Thanh toán VNPay thất bại. Đơn cũ đã được hủy và kho đã được hoàn đúng lô. Hãy hoàn lại phần tiền mặt đã nhận cho khách trước khi tạo giao dịch mới."
+      : backendData.message ||
+        "Thanh toán VNPay thất bại. Đơn cũ đã được hủy và kho đã được hoàn đúng lô. Quay lại POS để thanh toán lại.";
+
+    return false;
+  }
 
   errorMessage.value =
     backendData.message ||
@@ -672,16 +808,19 @@ const loadVnpayInvoice = async (): Promise<boolean> => {
 const printInvoice = () => {
   const handleAfterPrint = () => {
     window.removeEventListener("afterprint", handleAfterPrint);
+
     notifyParentPrintDone();
   };
 
   window.addEventListener("afterprint", handleAfterPrint);
+
   window.print();
 };
 
 const goBackToPos = () => {
   if (isEmbeddedPrint.value) {
     notifyParentPrintDone();
+
     return;
   }
 
@@ -704,7 +843,9 @@ onMounted(async () => {
     }
   } catch (error) {
     console.error("Lỗi xử lý hóa đơn:", error);
+
     errorMessage.value = "Có lỗi khi xử lý hóa đơn.";
+
     isSuccess.value = false;
 
     notifyParentPrintDone("POS_RECEIPT_PRINT_ERROR");
@@ -723,29 +864,45 @@ onMounted(async () => {
 <style scoped>
 .payment-result-container {
   background-color: #0f172a;
+
   min-height: 100vh;
+
   display: flex;
+
   flex-direction: column;
+
   align-items: center;
+
   justify-content: center;
+
   padding: 40px 20px;
+
   font-family: Arial, sans-serif;
+
   color: #333;
 }
 
 .invoice-card {
   background: #ffffff;
+
   padding: 30px;
+
   width: 100%;
+
   max-width: 450px;
+
   border-radius: 4px;
+
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+
   box-sizing: border-box;
 }
 
 .header .logo img {
   width: 150px !important;
+
   height: 150px !important;
+
   margin-bottom: 1px;
 }
 
@@ -755,31 +912,41 @@ onMounted(async () => {
 
 .header p {
   font-size: 12px;
+
   color: #666;
+
   margin: 3px 0;
 }
 
 .divider {
   border-top: 1px dashed #ccc;
+
   margin: 15px 0;
 }
 
 .invoice-title {
   text-align: center;
+
   font-size: 16px;
+
   margin: 10px 0 20px 0;
+
   font-weight: bold;
 }
 
 .info-section {
   font-size: 13px;
+
   margin-bottom: 20px;
 }
 
 .info-row {
   display: flex;
+
   justify-content: space-between;
+
   gap: 12px;
+
   margin-bottom: 6px;
 }
 
@@ -793,42 +960,55 @@ onMounted(async () => {
 
 .invoice-table {
   width: 100%;
+
   border-collapse: collapse;
+
   font-size: 13px;
 }
 
 .invoice-table th {
   border-bottom: 1px solid #333;
+
   padding-bottom: 8px;
+
   font-weight: bold;
 }
 
 .invoice-table td {
   padding: 10px 0;
+
   vertical-align: top;
 }
 
 .product-name {
   display: block;
+
   font-weight: bold;
 }
 
 .product-sub {
   display: block;
+
   font-size: 11px;
+
   color: #777;
+
   margin-top: 2px;
 }
 
 .price-details {
   font-size: 14px;
+
   margin-top: 10px;
 }
 
 .footer {
   text-align: center;
+
   margin-top: 30px;
+
   font-size: 12px;
+
   font-style: italic;
 }
 
@@ -838,58 +1018,85 @@ onMounted(async () => {
 
 .powered {
   font-size: 10px;
+
   color: #999;
 }
 
 .status-card {
   margin-top: 25px;
+
   text-align: center;
+
   background: rgba(30, 41, 59, 0.7);
+
   padding: 20px;
+
   border-radius: 8px;
+
   border: 1px solid #334155;
+
   width: 100%;
+
   max-width: 450px;
+
   box-sizing: border-box;
 }
 
 .status-card h3 {
   color: #4ade80;
+
   margin: 10px 0;
 }
 
 .status-card p {
   color: #94a3b8;
+
   font-size: 13px;
+
   margin-bottom: 15px;
 }
 
 .success-icon,
 .error-icon {
   width: 50px;
+
   height: 50px;
+
   background: rgba(74, 222, 128, 0.1);
+
   color: #4ade80;
+
   border-radius: 50%;
+
   display: flex;
+
   align-items: center;
+
   justify-content: center;
+
   margin: 0 auto;
 }
 
 .error-icon {
   background: rgba(239, 68, 68, 0.1);
+
   font-size: 24px;
 }
 
 .btn-back,
 .btn-print {
   color: white;
+
   border: none;
+
   padding: 10px 18px;
+
   border-radius: 4px;
+
   cursor: pointer;
+
   font-weight: bold;
+
   font-size: 13px;
 }
 
@@ -915,8 +1122,11 @@ onMounted(async () => {
   html,
   body {
     background: #ffffff !important;
+
     color: #000000 !important;
+
     padding: 0 !important;
+
     margin: 0 !important;
   }
 
@@ -941,37 +1151,57 @@ onMounted(async () => {
   .v-btn,
   .v-main__wrap > :not(.payment-result-container) {
     display: none !important;
+
     opacity: 0 !important;
+
     visibility: hidden !important;
+
     height: 0 !important;
+
     padding: 0 !important;
+
     margin: 0 !important;
   }
 
   .payment-result-container {
     background: #ffffff !important;
+
     padding: 0 !important;
+
     margin: 0 !important;
+
     min-height: auto !important;
+
     display: block !important;
+
     position: absolute;
+
     top: 0;
+
     left: 0;
+
     width: 100%;
   }
 
   .invoice-card {
     box-shadow: none !important;
+
     border: none !important;
+
     padding: 4mm !important;
+
     margin: 0 auto !important;
+
     width: 80mm !important;
+
     max-width: 80mm !important;
+
     background: #ffffff !important;
   }
 
   @page {
     size: 80mm auto;
+
     margin: 0mm;
   }
 }

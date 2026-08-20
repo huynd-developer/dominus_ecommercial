@@ -180,25 +180,6 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     """)
     Optional<ProductVariant> findPosVisibleBySku(@Param("sku") String sku);
 
-    // ================= Legacy =================
-
-    /**
-     * LEGACY: tạm giữ nguyên signature/query để không làm vỡ caller
-     * ở module khác trong lúc migrate từng module.
-     * Không dùng method này cho logic kho mới.
-     */
-    @Deprecated
-    @Query("""
-        SELECT v
-        FROM ProductVariant v
-        WHERE v.expirationDate <= :now
-          AND v.status = :status
-    """)
-    List<ProductVariant> findExpiredVariants(
-            @Param("now") java.time.LocalDate now,
-            @Param("status") Integer status
-    );
-
     /**
      * Giá thấp nhất chỉ tính variant chưa xóa mềm.
      * Không liên quan tồn kho.

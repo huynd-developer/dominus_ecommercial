@@ -89,4 +89,9 @@ export const REFERENCE_TYPE_OPTIONS = [
   { value: "ORDER", label: "Đơn hàng" },
   { value: "RETURN", label: "Phiếu trả hàng" },
   { value: "STOCK_ADJUSTMENT", label: "Điều chỉnh kho" },
+
+  { value: "ONLINE_ORDER", label: "Đơn hàng online" },
+  { value: "ONLINE_ORDER_RETURN", label: "Hoàn hàng online" },
+  { value: "POS_ORDER", label: "Đơn bán tại quầy" },
+  { value: "POS_ORDER_ROLLBACK", label: "Hoàn kho đơn tại quầy" },
 ];

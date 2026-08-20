@@ -49,6 +49,24 @@ const getVnpayQueryValue = (value: unknown) => {
   return String(value || "");
 };
 
+const getBackendOrderStatus = (data: any): number | null => {
+  const value =
+    data?.status ??
+    data?.orderStatus ??
+    data?.order?.status ??
+    null;
+
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue)
+    ? numberValue
+    : null;
+};
+
 const clearVnpayPendingLocalState = () => {
   posStore.vnpayUrl = "";
   posStore.vietQrImageUrl = "";
@@ -87,15 +105,115 @@ const buildFallbackVnpayInvoice = (backendData: any) => {
       backendData?.transactionNo ||
       getVnpayQueryValue(route.query.vnp_BankTranNo) ||
       getVnpayQueryValue(route.query.vnp_TransactionNo),
-    bankCode: backendData?.bankCode || getVnpayQueryValue(route.query.vnp_BankCode),
+    bankCode:
+      backendData?.bankCode ||
+      getVnpayQueryValue(route.query.vnp_BankCode),
     orderInfo:
-      backendData?.orderInfo || getVnpayQueryValue(route.query.vnp_OrderInfo),
+      backendData?.orderInfo ||
+      getVnpayQueryValue(route.query.vnp_OrderInfo),
     amount: backendData?.amount || queryAmount,
     finalAmount: backendData?.finalAmount || queryAmount,
     transferAmount: backendData?.transferAmount || queryAmount,
-    paidAmount: backendData?.paidAmount || backendData?.finalAmount || queryAmount,
+    paidAmount:
+      backendData?.paidAmount ||
+      backendData?.finalAmount ||
+      queryAmount,
     remainingAmount: 0,
   };
+};
+
+const syncRecoveredCartWithLatestProducts = () => {
+  if (!Array.isArray(posStore.cart) || posStore.cart.length === 0) {
+    return;
+  }
+
+  posStore.cart = posStore.cart.map((item: any) => {
+    const currentProduct = item?.product;
+
+    if (!currentProduct) {
+      return item;
+    }
+
+    const latestProduct = posStore.allProducts.find((product: any) => {
+      if (
+        Number(product?.id || 0) > 0 &&
+        Number(product?.id || 0) === Number(currentProduct?.id || 0)
+      ) {
+        return true;
+      }
+
+      return (
+        String(product?.sku || "").trim().toLowerCase() ===
+        String(currentProduct?.sku || "").trim().toLowerCase()
+      );
+    });
+
+    if (!latestProduct) {
+      return item;
+    }
+
+    /*
+     * Chỉ refresh thông tin SKU/tồn hiển thị từ InventoryLot.
+     * Giữ nguyên quantity mà thu ngân đã nhập, BE sẽ re-check khi checkout.
+     */
+    return {
+      ...item,
+      product: {
+        ...latestProduct,
+      },
+    };
+  });
+};
+
+const recoverCancelledVnpayOrderAsNewSale = async () => {
+  /*
+   * Draft được lưu trước khi redirect sang VNPay.
+   * Đọc lại trước để giữ cart/customer/voucher cho giao dịch mới.
+   */
+  posStore.restorePendingCheckoutDraft();
+
+  const hadPartialCash = Number(posStore.cashPaid || 0) > 0;
+
+  /*
+   * BE đã:
+   * - hủy order thanh toán cũ
+   * - RETURN_IN đúng InventoryLot đã SALE_OUT
+   *
+   * FE phải cắt liên kết tới order cũ, không được retry chính order CANCELLED.
+   */
+  posStore.vnpayUrl = "";
+  posStore.vietQrImageUrl = "";
+  posStore.vietQrContent = "";
+  posStore.pendingVietQrOrderId = null;
+  posStore.pendingVietQrAmount = 0;
+  posStore.activePendingPaymentOrderId = null;
+  posStore.activePendingPaymentTransferProvider = "";
+  posStore.activeHeldOrderId = null;
+  posStore.activeHeldOrderCashierName = "";
+  posStore.lastOrderId = null;
+
+  posStore.paymentMethod = "CASH";
+  posStore.transferProvider = "";
+  posStore.cashPaid = 0;
+
+  sessionStorage.removeItem("pos_pending_checkout_draft");
+
+  /*
+   * Callback failure vừa RETURN_IN InventoryLot ở BE.
+   * Refresh sản phẩm rồi đồng bộ cart để sellableQuantity phản ánh tồn thật.
+   */
+  await posStore.fetchProducts();
+  syncRecoveredCartWithLatestProducts();
+
+  if (posStore.cart.length > 0) {
+    await posStore.fetchAvailableVouchers();
+  }
+
+  await posStore.fetchHeldOrders();
+
+  posStore.errorMsg = hadPartialCash
+    ? "VNPay thất bại. Đơn cũ đã hủy và kho đã hoàn đúng lô. Hãy hoàn lại phần tiền mặt đã nhận cho khách trước khi tạo giao dịch mới."
+    : "VNPay thất bại. Đơn cũ đã hủy và kho đã hoàn đúng lô. Giỏ hàng đã được khôi phục để tạo giao dịch mới.";
 };
 
 const handleVnpayReturnAtPos = async () => {
@@ -108,7 +226,9 @@ const handleVnpayReturnAtPos = async () => {
     });
 
     const backendData =
-      response.data && typeof response.data === "object" ? response.data : {};
+      response.data && typeof response.data === "object"
+        ? response.data
+        : {};
 
     if (backendData.success === true) {
       const invoice = buildFallbackVnpayInvoice(backendData);
@@ -134,26 +254,55 @@ const handleVnpayReturnAtPos = async () => {
       return true;
     }
 
+    const backendStatus = getBackendOrderStatus(backendData);
+
     /*
-     * VNPay trả về nhưng chưa thành công hoặc bị hủy.
-     * Không xóa draft ở đây để nhân viên còn đổi phương thức/thanh toán lại.
+     * Theo BE mới:
+     * - VNPay fail/cancel hợp lệ => order status = 4
+     * - POS đã SALE_OUT trước gateway
+     * - BE đã RETURN_IN đúng lot SALE_OUT trước khi trả response
+     *
+     * Vì vậy không được restore draft thành PENDING_PAYMENT của order cũ.
+     */
+    if (backendStatus === 4) {
+      await recoverCancelledVnpayOrderAsNewSale();
+      await router.replace({ path: "/admin/pos" });
+      return false;
+    }
+
+    /*
+     * Chưa có trạng thái hủy chắc chắn:
+     * giữ nguyên draft để không làm mất payment intent trong trường hợp
+     * callback/IPN vẫn đang xử lý.
      */
     posStore.errorMsg =
       backendData.message ||
-      "Thanh toán VNPay chưa hoàn tất. Có thể đổi phương thức hoặc thanh toán lại.";
+      "Thanh toán VNPay chưa hoàn tất. Hệ thống giữ nguyên giao dịch đang chờ để tránh xử lý trùng.";
 
     posStore.restorePendingCheckoutDraft();
+    await posStore.fetchProducts();
     await posStore.fetchHeldOrders();
     await router.replace({ path: "/admin/pos" });
     return false;
   } catch (error: any) {
+    /*
+     * Network/signature/server error => chưa thể khẳng định payment thất bại.
+     * Không xóa pending order, không tự hoàn/đổi trạng thái ở FE.
+     */
     posStore.errorMsg =
       error?.response?.data?.message ||
       error?.response?.data?.error ||
-      "Không thể xử lý kết quả thanh toán VNPay. Vui lòng kiểm tra lại.";
+      "Không thể xác minh kết quả VNPay. Hệ thống giữ nguyên giao dịch đang chờ để tránh xử lý trùng.";
 
     posStore.restorePendingCheckoutDraft();
+
+    /*
+     * Refresh tồn hiển thị: nếu BE/IPN đã xử lý thì danh sách sẽ phản ánh
+     * đúng InventoryLot hiện tại; nếu chưa xử lý thì vẫn giữ trạng thái đang chờ.
+     */
+    await posStore.fetchProducts();
     await posStore.fetchHeldOrders();
+
     await router.replace({ path: "/admin/pos" });
     return false;
   } finally {

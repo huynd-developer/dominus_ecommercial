@@ -8,6 +8,7 @@ import org.example.datn_sd69.modules.favorite.dto.response.FavoriteToggleRespons
 import org.example.datn_sd69.modules.favorite.service.CustomerFavoriteService;
 import org.example.datn_sd69.repository.CustomerRepository;
 import org.example.datn_sd69.repository.FavoriteRepository;
+import org.example.datn_sd69.repository.InventoryLotRepository;
 import org.example.datn_sd69.repository.ProductVariantRepository;
 import org.example.datn_sd69.repository.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -31,12 +32,23 @@ public class CustomerFavoriteServiceImpl implements CustomerFavoriteService {
     private final FavoriteRepository favoriteRepository;
     private final ProductVariantRepository productVariantRepository;
 
+    /*
+     * InventoryLot là nguồn tồn kho vật lý duy nhất.
+     *
+     * FavoriteResponse vẫn giữ field stockQuantity để không phá contract FE cũ,
+     * nhưng giá trị của field này được map từ sellableQuantity thật của InventoryLot.
+     */
+    private final InventoryLotRepository inventoryLotRepository;
+
     @Override
     @Transactional(readOnly = true)
     public List<FavoriteResponse> getFavorites() {
         Customer customer = getCurrentCustomer();
 
-        return favoriteRepository.findByCustomer_UserIdOrderByCreatedAtDesc(customer.getUserId())
+        return favoriteRepository
+                .findByCustomer_UserIdOrderByCreatedAtDesc(
+                        customer.getUserId()
+                )
                 .stream()
                 .map(this::mapToFavoriteResponse)
                 .toList();
@@ -51,21 +63,26 @@ public class CustomerFavoriteServiceImpl implements CustomerFavoriteService {
 
         validateProductVariantId(productVariantId);
 
-        ProductVariant productVariant = productVariantRepository.findById(productVariantId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy biến thể sản phẩm"
-                ));
+        ProductVariant productVariant =
+                productVariantRepository.findById(productVariantId)
+                        .orElseThrow(() -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Không tìm thấy biến thể sản phẩm"
+                        ));
 
         validateProductVariantCanFavorite(productVariant);
 
-        boolean existed = favoriteRepository.existsByCustomer_UserIdAndProductVariant_Id(
-                customer.getUserId(),
-                productVariantId
-        );
+        boolean existed =
+                favoriteRepository
+                        .existsByCustomer_UserIdAndProductVariant_Id(
+                                customer.getUserId(),
+                                productVariantId
+                        );
 
         if (existed) {
-            throw badRequest("Sản phẩm này đã có trong danh sách yêu thích");
+            throw badRequest(
+                    "Sản phẩm này đã có trong danh sách yêu thích"
+            );
         }
 
         Favorite favorite = new Favorite();
@@ -80,25 +97,30 @@ public class CustomerFavoriteServiceImpl implements CustomerFavoriteService {
 
     @Override
     @Transactional
-    public FavoriteToggleResponse toggleFavorite(AddFavoriteRequest request) {
+    public FavoriteToggleResponse toggleFavorite(
+            AddFavoriteRequest request
+    ) {
         Customer customer = getCurrentCustomer();
 
         Integer productVariantId = request.productVariantId();
 
         validateProductVariantId(productVariantId);
 
-        ProductVariant productVariant = productVariantRepository.findById(productVariantId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy biến thể sản phẩm"
-                ));
+        ProductVariant productVariant =
+                productVariantRepository.findById(productVariantId)
+                        .orElseThrow(() -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Không tìm thấy biến thể sản phẩm"
+                        ));
 
         validateProductVariantCanFavorite(productVariant);
 
-        var existingFavorite = favoriteRepository.findByCustomer_UserIdAndProductVariant_Id(
-                customer.getUserId(),
-                productVariantId
-        );
+        var existingFavorite =
+                favoriteRepository
+                        .findByCustomer_UserIdAndProductVariant_Id(
+                                customer.getUserId(),
+                                productVariantId
+                        );
 
         if (existingFavorite.isPresent()) {
             favoriteRepository.delete(existingFavorite.get());
@@ -131,10 +153,11 @@ public class CustomerFavoriteServiceImpl implements CustomerFavoriteService {
 
         validateProductVariantId(productVariantId);
 
-        return favoriteRepository.existsByCustomer_UserIdAndProductVariant_Id(
-                customer.getUserId(),
-                productVariantId
-        );
+        return favoriteRepository
+                .existsByCustomer_UserIdAndProductVariant_Id(
+                        customer.getUserId(),
+                        productVariantId
+                );
     }
 
     @Override
@@ -143,106 +166,226 @@ public class CustomerFavoriteServiceImpl implements CustomerFavoriteService {
         Customer customer = getCurrentCustomer();
 
         if (favoriteId == null || favoriteId <= 0) {
-            throw badRequest("favoriteId không hợp lệ");
+            throw badRequest(
+                    "favoriteId không hợp lệ"
+            );
         }
 
-        Favorite favorite = favoriteRepository.findByIdAndCustomer_UserId(
-                        favoriteId,
-                        customer.getUserId()
-                )
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy sản phẩm yêu thích"
-                ));
+        Favorite favorite =
+                favoriteRepository.findByIdAndCustomer_UserId(
+                                favoriteId,
+                                customer.getUserId()
+                        )
+                        .orElseThrow(() ->
+                                new ResponseStatusException(
+                                        HttpStatus.NOT_FOUND,
+                                        "Không tìm thấy sản phẩm yêu thích"
+                                )
+                        );
 
         favoriteRepository.delete(favorite);
     }
 
     @Override
     @Transactional
-    public void deleteFavoriteByVariant(Integer productVariantId) {
+    public void deleteFavoriteByVariant(
+            Integer productVariantId
+    ) {
         Customer customer = getCurrentCustomer();
 
         validateProductVariantId(productVariantId);
 
-        Favorite favorite = favoriteRepository.findByCustomer_UserIdAndProductVariant_Id(
-                        customer.getUserId(),
-                        productVariantId
-                )
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Sản phẩm chưa có trong danh sách yêu thích"
-                ));
+        Favorite favorite =
+                favoriteRepository
+                        .findByCustomer_UserIdAndProductVariant_Id(
+                                customer.getUserId(),
+                                productVariantId
+                        )
+                        .orElseThrow(() ->
+                                new ResponseStatusException(
+                                        HttpStatus.NOT_FOUND,
+                                        "Sản phẩm chưa có trong danh sách yêu thích"
+                                )
+                        );
 
         favoriteRepository.delete(favorite);
     }
 
-    private FavoriteResponse mapToFavoriteResponse(Favorite favorite) {
+    private FavoriteResponse mapToFavoriteResponse(
+            Favorite favorite
+    ) {
         ProductVariant variant = favorite.getProductVariant();
 
-        Product product = variant != null ? variant.getProduct() : null;
-        Brand brand = product != null ? product.getBrand() : null;
-        Capacity capacity = variant != null ? variant.getCapacity() : null;
-        BottleType bottleType = variant != null ? variant.getBottleType() : null;
+        Product product =
+                variant != null
+                        ? variant.getProduct()
+                        : null;
+
+        Brand brand =
+                product != null
+                        ? product.getBrand()
+                        : null;
+
+        Capacity capacity =
+                variant != null
+                        ? variant.getCapacity()
+                        : null;
+
+        BottleType bottleType =
+                variant != null
+                        ? variant.getBottleType()
+                        : null;
+
+        /*
+         * stockQuantity trong FavoriteResponse chỉ còn là compatibility field.
+         *
+         * Giá trị nghiệp vụ thật:
+         * InventoryLot.QuantityOnHand > 0
+         * AND InventoryLot.ExpirationDate >= hôm nay.
+         *
+         * Tuyệt đối không đọc ProductVariant.stockQuantity.
+         */
+        int sellableQuantity =
+                getSellableQuantity(variant);
 
         return new FavoriteResponse(
                 favorite.getId(),
-                variant != null ? variant.getId() : null,
-                product != null ? product.getId() : null,
-                product != null ? product.getName() : null,
-                brand != null ? brand.getName() : null,
-                variant != null ? variant.getSku() : null,
-                variant != null ? variant.getPrice() : null,
-                variant != null ? variant.getStockQuantity() : null,
-                capacity != null && capacity.getValue() != null
+                variant != null
+                        ? variant.getId()
+                        : null,
+                product != null
+                        ? product.getId()
+                        : null,
+                product != null
+                        ? product.getName()
+                        : null,
+                brand != null
+                        ? brand.getName()
+                        : null,
+                variant != null
+                        ? variant.getSku()
+                        : null,
+                variant != null
+                        ? variant.getPrice()
+                        : null,
+
+                // Giữ tên field cũ, nhưng dữ liệu lấy từ InventoryLot.
+                sellableQuantity,
+
+                capacity != null
+                        && capacity.getValue() != null
                         ? capacity.getValue().doubleValue()
                         : null,
-                bottleType != null ? bottleType.getName() : null,
+                bottleType != null
+                        ? bottleType.getName()
+                        : null,
+
+                /*
+                 * Giữ nguyên logic cũ.
+                 * Không tự ý thay đổi cách lấy ảnh trong đợt migration kho này.
+                 */
                 null,
+
                 favorite.getCreatedAt()
         );
     }
 
-    private void validateProductVariantCanFavorite(ProductVariant productVariant) {
-        if (productVariant == null) {
-            throw badRequest("Biến thể sản phẩm không tồn tại");
+    /**
+     * Tổng tồn có thể bán thật của SKU.
+     *
+     * InventoryLot là nguồn tồn duy nhất.
+     *
+     * Rule:
+     * QuantityOnHand > 0
+     * AND ExpirationDate >= current date
+     *
+     * Không đọc và không đồng bộ:
+     * - ProductVariant.stockQuantity
+     * - ProductVariant.manufacturingDate
+     * - ProductVariant.expirationDate
+     */
+    private int getSellableQuantity(
+            ProductVariant variant
+    ) {
+        if (variant == null || variant.getId() == null) {
+            return 0;
         }
 
-        if (productVariant.getStatus() == null || productVariant.getStatus() != ACTIVE_STATUS) {
-            throw badRequest("Biến thể sản phẩm đang ngừng bán, không thể yêu thích");
+        Integer quantity =
+                inventoryLotRepository
+                        .getSellableQuantityByVariantId(
+                                variant.getId()
+                        );
+
+        return quantity == null
+                ? 0
+                : Math.max(quantity, 0);
+    }
+
+    private void validateProductVariantCanFavorite(
+            ProductVariant productVariant
+    ) {
+        if (productVariant == null) {
+            throw badRequest(
+                    "Biến thể sản phẩm không tồn tại"
+            );
+        }
+
+        if (productVariant.getStatus() == null
+                || productVariant.getStatus() != ACTIVE_STATUS) {
+            throw badRequest(
+                    "Biến thể sản phẩm đang ngừng bán, không thể yêu thích"
+            );
         }
 
         Product product = productVariant.getProduct();
 
         if (product == null) {
-            throw badRequest("Sản phẩm không tồn tại");
+            throw badRequest(
+                    "Sản phẩm không tồn tại"
+            );
         }
 
-        if (product.getStatus() == null || product.getStatus() != ACTIVE_STATUS) {
-            throw badRequest("Sản phẩm đang ngừng bán, không thể yêu thích");
+        if (product.getStatus() == null
+                || product.getStatus() != ACTIVE_STATUS) {
+            throw badRequest(
+                    "Sản phẩm đang ngừng bán, không thể yêu thích"
+            );
         }
     }
 
-    private void validateProductVariantId(Integer productVariantId) {
-        if (productVariantId == null || productVariantId <= 0) {
-            throw badRequest("productVariantId phải là số nguyên dương");
+    private void validateProductVariantId(
+            Integer productVariantId
+    ) {
+        if (productVariantId == null
+                || productVariantId <= 0) {
+            throw badRequest(
+                    "productVariantId phải là số nguyên dương"
+            );
         }
     }
 
     private Customer getCurrentCustomer() {
         User user = getCurrentUser();
 
-        return customerRepository.findByUserId(user.getId())
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.FORBIDDEN,
-                        "Tài khoản hiện tại không phải khách hàng"
-                ));
+        return customerRepository
+                .findByUserId(user.getId())
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.FORBIDDEN,
+                                "Tài khoản hiện tại không phải khách hàng"
+                        )
+                );
     }
 
     private User getCurrentUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
 
-        if (authentication == null || !authentication.isAuthenticated()) {
+        if (authentication == null
+                || !authentication.isAuthenticated()) {
             throw new ResponseStatusException(
                     HttpStatus.UNAUTHORIZED,
                     "Bạn chưa đăng nhập"
@@ -258,14 +401,22 @@ public class CustomerFavoriteServiceImpl implements CustomerFavoriteService {
             );
         }
 
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.UNAUTHORIZED,
-                        "Không tìm thấy tài khoản đăng nhập"
-                ));
+        return userRepository
+                .findByEmail(email)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.UNAUTHORIZED,
+                                "Không tìm thấy tài khoản đăng nhập"
+                        )
+                );
     }
 
-    private ResponseStatusException badRequest(String message) {
-        return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+    private ResponseStatusException badRequest(
+            String message
+    ) {
+        return new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                message
+        );
     }
 }

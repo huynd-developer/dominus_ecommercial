@@ -46,6 +46,16 @@ public interface PromotionVariantRepository extends JpaRepository<PromotionVaria
             Integer ignorePromotionId
     );
 
+    /**
+     * Flash Sale active chỉ phụ thuộc vào:
+     * - Promotion còn hiệu lực
+     * - ProductVariant/Product còn được bật và chưa xóa
+     *
+     * Promotion không dùng ProductVariant.stockQuantity / manufacturingDate /
+     * expirationDate để quyết định active.
+     *
+     * Tồn bán được thật do InventoryLot quản lý và được map ra response ở Service.
+     */
     @Query(
             value = """
                 SELECT pv
@@ -62,9 +72,6 @@ public interface PromotionVariantRepository extends JpaRepository<PromotionVaria
                   AND COALESCE(v.isDeleted, false) = false
                   AND v.status = 1
                   AND product.status = 1
-                  AND v.stockQuantity > 0
-                  AND v.manufacturingDate <= :today
-                  AND v.expirationDate >= :today
                 ORDER BY p.endDate ASC, product.name ASC, v.sku ASC
             """,
             countQuery = """
@@ -80,23 +87,30 @@ public interface PromotionVariantRepository extends JpaRepository<PromotionVaria
                   AND COALESCE(v.isDeleted, false) = false
                   AND v.status = 1
                   AND product.status = 1
-                  AND v.stockQuantity > 0
-                  AND v.manufacturingDate <= :today
-                  AND v.expirationDate >= :today
             """
     )
-    Page<PromotionVariant> findActiveFlashSaleVariants(
+    Page<PromotionVariant> findActiveFlashSaleVariantsByPromotionTime(
             LocalDateTime now,
-            LocalDate today,
             Pageable pageable
     );
 
     /**
-     * Dùng riêng cho cart/checkout để lấy Flash Sale active của 1 biến thể.
+     * Giữ signature cũ để không làm vỡ caller hiện tại.
+     * today chỉ còn là compatibility parameter, không tham gia business rule Promotion.
+     */
+    default Page<PromotionVariant> findActiveFlashSaleVariants(
+            LocalDateTime now,
+            LocalDate today,
+            Pageable pageable
+    ) {
+        return findActiveFlashSaleVariantsByPromotionTime(now, pageable);
+    }
+
+    /**
+     * Dùng riêng cho cart/checkout để lấy Promotion active của một biến thể.
      *
-     * Query này phải cùng điều kiện với public flash-sale để:
-     * - ProductDetail thấy sale
-     * - Cart cũng tính đúng salePrice
+     * Query này chỉ quyết định Promotion theo campaign/SKU.
+     * Cart/Checkout tự kiểm tồn sellable từ InventoryLot theo nghiệp vụ của chúng.
      */
     @Query("""
         SELECT pv
@@ -112,14 +126,24 @@ public interface PromotionVariantRepository extends JpaRepository<PromotionVaria
           AND COALESCE(v.isDeleted, false) = false
           AND v.status = 1
           AND product.status = 1
-          AND v.stockQuantity > 0
-          AND v.manufacturingDate <= :today
-          AND v.expirationDate >= :today
         ORDER BY pv.discountPercent DESC, p.endDate ASC
     """)
-    List<PromotionVariant> findActivePromotionByProductVariantId(
+    List<PromotionVariant> findActivePromotionByProductVariantIdByPromotionTime(
+            Integer productVariantId,
+            LocalDateTime now
+    );
+
+    /**
+     * Giữ signature cũ để Cart/Checkout hiện tại không cần sửa theo thay đổi repository.
+     */
+    default List<PromotionVariant> findActivePromotionByProductVariantId(
             Integer productVariantId,
             LocalDateTime now,
             LocalDate today
-    );
+    ) {
+        return findActivePromotionByProductVariantIdByPromotionTime(
+                productVariantId,
+                now
+        );
+    }
 }

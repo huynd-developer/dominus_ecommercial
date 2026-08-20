@@ -1191,7 +1191,7 @@
                   </template>
 
                   <button
-                    v-if="order.canCancel"
+                    v-if="order.canCancel && isOnlineOrder(order)"
                     class="btn btn-outline-danger btn-sm"
                     :disabled="store.orderLoading"
                     @click="cancelOrder(order)"
@@ -1702,6 +1702,10 @@ const isCompletedOrder = (order: any) => {
   return Number(order?.status) === 3;
 };
 
+const isOnlineOrder = (order: any) => {
+  return String(order?.orderType ?? "").trim().toUpperCase() === "ONLINE";
+};
+
 const getReturnDeadlineTime = (order: any) => {
   const completedTime = getOrderCompletedBaseTime(order);
 
@@ -1713,7 +1717,7 @@ const getReturnDeadlineTime = (order: any) => {
 };
 
 const canRequestReturn = (order: any) => {
-  if (!isCompletedOrder(order)) {
+  if (!isOnlineOrder(order) || !isCompletedOrder(order)) {
     return false;
   }
 
@@ -2911,7 +2915,7 @@ const normalizeReturnStatusValue = (
 };
 
 const shouldShowReturnDeadlineText = (order: any) => {
-  if (!isCompletedOrder(order)) {
+  if (!isOnlineOrder(order) || !isCompletedOrder(order)) {
     return false;
   }
 
@@ -3322,6 +3326,7 @@ const getOrderRefundMethodText = (order: any) => {
 
 const canCancelReturnRequest = (order: any) => {
   return (
+    isOnlineOrder(order) &&
     Number(order?.status) === 6 &&
     getOrderReturnProcessStatus(order) === "PENDING"
   );
@@ -4926,6 +4931,11 @@ const toast = (
 };
 
 const cancelOrder = async (order: CustomerOrderResponse) => {
+  if (!isOnlineOrder(order)) {
+    toast("warning", "Chức năng hủy đơn tại đây chỉ áp dụng cho đơn Online.");
+    return;
+  }
+
   const cancelReasons = [
     "Muốn thay đổi địa chỉ nhận hàng",
     "Muốn thay đổi số điện thoại nhận hàng",
@@ -5054,6 +5064,14 @@ const submitReturnRequest = async (payload: ReturnRequestSubmitPayload) => {
 };
 
 const cancelReturnRequest = async (order: CustomerOrderResponse) => {
+  if (!isOnlineOrder(order)) {
+    toast(
+      "warning",
+      "Chức năng hủy yêu cầu hoàn hàng tại đây chỉ áp dụng cho đơn Online."
+    );
+    return;
+  }
+
   const result = await Swal.fire({
     title: "Rút lại yêu cầu?",
     html: `<div class="return-cancel-modal"><div class="return-cancel-alert"><div class="return-cancel-icon"><i class="bi bi-arrow-counterclockwise"></i></div><div class="return-cancel-content"><div class="return-cancel-title">Xác nhận rút lại yêu cầu hoàn hàng</div><div class="return-cancel-desc">Đơn hàng sẽ trở về trạng thái <strong>Hoàn thành</strong>. Sau khi rút lại, bạn cần gửi yêu cầu mới nếu muốn hoàn hàng/đổi trả tiếp.</div></div></div></div>`,
