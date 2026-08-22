@@ -60,14 +60,17 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/orders/payment/vnpay-return").permitAll()
 
                         /*
-                         * AI compare là chức năng public của trang sản phẩm.
-                         * Chỉ mở đúng endpoint này cho POST,
-                         * không mở toàn bộ POST /api/v1/products/**.
+                         * So sánh bằng AI là tính năng có quota và bắt buộc
+                         * phải đăng nhập bằng tài khoản khách hàng.
+                         *
+                         * Chỉ khóa đúng POST endpoint AI.
+                         * GET /api/v1/products/** bên dưới vẫn public,
+                         * nên so sánh thường không bị ảnh hưởng.
                          */
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/products/compare/ai"
-                        ).permitAll()
+                        ).hasAuthority("USER")
 
                         .requestMatchers(
                                 HttpMethod.GET,
