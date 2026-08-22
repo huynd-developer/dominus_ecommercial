@@ -1,5 +1,6 @@
 package org.example.datn_sd69.common.config;
 
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -50,6 +51,36 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
+
+                /*
+                 * Phân biệt đúng authentication và authorization:
+                 *
+                 * - Không có authentication hợp lệ
+                 *   (không có token, token hết hạn, token không hợp lệ)
+                 *   => 401 Unauthorized.
+                 *
+                 * - Đã đăng nhập hợp lệ nhưng không đủ quyền
+                 *   => 403 Forbidden.
+                 *
+                 * Không thay đổi bất kỳ rule phân quyền nào bên dưới.
+                 */
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(
+                                (request, response, authException) ->
+                                        response.sendError(
+                                                HttpServletResponse.SC_UNAUTHORIZED,
+                                                "Unauthorized"
+                                        )
+                        )
+                        .accessDeniedHandler(
+                                (request, response, accessDeniedException) ->
+                                        response.sendError(
+                                                HttpServletResponse.SC_FORBIDDEN,
+                                                "Forbidden"
+                                        )
+                        )
+                )
+
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, "/api/reviews/product/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
