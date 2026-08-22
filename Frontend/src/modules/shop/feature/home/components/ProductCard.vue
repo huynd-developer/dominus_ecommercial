@@ -203,7 +203,7 @@
       </div>
     </Teleport>
 
-    <!-- BẢNG POPUP SO SÁNH CHUYÊN NGHIỆP -->
+    <!-- BẢNG POPUP SO SÁNH CHUYÊN NGHIỆP CÓ AI -->
     <Teleport to="body">
       <div class="compare-modal-overlay" v-if="isCompareUIRenderer && sharedShowCompareModal" @click.self="sharedShowCompareModal = false">
         <div class="compare-modal-box">
@@ -212,6 +212,7 @@
             <button class="cm-close" @click="sharedShowCompareModal = false">✕</button>
           </div>
           <div class="cm-body">
+            <!-- BẮT ĐẦU: KHỐI TÍNH NĂNG AI -->
             <div class="ai-compare-toolbar">
               <div class="ai-compare-toolbar-text">
                 <div class="ai-compare-title">
@@ -263,6 +264,7 @@
                 <p>{{ sharedCompareRecommendation }}</p>
               </div>
             </div>
+            <!-- KẾT THÚC: KHỐI TÍNH NĂNG AI -->
 
             <table class="table-compare">
               <thead class="sticky-header">
@@ -350,8 +352,7 @@
                   </td>
                   <td v-for="i in Math.max(0, 3 - sharedCompareList.length)" :key="'empty-rating-' + i"></td>
                 </tr>
-                
-                <!-- BẮT ĐẦU: CÁC TRƯỜNG SO SÁNH NƯỚC HOA ĐÃ TÁCH RIÊNG -->
+
                 <tr><td colspan="4" class="group-header">Đặc tính sản phẩm</td></tr>
                 <tr>
                   <th class="spec-label-col">Nhóm hương chính</th>
@@ -383,22 +384,19 @@
                   <td v-for="p in sharedCompareList" :key="'occ' + getProductIdNum(p)">{{ getCompareValue(p, "occasion") }}</td>
                   <td v-for="i in Math.max(0, 3 - sharedCompareList.length)" :key="'empty-occ-' + i"></td>
                 </tr>
-                <!-- KẾT THÚC -->
 
                 <tr><td colspan="4" class="group-header bg-white border-bottom-0 pt-4"></td></tr>
                 <tr>
                   <th class="spec-label-col border-bottom-0"></th>
                   <td v-for="p in sharedCompareList" :key="'act' + getProductIdNum(p)" class="border-bottom-0 pb-4">
                     <button class="cm-btn-buy" :disabled="isCompareBuyDisabled(p)" @click="buyFromCompare(p)">
-                      <i class="bi bi-cart-plus me-1"></i> {{ isCompareBuyDisabled(p) ? "Tạm hết hàng" : "Thêm giỏ hàng" }}
+                      <i class="bi bi-cart-plus me-1"></i> {{ isCompareBuyDisabled(p) ? "Tạm hết hàng" : "Xem sản phẩm" }}
                     </button>
                   </td>
                   <td v-for="i in Math.max(0, 3 - sharedCompareList.length)" :key="'empty-act-' + i" class="border-bottom-0"></td>
                 </tr>
               </tbody>
             </table>
-
-
           </div>
         </div>
       </div>
@@ -450,28 +448,29 @@
 
 <script lang="ts">
 import { ref } from "vue";
-const sharedCompareList = ref<any[]>([]);
-const sharedShowCompareModal = ref(false);
-const sharedShowPickerModal = ref(false);
-const sharedCompareVariantIds = ref<Record<number, number>>({});
-const allProductsStore = ref<any[]>([]);
-const pickerLoading = ref(false);
-const pickerSearchKeyword = ref("");
 
-type CompareInsight = {
+export const sharedCompareList = ref<any[]>([]);
+export const sharedShowCompareModal = ref(false);
+export const sharedShowPickerModal = ref(false);
+export const sharedCompareVariantIds = ref<Record<number, number>>({});
+export const allProductsStore = ref<any[]>([]);
+export const pickerLoading = ref(false);
+export const pickerSearchKeyword = ref("");
+
+export type CompareInsight = {
   productId: number;
   longevity?: string;
   style?: string;
   occasion?: string;
 };
 
-const sharedCompareInsights = ref<Record<number, CompareInsight>>({});
-const sharedCompareAiLoading = ref(false);
-const sharedCompareAnalysis = ref("");
-const sharedCompareRecommendation = ref("");
-const sharedCompareAiError = ref("");
+export const sharedCompareInsights = ref<Record<number, CompareInsight>>({});
+export const sharedCompareAiLoading = ref(false);
+export const sharedCompareAnalysis = ref("");
+export const sharedCompareRecommendation = ref("");
+export const sharedCompareAiError = ref("");
 
-let currentCompareRendererId: string | null = null;
+export let currentCompareRendererId: string | null = null;
 </script>
 
 <script setup lang="ts">
@@ -481,41 +480,8 @@ import Swal from "sweetalert2";
 import api from "@/common/api";
 import { favoriteService } from "@/modules/shop/feature/product/services/favorite.service";
 
-interface ProductVariant {
-  id?: number; Id?: number; variantId?: number; productVariantId?: number;
-  price?: number | string; originalPrice?: number | string; oldPrice?: number | string;
-  salePrice?: number | string; promotionPrice?: number | string; flashSalePrice?: number | string;
-  currentPrice?: number | string; displayPrice?: number | string; finalPrice?: number | string;
-  minPrice?: number | string; discountPercent?: number | string; stock?: number;
-  stockQuantity?: number; sellableQuantity?: number; availableQuantity?: number; quantity?: number; status?: number;
-  capacity?: string | number | any; capacityName?: string | number; capacityValue?: string | number;
-  volume?: string | number; bottleType?: string | any; bottleTypeName?: string;
-  imageUrl?: string; ImageUrl?: string; image?: string; Image?: string;
-  mainImage?: string; mainImageUrl?: string; thumbnailUrl?: string;
-  manufacturingDate?: string; mfgDate?: string; expirationDate?: string; expDate?: string;
-  images?: any[]; Images?: any[]; imageList?: any[]; productImages?: any[];
-  ProductImages?: any[]; productImageList?: any[]; ProductImageList?: any[];
-}
-
-interface Product {
-  id: number; productId?: number; productVariantId?: number; variantId?: number;
-  name: string; brand: string; color?: string; price?: number | string; oldPrice?: number | string;
-  promotionPrice?: number | string; flashSalePrice?: number | string; currentPrice?: number | string;
-  displayPrice?: number | string; finalPrice?: number | string; minPrice?: number | string;
-  salePrice?: number | string; originalPrice?: number | string; discountPercent?: number | string;
-  rating: number; averageRating?: number; reviewCount: number; imageUrl?: string; ImageUrl?: string;
-  image?: string; Image?: string; mainImage?: string; MainImage?: string; mainImageUrl?: string;
-  MainImageUrl?: string; thumbnailUrl?: string; ThumbnailUrl?: string; images?: any[]; Images?: any[];
-  imageList?: any[]; ImageList?: any[]; galleryImages?: any[]; GalleryImages?: any[];
-  productImages?: any[]; ProductImages?: any[]; productImageList?: any[]; ProductImageList?: any[];
-  stock?: number; stockQuantity?: number; sellableQuantity?: number; availableQuantity?: number; status?: number;
-  isFlashSale?: boolean; manufacturingDate?: string; mfgDate?: string; expirationDate?: string;
-  expDate?: string; variants?: ProductVariant[];
-}
-
-const props = defineProps<{ product: Product }>();
+const props = defineProps<{ product: any }>();
 const router = useRouter();
-
 const instanceId = Math.random().toString(36).substring(2, 9);
 const isCompareUIRenderer = ref(false);
 
@@ -525,7 +491,6 @@ const activeProduct = computed(() => {
   const p = props.product as any;
   const full = fullProductData.value;
   
-  // Quét đủ tên mảng biến thể đề phòng API đổi tên
   const pVariants = p?.variants || p?.productVariants || p?.productVariantList || [];
   
   if (!full) {
@@ -536,24 +501,66 @@ const activeProduct = computed(() => {
   
   return {
     ...p,
-    ...full, // Lần này data Full sẽ ĐÈ LÊN data P cũ
+    ...full, 
     expirationDate: full.expirationDate || full.expDate || p.expirationDate || p.expDate,
     manufacturingDate: full.manufacturingDate || full.mfgDate || p.manufacturingDate || p.mfgDate,
     variants: fVariants.length > 0 ? fVariants : pVariants
   };
 });
 
+// =====================================
+// BỘ HÀM TÍNH TOÁN GIÁ CẢ THÔNG MINH
+// =====================================
+const getSafeNumber = (val: any) => {
+  if (val === null || val === undefined || val === '') return 0;
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  if (typeof val === 'string') {
+    const cleanStr = val.replace(/[^\d]/g, '');
+    return parseInt(cleanStr, 10) || 0;
+  }
+  return 0;
+};
+
+const getProductPrices = (item: any, parentProduct: any = null) => {
+  if (!item) return { sale: 0, orig: 0, percent: 0 };
+  
+  const basePrice = getSafeNumber(item.price ?? item.Price ?? item.basePrice);
+  const flashSale = getSafeNumber(item.flashSalePrice ?? item.salePrice ?? item.promotionPrice ?? item.discountPrice ?? item.specialPrice ?? item.currentPrice);
+  let explicitOrig = getSafeNumber(item.originalPrice ?? item.oldPrice ?? item.listPrice ?? item.regularPrice);
+  const percent = getSafeNumber(item.discountPercent ?? item.discount ?? item.salePercent ?? parentProduct?.discountPercent ?? parentProduct?.discount ?? 0);
+
+  let sale = 0;
+  let orig = 0;
+
+  if (flashSale > 0) {
+    sale = flashSale;
+    orig = explicitOrig > flashSale ? explicitOrig : (basePrice > flashSale ? basePrice : 0);
+  } else if (basePrice > 0) {
+    sale = basePrice;
+    orig = explicitOrig > basePrice ? explicitOrig : 0;
+  }
+
+  if (percent > 0 && sale > 0 && (orig === 0 || orig <= sale)) {
+    orig = sale;
+    sale = Math.round(orig * (1 - percent / 100));
+  }
+
+  if (orig > 0 && sale > orig) {
+    const temp = sale;
+    sale = orig;
+    orig = temp;
+  }
+
+  return { sale, orig, percent };
+};
+
 const getCheapestVariant = (p: any) => {
   const variants = p?.variants || p?.productVariants || p?.productVariantList || [];
   if (!variants || variants.length === 0) return null;
 
-  /*
-   * Ưu tiên biến thể đang bán và còn tồn có thể bán thật.
-   * Nếu tất cả đã hết hàng, vẫn giữ biến thể active có giá để card còn hiển thị giá.
-   */
   const activePricedVariants = variants.filter((v: any) => {
     const status = Number(v?.status ?? v?.variantStatus ?? 1);
-    return status === 1 && getProductPrices(v).sale > 0;
+    return status === 1 && getProductPrices(v, p).sale > 0;
   });
 
   const sellableVariants = activePricedVariants.filter((v: any) =>
@@ -566,16 +573,72 @@ const getCheapestVariant = (p: any) => {
   if (validVariants.length === 0) return null;
 
   return validVariants.reduce((min: any, v: any) => {
-    const vSale = getProductPrices(v).sale;
-    const minSale = getProductPrices(min).sale;
+    const vSale = getProductPrices(v, p).sale;
+    const minSale = getProductPrices(min, p).sale;
     return vSale < minSale ? v : min;
   }, validVariants[0]);
 };
 
-const confirmActionSpecific = async (type: "CART" | "BUY") => {
-  actionType.value = type;
-  await confirmAction();
-};
+const cardSalePrice = computed(() => {
+  const p = activeProduct.value as any;
+  const cheapestV = getCheapestVariant(p);
+  if (cheapestV) {
+    const { sale } = getProductPrices(cheapestV, p);
+    if (sale > 0) return sale;
+  }
+  const { sale } = getProductPrices(p);
+  return sale;
+});
+
+const cardOriginalPrice = computed(() => {
+  const p = activeProduct.value as any;
+  const cheapestV = getCheapestVariant(p);
+  const sale = cardSalePrice.value;
+  if (cheapestV) {
+    const { orig } = getProductPrices(cheapestV, p);
+    if (orig > sale) return orig;
+  }
+  const { orig } = getProductPrices(p);
+  return orig > sale ? orig : sale;
+});
+
+const cardDiscountPercent = computed(() => {
+  const p = activeProduct.value as any;
+  let percent = getSafeNumber(p.discountPercent ?? p.discount ?? p.salePercent);
+  if (percent > 0) return Math.round(percent);
+  const sale = cardSalePrice.value;
+  const orig = cardOriginalPrice.value;
+  if (orig > sale && sale > 0) return Math.round(((orig - sale) / orig) * 100);
+  return 0;
+});
+
+const cardRepresentativeVariantId = computed(() => {
+  const p = activeProduct.value as any;
+  const cheapestV = getCheapestVariant(p);
+  if (cheapestV) return Number(cheapestV.productVariantId || cheapestV.variantId || cheapestV.id || 0);
+  return Number(p.productVariantId || p.variantId || p.id || 0);
+});
+
+const hasVariantPriceRange = computed(() => {
+  const p = activeProduct.value as any;
+  const variants = Array.isArray(p?.variants) ? p.variants : [];
+  if (variants.length <= 1) return false;
+
+  const activeVariants = variants.filter(
+    (v: any) => Number(v?.status ?? v?.variantStatus ?? 1) === 1
+  );
+  const sellableVariants = activeVariants.filter((v: any) =>
+    isVariantSellable(v)
+  );
+  const priceVariants =
+    sellableVariants.length > 0 ? sellableVariants : activeVariants;
+
+  const prices = priceVariants
+    .map((v: any) => getProductPrices(v, p).sale)
+    .filter((price: number) => price > 0);
+
+  return new Set(prices).size > 1;
+});
 
 const quantity = ref(1);
 const actionLoading = ref(false);
@@ -642,10 +705,6 @@ const syncProductData = async () => {
 
 const formatCurrency = (value: number) => new Intl.NumberFormat("vi-VN").format(Number(value || 0)) + " đ";
 
-/**
- * Tồn có thể bán thật của SKU từ InventoryLot.
- * Không dùng stockQuantity / NSX / HSD legacy của ProductVariant để quyết định bán.
- */
 const getSellableQuantity = (variant: any) => {
   const value = Number(variant?.sellableQuantity ?? 0);
   if (!Number.isFinite(value) || value <= 0) return 0;
@@ -656,16 +715,6 @@ const isVariantSellable = (variant: any) => {
   if (!variant) return false;
   const status = Number(variant?.status ?? variant?.variantStatus ?? 1);
   return status === 1 && getSellableQuantity(variant) > 0;
-};
-
-const getSafeNumber = (val: any) => {
-  if (val === null || val === undefined || val === '') return 0;
-  if (typeof val === 'number') return isNaN(val) ? 0 : val;
-  if (typeof val === 'string') {
-    const cleanStr = val.replace(/[^\d]/g, '');
-    return parseInt(cleanStr, 10) || 0;
-  }
-  return 0;
 };
 
 const formatVariantName = (v: any) => {
@@ -706,99 +755,6 @@ const getSortedVariants = (p: any) => {
     return getCap(a) - getCap(b);
   });
 };
-
-const getProductPrices = (item: any) => {
-  if (!item) return { sale: 0, orig: 0 };
-  
-  const basePrice = getSafeNumber(item.price ?? item.Price ?? item.basePrice);
-  const flashSale = getSafeNumber(item.flashSalePrice ?? item.salePrice ?? item.promotionPrice ?? item.discountPrice ?? item.specialPrice ?? item.currentPrice);
-  const explicitOrig = getSafeNumber(item.originalPrice ?? item.oldPrice ?? item.listPrice ?? item.regularPrice);
-  const percent = getSafeNumber(item.discountPercent ?? item.discount ?? item.salePercent);
-
-  let sale = 0;
-  let orig = 0;
-
-  if (flashSale > 0) {
-    sale = flashSale;
-    orig = explicitOrig > flashSale ? explicitOrig : (basePrice > flashSale ? basePrice : 0);
-  } else if (basePrice > 0) {
-    sale = basePrice;
-    orig = explicitOrig > basePrice ? explicitOrig : 0;
-  }
-
-  if (orig === 0 && percent > 0 && sale > 0) {
-    orig = Math.round(sale / (1 - percent / 100));
-  }
-
-  if (orig > 0 && sale > orig) {
-    const temp = sale;
-    sale = orig;
-    orig = temp;
-  }
-
-  return { sale, orig };
-};
-
-const cardSalePrice = computed(() => {
-  const p = activeProduct.value as any;
-  const cheapestV = getCheapestVariant(p);
-  if (cheapestV) {
-    const { sale } = getProductPrices(cheapestV);
-    if (sale > 0) return sale;
-  }
-  const { sale } = getProductPrices(p);
-  return sale;
-});
-
-const cardOriginalPrice = computed(() => {
-  const p = activeProduct.value as any;
-  const cheapestV = getCheapestVariant(p);
-  const sale = cardSalePrice.value;
-  if (cheapestV) {
-    const { orig } = getProductPrices(cheapestV);
-    if (orig > sale) return orig;
-  }
-  const { orig } = getProductPrices(p);
-  return orig > sale ? orig : sale;
-});
-
-const cardDiscountPercent = computed(() => {
-  const p = activeProduct.value as any;
-  let percent = getSafeNumber(p.discountPercent ?? p.discount ?? p.salePercent);
-  if (percent > 0) return Math.round(percent);
-  const sale = cardSalePrice.value;
-  const orig = cardOriginalPrice.value;
-  if (orig > sale && sale > 0) return Math.round(((orig - sale) / orig) * 100);
-  return 0;
-});
-
-const cardRepresentativeVariantId = computed(() => {
-  const p = activeProduct.value as any;
-  const cheapestV = getCheapestVariant(p);
-  if (cheapestV) return Number(cheapestV.productVariantId || cheapestV.variantId || cheapestV.id || 0);
-  return Number(p.productVariantId || p.variantId || p.id || 0);
-});
-
-const hasVariantPriceRange = computed(() => {
-  const p = activeProduct.value as any;
-  const variants = Array.isArray(p?.variants) ? p.variants : [];
-  if (variants.length <= 1) return false;
-
-  const activeVariants = variants.filter(
-    (v: any) => Number(v?.status ?? v?.variantStatus ?? 1) === 1
-  );
-  const sellableVariants = activeVariants.filter((v: any) =>
-    isVariantSellable(v)
-  );
-  const priceVariants =
-    sellableVariants.length > 0 ? sellableVariants : activeVariants;
-
-  const prices = priceVariants
-    .map((v: any) => getProductPrices(v).sale)
-    .filter((price: number) => price > 0);
-
-  return new Set(prices).size > 1;
-});
 
 const normalizeImageUrl = (url: unknown) => {
   const rawUrl = String(url || "").trim();
@@ -858,6 +814,7 @@ const productImages = computed(() => {
 const productImage = computed(() => productImages.value[0] || "");
 const hasProductImage = computed(() => Boolean(productImage.value) && !imageLoadError.value);
 const getPlaceholderImage = () => { return "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#9ca3af" font-family="Arial" font-size="20">No Image</text></svg>`); };
+
 const getGlobalProductImage = (p: any) => {
   if (!p) return getPlaceholderImage();
   const images: string[] = [];
@@ -952,14 +909,14 @@ const getPrimaryVariantObject = (item: any) => {
 
     const sellableVariant = activeVariants.find(
       (variant: any) =>
-        isVariantSellable(variant) && getProductPrices(variant).sale > 0
+        isVariantSellable(variant) && getProductPrices(variant, item).sale > 0
     );
 
     if (sellableVariant) return sellableVariant;
 
     return (
       activeVariants.find(
-        (variant: any) => getProductPrices(variant).sale > 0
+        (variant: any) => getProductPrices(variant, item).sale > 0
       ) ||
       activeVariants[0] ||
       item.variants[0]
@@ -981,7 +938,7 @@ const getCompareVariant = (p: any) => {
 
 const getComparePrice = (p: any) => {
   const v = getCompareVariant(p);
-  const { sale } = getProductPrices(v || p);
+  const { sale } = getProductPrices(v || p, p);
   if (sale > 0) return sale;
   return getSafeNumber(p?.price ?? p?.Price ?? p?.minPrice ?? p?.maxPrice);
 };
@@ -989,7 +946,7 @@ const getComparePrice = (p: any) => {
 const getCompareOriginalPrice = (p: any) => {
   const v = getCompareVariant(p);
   const sale = getComparePrice(p);
-  const { orig } = getProductPrices(v || p);
+  const { orig } = getProductPrices(v || p, p);
   if (orig > sale) return orig;
   
   const pOrig = getSafeNumber(p?.originalPrice ?? p?.oldPrice ?? p?.listPrice ?? p?.price ?? p?.maxPrice ?? p?.minPrice);
@@ -1010,11 +967,78 @@ const getCompareDiscount = (p: any) => {
 
 const isCompareBuyDisabled = (p: any) => getCompareStock(p) <= 0 || getComparePrice(p) <= 0;
 
+const confirmActionSpecific = async (type: "CART" | "BUY") => {
+  actionType.value = type;
+  
+  if (!selectedVariant.value) return;
+  const targetIdToUse = currentTargetProduct.value ? getProductIdNum(currentTargetProduct.value) : getProductIdNum(activeProduct.value);
+  const variantId = Number(selectedVariant.value.productVariantId || selectedVariant.value.variantId || selectedVariant.value.id || targetIdToUse);
+
+  try {
+    actionLoading.value = true;
+    
+    const cartRes = await api.get("/v1/customer/cart/my-cart").catch(() => null);
+    let currentQty = 0;
+    
+    if (cartRes && cartRes.data) {
+      const payload = cartRes.data;
+      const candidates = [payload, payload?.data, payload?.content, payload?.items, payload?.cartItems, payload?.data?.content, payload?.data?.items, payload?.data?.cartItems];
+      let currentCartItems = [];
+      for (const c of candidates) {
+        if (Array.isArray(c)) { currentCartItems = c; break; }
+      }
+      const existingItem = currentCartItems.find((i: any) => 
+        Number(i?.productVariantId || i?.variantId || i?.id) === variantId
+      );
+      if (existingItem) currentQty = Number(existingItem.quantity || 0);
+    }
+    
+    const stock = getSellableQuantity(selectedVariant.value);
+
+    if (!isVariantSellable(selectedVariant.value) || stock <= 0) {
+      showToast(
+        "warning",
+        "Tạm hết hàng",
+        "Phân loại này hiện không còn tồn có thể bán."
+      );
+      return;
+    }
+
+    const maxAllow = Math.min(stock, 10);
+    
+    if (currentQty + quantity.value > maxAllow) {
+      if (currentQty >= maxAllow) {
+          showToast("warning", "Giới hạn mua", `Giỏ hàng đã đạt giới hạn ${maxAllow} sản phẩm này!`);
+      } else {
+          showToast("warning", "Giới hạn mua", `Giỏ hàng đang có sẵn ${currentQty} cái. Chỉ được thêm tối đa ${maxAllow - currentQty} cái nữa!`);
+      }
+      return; 
+    }
+
+    if (actionType.value === "CART") {
+      await api.post("/v1/customer/cart/add", { productVariantId: variantId, quantity: quantity.value });
+      window.dispatchEvent(new Event("cart-updated"));
+      showVariantModal.value = false;
+      showToast("success", "Thành công", "Đã thêm sản phẩm vào giỏ hàng.");
+    } else {
+      await api.post("/v1/customer/cart/add", { productVariantId: variantId, quantity: quantity.value });
+      window.dispatchEvent(new Event("cart-updated"));
+      showVariantModal.value = false;
+      router.push({ name: "Checkout" });
+    }
+  } catch (error: any) { 
+    showToast("error", "Lỗi", error?.response?.data?.message || "Không thể thực hiện yêu cầu."); 
+  } finally { 
+    actionLoading.value = false; 
+  }
+};
+
 const buyFromCompare = (p: any) => {
-  const pId = getProductIdNum(p);
-  const vId = sharedCompareVariantIds.value[pId];
-  openVariantModal("CART", p, vId);
+  const id = p.id || p.productId;
   sharedShowCompareModal.value = false;
+  if(id) {
+      router.push({ name: "SingleProduct", params: { id: id } });
+  }
 };
 
 const toCompareText = (value: any): string => {
@@ -1092,13 +1116,6 @@ const getFragranceFamily = (item: any) => {
   return "Đang cập nhật";
 };
 
-// CÁC HÀM XỬ LÝ MỚI CHO THUỘC TÍNH NƯỚC HOA
-const getCompareInsight = (item: any): CompareInsight | null => {
-  const productId = getProductIdNum(item);
-  if (!productId) return null;
-  return sharedCompareInsights.value[productId] || null;
-};
-
 const getOccasionText = (item: any) => {
   const directCandidates = [
     item?.occasions,
@@ -1111,7 +1128,7 @@ const getOccasionText = (item: any) => {
     if (text) return text;
   }
 
-  return getCompareInsight(item)?.occasion || "Chưa có dữ liệu";
+  return sharedCompareInsights.value[getProductIdNum(item)]?.occasion || "Chưa có dữ liệu";
 };
 
 const getStyleText = (item: any) => {
@@ -1126,7 +1143,7 @@ const getStyleText = (item: any) => {
     if (text) return text;
   }
 
-  return getCompareInsight(item)?.style || "Chưa có dữ liệu";
+  return sharedCompareInsights.value[getProductIdNum(item)]?.style || "Chưa có dữ liệu";
 };
 
 const getBrandNameGlobal = (item: any) => {
@@ -1139,9 +1156,9 @@ const getRatingScore = (item: any) => {
   if (raw > 0) return Math.min(5, Math.max(0, raw)).toFixed(1);
   return (5.0).toFixed(1);
 };
+
 const getReviewCount = (item: any) => Number(item?.reviewCount || item?.reviews || item?.totalReviews || 0);
 
-// SO SÁNH NÂNG CAO
 const getPricePerMl = (p: any) => {
   const v = getCompareVariant(p);
   const price = getComparePrice(p);
@@ -1186,7 +1203,7 @@ const getLongevityDisplay = (p: any) => {
 
   if (actualLongevity) return actualLongevity;
 
-  return getCompareInsight(p)?.longevity || "Chưa có dữ liệu";
+  return sharedCompareInsights.value[getProductIdNum(p)]?.longevity || "Chưa có dữ liệu";
 };
 
 const getCompareBottleType = (p: any) => {
@@ -1382,10 +1399,6 @@ const loadStructuredCompareInsights = async (): Promise<boolean> => {
 
     return true;
   } catch (error: any) {
-    /*
-     * AI chỉ là phần bổ sung.
-     * Nếu Gemini lỗi/quá quota thì bảng so sánh thường vẫn phải hoạt động bình thường.
-     */
     const message =
       error?.response?.data?.message ||
       error?.message ||
@@ -1449,16 +1462,20 @@ watch(sharedShowCompareModal, async (val) => {
       const p = updatedList[i];
       const id = getProductIdNum(p);
 
-      // Lưu lại map giá variant từ card gốc trước khi gọi API
       const variantSaleMap = new Map<number, number>();
       const variantOrigMap = new Map<number, number>();
+      const discountMap = new Map<number, number>();
+
       if (p.variants && Array.isArray(p.variants)) {
         p.variants.forEach((pv: any) => {
           const vId = Number(pv.productVariantId || pv.variantId || pv.id);
           if (vId) {
-            const prices = getProductPrices(pv);
-            if (prices.sale > 0) variantSaleMap.set(vId, prices.sale);
-            if (prices.orig > 0) variantOrigMap.set(vId, prices.orig);
+            const sale = Number(pv.salePrice ?? pv.promotionPrice ?? pv.flashSalePrice ?? pv.price ?? 0);
+            const orig = Number(pv.originalPrice ?? pv.oldPrice ?? pv.price ?? sale);
+            const disc = Number(pv.discountPercent ?? pv.discount ?? 0);
+            if (sale > 0) variantSaleMap.set(vId, sale);
+            if (orig > 0) variantOrigMap.set(vId, orig);
+            if (disc > 0) discountMap.set(vId, disc);
           }
         });
       }
@@ -1471,19 +1488,30 @@ watch(sharedShowCompareModal, async (val) => {
           if (rawVariants && Array.isArray(rawVariants)) {
             fullData.variants = rawVariants.map((v: any) => {
               const vId = Number(v.productVariantId || v.variantId || v.id);
-              const prices = getProductPrices(v);
+
+              const apiSale = Number(v.salePrice ?? v.promotionPrice ?? v.flashSalePrice ?? v.price ?? 0);
+              const apiOrig = Number(v.originalPrice ?? v.oldPrice ?? v.price ?? apiSale);
+              
+              let finalSale = variantSaleMap.get(vId) ?? apiSale;
+              let finalOrig = variantOrigMap.get(vId) ?? apiOrig;
+              let finalDisc = discountMap.get(vId) ?? Number(v.discountPercent ?? fullData?.discountPercent ?? 0);
+              
+              if (finalDisc > 0 && finalOrig <= finalSale && finalSale > 0) {
+                 finalOrig = finalSale;
+                 finalSale = Math.round(finalOrig * (1 - finalDisc / 100));
+              }
+
               return { 
                 ...v, 
-                salePrice: variantSaleMap.get(vId) ?? (prices.sale > 0 ? prices.sale : v.salePrice), 
-                originalPrice: variantOrigMap.get(vId) ?? (prices.orig > 0 ? prices.orig : v.originalPrice) 
+                salePrice: finalSale, 
+                originalPrice: finalOrig,
+                discountPercent: finalDisc
               };
             });
           }
           updatedList[i] = { 
-            // Card chỉ giữ dữ liệu hiển thị/khuyến mãi; detail là nguồn metadata cho bảng so sánh.
             ...p,
             ...fullData,
-            // Không để detail ghi đè giá khuyến mãi đang hiển thị trên card.
             flashSalePrice: p.flashSalePrice ?? fullData.flashSalePrice,
             salePrice: p.salePrice ?? fullData.salePrice,
             discountPercent: p.discountPercent ?? fullData.discountPercent,
@@ -1495,12 +1523,6 @@ watch(sharedShowCompareModal, async (val) => {
       } catch (e) {}
     }
     sharedCompareList.value = updatedList;
-
-    /*
-     * So sánh thường luôn mở độc lập.
-     * Không tự động gọi Gemini khi mở modal để tránh tiêu tốn quota/token.
-     * AI chỉ chạy khi người dùng chủ động bấm "So sánh bằng AI".
-     */
     resetCompareAiResult();
   }
 });
@@ -1521,7 +1543,7 @@ const openVariantModal = async (type: "CART" | "BUY", customProduct: any = null,
 
     const salePriceMap = new Map<number, number>();
     const origPriceMap = new Map<number, number>();
-    const discountMap = new Map<number, number>(); // Thêm Map giữ % giảm
+    const discountMap = new Map<number, number>();
     
     if (tp?.variants && Array.isArray(tp.variants)) {
       tp.variants.forEach((v: any) => {
@@ -1556,12 +1578,13 @@ const openVariantModal = async (type: "CART" | "BUY", customProduct: any = null,
       const apiSale = Number(v.salePrice ?? v.promotionPrice ?? v.flashSalePrice ?? v.price ?? 0);
       const apiOrig = Number(v.originalPrice ?? v.oldPrice ?? v.price ?? apiSale);
       
-      const finalSale = salePriceMap.get(vId) ?? apiSale;
-      const finalOrig = origPriceMap.get(vId) ?? apiOrig;
-      let finalDisc = discountMap.get(vId) ?? Number(v.discountPercent ?? 0);
+      let finalSale = salePriceMap.get(vId) ?? apiSale;
+      let finalOrig = origPriceMap.get(vId) ?? apiOrig;
+      let finalDisc = discountMap.get(vId) ?? Number(v.discountPercent ?? tp?.discountPercent ?? tp?.discount ?? 0);
       
-      if (finalDisc === 0 && finalOrig > finalSale && finalSale > 0) {
-         finalDisc = Math.round(((finalOrig - finalSale) / finalOrig) * 100);
+      if (finalDisc > 0 && finalOrig <= finalSale && finalSale > 0) {
+         finalOrig = finalSale;
+         finalSale = Math.round(finalOrig * (1 - finalDisc / 100));
       }
 
       return {
@@ -1571,7 +1594,7 @@ const openVariantModal = async (type: "CART" | "BUY", customProduct: any = null,
         salePrice: finalSale,
         originalPrice: finalOrig,
         price: finalSale > 0 ? finalSale : finalOrig,
-        discountPercent: finalDisc, // Lưu lại % giảm
+        discountPercent: finalDisc,
         displayCapacity: displayCap,
         numericCapacity: numericCap,
       };
@@ -1605,72 +1628,6 @@ const openVariantModal = async (type: "CART" | "BUY", customProduct: any = null,
     }
   } finally {
     isLoadingVariants.value = false;
-  }
-};
-
-const confirmAction = async () => {
-  if (!selectedVariant.value) return;
-  const targetIdToUse = currentTargetProduct.value ? getProductIdNum(currentTargetProduct.value) : getProductIdNum(activeProduct.value);
-  const variantId = Number(selectedVariant.value.productVariantId || selectedVariant.value.variantId || selectedVariant.value.id || targetIdToUse);
-
-  try {
-    actionLoading.value = true;
-    
-    // === BẮT ĐẦU FIX: CHECK SỐ LƯỢNG GIỎ HÀNG THỰC TẾ TRƯỚC KHI THÊM ===
-    const cartRes = await api.get("/v1/customer/cart/my-cart").catch(() => null);
-    let currentQty = 0;
-    
-    if (cartRes && cartRes.data) {
-      const payload = cartRes.data;
-      const candidates = [payload, payload?.data, payload?.content, payload?.items, payload?.cartItems, payload?.data?.content, payload?.data?.items, payload?.data?.cartItems];
-      let currentCartItems = [];
-      for (const c of candidates) {
-        if (Array.isArray(c)) { currentCartItems = c; break; }
-      }
-      const existingItem = currentCartItems.find((i: any) => 
-        Number(i?.productVariantId || i?.variantId || i?.id) === variantId
-      );
-      if (existingItem) currentQty = Number(existingItem.quantity || 0);
-    }
-    
-    const stock = getSellableQuantity(selectedVariant.value);
-
-    if (!isVariantSellable(selectedVariant.value) || stock <= 0) {
-      showToast(
-        "warning",
-        "Tạm hết hàng",
-        "Phân loại này hiện không còn tồn có thể bán."
-      );
-      return;
-    }
-
-    const maxAllow = Math.min(stock, 10);
-    
-    if (currentQty + quantity.value > maxAllow) {
-      if (currentQty >= maxAllow) {
-          showToast("warning", "Giới hạn mua", `Giỏ hàng đã đạt giới hạn ${maxAllow} sản phẩm này!`);
-      } else {
-          showToast("warning", "Giới hạn mua", `Giỏ hàng đang có sẵn ${currentQty} cái. Chỉ được thêm tối đa ${maxAllow - currentQty} cái nữa!`);
-      }
-      return; 
-    }
-    // === KẾT THÚC FIX ===
-
-    if (actionType.value === "CART") {
-      await api.post("/v1/customer/cart/add", { productVariantId: variantId, quantity: quantity.value });
-      window.dispatchEvent(new Event("cart-updated"));
-      showVariantModal.value = false;
-      showToast("success", "Thành công", "Đã thêm sản phẩm vào giỏ hàng.");
-    } else {
-      await api.post("/v1/customer/cart/add", { productVariantId: variantId, quantity: quantity.value });
-      window.dispatchEvent(new Event("cart-updated"));
-      showVariantModal.value = false;
-      router.push({ name: "Checkout" });
-    }
-  } catch (error: any) { 
-    showToast("error", "Lỗi", error?.response?.data?.message || "Không thể thực hiện yêu cầu."); 
-  } finally { 
-    actionLoading.value = false; 
   }
 };
 
