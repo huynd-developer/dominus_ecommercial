@@ -282,7 +282,7 @@
         <span>{{ formatCurrency(totalAmount) }}</span>
       </div>
 
-      <div class="summary-line">
+      <div class="summary-line" v-if="discountAmount > 0">
         <span>Giảm giá</span>
         <span class="discount-value">-{{ formatCurrency(discountAmount) }}</span>
       </div>
@@ -379,9 +379,6 @@ const vouchersLoaded = ref(false);
 
 let closeDropdownTimer: ReturnType<typeof setTimeout> | null = null;
 
-// =====================================
-// TÍNH TOÁN SỐ TIỀN GIẢM THỰC TẾ CHO VOUCHER
-// =====================================
 const getActualDiscountAmount = (voucher: any) => {
   if (!canUseVoucherLocally(voucher)) return 0;
   
@@ -394,12 +391,9 @@ const getActualDiscountAmount = (voucher: any) => {
     return maxDiscount > 0 ? Math.min(calculated, maxDiscount) : calculated;
   }
   
-  return value; // Khấu trừ trực tiếp số tiền
+  return value;
 };
 
-// =====================================
-// SẮP XẾP LẠI MÃ NGON LÊN ĐẦU
-// =====================================
 const filteredVouchers = computed(() => {
   const keyword = voucherCode.value.trim().toLowerCase();
 
@@ -414,16 +408,13 @@ const filteredVouchers = computed(() => {
     const aUsable = canUseVoucherLocally(a);
     const bUsable = canUseVoucherLocally(b);
     
-    // 1. Ưu tiên mã đủ điều kiện (đơn tối thiểu)
     if (aUsable && !bUsable) return -1;
     if (!aUsable && bUsable) return 1;
     
-    // 2. Nếu cả 2 cùng trạng thái (cùng đủ điều kiện hoặc cùng không),
-    // thì so sánh số tiền giảm được thực tế trên đơn hàng hiện tại
     const aDiscount = getActualDiscountAmount(a);
     const bDiscount = getActualDiscountAmount(b);
     
-    return bDiscount - aDiscount; // Sắp xếp giảm dần theo số tiền giảm
+    return bDiscount - aDiscount;
   }).slice(0, 10);
 });
 
@@ -646,16 +637,19 @@ const handleApplyVoucher = async () => {
       },
     });
 
+    // BÓC TÁCH DỮ LIỆU ĐA TẦNG ĐỂ KHÔNG BỊ MISS GIẢM GIÁ
+    const respData = res.data?.data ?? res.data?.result ?? res.data;
     const discount = Number(
-      res.data?.discountAmount ??
-        res.data?.discount ??
-        res.data?.amount ??
-        0
+      respData?.discountAmount ??
+      respData?.discountValue ??
+      respData?.discount ??
+      respData?.amount ??
+      0
     );
 
     voucherCode.value = cleanCode;
     isVoucherApplied.value = true;
-    voucherMessage.value = res.data?.message || "Áp dụng voucher thành công.";
+    voucherMessage.value = respData?.message || "Áp dụng voucher thành công.";
     voucherMessageClass.value = "text-success";
 
     localStorage.setItem("applied_voucher", cleanCode);
@@ -705,7 +699,6 @@ const getMinOrderValue = (voucher: any) => {
   return Number(voucher?.minOrderValue ?? voucher?.minimumOrderValue ?? voucher?.minOrderAmount ?? 0);
 };
 
-// ĐÃ SỬA: Đọc đủ hết tất cả các trường hợp tên biến giảm tối đa từ Backend
 const getMaxDiscount = (voucher: any) => {
   return Number(
     voucher?.maxDiscount ?? 
@@ -775,7 +768,6 @@ const getErrorMessage = (error: any, fallback: string) => {
 watch(
   () => props.totalAmount,
   (newValue, oldValue) => {
-    // THÊM ĐIỀU KIỆN CHẶN: Nếu đang submit thanh toán hoặc tiền về 0 thì KHÔNG ĐƯỢC tự động hủy voucher
     if (
       !props.isSubmitting &&
       Number(newValue || 0) > 0 &&
@@ -805,8 +797,6 @@ onMounted(async () => {
 
   const savedVoucher = localStorage.getItem("applied_voucher");
 
-  // Nếu khách đã chọn mã ở giỏ hàng (được lưu trong localStorage)
-  // thì tự động điền lại mã đó và áp dụng (Không tự động chọn mã tốt nhất nữa)
   if (savedVoucher && props.totalAmount > 0) {
     voucherCode.value = savedVoucher;
     await handleApplyVoucher();
