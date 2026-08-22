@@ -84,6 +84,62 @@
             <button class="cm-close" @click="showCompareModal = false">✕</button>
           </div>
           <div class="cm-body">
+            <!-- AI chỉ là phần bổ sung; bảng so sánh thường bên dưới giữ nguyên. -->
+            <div class="ai-compare-toolbar">
+              <div class="ai-compare-toolbar-text">
+                <div class="ai-compare-title">
+                  <i class="bi bi-stars"></i>
+                  So sánh bằng AI
+                </div>
+                <div class="ai-compare-subtitle">
+                  AI sẽ phân tích thêm độ lưu hương, phong cách, hoàn cảnh sử dụng và gợi ý lựa chọn dựa trên dữ liệu sản phẩm.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                class="cm-btn-ai"
+                :disabled="aiCompareLoading || compareList.length < 2"
+                @click="handleAiCompare"
+              >
+                <span
+                  v-if="aiCompareLoading"
+                  class="spinner-border spinner-border-sm me-2"
+                ></span>
+                <i v-else class="bi bi-stars me-2"></i>
+                {{ aiCompareLoading ? "Đang phân tích..." : "So sánh bằng AI" }}
+              </button>
+            </div>
+
+            <div v-if="aiCompareError" class="ai-compare-error">
+              <i class="bi bi-exclamation-circle me-2"></i>
+              {{ aiCompareError }}
+            </div>
+
+            <div
+              v-if="aiCompareAnalysis || aiCompareRecommendation"
+              class="ai-compare-result"
+            >
+              <div v-if="aiCompareAnalysis" class="ai-result-block">
+                <div class="ai-result-label">
+                  <i class="bi bi-lightbulb me-2"></i>
+                  Nhận xét từ AI
+                </div>
+                <p>{{ aiCompareAnalysis }}</p>
+              </div>
+
+              <div
+                v-if="aiCompareRecommendation"
+                class="ai-result-block ai-result-recommendation"
+              >
+                <div class="ai-result-label">
+                  <i class="bi bi-check2-circle me-2"></i>
+                  Gợi ý lựa chọn
+                </div>
+                <p>{{ aiCompareRecommendation }}</p>
+              </div>
+            </div>
+
             <table class="table-compare">
               <thead class="sticky-header">
                 <tr>
@@ -431,6 +487,124 @@ const pickerSearchKeyword = ref("");
 const allProductsStore = ref<any[]>([]);
 const compareVariantIds = ref<Record<number, number>>({});
 
+type CompareInsight = {
+  productId: number;
+  longevity?: string;
+  style?: string;
+  occasion?: string;
+};
+
+const compareInsights = ref<Record<number, CompareInsight>>({});
+const aiCompareLoading = ref(false);
+const aiCompareAnalysis = ref("");
+const aiCompareRecommendation = ref("");
+const aiCompareError = ref("");
+
+const resetCompareAiResult = () => {
+  compareInsights.value = {};
+  aiCompareAnalysis.value = "";
+  aiCompareRecommendation.value = "";
+  aiCompareError.value = "";
+};
+
+const getCompareProductIds = () => {
+  return compareList.value
+    .map((p: any) => Number(p?.productId || p?.id || 0))
+    .filter((id: number) => Number.isFinite(id) && id > 0);
+};
+
+const loadStructuredCompareInsights = async (): Promise<boolean> => {
+  const productIds = getCompareProductIds();
+
+  if (productIds.length < 2 || productIds.length > MAX_COMPARE) {
+    resetCompareAiResult();
+    return false;
+  }
+
+  try {
+    const res = await api.post("/v1/products/compare/ai", {
+      productIds,
+    });
+
+    const data = res?.data?.data ?? res?.data;
+    const rows = Array.isArray(data?.insights) ? data.insights : [];
+    const nextInsights: Record<number, CompareInsight> = {};
+
+    rows.forEach((row: any) => {
+      const productId = Number(row?.productId);
+      if (!Number.isFinite(productId) || productId <= 0) return;
+
+      nextInsights[productId] = {
+        productId,
+        longevity: String(row?.longevity || "").trim() || "Chưa có dữ liệu",
+        style: String(row?.style || "").trim() || "Chưa có dữ liệu",
+        occasion: String(row?.occasion || "").trim() || "Chưa có dữ liệu",
+      };
+    });
+
+    compareInsights.value = nextInsights;
+    aiCompareAnalysis.value = String(data?.analysis || "").trim();
+    aiCompareRecommendation.value = String(data?.recommendation || "").trim();
+    aiCompareError.value = "";
+    return true;
+  } catch (error: any) {
+    const message =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Không thể phân tích sản phẩm bằng AI lúc này.";
+
+    console.warn("Không lấy được kết quả so sánh AI:", message);
+
+    compareInsights.value = {};
+    aiCompareAnalysis.value = "";
+    aiCompareRecommendation.value = "";
+    aiCompareError.value = String(message);
+    return false;
+  }
+};
+
+const handleAiCompare = async () => {
+  if (aiCompareLoading.value) return;
+
+  // Chỉ AI bắt buộc đăng nhập; so sánh thường vẫn public.
+  if (!checkLoginBeforeAction()) return;
+
+  const productIds = getCompareProductIds();
+
+  if (productIds.length < 2 || productIds.length > MAX_COMPARE) {
+    showToast(
+      "warning",
+      "Chưa đủ sản phẩm",
+      "Vui lòng chọn từ 2 đến 3 sản phẩm để so sánh bằng AI."
+    );
+    return;
+  }
+
+  if (new Set(productIds).size !== productIds.length) {
+    showToast(
+      "warning",
+      "Sản phẩm bị trùng",
+      "Không được chọn trùng sản phẩm để so sánh bằng AI."
+    );
+    return;
+  }
+
+  aiCompareLoading.value = true;
+  aiCompareError.value = "";
+
+  try {
+    await loadStructuredCompareInsights();
+  } finally {
+    aiCompareLoading.value = false;
+  }
+};
+
+const getCompareInsight = (item: any): CompareInsight | null => {
+  const productId = Number(item?.productId || item?.id || 0);
+  if (!Number.isFinite(productId) || productId <= 0) return null;
+  return compareInsights.value[productId] || null;
+};
+
 const isInCompare = (item: any) => { const id = item.id || item.productId; return compareList.value.some((p: any) => (p.id || p.productId) === id); };
 
 const toggleCompare = (item: any) => {
@@ -497,8 +671,21 @@ watch(showCompareModal, (val) => {
         compareVariantIds.value[id] = Number(primaryV?.productVariantId ?? primaryV?.variantId ?? primaryV?.id ?? 0);
       }
     });
+
+    // Không tự gọi Gemini khi mở modal; chỉ reset kết quả AI cũ.
+    resetCompareAiResult();
   }
 });
+
+watch(
+  () =>
+    compareList.value
+      .map((p: any) => Number(p?.productId || p?.id || 0))
+      .join(","),
+  () => {
+    resetCompareAiResult();
+  }
+);
 
 const getSafeNumber = (val: any) => {
   if (val === null || val === undefined || val === '') return 0;
@@ -637,7 +824,10 @@ const getOccasionText = (item: any) => {
     return result.join(" | ");
   }
 
-  // 2. Tự động suy luận nếu Backend trống
+  const aiOccasion = getCompareInsight(item)?.occasion;
+  if (aiOccasion) return aiOccasion;
+
+  // 2. Tự động suy luận nếu Backend và AI đều chưa có dữ liệu
   const scent = String(getFragranceFamily(item) || "").toLowerCase();
   const con = String(getAttributeText(item, "concentration") || "").toLowerCase();
 
@@ -662,7 +852,10 @@ const getStyleText = (item: any) => {
   const val = getAttributeText(item, "style");
   if (val !== "Đang cập nhật" && val) return val;
 
-  // 2. Tự động suy luận nếu Backend trống
+  const aiStyle = getCompareInsight(item)?.style;
+  if (aiStyle) return aiStyle;
+
+  // 2. Tự động suy luận nếu Backend và AI đều chưa có dữ liệu
   const scent = String(getFragranceFamily(item) || "").toLowerCase();
   
   if (scent.includes("wood") || scent.includes("gỗ")) return "Sang trọng, Trưởng thành, Ấm áp";
@@ -682,8 +875,20 @@ const getCompareValue = (p: any, type: string) => {
   if (type === 'scent') return getFragranceFamily(p);
   if (type === 'concentration') return getAttributeText(p, 'concentration'); 
   if (type === 'gender') return getGenderText(p);
-  if (type === 'occasion') return getOccasionText(p);
-  if (type === 'style') return getStyleText(p);
+
+  /*
+   * Phong cách và hoàn cảnh là kết quả bổ sung từ AI.
+   * Trước khi người dùng bấm "So sánh bằng AI" thì không tự suy luận
+   * và không hiển thị dữ liệu giả định.
+   */
+  if (type === 'occasion') {
+    return getCompareInsight(p)?.occasion || "Chưa phân tích bằng AI";
+  }
+
+  if (type === 'style') {
+    return getCompareInsight(p)?.style || "Chưa phân tích bằng AI";
+  }
+
   if (type === 'rating') return getRatingScore(p); 
   if (type === 'price') return getComparePrice(p);
   if (type === 'stock') return getCompareStock(p) > 0 ? 'Còn hàng' : 'Hết hàng'; 
@@ -718,12 +923,11 @@ const isBestValue = (p: any) => {
 };
 
 const getLongevityDisplay = (p: any) => {
-  const con = String(getCompareValue(p, "concentration")).toLowerCase();
-  if (con.includes("cologne") || con.includes("edc")) return "2 - 4 tiếng (Nhẹ nhàng)";
-  if (con.includes("toilette") || con.includes("edt")) return "4 - 6 tiếng (Vừa phải)";
-  if ((con.includes("parfum") && !con.includes("extrait")) || con.includes("edp")) return "6 - 8 tiếng (Lâu phai)";
-  if (con.includes("extrait") || con.includes("parfum")) return "Trên 8 tiếng (Đậm đặc)";
-  return "Tùy cơ địa";
+  /*
+   * Độ lưu hương trong bảng này là insight AI.
+   * Không tự suy luận từ nồng độ trước khi người dùng chủ động bấm AI.
+   */
+  return getCompareInsight(p)?.longevity || "Chưa phân tích bằng AI";
 };
 
 const DEFAULT_RATING = 5;
@@ -1163,6 +1367,67 @@ watch(() => props.productList, () => { loadMyFavorites(); syncGridRatings(); }, 
 .cm-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #a0aec0; transition: 0.2s; padding: 0; line-height: 1; }
 .cm-close:hover { color: #e53e3e; transform: rotate(90deg); }
 .cm-body { padding: 0; overflow-y: auto; }
+
+.ai-compare-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 24px;
+  background: #fffdf8;
+  border-bottom: 1px solid #eee3d3;
+}
+.ai-compare-toolbar-text { min-width: 0; }
+.ai-compare-title { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; color: #0a142f; font-size: 16px; font-weight: 800; }
+.ai-compare-title i { color: #b78d52; }
+.ai-compare-subtitle { color: #718096; font-size: 13px; line-height: 1.5; }
+
+.cm-btn-ai {
+  flex-shrink: 0;
+  min-width: 180px;
+  padding: 11px 16px;
+  border: none;
+  border-radius: 10px;
+  background: #b78d52;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.cm-btn-ai:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(183, 141, 82, 0.24); }
+.cm-btn-ai:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.ai-compare-error {
+  margin: 16px 24px 0;
+  padding: 12px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fff5f5;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ai-compare-result {
+  margin: 16px 24px;
+  border: 1px solid #eadfcf;
+  border-radius: 12px;
+  background: #fffdf8;
+  overflow: hidden;
+}
+.ai-result-block { padding: 15px 16px; }
+.ai-result-block + .ai-result-block { border-top: 1px solid #eadfcf; }
+.ai-result-label { margin-bottom: 6px; color: #0a142f; font-size: 14px; font-weight: 800; }
+.ai-result-label i { color: #b78d52; }
+.ai-result-block p { margin: 0; color: #4a5568; font-size: 14px; line-height: 1.65; }
+.ai-result-recommendation { background: #fffcf7; }
+
+@media (max-width: 768px) {
+  .ai-compare-toolbar { align-items: stretch; flex-direction: column; }
+  .cm-btn-ai { width: 100%; }
+}
+
 .table-compare { width: 100%; border-collapse: collapse; text-align: left; }
 .sticky-header th, .sticky-header td { position: sticky; top: 0; background: white; z-index: 10; border-bottom: 2px solid #eaeaea; padding-top: 25px; padding-bottom: 20px; }
 .table-compare th, .table-compare td { padding: 18px 24px; border-bottom: 1px solid #eaeaea; vertical-align: middle; }
