@@ -6,6 +6,12 @@ const api = axios.create({
   timeout: 30000,
 });
 
+/*
+ * Tránh nhiều request cùng nhận 401 và mở nhiều popup
+ * "Phiên đăng nhập đã hết hạn" cùng lúc.
+ */
+let handlingUnauthorized = false;
+
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
@@ -38,12 +44,28 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     const requestUrl = originalRequest?.url || "";
+    const status = error.response?.status;
+
+    /*
+     * Chỉ coi là "phiên đăng nhập đã hết hạn" khi request thực tế
+     * đã gửi Bearer token nhưng backend trả 401.
+     *
+     * Nếu request không có token thì không tự bật popup hết phiên;
+     * các chức năng cần login sẽ tự yêu cầu đăng nhập theo flow hiện tại.
+     */
+    const requestHadToken = Boolean(
+      originalRequest?.headers?.Authorization ||
+      originalRequest?.headers?.authorization
+    );
 
     if (
-      error.response &&
-      error.response.status === 401 &&
-      !requestUrl.includes("/auth/")
+      status === 401 &&
+      !requestUrl.includes("/auth/") &&
+      requestHadToken &&
+      !handlingUnauthorized
     ) {
+      handlingUnauthorized = true;
+
       localStorage.removeItem("token");
       localStorage.removeItem("role");
       localStorage.removeItem("name");
