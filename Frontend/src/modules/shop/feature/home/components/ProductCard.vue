@@ -194,7 +194,7 @@
             </div>
           </div>
           <div class="cb-right">
-            <button class="cb-btn-clear" @click="sharedCompareList = []">Xóa tất cả</button>
+            <button class="cb-btn-clear" @click="clearCompareList">Xóa tất cả</button>
             <button class="cb-btn-compare" :disabled="sharedCompareList.length < 2" @click="sharedShowCompareModal = true">
               So sánh ngay ({{ sharedCompareList.length }})
             </button>
@@ -212,6 +212,58 @@
             <button class="cm-close" @click="sharedShowCompareModal = false">✕</button>
           </div>
           <div class="cm-body">
+            <div class="ai-compare-toolbar">
+              <div class="ai-compare-toolbar-text">
+                <div class="ai-compare-title">
+                  <i class="bi bi-stars"></i>
+                  So sánh bằng AI
+                </div>
+                <div class="ai-compare-subtitle">
+                  AI sẽ phân tích thêm độ lưu hương, phong cách, hoàn cảnh sử dụng và gợi ý lựa chọn dựa trên dữ liệu sản phẩm.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                class="cm-btn-ai"
+                :disabled="sharedCompareAiLoading || sharedCompareList.length < 2"
+                @click="handleAiCompare"
+              >
+                <span
+                  v-if="sharedCompareAiLoading"
+                  class="spinner-border spinner-border-sm me-2"
+                ></span>
+                <i v-else class="bi bi-stars me-2"></i>
+                {{ sharedCompareAiLoading ? "Đang phân tích..." : "So sánh bằng AI" }}
+              </button>
+            </div>
+
+            <div v-if="sharedCompareAiError" class="ai-compare-error">
+              <i class="bi bi-exclamation-circle me-2"></i>
+              {{ sharedCompareAiError }}
+            </div>
+
+            <div
+              v-if="sharedCompareAnalysis || sharedCompareRecommendation"
+              class="ai-compare-result"
+            >
+              <div v-if="sharedCompareAnalysis" class="ai-result-block">
+                <div class="ai-result-label">
+                  <i class="bi bi-lightbulb me-2"></i>
+                  Nhận xét từ AI
+                </div>
+                <p>{{ sharedCompareAnalysis }}</p>
+              </div>
+
+              <div v-if="sharedCompareRecommendation" class="ai-result-block ai-result-recommendation">
+                <div class="ai-result-label">
+                  <i class="bi bi-check2-circle me-2"></i>
+                  Gợi ý lựa chọn
+                </div>
+                <p>{{ sharedCompareRecommendation }}</p>
+              </div>
+            </div>
+
             <table class="table-compare">
               <thead class="sticky-header">
                 <tr>
@@ -414,7 +466,10 @@ type CompareInsight = {
 };
 
 const sharedCompareInsights = ref<Record<number, CompareInsight>>({});
-
+const sharedCompareAiLoading = ref(false);
+const sharedCompareAnalysis = ref("");
+const sharedCompareRecommendation = ref("");
+const sharedCompareAiError = ref("");
 
 let currentCompareRendererId: string | null = null;
 </script>
@@ -1215,9 +1270,23 @@ const isInCompare = (item: any) => {
   return sharedCompareList.value.some((p: any) => getProductIdNum(p) === targetId);
 };
 
+const resetCompareAiResult = () => {
+  sharedCompareInsights.value = {};
+  sharedCompareAnalysis.value = "";
+  sharedCompareRecommendation.value = "";
+  sharedCompareAiError.value = "";
+};
+
+const clearCompareList = () => {
+  sharedCompareList.value = [];
+  sharedCompareVariantIds.value = {};
+  resetCompareAiResult();
+};
+
 const toggleCompare = (item: any) => {
   const targetId = getProductIdNum(item);
   if (!targetId) return;
+
   if (isInCompare(item)) {
     removeFromCompare(item);
   } else {
@@ -1225,45 +1294,60 @@ const toggleCompare = (item: any) => {
       showToast("warning", "Giới hạn", "Chỉ được so sánh tối đa 3 sản phẩm!");
       return;
     }
+
     sharedCompareList.value.push(item);
+    resetCompareAiResult();
   }
 };
 
 const removeFromCompare = (item: any) => {
   const targetId = getProductIdNum(item);
   if (!targetId) return;
-  sharedCompareList.value = sharedCompareList.value.filter((p: any) => getProductIdNum(p) !== targetId);
+
+  sharedCompareList.value = sharedCompareList.value.filter(
+    (p: any) => getProductIdNum(p) !== targetId
+  );
+
   if (sharedCompareVariantIds.value) {
     delete sharedCompareVariantIds.value[targetId];
   }
+
+  resetCompareAiResult();
 };
 
 const toggleItemInPicker = (item: any) => {
   const targetId = getProductIdNum(item);
   if (!targetId) return;
+
   if (isInCompare(item)) {
     removeFromCompare(item);
   } else {
-    if (sharedCompareList.value.length >= 3) { 
-      showToast("warning", "Giới hạn", "Chỉ được so sánh tối đa 3 sản phẩm!"); 
-      return; 
+    if (sharedCompareList.value.length >= 3) {
+      showToast("warning", "Giới hạn", "Chỉ được so sánh tối đa 3 sản phẩm!");
+      return;
     }
+
     sharedCompareList.value.push(item);
+    resetCompareAiResult();
   }
 };
 
-const loadStructuredCompareInsights = async () => {
-  const productIds = Array.from(
+const getCompareProductIds = () => {
+  return Array.from(
     new Set(
       sharedCompareList.value
         .map((item: any) => getProductIdNum(item))
         .filter((id: number) => Number.isFinite(id) && id > 0)
     )
   );
+};
+
+const loadStructuredCompareInsights = async (): Promise<boolean> => {
+  const productIds = getCompareProductIds();
 
   if (productIds.length < 2 || productIds.length > 3) {
-    sharedCompareInsights.value = {};
-    return;
+    resetCompareAiResult();
+    return false;
   }
 
   try {
@@ -1292,17 +1376,55 @@ const loadStructuredCompareInsights = async () => {
     });
 
     sharedCompareInsights.value = map;
+    sharedCompareAnalysis.value = String(data?.analysis || "").trim();
+    sharedCompareRecommendation.value = String(data?.recommendation || "").trim();
+    sharedCompareAiError.value = "";
+
+    return true;
   } catch (error: any) {
     /*
-     * AI là dữ liệu bổ sung cho 3 field mềm.
-     * Không được làm hỏng bảng compare nếu Gemini hết quota / lỗi mạng.
-     * Các field đó sẽ hiển thị "Chưa có dữ liệu", còn giá/tồn/variant vẫn dùng API sản phẩm.
+     * AI chỉ là phần bổ sung.
+     * Nếu Gemini lỗi/quá quota thì bảng so sánh thường vẫn phải hoạt động bình thường.
      */
-    console.warn(
-      "Không lấy được structured compare insights:",
-      error?.response?.data?.message || error?.message || error
-    );
+    const message =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Không thể phân tích sản phẩm bằng AI lúc này.";
+
+    console.warn("Không lấy được kết quả so sánh AI:", message);
+
     sharedCompareInsights.value = {};
+    sharedCompareAnalysis.value = "";
+    sharedCompareRecommendation.value = "";
+    sharedCompareAiError.value = String(message);
+
+    return false;
+  }
+};
+
+const handleAiCompare = async () => {
+  if (sharedCompareAiLoading.value) return;
+
+  if (!checkLoginBeforeAction()) return;
+
+  const productIds = getCompareProductIds();
+
+  if (productIds.length < 2 || productIds.length > 3) {
+    showToast(
+      "warning",
+      "Chưa đủ sản phẩm",
+      "Vui lòng chọn từ 2 đến 3 sản phẩm để so sánh bằng AI."
+    );
+    return;
+  }
+
+  sharedCompareAiLoading.value = true;
+  sharedCompareAiError.value = "";
+
+  try {
+    await loadStructuredCompareInsights();
+  } finally {
+    sharedCompareAiLoading.value = false;
   }
 };
 
@@ -1374,9 +1496,12 @@ watch(sharedShowCompareModal, async (val) => {
     }
     sharedCompareList.value = updatedList;
 
-    // AI chỉ bổ sung longevity/style/occasion vào chính các dòng của bảng.
-    // Không render panel "Phân tích bằng AI".
-    await loadStructuredCompareInsights();
+    /*
+     * So sánh thường luôn mở độc lập.
+     * Không tự động gọi Gemini khi mở modal để tránh tiêu tốn quota/token.
+     * AI chỉ chạy khi người dùng chủ động bấm "So sánh bằng AI".
+     */
+    resetCompareAiResult();
   }
 });
 
@@ -1754,6 +1879,124 @@ watch(() => props.product, () => {
 .cm-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #a0aec0; transition: 0.2s; padding: 0; line-height: 1; }
 .cm-close:hover { color: #e53e3e; transform: rotate(90deg); }
 .cm-body { padding: 0; overflow-y: auto; }
+
+.ai-compare-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 24px;
+  background: #fffdf8;
+  border-bottom: 1px solid #eee3d3;
+}
+
+.ai-compare-toolbar-text {
+  min-width: 0;
+}
+
+.ai-compare-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  color: #0a142f;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.ai-compare-title i {
+  color: #b78d52;
+}
+
+.ai-compare-subtitle {
+  color: #718096;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.cm-btn-ai {
+  flex-shrink: 0;
+  min-width: 180px;
+  padding: 11px 16px;
+  border: none;
+  border-radius: 10px;
+  background: #b78d52;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.cm-btn-ai:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(183, 141, 82, 0.24);
+}
+
+.cm-btn-ai:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ai-compare-error {
+  margin: 16px 24px 0;
+  padding: 12px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fff5f5;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ai-compare-result {
+  margin: 16px 24px;
+  border: 1px solid #eadfcf;
+  border-radius: 12px;
+  background: #fffdf8;
+  overflow: hidden;
+}
+
+.ai-result-block {
+  padding: 15px 16px;
+}
+
+.ai-result-block + .ai-result-block {
+  border-top: 1px solid #eadfcf;
+}
+
+.ai-result-label {
+  margin-bottom: 6px;
+  color: #0a142f;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.ai-result-label i {
+  color: #b78d52;
+}
+
+.ai-result-block p {
+  margin: 0;
+  color: #4a5568;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.ai-result-recommendation {
+  background: #fffcf7;
+}
+
+@media (max-width: 768px) {
+  .ai-compare-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cm-btn-ai {
+    width: 100%;
+  }
+}
 
 .table-compare { width: 100%; border-collapse: collapse; text-align: left; }
 .sticky-header th, .sticky-header td { position: sticky; top: 0; background: white; z-index: 10; border-bottom: 2px solid #eaeaea; padding-top: 25px; padding-bottom: 20px; }
