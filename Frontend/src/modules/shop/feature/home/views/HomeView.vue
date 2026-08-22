@@ -65,7 +65,7 @@
             :key="product.id"
             class="col"
           >
-            <ProductCard :product="product" />
+            <ProductCard :product="product" :preload-detail="false" />
           </div>
         </div>
       </section>
@@ -105,7 +105,7 @@
             class="col-12 col-lg-2 special-product-col"
           >
             <div class="special-product-wrap">
-              <ProductCard :product="product" />
+              <ProductCard :product="product" :preload-detail="false" />
             </div>
           </div>
         </div>
@@ -135,7 +135,7 @@
             :key="product.id"
             class="col"
           >
-            <ProductCard :product="product" />
+            <ProductCard :product="product" :preload-detail="false" />
           </div>
         </div>
       </section>
@@ -809,9 +809,11 @@ const refreshHomeProductSections = () => {
   specialProducts.value = special.length > 0 ? special : formatted.slice(0, 2);
 };
 
-const fetchFlashSaleProducts = async () => {
+const fetchFlashSaleProducts = async (showLoading = true) => {
   try {
-    flashSaleLoading.value = true;
+    if (showLoading) {
+      flashSaleLoading.value = true;
+    }
 
     const res = await api.get<PageResponse<FlashSaleProductResponse>>(
       "/promotions/flash-sale",
@@ -921,10 +923,20 @@ const fetchFlashSaleProducts = async () => {
     refreshHomeProductSections();
   } catch (error) {
     console.error("Lỗi tải Flash Sale:", error);
-    flashSaleProducts.value = [];
-    refreshHomeProductSections();
+
+    /*
+     * Lần tải đầu: giữ nguyên hành vi cũ, API lỗi thì hiển thị trạng thái rỗng.
+     * Refresh nền: giữ dữ liệu hiện tại để không làm trang nháy/rỗng
+     * chỉ vì một request nền lỗi tạm thời.
+     */
+    if (showLoading) {
+      flashSaleProducts.value = [];
+      refreshHomeProductSections();
+    }
   } finally {
-    flashSaleLoading.value = false;
+    if (showLoading) {
+      flashSaleLoading.value = false;
+    }
   }
 };
 
@@ -962,7 +974,8 @@ const startFlashSaleRealtimeRefresh = () => {
   stopFlashSaleRealtimeRefresh();
 
   flashSaleRefreshTimer = window.setInterval(() => {
-    fetchFlashSaleProducts();
+    // Chỉ refresh dữ liệu nền, không bật lại spinner/loading của trang.
+    fetchFlashSaleProducts(false);
   }, 60000);
 };
 
@@ -973,9 +986,10 @@ const stopFlashSaleRealtimeRefresh = () => {
   }
 };
 
-// BẮT SỰ KIỆN CLICK CHUỘT QUAY LẠI CỬA SỔ ĐỂ TỰ ĐỘNG CẬP NHẬT FLASH SALE MỚI NHẤT
+// Khi quay lại cửa sổ chỉ đồng bộ Flash Sale ở nền.
+// Không tải lại danh sách sản phẩm thường chỉ vì browser vừa được focus.
 const handleFocus = async () => {
-  await Promise.all([fetchFlashSaleProducts(), fetchNormalProducts()]);
+  await fetchFlashSaleProducts(false);
 };
 
 onMounted(async () => {

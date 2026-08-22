@@ -470,7 +470,14 @@ export const sharedCompareAnalysis = ref("");
 export const sharedCompareRecommendation = ref("");
 export const sharedCompareAiError = ref("");
 
-export let currentCompareRendererId: string | null = null;
+let currentCompareRendererId: string | null = null;
+
+/*
+ * Nhiều ProductCard có thể mount cùng lúc trên một trang.
+ * Chỉ gộp các request favorites đang chạy đồng thời; không cache lâu dài,
+ * nên không thay đổi tính đúng của dữ liệu yêu thích giữa các lần tải sau.
+ */
+let sharedFavoriteLoadPromise: Promise<any> | null = null;
 </script>
 
 <script setup lang="ts">
@@ -480,7 +487,47 @@ import Swal from "sweetalert2";
 import api from "@/common/api";
 import { favoriteService } from "@/modules/shop/feature/product/services/favorite.service";
 
-const props = defineProps<{ product: any }>();
+interface ProductVariant {
+  id?: number; Id?: number; variantId?: number; productVariantId?: number;
+  price?: number | string; originalPrice?: number | string; oldPrice?: number | string;
+  salePrice?: number | string; promotionPrice?: number | string; flashSalePrice?: number | string;
+  currentPrice?: number | string; displayPrice?: number | string; finalPrice?: number | string;
+  minPrice?: number | string; discountPercent?: number | string; stock?: number;
+  stockQuantity?: number; sellableQuantity?: number; availableQuantity?: number; quantity?: number; status?: number;
+  capacity?: string | number | any; capacityName?: string | number; capacityValue?: string | number;
+  volume?: string | number; bottleType?: string | any; bottleTypeName?: string;
+  imageUrl?: string; ImageUrl?: string; image?: string; Image?: string;
+  mainImage?: string; mainImageUrl?: string; thumbnailUrl?: string;
+  manufacturingDate?: string; mfgDate?: string; expirationDate?: string; expDate?: string;
+  images?: any[]; Images?: any[]; imageList?: any[]; productImages?: any[];
+  ProductImages?: any[]; productImageList?: any[]; ProductImageList?: any[];
+}
+
+interface Product {
+  id: number; productId?: number; productVariantId?: number; variantId?: number;
+  name: string; brand: string; color?: string; price?: number | string; oldPrice?: number | string;
+  promotionPrice?: number | string; flashSalePrice?: number | string; currentPrice?: number | string;
+  displayPrice?: number | string; finalPrice?: number | string; minPrice?: number | string;
+  salePrice?: number | string; originalPrice?: number | string; discountPercent?: number | string;
+  rating: number; averageRating?: number; reviewCount: number; imageUrl?: string; ImageUrl?: string;
+  image?: string; Image?: string; mainImage?: string; MainImage?: string; mainImageUrl?: string;
+  MainImageUrl?: string; thumbnailUrl?: string; ThumbnailUrl?: string; images?: any[]; Images?: any[];
+  imageList?: any[]; ImageList?: any[]; galleryImages?: any[]; GalleryImages?: any[];
+  productImages?: any[]; ProductImages?: any[]; productImageList?: any[]; ProductImageList?: any[];
+  stock?: number; stockQuantity?: number; sellableQuantity?: number; availableQuantity?: number; status?: number;
+  isFlashSale?: boolean; manufacturingDate?: string; mfgDate?: string; expirationDate?: string;
+  expDate?: string; variants?: ProductVariant[];
+}
+
+const props = withDefaults(
+  defineProps<{
+    product: Product;
+    preloadDetail?: boolean;
+  }>(),
+  {
+    preloadDetail: true,
+  }
+);
 const router = useRouter();
 const instanceId = Math.random().toString(36).substring(2, 9);
 const isCompareUIRenderer = ref(false);
@@ -1647,7 +1694,19 @@ const loadFavoriteStatus = async () => {
   if (!token || (role !== "USER" && role !== "CUSTOMER")) { favoritedMap.value = {}; isFavorited.value = false; return; }
 
   try {
-    const res = await favoriteService.getFavorites();
+    /*
+     * Nếu nhiều card cùng mount, dùng chung request favorites đang chạy.
+     * Khi request hoàn tất thì bỏ promise, lần tải sau vẫn lấy dữ liệu mới.
+     */
+    if (!sharedFavoriteLoadPromise) {
+      sharedFavoriteLoadPromise = favoriteService
+        .getFavorites()
+        .finally(() => {
+          sharedFavoriteLoadPromise = null;
+        });
+    }
+
+    const res = await sharedFavoriteLoadPromise;
     const list = Array.isArray(res.data) ? res.data : [];
     const nextMap: Record<number, boolean> = {};
     list.forEach((item: any) => {
@@ -1741,7 +1800,15 @@ onMounted(() => {
   }
   window.addEventListener("favorite-updated", handleFavoriteUpdated);
   loadFavoriteStatus();
-  syncProductData();
+
+  /*
+   * Mặc định vẫn preload detail để không ảnh hưởng các màn hình khác.
+   * HomeView truyền preloadDetail=false cho các card sản phẩm thường vì
+   * dữ liệu list đã đủ để render; khi mua/so sánh, flow hiện tại vẫn tự lấy detail.
+   */
+  if (props.preloadDetail) {
+    syncProductData();
+  }
 });
 
 onBeforeUnmount(() => {
@@ -1751,11 +1818,24 @@ onBeforeUnmount(() => {
   window.removeEventListener("favorite-updated", handleFavoriteUpdated);
 });
 
-watch(() => props.product, () => { 
-  fullProductData.value = null; 
-  loadFavoriteStatus(); 
-  syncProductData();
-}, { deep: true });
+watch(
+  () => Number((props.product as any)?.productId || (props.product as any)?.id || 0),
+  (newProductId, oldProductId) => {
+    /*
+     * Chỉ tải lại khi component thực sự đổi sang product khác.
+     * Thay đổi giá/Flash Sale/tồn của cùng product không được tạo lại
+     * request detail + favorites.
+     */
+    if (newProductId === oldProductId) return;
+
+    fullProductData.value = null;
+    loadFavoriteStatus();
+
+    if (props.preloadDetail) {
+      syncProductData();
+    }
+  }
+);
 </script>
 
 <style scoped>
