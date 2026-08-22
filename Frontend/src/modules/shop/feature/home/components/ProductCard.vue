@@ -472,6 +472,13 @@ const sharedCompareRecommendation = ref("");
 const sharedCompareAiError = ref("");
 
 let currentCompareRendererId: string | null = null;
+
+/*
+ * Nhiều ProductCard có thể mount cùng lúc trên một trang.
+ * Chỉ gộp các request favorites đang chạy đồng thời; không cache lâu dài,
+ * nên không thay đổi tính đúng của dữ liệu yêu thích giữa các lần tải sau.
+ */
+let sharedFavoriteLoadPromise: Promise<any> | null = null;
 </script>
 
 <script setup lang="ts">
@@ -513,7 +520,15 @@ interface Product {
   expDate?: string; variants?: ProductVariant[];
 }
 
-const props = defineProps<{ product: Product }>();
+const props = withDefaults(
+  defineProps<{
+    product: Product;
+    preloadDetail?: boolean;
+  }>(),
+  {
+    preloadDetail: true,
+  }
+);
 const router = useRouter();
 
 const instanceId = Math.random().toString(36).substring(2, 9);
@@ -1690,7 +1705,19 @@ const loadFavoriteStatus = async () => {
   if (!token || (role !== "USER" && role !== "CUSTOMER")) { favoritedMap.value = {}; isFavorited.value = false; return; }
 
   try {
-    const res = await favoriteService.getFavorites();
+    /*
+     * Nếu nhiều card cùng mount, dùng chung request favorites đang chạy.
+     * Khi request hoàn tất thì bỏ promise, lần tải sau vẫn lấy dữ liệu mới.
+     */
+    if (!sharedFavoriteLoadPromise) {
+      sharedFavoriteLoadPromise = favoriteService
+        .getFavorites()
+        .finally(() => {
+          sharedFavoriteLoadPromise = null;
+        });
+    }
+
+    const res = await sharedFavoriteLoadPromise;
     const list = Array.isArray(res.data) ? res.data : [];
     const nextMap: Record<number, boolean> = {};
     list.forEach((item: any) => {
@@ -1784,7 +1811,15 @@ onMounted(() => {
   }
   window.addEventListener("favorite-updated", handleFavoriteUpdated);
   loadFavoriteStatus();
-  syncProductData();
+
+  /*
+   * Mặc định vẫn preload detail để không ảnh hưởng các màn hình khác.
+   * HomeView truyền preloadDetail=false cho các card sản phẩm thường vì
+   * dữ liệu list đã đủ để render; khi mua/so sánh, flow hiện tại vẫn tự lấy detail.
+   */
+  if (props.preloadDetail) {
+    syncProductData();
+  }
 });
 
 onBeforeUnmount(() => {
@@ -1794,11 +1829,24 @@ onBeforeUnmount(() => {
   window.removeEventListener("favorite-updated", handleFavoriteUpdated);
 });
 
-watch(() => props.product, () => { 
-  fullProductData.value = null; 
-  loadFavoriteStatus(); 
-  syncProductData();
-}, { deep: true });
+watch(
+  () => Number((props.product as any)?.productId || (props.product as any)?.id || 0),
+  (newProductId, oldProductId) => {
+    /*
+     * Chỉ tải lại khi component thực sự đổi sang product khác.
+     * Thay đổi giá/Flash Sale/tồn của cùng product không được tạo lại
+     * request detail + favorites.
+     */
+    if (newProductId === oldProductId) return;
+
+    fullProductData.value = null;
+    loadFavoriteStatus();
+
+    if (props.preloadDetail) {
+      syncProductData();
+    }
+  }
+);
 </script>
 
 <style scoped>
