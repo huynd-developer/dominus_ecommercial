@@ -123,7 +123,7 @@
                 </span>
 
                 <div class="fw-bold mt-1 order-header-total">
-                  {{ formatMoney(Math.max(0, Number(order.totalAmount || 0) - Number(order.discountAmount || 0)) + getOrderShippingFee(order)) }}
+                  {{ formatMoney(getOrderFinalAmount(order)) }}
                 </div>
               </div>
 
@@ -770,7 +770,7 @@
                       <div class="delivery-refund-grid">
                         <div class="delivery-refund-line delivery-refund-money">
                           <span>Số tiền cần hoàn:</span>
-                          <strong>{{ formatMoney(order.finalAmount) }}</strong>
+                          <strong>{{ formatMoney(getOrderFinalAmount(order)) }}</strong>
                         </div>
 
                         <template v-if="hasCancelRefundBankInfo(order)">
@@ -1110,13 +1110,13 @@
                   <div class="order-total-box">
                     <div>
                       <span>Tạm tính:</span>
-                      <strong>{{ formatMoney(order.totalAmount) }}</strong>
+                      <strong>{{ formatMoney(getOrderSubtotal(order)) }}</strong>
                     </div>
 
-                    <div v-if="order.discountAmount > 0">
+                    <div v-if="getOrderDiscountAmount(order) > 0">
                       <span>Giảm giá:</span>
                       <strong class="text-danger">
-                        -{{ formatMoney(order.discountAmount) }}
+                        -{{ formatMoney(getOrderDiscountAmount(order)) }}
                       </strong>
                     </div>
 
@@ -1128,7 +1128,7 @@
                     <div class="d-flex justify-content-between fs-5 mt-2 pt-2 border-top">
                       <span>Tổng thanh toán:</span>
                       <strong class="text-danger">
-                        {{ formatMoney(Math.max(0, Number(order.totalAmount || 0) - Number(order.discountAmount || 0)) + getOrderShippingFee(order)) }}
+                        {{ formatMoney(getOrderFinalAmount(order)) }}
                       </strong>
                     </div>
                   </div>
@@ -1331,7 +1331,102 @@ const initPaidOrders = () => {
   } catch (e) {}
 };
 
-// CÁC HÀM XỬ LÝ FORM HOÀN TIỀN ĐƠN HỦY MỚI THÊM
+// 💥 BƯỚC 1: LÀM LẠI BỘ HÀM TÍNH TOÁN BẤT CHẤP API TRẢ SAO
+const toMoneyNumber = (value: unknown) => {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+};
+
+const pickMoneyValue = (...values: unknown[]) => {
+  for (const value of values) {
+    const numberValue = toMoneyNumber(value);
+    if (numberValue > 0) return numberValue;
+  }
+  return 0;
+};
+
+const getOrderSubtotal = (order: any) => {
+  const explicitSubtotal = pickMoneyValue(
+    order?.totalAmount, order?.TotalAmount,
+    order?.subTotal, order?.SubTotal,
+    order?.subTotalAmount, order?.SubTotalAmount,
+    order?.amount, order?.Amount
+  );
+  if (explicitSubtotal > 0) return explicitSubtotal;
+
+  if (Array.isArray(order?.items)) {
+    return order.items.reduce((sum: number, item: any) => sum + getItemLineTotal(item), 0);
+  }
+  return 0;
+};
+
+const getOrderShippingFee = (order: any) => {
+  return pickMoneyValue(
+    order?.shippingFee, order?.ShippingFee,
+    order?.shippingfee,
+    order?.shippingFeeAmount, order?.ShippingFeeAmount,
+    order?.shipFee, order?.ShipFee,
+    order?.deliveryFee, order?.DeliveryFee,
+    order?.shippingAmount, order?.ShippingAmount
+  );
+};
+
+const getOrderFinalAmount = (order: any) => {
+  const explicitFinal = pickMoneyValue(
+    order?.finalAmount, order?.FinalAmount,
+    order?.totalPayment, order?.TotalPayment,
+    order?.totalPay, order?.TotalPay,
+    order?.paymentTotal, order?.PaymentTotal,
+    order?.totalPrice, order?.TotalPrice
+  );
+  if (explicitFinal > 0) return explicitFinal;
+
+  const subtotal = getOrderSubtotal(order);
+  const discount = getOrderDiscountAmount(order);
+  const ship = getOrderShippingFee(order);
+
+  return Math.max(0, subtotal - discount) + ship;
+};
+
+const getOrderDiscountAmount = (order: any) => {
+  let explicitDiscount = pickMoneyValue(
+    order?.discountAmount, order?.DiscountAmount,
+    order?.discountValue, order?.DiscountValue,
+    order?.discount, order?.Discount,
+    order?.voucherDiscount, order?.VoucherDiscount,
+    order?.voucherAmount, order?.VoucherAmount,
+    order?.voucherDiscountAmount, order?.VoucherDiscountAmount,
+    order?.promotionAmount, order?.PromotionAmount,
+    order?.promotionDiscount, order?.PromotionDiscount
+  );
+  if (explicitDiscount > 0) return explicitDiscount;
+
+  if (Array.isArray(order?.items)) {
+     const sumFromItems = order.items.reduce((sum: number, item: any) => {
+         return sum + pickMoneyValue(item?.voucherAllocatedAmount, item?.allocatedVoucherAmount, item?.discountAmount, item?.itemDiscount);
+     }, 0);
+     if (sumFromItems > 0) return sumFromItems;
+  }
+
+  // TÍNH NGƯỢC GIẢM GIÁ TỪ FRONTEND
+  const subtotal = getOrderSubtotal(order);
+  const ship = getOrderShippingFee(order);
+  const explicitFinal = pickMoneyValue(
+    order?.finalAmount, order?.FinalAmount,
+    order?.totalPayment, order?.TotalPayment,
+    order?.totalPay, order?.TotalPay,
+    order?.paymentTotal, order?.PaymentTotal,
+    order?.totalPrice, order?.TotalPrice
+  );
+
+  if (subtotal > 0 && explicitFinal > 0 && ((subtotal + ship) > explicitFinal)) {
+     return (subtotal + ship) - explicitFinal;
+  }
+
+  return 0;
+};
+// 💥 KẾT THÚC BƯỚC 1
+
 const isPrepaidOrder = (order: any) => {
   if (!order || !order.paymentMethod) return false;
   const pm = String(order.paymentMethod).toUpperCase();
@@ -1361,7 +1456,7 @@ const getCancelRefundStatusText = (order: any) => {
 };
 
 const getCancelRefundDescription = (order: any) => {
-  const amount = formatMoney(order.finalAmount);
+  const amount = formatMoney(getOrderFinalAmount(order));
   if (isCancelRefunded(order)) return `Shop đã hoàn ${amount} cho đơn bị hủy.`;
   if (hasCancelRefundBankInfo(order)) return `Shop đã nhận thông tin tài khoản và sẽ hoàn ${amount} cho bạn.`;
   return `Đơn đã thanh toán trước nhưng bị hủy. Vui lòng nhập số tài khoản ngân hàng để shop hoàn ${amount}.`;
@@ -1397,7 +1492,7 @@ const openCancelRefundBankModal = async (order: CustomerOrderResponse) => {
       <div class="delivery-refund-modal">
         <div class="delivery-refund-modal-alert">
           <i class="bi bi-info-circle"></i>
-          <span>Shop sẽ hoàn <strong>${escapeHtml(formatMoney(order.finalAmount))}</strong> cho đơn hủy ${escapeHtml(generateOrderCode(order.orderId))}. Thông tin này chỉ gửi được 1 lần và không thể tự chỉnh sửa.</span>
+          <span>Shop sẽ hoàn <strong>${escapeHtml(formatMoney(getOrderFinalAmount(order)))}</strong> cho đơn hủy ${escapeHtml(generateOrderCode(order.orderId))}. Thông tin này chỉ gửi được 1 lần và không thể tự chỉnh sửa.</span>
         </div>
 
         <label for="cancel-refund-bank-search" class="delivery-refund-modal-label">
@@ -1580,7 +1675,6 @@ const setCancelRefundBankListHtml = (keyword = "", selectedBank?: string | null)
     });
   });
 };
-// KẾT THÚC CÁC HÀM MỚI
 
 const isOrderPendingVerification = (order: any) => {
   if (!order) return false;
@@ -1731,11 +1825,6 @@ const canRequestReturn = (order: any) => {
     return true;
   }
 
-  /**
-   * Logic Shopee-like:
-   * - Khách tự hủy yêu cầu khi shop chưa xử lý thì được gửi lại nếu còn hạn.
-   * - Shop đã từ chối / đã chấp nhận / đã hoàn tiền thì không cho gửi lại.
-   */
   return getOrderReturnProcessStatus(order) === "CUSTOMER_CANCELLED";
 };
 
@@ -1766,11 +1855,6 @@ const isReturnTabOrder = (order: any) => {
     return true;
   }
 
-  /**
-   * Đơn đã hoàn thành bình thường không được nằm trong tab Hoàn hàng.
-   * Trường hợp duy nhất status = 3 vẫn nằm tab Hoàn hàng là khi shop/admin
-   * đã từ chối yêu cầu hoàn và đơn được đưa về trạng thái Hoàn thành.
-   */
   return status === 3 && getOrderReturnProcessStatus(order) === "REJECTED";
 };
 
@@ -1868,8 +1952,6 @@ const fetchOrdersAndReviews = async () => {
     await store.fetchOrders();
     await fetchMyReviews();
 
-    // Tự động tải lại trạng thái reviewable cho các đơn hàng hoàn thành (status === 3)
-    // hoặc đơn hàng đang được mở rộng xem chi tiết
     const reviewPromises: Promise<any>[] = [];
     store.orders.forEach((order) => {
       if (order.status === 3) {
@@ -2524,17 +2606,7 @@ const formatMoney = (value: number | null | undefined) =>
     style: "currency",
     currency: "VND",
   });
-const toMoneyNumber = (value: unknown) => {
-  const numberValue = Number(value);
-  return Number.isFinite(numberValue) ? numberValue : 0;
-};
-const pickMoneyValue = (...values: unknown[]) => {
-  for (const value of values) {
-    const numberValue = toMoneyNumber(value);
-    if (numberValue > 0) return numberValue;
-  }
-  return 0;
-};
+
 const getItemUnitDiscount = (item: any) =>
   pickMoneyValue(
     item?.discountAmount,
@@ -2654,18 +2726,6 @@ const hasPositiveMoneyValue = (...values: unknown[]) => {
   return values.some((value) => toMoneyNumber(value) > 0);
 };
 
-// ĐÃ THÊM: Lấy phí vận chuyển
-const getOrderShippingFee = (order: any) => {
-  return pickMoneyValue(
-    order?.shippingFee,
-    order?.shippingfee,
-    order?.shippingFeeAmount,
-    order?.shipFee,
-    order?.deliveryFee,
-    order?.shippingAmount
-  );
-};
-
 const hasRealReturnRequestObject = (request: any) => {
   if (!request) {
     return false;
@@ -2759,11 +2819,6 @@ const isReturnInfoVisible = (order: any) => {
 
   const processStatus = getOrderReturnProcessStatus(order);
 
-  /**
-   * Chỉ hiển thị box hoàn hàng khi có trạng thái hoàn thật sự.
-   * CUSTOMER_CANCELLED: khách đã tự rút yêu cầu, cho quay lại luồng Hoàn thành.
-   * UNKNOWN: không coi là yêu cầu hoàn để tránh đơn Hoàn thành thường bị lẫn vào.
-   */
   return processStatus !== "CUSTOMER_CANCELLED" && processStatus !== "UNKNOWN";
 };
 
@@ -2919,17 +2974,6 @@ const shouldShowReturnDeadlineText = (order: any) => {
     return false;
   }
 
-  /**
-   * Đã từng có yêu cầu hoàn thật:
-   * - PENDING: đang chờ shop xử lý
-   * - ACCEPTED: đã chấp nhận
-   * - REJECTED: đã từ chối
-   * - REFUNDED: đã hoàn tiền
-   * - PARTIAL: đang xử lý một phần
-   *
-   * Các case này không hiện "Còn X ngày để yêu cầu hoàn hàng"
-   * vì sẽ gây hiểu nhầm là khách còn được gửi lại.
-   */
   const returnStatus = getOrderReturnProcessStatus(order);
 
   if (
@@ -3337,7 +3381,6 @@ const getDeliveryRefundAmount = (order: any) =>
 
 const isDeliveryRefundInfoVisible = (order: any) => {
   const status = Number(order?.status);
-  // Mở box cho Status 5 (Giao thất bại), 8 (Chờ hoàn tiền), HOẶC 4 (Đã hủy nhưng có tiền hoàn)
   return (
     (status === 5 || status === 8 || status === 4) &&
     getDeliveryRefundAmount(order) > 0
@@ -3411,7 +3454,6 @@ const getDeliveryRefundDescription = (order: any) => {
     return "Thông tin tài khoản hoàn tiền chưa đầy đủ. Vui lòng liên hệ shop để được hỗ trợ.";
   }
 
-  // THÊM ĐOẠN NÀY CHO STATUS 8
   if (Number(order?.status) === 8) {
     return `Đơn hàng đã được hủy. Vui lòng nhập thông tin tài khoản ngân hàng để shop hoàn lại ${amount}.`;
   }

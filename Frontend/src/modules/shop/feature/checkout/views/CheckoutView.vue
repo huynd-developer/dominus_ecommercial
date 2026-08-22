@@ -253,12 +253,6 @@ const getProductVariantId = (item: any) => Number(item?.productVariantId || item
 const getCartItemId = (item: any) => Number(item?.cartItemId || item?.id || 0);
 const getItemPrice = (item: any) => Number(item?.price ?? item?.salePrice ?? item?.finalPrice ?? item?.originalPrice ?? 0);
 
-/**
- * Tồn có thể bán thật mà Checkout FE sử dụng.
- *
- * Chỉ lấy sellableQuantity đã được BE Product map từ InventoryLot.
- * Không dùng ProductVariant.stockQuantity / NSX / HSD legacy để quyết định bán.
- */
 const getItemSellableQuantity = (item: any) => {
   const quantity = Number(
     item?.sellableQuantity ??
@@ -280,7 +274,6 @@ const totalAmount = computed(() =>
   cartItems.value.reduce((sum, item) => sum + getItemPrice(item) * Number(item.quantity || 0), 0)
 );
 
-// ĐÃ SỬA: Đảm bảo số tiền tối thiểu bằng tiền ship
 const finalTotal = computed(() =>
   Math.max(0, Number(totalAmount.value || 0) - Number(discountAmount.value || 0)) + Number(shippingFee.value || 0)
 );
@@ -383,10 +376,6 @@ const validateCheckoutForm = async (): Promise<any | null> => {
     return null;
   }
 
-  /*
-   * Validate UX bằng tồn sellable thật đã load từ InventoryLot.
-   * BE /v1/orders/checkout vẫn re-check lần cuối nên FE không phải nguồn sự thật.
-   */
   for (const item of cartItems.value) {
     const requestedQuantity = Number(item?.quantity || 0);
     const sellableQuantity = getItemSellableQuantity(item);
@@ -470,10 +459,6 @@ const loadCartSummary = async () => {
           const productId = Number(item?.productId || item?.ProductId || item?.product?.id || item?.product?.productId || item?.Product?.id || item?.Product?.productId || item?.productVariant?.productId || item?.productVariant?.product?.id || item?.ProductVariant?.ProductId || item?.ProductVariant?.Product?.Id || item?.variant?.productId || item?.variant?.product?.id || 0);
           const variantId = Number(item?.productVariantId || item?.ProductVariantId || item?.variantId || item?.VariantId || item?.productVariant?.id || item?.ProductVariant?.Id || item?.productVariant?.productVariantId || item?.variant?.id || item?.Variant?.Id || 0);
           
-          /*
-           * Checkout cần Product detail để lấy sellableQuantity mới nhất.
-           * Nếu không xác định được Product thì không được fallback sang stock legacy.
-           */
           if (!productId) {
             const sellableQuantity = Math.max(
               Number(item?.sellableQuantity ?? 0) || 0,
@@ -483,7 +468,6 @@ const loadCartSummary = async () => {
             return {
               ...item,
               sellableQuantity,
-              // compatibility cho component/code cũ trong lúc migrate
               stockQuantity: sellableQuantity,
               sellable:
                 item?.sellable ??
@@ -557,14 +541,8 @@ const loadCartSummary = async () => {
 
             return {
               ...item,
-
-              /*
-               * sellableQuantity là field nghiệp vụ thật.
-               * stockQuantity chỉ map cùng giá trị để không làm vỡ code compatibility.
-               */
               sellableQuantity,
               stockQuantity: sellableQuantity,
-
               variantStatus,
               sellable: Boolean(sellable),
               unavailableReason:
@@ -609,15 +587,53 @@ const loadCartSummary = async () => {
   }
 };
 
+// 💥 BƯỚC 1: FIX VỤ TỰ ĐỘNG RESET VOUCHER VỀ 0
 const loadSavedVoucher = async () => {
   const savedCode = localStorage.getItem("applied_voucher");
   if (!savedCode || totalAmount.value <= 0) return;
 
   try {
-    const res = await api.get("/v1/customer/vouchers/apply", {
+    // Ưu tiên tự tính toán giống như CheckoutSummary để Frontend tự lo
+    const resVouchers = await api.get("/v1/customer/vouchers");
+    let vouchers = [];
+    if (Array.isArray(resVouchers.data)) vouchers = resVouchers.data;
+    else if (Array.isArray(resVouchers.data?.content)) vouchers = resVouchers.data.content;
+    else if (Array.isArray(resVouchers.data?.data)) vouchers = resVouchers.data.data;
+
+    const matchedVoucher = vouchers.find((v: any) => String(v?.code || v?.voucherCode || v?.name || "").trim().toUpperCase() === savedCode.toUpperCase());
+
+    if (matchedVoucher) {
+       const minOrder = Number(matchedVoucher.minOrderValue || matchedVoucher.minimumOrderValue || matchedVoucher.minOrderAmount || 0);
+       if (totalAmount.value >= minOrder) {
+           const type = String(matchedVoucher.discountType || matchedVoucher.type || "").toUpperCase();
+           const value = Number(matchedVoucher.discountValue || matchedVoucher.value || matchedVoucher.discount || 0);
+           const maxDiscount = Number(matchedVoucher.maxDiscount || matchedVoucher.maxDiscountAmount || matchedVoucher.maximumDiscountAmount || matchedVoucher.maxAmount || 0);
+
+           let calc = 0;
+           if (type === "PERCENT" || type === "PERCENTAGE") {
+               calc = (totalAmount.value * value) / 100;
+               if (maxDiscount > 0) calc = Math.min(calc, maxDiscount);
+           } else {
+               calc = value;
+           }
+           discountAmount.value = Math.min(calc, totalAmount.value);
+           appliedVoucherCode.value = savedCode;
+           return; 
+       }
+    }
+
+    // Nếu không tự tính được thì mới gọi API apply
+    const resApply = await api.get("/v1/customer/vouchers/apply", {
       params: { code: savedCode, orderTotal: totalAmount.value },
     });
-    const discount = Number(res.data?.discountAmount ?? res.data?.discount ?? res.data?.amount ?? 0);
+    const respData = resApply.data?.data ?? resApply.data?.result ?? resApply.data;
+    const discount = Number(
+      respData?.discountAmount || 
+      respData?.discountValue || 
+      respData?.discount || 
+      respData?.amount || 
+      0
+    );
     discountAmount.value = Math.min(Math.max(discount, 0), Number(totalAmount.value || 0));
     appliedVoucherCode.value = savedCode;
   } catch (error) {
@@ -657,42 +673,57 @@ const handlePlaceOrder = async () => {
   try {
     cartSnapshot.value = JSON.parse(JSON.stringify(cartItems.value));
 
+    // CHỐT DATA TRÊN FRONTEND TRƯỚC KHI GỌI API
+    const feSubtotal = Number(totalAmount.value || 0);
+    const feDiscount = Number(discountAmount.value || 0);
+    const feShipping = Number(shippingFee.value || 0);
+    const feVoucherCode = appliedVoucherCode.value || null;
+    const feFinalTotal = Math.max(0, feSubtotal - feDiscount) + feShipping;
+
+    // 💥 BƯỚC 2: ÉP BACKEND PHẢI NHẬN SỐ TIỀN GIẢM GIÁ TỪ FRONTEND
     const orderPayload = { 
       ...submitData,
-      shippingFee: shippingFee.value,
-      voucherCode: appliedVoucherCode.value || null
+      shippingFee: feShipping,
+      voucherCode: feVoucherCode,
+      
+      // Bọc đủ các loại tên biến phòng khi Backend khó ở
+      discountAmount: feDiscount,
+      discount: feDiscount,
+      voucherDiscount: feDiscount,
+      totalAmount: feSubtotal,
+      subTotal: feSubtotal,
+      finalAmount: feFinalTotal,
+      totalPayment: feFinalTotal
     };
 
     const res = await api.post("/v1/orders/checkout", orderPayload);
-    createdOrderId.value = res.data?.orderId || null;
-
-    const finalDiscount = Number(res.data?.discountAmount ?? discountAmount.value);
-    successStatusText.value = getStatusText(Number(res.data?.status ?? 0));
-    successMessage.value = res.data?.message || "Cảm ơn bạn đã mua sắm tại Dominus.";
-
-    // ĐÃ SỬA: Đảm bảo số tiền tối thiểu bằng tiền ship
-    const calculatedFinalTotal = Math.max(0, Number(res.data?.totalAmount ?? totalAmount.value) - finalDiscount) + Number(shippingFee.value);
+    const respData = res.data?.data ?? res.data?.result ?? res.data;
     
+    createdOrderId.value = respData?.orderId || res.data?.orderId || null;
+    successStatusText.value = getStatusText(Number(respData?.status ?? res.data?.status ?? 0));
+    successMessage.value = respData?.message || res.data?.message || "Cảm ơn bạn đã mua sắm tại Dominus.";
+
+    // ÉP BUỘC SỬ DỤNG DỮ LIỆU FRONTEND ĐỂ HIỂN THỊ POPUP
     successDetails.value = [
-      { label: "Mã đơn hàng", value: res.data?.orderId ? `#${res.data.orderId}` : "-" },
+      { label: "Mã đơn hàng", value: createdOrderId.value ? `#${createdOrderId.value}` : "-" },
       { label: "Trạng thái", value: successStatusText.value },
-      { label: "Phương thức", value: formatPaymentMethod(res.data?.paymentMethod || orderPayload.paymentMethod) },
-      ...(finalDiscount > 0 ? [{ label: "Mã giảm giá", value: res.data?.voucherCode || orderPayload.voucherCode || "Không có" }] : []),
-      { label: "Tạm tính", value: formatCurrency(Number(res.data?.totalAmount ?? totalAmount.value)), money: true },
-      ...(finalDiscount > 0 ? [{ label: "Giảm giá", value: `-${formatCurrency(finalDiscount)}`, money: true }] : []),
-      { label: "Phí vận chuyển", value: formatCurrency(Number(shippingFee.value)), money: true },
-      { label: "Tổng thanh toán", value: formatCurrency(calculatedFinalTotal), money: true },
+      { label: "Phương thức", value: formatPaymentMethod(respData?.paymentMethod || res.data?.paymentMethod || orderPayload.paymentMethod) },
+      ...(feDiscount > 0 ? [{ label: "Mã giảm giá", value: feVoucherCode || "Đã áp dụng" }] : []),
+      { label: "Tạm tính", value: formatCurrency(feSubtotal), money: true },
+      ...(feDiscount > 0 ? [{ label: "Giảm giá", value: `-${formatCurrency(feDiscount)}`, money: true }] : []),
+      { label: "Phí vận chuyển", value: formatCurrency(feShipping), money: true },
+      { label: "Tổng thanh toán", value: formatCurrency(feFinalTotal), money: true },
     ];
 
     if (orderPayload.paymentMethod === "VIETQR" || orderPayload.paymentMethod === "VNPAY") {
       currentPaymentMethod.value = orderPayload.paymentMethod;
 
       if (orderPayload.paymentMethod === "VIETQR") {
-        const orderId = res.data?.orderId || Math.floor(Math.random() * 100000);
-        const amount = finalTotal.value;
-        qrCodeUrl.value = res.data?.qrUrl || `https://img.vietqr.io/image/TCB-3714082007-compact2.png?amount=${amount}&addInfo=DH${orderId}&accountName=NGUYEN%20DINH%20HUY`;
+        const orderId = createdOrderId.value || Math.floor(Math.random() * 100000);
+        const amount = feFinalTotal;
+        qrCodeUrl.value = respData?.qrUrl || res.data?.qrUrl || `https://img.vietqr.io/image/TCB-3714082007-compact2.png?amount=${amount}&addInfo=DH${orderId}&accountName=NGUYEN%20DINH%20HUY`;
       } else {
-        const url = res.data?.paymentUrl || res.data?.vnpUrl || res.data?.url;
+        const url = respData?.paymentUrl || respData?.vnpUrl || respData?.url || res.data?.paymentUrl || res.data?.vnpUrl || res.data?.url;
         if (!url) throw new Error("Không lấy được link thanh toán VNPay");
         vnpayUrl.value = url;
       }
@@ -854,7 +885,6 @@ const restorePendingVnpayFormAndVoucher = () => {
       Object.assign(orderForm.value, JSON.parse(pendingForm));
       formKey.value++;
     } catch {
-      // Draft form hỏng thì bỏ qua, không ảnh hưởng việc restore cart.
     }
   }
 
@@ -916,10 +946,6 @@ const checkAndRestoreVnpayBackup = async () => {
         ? null
         : Number(outcome.status);
 
-    /*
-     * Nếu BE đã xác nhận thanh toán thành công thì tuyệt đối KHÔNG restore
-     * cart snapshot. Làm vậy sẽ khiến sản phẩm đã mua bị add lại vào giỏ.
-     */
     const alreadyPaidOrCompleted =
       sameOrder &&
       (
@@ -934,14 +960,6 @@ const checkAndRestoreVnpayBackup = async () => {
       return false;
     }
 
-    /*
-     * Chỉ restore cart khi BE /api/vnpay/return đã xác nhận thất bại
-     * và order đã chuyển CANCELLED (status = 4).
-     *
-     * Không tự PATCH cancel khi chưa biết kết quả VNPay:
-     * request browser-back/network-error có thể xảy ra trong lúc IPN đang
-     * xác nhận giao dịch thành công. Tự cancel ở đây có thể hủy nhầm đơn đã trả tiền.
-     */
     const confirmedCancelled =
       sameOrder &&
       outcome?.success === false &&
@@ -960,10 +978,6 @@ const checkAndRestoreVnpayBackup = async () => {
 
     restorePendingVnpayFormAndVoucher();
 
-    /*
-     * Đơn VNPay ONLINE thất bại chưa SALE_OUT.
-     * BE đã hủy order, vì vậy FE chỉ phục hồi cart snapshot đúng một lần.
-     */
     await restorePendingVnpayCart(safeItems);
 
     cartSnapshot.value = safeItems;
@@ -1003,7 +1017,6 @@ window.addEventListener("pageshow", async (event) => {
   }
 });
 
-// BẮT SỰ KIỆN CLICK CHUỘT VÀO CỬA SỔ ĐỂ TỰ ĐỘNG LOAD LẠI FLASH SALE & VOUCHER
 const handleFocus = async () => {
   if (!showPaymentModal.value && !showSuccessModal.value) {
     await loadCartSummary();

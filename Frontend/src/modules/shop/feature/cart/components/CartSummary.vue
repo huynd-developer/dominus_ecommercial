@@ -155,22 +155,15 @@
           </div>
 
           <div class="voucher-desc">
-
-            Giảm
-
-            <strong class="text-danger">
-
-              {{ formatVoucherDiscount(v) }}
-
-            </strong>
-
-            <span v-if="getMaxDiscount(v) > 0">
-
-              · tối đa {{ formatCurrency(getMaxDiscount(v)) }}
-
-            </span>
-
-          </div>
+  Giảm
+  <strong class="text-danger">
+    {{ formatVoucherDiscount(v) }}
+  </strong>
+  <!-- Bổ sung điều kiện chỉ hiển thị "tối đa" nếu là mã phần trăm -->
+  <span v-if="getMaxDiscount(v) > 0 && ['PERCENT', 'PERCENTAGE'].includes(getVoucherDiscountType(v))">
+    · tối đa {{ formatCurrency(getMaxDiscount(v)) }}
+  </span>
+</div>
 
           <div class="voucher-min">
 
