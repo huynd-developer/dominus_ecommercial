@@ -110,11 +110,14 @@
       <div class="row g-3">
         <div class="col-12 col-md-6">
           <label class="form-label fw-semibold">Họ tên</label>
+          <!-- ĐÃ THÊM: maxlength="50" và @input="handleNameInput" -->
           <input
             v-model="store.profileForm.name"
             type="text"
             class="form-control"
             placeholder="Nhập họ tên"
+            maxlength="50"
+            @input="handleNameInput"
           />
         </div>
 
@@ -622,9 +625,33 @@ const removeAddress = async (id: number) => {
   }
 };
 
+// ĐÃ THÊM: Xử lý chặn nhập liệu tên khách hàng (chỉ cho phép chữ và khoảng trắng)
+const handleNameInput = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const sanitized = input.value.replace(/[^\p{L}\s]/gu, "");
+  input.value = sanitized;
+  store.profileForm.name = sanitized;
+};
+
 const saveProfileInfo = async () => {
+  // Bổ sung kiểm tra rỗng ở đây (tùy chọn)
+  if (!store.profileForm.name || !store.profileForm.name.trim()) {
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "warning",
+      title: "Tên không được để trống",
+      showConfirmButton: false,
+      timer: 2000,
+    });
+    return;
+  }
+
   store.profileLoading = true;
   try {
+    // Đảm bảo loại bỏ các khoảng trắng thừa trước khi gửi lên Backend
+    store.profileForm.name = store.profileForm.name.trim().replace(/\s+/g, ' ');
+
     await api.put("/customer/profile", store.profileForm);
     Swal.fire({
       toast: true,

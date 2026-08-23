@@ -83,6 +83,9 @@ interface CartItem {
   available?: boolean | null;
   sellable?: boolean | null;
   unavailableReason?: string | null;
+  
+  // Flag nhận biết SP đã bị xóa hay chưa
+  isDeleted?: boolean | null;
 }
 
 const router = useRouter();
@@ -107,6 +110,12 @@ const getSellableQuantity = (item: CartItem | any) => {
 
 const getUnavailableReason = (item: CartItem) => {
   if (!item) return "Sản phẩm không hợp lệ.";
+  
+  // ĐÃ THÊM: Check thêm SP bị xóa không?
+  if (item.isDeleted === true || item.product?.isDeleted === true || item.productVariant?.isDeleted === true) {
+      return "Sản phẩm đã bị xóa khỏi hệ thống.";
+  }
+
   if (item.unavailableReason) return item.unavailableReason;
   if (item.available === false || item.sellable === false) return "Sản phẩm hiện không khả dụng.";
   if (item.variantStatus != null && Number(item.variantStatus) !== 1) return "Sản phẩm đang ngừng bán.";
@@ -124,6 +133,10 @@ const getUnavailableReason = (item: CartItem) => {
 
 const isItemAvailable = (item: CartItem) => {
   if (!item) return false;
+  
+  // ĐÃ THÊM: Check SP bị xóa không?
+  if (item.isDeleted === true || item.product?.isDeleted === true || item.productVariant?.isDeleted === true) return false;
+
   if (item.available === false || item.sellable === false) return false;
   if (item.variantStatus != null && Number(item.variantStatus) !== 1) return false;
 
@@ -241,7 +254,6 @@ const fetchProductDetail = async (productId: number) => {
   if (!productId) return null;
   
   try {
-    // THÊM CHỐNG CACHE VÀO ĐÂY ĐỂ TRÌNH DUYỆT KHÔNG LƯU GIÁ CŨ
     const t = Date.now();
     let res = await api.get(`/v1/products/${productId}?t=${t}`).catch(() => null);
     if (!res) res = await api.get(`/customer/products/${productId}?t=${t}`).catch(() => null);
@@ -253,7 +265,6 @@ const fetchProductDetail = async (productId: number) => {
   }
 };
 
-// TRẢ LẠI NGUYÊN BẢN: Chỉ ghép ảnh, KHÔNG ĐƯỢC ghi đè giá (price, discount) của Backend
 const enrichCartItemImage = async (item: CartItem): Promise<CartItem> => {
   if (!item) return item;
   
@@ -261,9 +272,32 @@ const enrichCartItemImage = async (item: CartItem): Promise<CartItem> => {
   if (!productId) return item; 
 
   const productData = await fetchProductDetail(productId);
-  if (!productData) return item;
+  // ĐÃ THÊM: Nếu BE trả null => Sản phẩm bị xóa/không tồn tại
+  if (!productData) {
+      return {
+          ...item,
+          isDeleted: true,
+          variantStatus: 0,
+          sellableQuantity: 0,
+          stockQuantity: 0,
+          sellable: false
+      };
+  }
 
   const matchedVariant = findMatchingVariant(productData, getItemVariantId(item));
+  
+  // ĐÃ THÊM: Check nếu Biến thể bị xóa
+  if (!matchedVariant) {
+       return {
+          ...item,
+          isDeleted: true,
+          variantStatus: 0,
+          sellableQuantity: 0,
+          stockQuantity: 0,
+          sellable: false
+      };
+  }
+
   const imageUrl = extractImageValue(matchedVariant) || extractImageValue(productData);
 
   return {
@@ -271,6 +305,7 @@ const enrichCartItemImage = async (item: CartItem): Promise<CartItem> => {
     imageUrl: extractImageValue(item) || imageUrl, 
     product: productData, 
     productVariant: matchedVariant || item.productVariant,
+    isDeleted: productData?.isDeleted || matchedVariant?.isDeleted || false
   };
 };
 
@@ -315,9 +350,11 @@ const loadCart = async (options: { preserveOrder?: boolean } = {}) => {
           
           const productData = await fetchProductDetail(productId);
 
-          if (!productData) {
+          // ĐÃ THÊM: Nếu BE trả null -> Sản phẩm bị xóa/không tồn tại
+          if (!productData || productData?.isDeleted === true) {
             return {
               ...item,
+              isDeleted: true,
               variantStatus: 0,
               sellableQuantity: 0,
               stockQuantity: 0,
@@ -327,7 +364,7 @@ const loadCart = async (options: { preserveOrder?: boolean } = {}) => {
 
           const matchedVariant = findMatchingVariant(productData, variantId);
 
-          if (matchedVariant) {
+          if (matchedVariant && !matchedVariant?.isDeleted) {
             // Giữ nguyên price/discount từ Cart BE, chỉ enrich metadata + tồn bán được.
             const sellableQuantity = Math.max(
               Number(
@@ -352,8 +389,10 @@ const loadCart = async (options: { preserveOrder?: boolean } = {}) => {
             };
           }
 
+          // Trưởng hợp có product nhưng KHÔNG có biến thể (Biến thể bị xóa)
           return {
             ...item,
+            isDeleted: true,
             variantStatus: 0,
             sellableQuantity: 0,
             stockQuantity: 0,
@@ -408,10 +447,6 @@ const updateQty = async (item: CartItem, newQty: number) => {
   }
 };
 
-// ==============================================
-// FIX: ĐỔI PHÂN LOẠI BẰNG THÊM MỚI -> XÓA CŨ
-// (Vì PUT API chỉ cho phép cập nhật số lượng)
-// ==============================================
 const updateVariant = async (item: CartItem, newVariantId: number) => {
   if (!item?.cartItemId || !newVariantId) return;
   if (getItemVariantId(item) === newVariantId) return;
@@ -431,7 +466,7 @@ const updateVariant = async (item: CartItem, newVariantId: number) => {
     resetVoucher();
     showToast("success", "Đã đổi phân loại sản phẩm");
     
-    // Tải lại dữ liệu (Bỏ preserveOrder vì cartItemId đã bị thay đổi)
+    // Tải lại dữ liệu
     await loadCart();
   } catch (err: any) {
     console.error("Lỗi đổi biến thể:", err);
@@ -480,7 +515,6 @@ const finalTotal = computed(() => {
   return Math.max(0, totalAmount.value - discountAmount.value) + shippingFee.value;
 });
 
-// THÊM HÀM CHECK LẠI VOUCHER TỪ LOCALSTORAGE
 const loadSavedVoucher = async () => {
   const savedCode = localStorage.getItem("applied_voucher");
   if (!savedCode || totalAmount.value <= 0) {
@@ -499,7 +533,6 @@ const loadSavedVoucher = async () => {
     discountAmount.value = Math.min(Math.max(discount, 0), Number(totalAmount.value || 0));
     appliedVoucherCode.value = savedCode;
   } catch (error) {
-    // Voucher bị tắt hoặc hết hạn -> Xóa bỏ khỏi giỏ hàng
     discountAmount.value = 0;
     appliedVoucherCode.value = "";
     localStorage.removeItem("applied_voucher");
@@ -507,7 +540,6 @@ const loadSavedVoucher = async () => {
   }
 };
 
-// BẮT SỰ KIỆN CLICK CHUỘT VÀO CỬA SỔ ĐỂ TỰ ĐỘNG LOAD LẠI FLASH SALE & VOUCHER
 const handleFocus = async () => {
   await loadCart({ preserveOrder: true });
   await loadSavedVoucher();

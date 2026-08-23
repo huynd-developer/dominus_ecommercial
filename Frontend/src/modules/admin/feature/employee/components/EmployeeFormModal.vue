@@ -83,7 +83,7 @@
               v-model.trim="form.name"
               type="text"
               class="form-control"
-              maxlength="255"
+              maxlength="50"
               required
             />
           </div>
@@ -94,7 +94,7 @@
               v-model.trim="form.email"
               type="email"
               class="form-control"
-              maxlength="255"
+              maxlength="50"
               required
             />
           </div>
@@ -112,7 +112,7 @@
               type="password"
               class="form-control"
               minlength="6"
-              maxlength="72"
+              maxlength="50"
               :required="!isUpdateMode"
             />
           </div>
@@ -676,8 +676,18 @@ function validateForm() {
     return false;
   }
 
+  if (form.name.trim().length > 50) {
+    formError.value = "Họ tên không được vượt quá 50 ký tự.";
+    return false;
+  }
+
   if (!/^\S+@\S+\.\S+$/.test(form.email)) {
     formError.value = "Email không đúng định dạng.";
+    return false;
+  }
+
+  if (form.email.trim().length > 50) {
+    formError.value = "Email không được vượt quá 50 ký tự.";
     return false;
   }
 
@@ -686,8 +696,8 @@ function validateForm() {
     return false;
   }
 
-  if (form.password && !/^\S{6,72}$/.test(form.password)) {
-    formError.value = "Mật khẩu phải từ 6 đến 72 ký tự và không chứa khoảng trắng.";
+  if (form.password && !/^\S{6,50}$/.test(form.password)) {
+    formError.value = "Mật khẩu phải từ 6 đến 50 ký tự và không chứa khoảng trắng.";
     return false;
   }
 

@@ -85,12 +85,14 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label">Tên nhóm hương <span class="text-danger">*</span></label>
+            <!-- ĐÃ THÊM maxlength="50" Ở ĐÂY -->
             <input 
               v-model="formData.name" 
               type="text" 
               class="form-control" 
               :class="{ 'is-invalid': errors.name }"
               placeholder="VD: Floral, Woody..." 
+              maxlength="50"
               @input="validateForm"
               @keyup.enter="handleSubmit"
               autofocus
@@ -156,8 +158,9 @@ const validateForm = () => {
     errors.value.name = 'Tên nhóm hương không được để trống';
     return false;
   }
-  if (nameValue.length > 255) {
-    errors.value.name = 'Tên nhóm hương không được vượt quá 255 ký tự';
+  // ĐÃ SỬA CHỖ NÀY THÀNH 50
+  if (nameValue.length > 50) {
+    errors.value.name = 'Tên nhóm hương không được vượt quá 50 ký tự';
     return false;
   }
   if (!nameRegex.test(nameValue)) {

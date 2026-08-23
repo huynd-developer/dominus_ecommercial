@@ -109,6 +109,7 @@
               class="form-control" 
               :class="{ 'is-invalid': errors.name }"
               placeholder="VD: Dior, Chanel..."
+              maxlength="50"
               @input="validateForm"
               @keyup.enter="handleSubmit"
             >
@@ -119,11 +120,13 @@
           
           <div class="mb-3">
             <label class="form-label">Mô tả chi tiết</label>
+            <!-- ĐÃ SỬA CHỖ NÀY THÊM MAXLENGTH 200 -->
             <textarea 
               v-model="formData.description" 
               class="form-control" 
               :class="{ 'is-invalid': errors.description }"
               rows="3" 
+              maxlength="200"
               placeholder="Giới thiệu thương hiệu..."
               @input="validateForm"
             ></textarea>
@@ -228,8 +231,8 @@ const validateForm = () => {
   if (!nameValue) {
     errors.value.name = 'Tên thương hiệu không được để trống!';
     isValid = false;
-  } else if (nameValue.length > 255) {
-    errors.value.name = 'Tên thương hiệu không được vượt quá 255 ký tự!';
+  } else if (nameValue.length > 50) { 
+    errors.value.name = 'Tên thương hiệu không được vượt quá 50 ký tự!'; 
     isValid = false;
   } else if (!nameRegex.test(nameValue)) {
     errors.value.name = "Tên thương hiệu chỉ được chứa chữ cái, số, khoảng trắng và các ký tự: &, -, ., '";
@@ -249,8 +252,9 @@ const validateForm = () => {
     }
   }
 
-  if (descValue.length > 1000) {
-    errors.value.description = 'Mô tả không được vượt quá 1000 ký tự!';
+  // ĐÃ SỬA CHỖ NÀY THÀNH 200
+  if (descValue.length > 200) {
+    errors.value.description = 'Mô tả không được vượt quá 200 ký tự!';
     isValid = false;
   }
 

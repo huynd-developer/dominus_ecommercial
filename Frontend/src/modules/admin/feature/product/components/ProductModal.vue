@@ -72,11 +72,14 @@
                     <label class="form-label"
                       >Tên sản phẩm <span class="text-danger">*</span></label
                     >
+                    <!-- ĐÃ THÊM HÀM CHẶN GÕ SỐ & KÝ TỰ ĐẶC BIỆT -->
                     <input
-                      v-model.trim="formData.name"
+                      v-model="formData.name"
                       class="form-control"
                       placeholder="Ví dụ: Dior Sauvage Eau De Parfum"
                       :disabled="isEdit && formData.status === 1"
+                      maxlength="50"
+                      @input="handleNameInput"
                     />
                   </div>
 
@@ -178,6 +181,7 @@
                       rows="4"
                       placeholder="Nhập mô tả chi tiết về sản phẩm..."
                       :disabled="isEdit && formData.status === 1"
+                      maxlength="200"
                     ></textarea>
                   </div>
                 </div>
@@ -540,6 +544,15 @@ const formData = ref<any>({
   variants: [],
 });
 
+// HÀM CHẶN GÕ KÝ TỰ ĐẶC BIỆT TÊN SẢN PHẨM
+const handleNameInput = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  // Cho phép chữ cái, số (0-9), khoảng trắng và các dấu () - _ . ,
+  const sanitized = input.value.replace(/[^\p{L}0-9\s\(\)\-_\.,]/gu, "");
+  input.value = sanitized;
+  formData.value.name = sanitized;
+};
+
 const resetForm = () => {
   formData.value = {
     name: "",
@@ -621,7 +634,6 @@ const onPriceInput = (index: any, event: Event) => {
     ? new Intl.NumberFormat("en-US").format(numericValue)
     : "";
 };
-
 
 const fillForm = async (product: Product, isClone = false) => {
   let newName = product.name;
@@ -811,8 +823,27 @@ const removeImage = (index: number) => {
 
 const validateForm = () => {
   const name = formData.value.name.trim();
+  // Cho phép chữ cái, số, khoảng trắng và các dấu () - _ . ,
+  const nameRegex = /^[\p{L}0-9\s\(\)\-_\.,]+$/u; 
+
   if (!name) {
     Swal.fire("Thiếu dữ liệu", "Vui lòng nhập Tên sản phẩm.", "warning");
+    return false;
+  }
+  
+  if (name.length > 50) {
+    Swal.fire("Lỗi dữ liệu", "Tên sản phẩm không được vượt quá 50 ký tự.", "warning");
+    return false;
+  }
+
+  if (!nameRegex.test(name)) {
+    Swal.fire("Lỗi dữ liệu", "Tên sản phẩm chỉ được chứa chữ cái, số, khoảng trắng và các dấu cơ bản như () - _ . ,", "warning");
+    return false;
+  }
+
+  const desc = formData.value.description ? formData.value.description.trim() : "";
+  if (desc.length > 200) {
+    Swal.fire("Lỗi dữ liệu", "Mô tả sản phẩm không được vượt quá 200 ký tự.", "warning");
     return false;
   }
 

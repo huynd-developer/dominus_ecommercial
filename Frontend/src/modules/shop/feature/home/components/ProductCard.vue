@@ -472,11 +472,6 @@ export const sharedCompareAiError = ref("");
 
 let currentCompareRendererId: string | null = null;
 
-/*
- * Nhiều ProductCard có thể mount cùng lúc trên một trang.
- * Chỉ gộp các request favorites đang chạy đồng thời; không cache lâu dài,
- * nên không thay đổi tính đúng của dữ liệu yêu thích giữa các lần tải sau.
- */
 let sharedFavoriteLoadPromise: Promise<any> | null = null;
 </script>
 
@@ -555,9 +550,6 @@ const activeProduct = computed(() => {
   };
 });
 
-// =====================================
-// BỘ HÀM TÍNH TOÁN GIÁ CẢ THÔNG MINH
-// =====================================
 const getSafeNumber = (val: any) => {
   if (val === null || val === undefined || val === '') return 0;
   if (typeof val === 'number') return isNaN(val) ? 0 : val;
@@ -739,7 +731,7 @@ const syncProductData = async () => {
   
   if (productId > 0 && !fullProductData.value) {
     try {
-      const res = await api.get(`/v1/products/${productId}`);
+      const res = await api.get(`/v1/products/${productId}?t=${Date.now()}`);
       const data = res.data?.data || res.data;
       if (data) {
         fullProductData.value = data; 
@@ -890,6 +882,7 @@ const handleModalImageError = (event: Event) => {
 };
 const getBottleStyle = (color?: string): Record<string, string> => ({ "--bottle-color": color || "#0a192f" });
 
+// ĐÃ SỬA: Ép z-index lên tận nóc để không bị chìm dưới lớp Modal Overlay
 const showToast = (type: "success" | "warning" | "error", title: string, message: string) => {
   Swal.fire({ 
     toast: true, 
@@ -902,7 +895,7 @@ const showToast = (type: "success" | "warning" | "error", title: string, message
     didOpen: () => {
       const container = Swal.getContainer();
       if (container) {
-        container.style.zIndex = '9999999';
+        container.style.setProperty('z-index', '9999999', 'important');
       }
     }
   });
@@ -920,7 +913,7 @@ const checkLoginBeforeAction = () => {
       confirmButtonColor: "#bd9a5f", cancelButtonColor: "#6b7280",
       didOpen: () => {
         const container = Swal.getContainer();
-        if (container) container.style.zIndex = '9999999';
+        if (container) container.style.setProperty('z-index', '9999999', 'important');
       }
     }).then((result) => {
       if (result.isConfirmed) router.push({ name: "Login", query: { redirect: router.currentRoute.value.fullPath } });
@@ -935,7 +928,7 @@ const checkLoginBeforeAction = () => {
       confirmButtonColor: "#bd9a5f",
       didOpen: () => {
         const container = Swal.getContainer();
-        if (container) container.style.zIndex = '9999999';
+        if (container) container.style.setProperty('z-index', '9999999', 'important');
       }
     });
     return false;
@@ -1301,7 +1294,7 @@ const openPickerModal = async () => {
   if (allProductsStore.value.length === 0) {
     pickerLoading.value = true;
     try {
-      const res = await api.get("/v1/products", { params: { size: 100, page: 0 } });
+      const res = await api.get("/v1/products", { params: { size: 100, page: 0, t: Date.now() } });
       let list = [];
       if (res.data?.data?.content) list = res.data.data.content;
       else if (Array.isArray(res.data?.data)) list = res.data.data;
@@ -1528,7 +1521,7 @@ watch(sharedShowCompareModal, async (val) => {
       }
 
       try {
-        const res = await api.get(`/v1/products/${id}`);
+        const res = await api.get(`/v1/products/${id}?t=${Date.now()}`);
         const fullData = res.data?.data || res.data;
         if (fullData) {
           let rawVariants = fullData.variants || fullData.productVariants || fullData.productVariantList;
@@ -1606,7 +1599,7 @@ const openVariantModal = async (type: "CART" | "BUY", customProduct: any = null,
       });
     }
 
-    const res = await api.get(`/v1/products/${tId}`);
+    const res = await api.get(`/v1/products/${tId}?t=${Date.now()}`);
     const data = res.data?.data || res.data;
     let rawVariants = data?.variants || data?.productVariants || data?.productVariantList || [];
     
@@ -1694,10 +1687,6 @@ const loadFavoriteStatus = async () => {
   if (!token || (role !== "USER" && role !== "CUSTOMER")) { favoritedMap.value = {}; isFavorited.value = false; return; }
 
   try {
-    /*
-     * Nếu nhiều card cùng mount, dùng chung request favorites đang chạy.
-     * Khi request hoàn tất thì bỏ promise, lần tải sau vẫn lấy dữ liệu mới.
-     */
     if (!sharedFavoriteLoadPromise) {
       sharedFavoriteLoadPromise = favoriteService
         .getFavorites()
@@ -1801,11 +1790,6 @@ onMounted(() => {
   window.addEventListener("favorite-updated", handleFavoriteUpdated);
   loadFavoriteStatus();
 
-  /*
-   * Mặc định vẫn preload detail để không ảnh hưởng các màn hình khác.
-   * HomeView truyền preloadDetail=false cho các card sản phẩm thường vì
-   * dữ liệu list đã đủ để render; khi mua/so sánh, flow hiện tại vẫn tự lấy detail.
-   */
   if (props.preloadDetail) {
     syncProductData();
   }
@@ -1821,11 +1805,6 @@ onBeforeUnmount(() => {
 watch(
   () => Number((props.product as any)?.productId || (props.product as any)?.id || 0),
   (newProductId, oldProductId) => {
-    /*
-     * Chỉ tải lại khi component thực sự đổi sang product khác.
-     * Thay đổi giá/Flash Sale/tồn của cùng product không được tạo lại
-     * request detail + favorites.
-     */
     if (newProductId === oldProductId) return;
 
     fullProductData.value = null;
@@ -1885,7 +1864,8 @@ watch(
 .buy-now-btn:disabled, .add-cart-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
 /* COMPARE BAR */
-.compare-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: #ffffff; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 9998; padding: 15px 0; border-top: 2px solid #bd9a5f; }
+/* ĐÃ SỬA Z-INDEX XUỐNG 1040 ĐỂ TRÁNH ĐÈ THÔNG BÁO TỐI ĐA SỐ LƯỢNG */
+.compare-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: #ffffff; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1040; padding: 15px 0; border-top: 2px solid #bd9a5f; }
 .compare-bar.show { transform: translateY(0); }
 .cb-container { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; }
 .cb-left { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
@@ -1909,7 +1889,8 @@ watch(
 .cb-btn-compare:hover:not(:disabled) { background: #bd9a5f; box-shadow: 0 4px 12px rgba(189,154,95,0.3); }
 
 /* COMPARE MODAL */
-.compare-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 999999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); }
+/* ĐÃ SỬA Z-INDEX XUỐNG 1050 ĐỂ TRÁNH ĐÈ THÔNG BÁO TỐI ĐA SỐ LƯỢNG */
+.compare-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1050; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); }
 .compare-modal-box { background: white; width: 95%; max-width: 1100px; max-height: 90vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; animation: modalFadeIn 0.3s ease; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
 .cm-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid #eaeaea; background: #fdfaf6; }
 .cm-header h3 { margin: 0; font-family: "Playfair Display", serif; font-size: 22px; font-weight: 800; color: #0a142f; }
@@ -2109,7 +2090,8 @@ watch(
 .picker-footer { padding: 15px 24px; border-top: 1px solid #eaeaea; display: flex; justify-content: flex-end; background: #f8fafc; }
 
 /* MODAL CHỌN BIẾN THỂ */
-.custom-modal-overlay { backdrop-filter: blur(5px); position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 999999; display: flex; align-items: center; justify-content: center; }
+/* ĐÃ SỬA Z-INDEX XUỐNG 1050 ĐỂ TRÁNH ĐÈ THÔNG BÁO TỐI ĐA SỐ LƯỢNG */
+.custom-modal-overlay { backdrop-filter: blur(5px); position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 1050; display: flex; align-items: center; justify-content: center; }
 .variant-modal-box { background: #ffffff; width: 100%; max-width: 440px; border-radius: 20px; padding: 28px; box-shadow: 0 24px 54px rgba(6, 19, 43, 0.25); animation: modalFadeIn 0.3s ease-out forwards; }
 @keyframes modalFadeIn { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .vm-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid rgba(189, 154, 95, 0.15); padding-bottom: 16px; }

@@ -211,7 +211,7 @@
                   <input
                     type="number"
                     min="0.01"
-                    max="99.99"
+                    max="99"
                     step="0.01"
                     class="form-control"
                     :value="selected.discountPercent"
@@ -362,10 +362,21 @@ const removeSelected = (productVariantId: number) => {
   );
 };
 
+// ===================== CHẶN KÝ TỰ / SỐ QUÁ 99 =====================
 const onDiscountInput = (productVariantId: number, event: Event) => {
   if (props.readonly) return;
   const target = event.target as HTMLInputElement;
-  updateDiscount(productVariantId, Number(target.value));
+  let val = Number(target.value);
+  
+  if (val > 99) {
+    val = 99;
+    target.value = "99";
+  } else if (val < 0) {
+    val = 0;
+    target.value = "0";
+  }
+  
+  updateDiscount(productVariantId, val);
 };
 
 const updateDiscount = (productVariantId: number, discountPercent: number) => {

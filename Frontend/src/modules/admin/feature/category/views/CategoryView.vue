@@ -74,7 +74,7 @@
       </div>
     </div>
 
-    <!-- MODAL (Giữ nguyên logic của m, chỉ sửa CSS form) -->
+    <!-- MODAL -->
     <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
       <div class="custom-modal">
         <div class="modal-header">
@@ -86,12 +86,14 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label">Tên danh mục <span class="text-danger">*</span></label>
+            <!-- ĐÃ THÊM maxlength="50" Ở ĐÂY -->
             <input 
               v-model="formData.name" 
               type="text" 
               class="form-control" 
               :class="{ 'is-invalid': errors.name }"
               placeholder="Nhập tên danh mục..."
+              maxlength="50"
               @input="validateForm"
               @keyup.enter="handleSubmit"
               autofocus
@@ -191,8 +193,9 @@ const validateForm = () => {
     return false;
   }
   
-  if (nameValue.length > 255) {
-    errors.value.name = 'Tên danh mục không được vượt quá 255 ký tự';
+  // ĐÃ SỬA CHỖ NÀY THÀNH 50
+  if (nameValue.length > 50) {
+    errors.value.name = 'Tên danh mục không được vượt quá 50 ký tự';
     return false;
   }
   
