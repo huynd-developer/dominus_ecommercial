@@ -49,23 +49,27 @@
 
               <td>
                 <div class="d-flex align-items-center gap-3">
-                  <img
-                    v-if="item.imageUrl"
-                    :src="item.imageUrl"
-                    class="product-img"
-                    alt="Ảnh sản phẩm"
-                    @error="handleImageError"
-                  />
+                  <div class="image-box">
+                    <!-- ƯU TIÊN TUYỆT ĐỐI PRIMARY IMAGE ĐỂ ĐỒNG BỘ VỚI TRANG QUẢN LÝ -->
+                    <img
+                      v-if="getBestSellingImageUrl(item)"
+                      :src="getBestSellingImageUrl(item)"
+                      class="product-img custom-img-hover"
+                      loading="lazy"
+                      decoding="async"
+                      alt="Ảnh sản phẩm"
+                      @error="handleImageError"
+                    />
 
-                  <div v-else class="product-img placeholder-img">
-                    No Image
+                    <div v-else class="product-img placeholder-img">
+                      <i class="bi bi-image"></i>
+                    </div>
                   </div>
 
                   <div class="min-w-0">
                     <div class="fw-semibold product-name">
                       {{ item.productName || "Sản phẩm" }}
                     </div>
-
                     <div class="text-muted small">
                       ID: {{ item.productId || "-" }}
                     </div>
@@ -93,12 +97,77 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import type { BestSellingProductResponse } from "../types/report.type";
+import api from "@/common/api";
 
 const props = defineProps<{
   items: BestSellingProductResponse[];
 }>();
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
+const productDetailMap = ref<Record<number, any>>({});
+
+const getImageUrl = (url?: string) => {
+  if (!url) return "";
+  if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("data:")) return url;
+  return url.startsWith("/") ? `${API_URL}${url}` : `${API_URL}/${url}`;
+};
+
+const fetchMissingImages = async () => {
+  if (!Array.isArray(props.items)) return;
+  for (const item of props.items) {
+    const pId = Number(item.productId || 0);
+    if (pId > 0 && !productDetailMap.value[pId]) {
+      try {
+        const res = await api.get(`/v1/products/${pId}`);
+        const data = res.data?.data || res.data;
+        if (data) {
+          productDetailMap.value[pId] = data;
+        }
+      } catch (e) {}
+    }
+  }
+};
+
+watch(() => props.items, () => {
+  fetchMissingImages();
+}, { immediate: true, deep: true });
+
+// HÀM ƯU TIÊN LẤY PRIMARY IMAGE ĐỂ KHỚP VỚI BÊN QUẢN LÝ SẢN PHẨM
+const getBestSellingImageUrl = (item: any) => {
+  if (!item) return "";
+  
+  const pId = Number(item.productId || 0);
+  const detail = pId > 0 ? productDetailMap.value[pId] : null;
+
+  // 1. Kiểm tra từ chi tiết sản phẩm trước (lấy chuẩn primaryImageUrl y hệt ProductList)
+  if (detail) {
+    const detailUrl = detail.primaryImageUrl || detail.PrimaryImageUrl || detail.imageUrl || detail.ImageUrl || detail.mainImage;
+    if (detailUrl) return getImageUrl(detailUrl);
+    
+    if (Array.isArray(detail.images) && detail.images.length > 0) {
+      const primaryObj = detail.images.find((img: any) => Boolean(img?.isPrimary || img?.is_primary));
+      const fallbackObj = primaryObj || detail.images[0];
+      const imgUrl = fallbackObj?.imageUrl || fallbackObj?.url || fallbackObj;
+      if (imgUrl) return getImageUrl(imgUrl);
+    }
+  }
+
+  // 2. Fallback về item của bảng bán chạy nhưng đặt primaryImageUrl lên đầu tiên
+  const rawUrl =
+    item.primaryImageUrl ||
+    item.PrimaryImageUrl ||
+    item.imageUrl ||
+    item.ImageUrl ||
+    item.image ||
+    item.Image ||
+    item.thumbnailUrl ||
+    item.mainImage ||
+    "";
+  
+  return getImageUrl(rawUrl);
+};
 
 const toNumber = (value: unknown) => {
   const numberValue = Number(value ?? 0);
@@ -128,32 +197,46 @@ const getRankClass = (index: number) => {
   return "";
 };
 
+const FALLBACK_IMAGE = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23f1f5f9%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20fill%3D%22%2394a3b8%22%20font-family%3D%22Arial%22%20font-size%3D%2214%22%3EKh%C3%B4ng%20c%C3%B3%20%E1%BA%A3nh%3C%2Ftext%3E%3C%2Fsvg%3E";
+
 const handleImageError = (event: Event) => {
   const target = event.target as HTMLImageElement | null;
-
   if (target) {
-    target.style.display = "none";
+    target.src = FALLBACK_IMAGE;
   }
 };
 </script>
 
 <style scoped>
+.image-box {
+  width: 55px;
+  height: 55px;
+}
+
 .product-img {
-  width: 54px;
-  height: 54px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
   flex-shrink: 0;
+}
+
+.custom-img-hover {
+  transition: 0.25s;
+}
+
+.custom-img-hover:hover {
+  transform: scale(1.08);
 }
 
 .placeholder-img {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  color: #9ca3af;
-  background: #f3f4f6;
+  background: #f1f5f9;
+  color: #94a3b8;
+  font-size: 20px;
 }
 
 .product-name {

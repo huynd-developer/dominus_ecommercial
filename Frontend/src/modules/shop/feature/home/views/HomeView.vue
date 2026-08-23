@@ -988,8 +988,10 @@ const stopFlashSaleRealtimeRefresh = () => {
 
 // Khi quay lại cửa sổ chỉ đồng bộ Flash Sale ở nền.
 // Không tải lại danh sách sản phẩm thường chỉ vì browser vừa được focus.
+// Khi quay lại cửa sổ, ép tải lại cả Flash Sale và Sản phẩm thường
 const handleFocus = async () => {
   await fetchFlashSaleProducts(false);
+  await fetchNormalProducts(); // BỔ SUNG DÒNG NÀY VÀO ĐÂY
 };
 
 onMounted(async () => {

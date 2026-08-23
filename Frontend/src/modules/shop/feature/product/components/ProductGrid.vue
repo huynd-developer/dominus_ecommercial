@@ -84,7 +84,6 @@
             <button class="cm-close" @click="showCompareModal = false">✕</button>
           </div>
           <div class="cm-body">
-            <!-- AI chỉ là phần bổ sung; bảng so sánh thường bên dưới giữ nguyên. -->
             <div class="ai-compare-toolbar">
               <div class="ai-compare-toolbar-text">
                 <div class="ai-compare-title">
@@ -227,7 +226,6 @@
                   <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-rating-' + i"></td>
                 </tr>
 
-                <!-- BẮT ĐẦU: CÁC TRƯỜNG SO SÁNH NƯỚC HOA ĐÃ TÁCH RIÊNG -->
                 <tr><td colspan="4" class="group-header">Đặc tính sản phẩm</td></tr>
                 <tr>
                   <th class="spec-label-col">Nhóm hương chính</th>
@@ -259,14 +257,13 @@
                   <td v-for="p in compareList" :key="'occ' + (p.id || p.productId)">{{ getCompareValue(p, "occasion") }}</td>
                   <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-occ-' + i"></td>
                 </tr>
-                <!-- KẾT THÚC -->
 
                 <tr><td colspan="4" class="group-header bg-white border-bottom-0 pt-4"></td></tr>
                 <tr>
                   <th class="spec-label-col border-bottom-0"></th>
                   <td v-for="p in compareList" :key="'act' + (p.id || p.productId)" class="border-bottom-0 pb-4">
                     <button class="cm-btn-buy" :disabled="isCompareBuyDisabled(p)" @click="buyFromCompare(p)">
-                      <i class="bi bi-cart-plus me-1"></i> {{ isCompareBuyDisabled(p) ? "Tạm hết hàng" : "Thêm giỏ hàng" }}
+                      <i class="bi bi-cart-plus me-1"></i> {{ isCompareBuyDisabled(p) ? "Tạm hết hàng" : "Xem sản phẩm" }}
                     </button>
                   </td>
                   <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-act-' + i" class="border-bottom-0"></td>
@@ -415,16 +412,12 @@ const showToast = (type: "success" | "warning" | "error", title: string, message
     didOpen: () => {
       const container = Swal.getContainer();
       if (container) {
-        container.style.zIndex = '9999999';
+        container.style.setProperty('z-index', '9999999', 'important');
       }
     }
   });
 };
 
-/**
- * Tồn có thể bán thật từ InventoryLot.
- * Không dùng stockQuantity / NSX / HSD legacy của ProductVariant để quyết định bán.
- */
 const getSellableQuantity = (variant: any) => {
   const value = Number(variant?.sellableQuantity ?? 0);
   if (!Number.isFinite(value) || value <= 0) return 0;
@@ -566,7 +559,6 @@ const loadStructuredCompareInsights = async (): Promise<boolean> => {
 const handleAiCompare = async () => {
   if (aiCompareLoading.value) return;
 
-  // Chỉ AI bắt buộc đăng nhập; so sánh thường vẫn public.
   if (!checkLoginBeforeAction()) return;
 
   const productIds = getCompareProductIds();
@@ -672,7 +664,6 @@ watch(showCompareModal, (val) => {
       }
     });
 
-    // Không tự gọi Gemini khi mở modal; chỉ reset kết quả AI cũ.
     resetCompareAiResult();
   }
 });
@@ -784,6 +775,17 @@ const buyFromCompare = (p: any) => {
   openVariantModal('BUY', p, vId); showCompareModal.value = false;
 };
 
+const toCompareText = (value: any): string => {
+  if (value === null || value === undefined || value === "") return "";
+  if (Array.isArray(value)) {
+    return value.map((item: any) => toCompareText(item)).filter(Boolean).join(", ");
+  }
+  if (typeof value === "object") {
+    return String(value?.name ?? value?.value ?? value?.label ?? value?.displayName ?? "").trim();
+  }
+  return String(value).trim();
+};
+
 const getGenderText = (item: any) => {
   const g = item?.gender;
   if (g === 1 || String(g) === '1' || String(g).toLowerCase() === 'nam') return "Nam";
@@ -801,9 +803,7 @@ const getFragranceFamily = (item: any) => {
   return getAttributeText(item, 'fragranceFamily');
 };
 
-// CÁC HÀM XỬ LÝ MỚI CHO THUỘC TÍNH NƯỚC HOA
 const getOccasionText = (item: any) => {
-  // 1. Thử lấy từ Backend nếu có
   let occasions = [];
   if (Array.isArray(item?.occasions) && item.occasions.length > 0) {
     occasions = item.occasions.map((i: any) => (typeof i === "object" ? i?.name : i));
@@ -827,7 +827,6 @@ const getOccasionText = (item: any) => {
   const aiOccasion = getCompareInsight(item)?.occasion;
   if (aiOccasion) return aiOccasion;
 
-  // 2. Tự động suy luận nếu Backend và AI đều chưa có dữ liệu
   const scent = String(getFragranceFamily(item) || "").toLowerCase();
   const con = String(getAttributeText(item, "concentration") || "").toLowerCase();
 
@@ -845,7 +844,6 @@ const getOccasionText = (item: any) => {
 };
 
 const getStyleText = (item: any) => {
-  // 1. Thử lấy từ Backend nếu có
   if (Array.isArray(item?.styles) && item.styles.length > 0) {
     return item.styles.map((i: any) => (typeof i === "object" ? i?.name : i)).filter(Boolean).join(", ");
   }
@@ -855,7 +853,6 @@ const getStyleText = (item: any) => {
   const aiStyle = getCompareInsight(item)?.style;
   if (aiStyle) return aiStyle;
 
-  // 2. Tự động suy luận nếu Backend và AI đều chưa có dữ liệu
   const scent = String(getFragranceFamily(item) || "").toLowerCase();
   
   if (scent.includes("wood") || scent.includes("gỗ")) return "Sang trọng, Trưởng thành, Ấm áp";
@@ -869,18 +866,12 @@ const getStyleText = (item: any) => {
   return "Thanh lịch, Tinh tế, Dễ sử dụng";
 };
 
-// ĐÃ THÊM CÁC FIELD MỚI VÀO getCompareValue
 const getCompareValue = (p: any, type: string) => {
   if (type === 'brand') return getBrandName(p); 
   if (type === 'scent') return getFragranceFamily(p);
   if (type === 'concentration') return getAttributeText(p, 'concentration'); 
   if (type === 'gender') return getGenderText(p);
 
-  /*
-   * Phong cách và hoàn cảnh là kết quả bổ sung từ AI.
-   * Trước khi người dùng bấm "So sánh bằng AI" thì không tự suy luận
-   * và không hiển thị dữ liệu giả định.
-   */
   if (type === 'occasion') {
     return getCompareInsight(p)?.occasion || "Chưa phân tích bằng AI";
   }
@@ -895,7 +886,6 @@ const getCompareValue = (p: any, type: string) => {
   return '';
 };
 
-// SO SÁNH NÂNG CAO
 const getPricePerMl = (p: any) => {
   const v = getCompareVariant(p);
   const price = getComparePrice(p);
@@ -923,10 +913,6 @@ const isBestValue = (p: any) => {
 };
 
 const getLongevityDisplay = (p: any) => {
-  /*
-   * Độ lưu hương trong bảng này là insight AI.
-   * Không tự suy luận từ nồng độ trước khi người dùng chủ động bấm AI.
-   */
   return getCompareInsight(p)?.longevity || "Chưa phân tích bằng AI";
 };
 
@@ -964,7 +950,7 @@ const syncGridRatings = () => {
         const res = await api.get(`/v1/products/${id}`);
         const data = res.data?.data || res.data;
         if (data) { syncedRatingsMap.value[id] = Number(data.averageRating || data.avgRating || data.rating || 0); syncedReviewsMap.value[id] = Number(data.reviewCount || data.reviews || data.totalReviews || 0); }
-      } catch (e) { /* Bỏ qua */ }
+      } catch (e) { }
     }
   });
 };
@@ -990,8 +976,40 @@ const appendImageList = (images: string[], value: any) => {
 
 const getProductImages = (item: any) => {
   const images: string[] = [];
-  appendImage(images, item?.mainImage); appendImage(images, item?.mainImageUrl); appendImage(images, item?.thumbnailUrl); appendImage(images, item?.imageUrl); appendImage(images, item?.ImageUrl); appendImage(images, item?.image);
-  appendImageList(images, item?.images); appendImageList(images, item?.Images); appendImageList(images, item?.galleryImages); appendImageList(images, item?.imageList); appendImageList(images, item?.ImageList); appendImageList(images, item?.productImages); appendImageList(images, item?.ProductImages); appendImageList(images, item?.productImageList); appendImageList(images, item?.ProductImageList);
+  
+  // Ưu tiên tuyệt đối tìm ảnh có đánh dấu isPrimary (giống như logic trong quản lý sản phẩm)
+  const imageArrays = [
+    item?.images,
+    item?.Images,
+    item?.productImages,
+    item?.ProductImages,
+    item?.galleryImages,
+    item?.imageList,
+  ];
+
+  for (const arr of imageArrays) {
+    if (Array.isArray(arr)) {
+      const primaryObj = arr.find((img: any) => 
+        Boolean(img?.isPrimary || img?.is_primary || img?.primary)
+      );
+      if (primaryObj) {
+        appendImage(images, primaryObj?.imageUrl || primaryObj?.url || primaryObj);
+      }
+    }
+  }
+
+  appendImage(images, item?.primaryImageUrl);
+  appendImage(images, item?.mainImage); 
+  appendImage(images, item?.mainImageUrl); 
+  appendImage(images, item?.thumbnailUrl); 
+  appendImage(images, item?.imageUrl); 
+  appendImage(images, item?.ImageUrl); 
+  appendImage(images, item?.image);
+  
+  imageArrays.forEach((arr) => {
+    appendImageList(images, arr);
+  });
+
   if (Array.isArray(item?.variants)) {
     item.variants.forEach((variant: any) => {
       appendImage(images, variant?.mainImage); appendImage(images, variant?.mainImageUrl); appendImage(images, variant?.thumbnailUrl); appendImage(images, variant?.imageUrl); appendImage(images, variant?.ImageUrl); appendImage(images, variant?.image);
@@ -1054,7 +1072,7 @@ const checkLoginBeforeAction = () => {
       cancelButtonColor: "#6b7280",
       didOpen: () => {
         const container = Swal.getContainer();
-        if (container) container.style.zIndex = '9999999';
+        if (container) container.style.setProperty('z-index', '9999999', 'important');
       }
     })
       .then((result) => { if (result.isConfirmed) router.push({ name: "Login", query: { redirect: router.currentRoute.value.fullPath } }); });
@@ -1068,7 +1086,7 @@ const checkLoginBeforeAction = () => {
       confirmButtonColor: "#bd9a5f",
       didOpen: () => {
         const container = Swal.getContainer();
-        if (container) container.style.zIndex = '9999999';
+        if (container) container.style.setProperty('z-index', '9999999', 'important');
       }
     });
     return false;
@@ -1211,7 +1229,7 @@ const confirmAction = async (type: 'CART' | 'BUY') => {
   try {
     actionType.value = type; actionLoading.value = true;
     
-    // === BẮT ĐẦU FIX: CHECK SỐ LƯỢNG GIỎ HÀNG THỰC TẾ TRƯỚC KHI THÊM ===
+    // Check lại giỏ hàng trước khi mua
     const cartRes = await api.get("/v1/customer/cart/my-cart").catch(() => null);
     let currentQty = 0;
     
@@ -1249,7 +1267,6 @@ const confirmAction = async (type: 'CART' | 'BUY') => {
       }
       return; 
     }
-    // === KẾT THÚC FIX ===
 
     if (type === 'BUY') {
       await api.post("/v1/customer/cart/add", { productVariantId: variantId, quantity: quantity.value });
@@ -1360,7 +1377,18 @@ watch(() => props.productList, () => { loadMyFavorites(); syncGridRatings(); }, 
 .cb-btn-compare:hover:not(:disabled) { background: #bd9a5f; box-shadow: 0 4px 12px rgba(189,154,95,0.3); }
 
 /* COMPARE MODAL */
-.compare-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 999999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); }
+/* CŨ: z-index: 999999; */
+/* THAY BẰNG: */
+.compare-modal-overlay { 
+  position: fixed; 
+  inset: 0; 
+  background: rgba(0,0,0,0.7); 
+  z-index: 1055; /* ĐÃ HẠ XUỐNG 1055 */
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  backdrop-filter: blur(6px); 
+}
 .compare-modal-box { background: white; width: 95%; max-width: 1100px; max-height: 90vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; animation: modalFadeIn 0.3s ease; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
 .cm-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid #eaeaea; background: #fdfaf6; }
 .cm-header h3 { margin: 0; font-family: "Playfair Display", serif; font-size: 22px; font-weight: 800; color: #0a142f; }
@@ -1464,6 +1492,7 @@ watch(() => props.productList, () => { loadMyFavorites(); syncGridRatings(); }, 
 .cm-btn-buy:hover:not(:disabled) { background: #bd9a5f; box-shadow: 0 4px 15px rgba(189,154,95,0.3); }
 .cm-btn-buy:disabled { opacity: 0.6; cursor: not-allowed; background: #718096; }
 
+/* PICKER MODAL */
 .product-picker-box { background: white; width: 95%; max-width: 700px; max-height: 80vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; animation: modalFadeIn 0.3s ease; }
 .picker-search-bar { padding: 15px 24px; border-bottom: 1px solid #eaeaea; background: #f8fafc; }
 .picker-input { width: 100%; padding: 12px 15px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 14px; outline: none; transition: 0.2s; }
@@ -1482,7 +1511,8 @@ watch(() => props.productList, () => { loadMyFavorites(); syncGridRatings(); }, 
 .picker-check { position: absolute; top: 10px; right: 10px; font-size: 18px; }
 .picker-footer { padding: 15px 24px; border-top: 1px solid #eaeaea; display: flex; justify-content: flex-end; background: #f8fafc; }
 
-.custom-modal-overlay { backdrop-filter: blur(5px); position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 999999; display: flex; align-items: center; justify-content: center; }
+/* MODAL CHỌN BIẾN THỂ */
+.custom-modal-overlay { backdrop-filter: blur(5px); position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 1050; display: flex; align-items: center; justify-content: center; }
 .variant-modal-box { background: #ffffff; width: 100%; max-width: 440px; border-radius: 20px; padding: 28px; box-shadow: 0 24px 54px rgba(6, 19, 43, 0.25); animation: modalFadeIn 0.3s ease-out forwards; }
 @keyframes modalFadeIn { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .vm-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid rgba(189, 154, 95, 0.15); padding-bottom: 16px; }
@@ -1518,8 +1548,16 @@ watch(() => props.productList, () => { loadMyFavorites(); syncGridRatings(); }, 
 .vm-btn-buy { background: #b78d52; color: #ffffff; }
 .vm-btn-buy:hover:not(:disabled) { background: #9b7541; transform: translateY(-2px); box-shadow: 0 6px 14px rgba(183, 141, 82, 0.25); }
 .vm-btn-cart:disabled, .vm-btn-buy:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
-.qty-wrapper input[type="number"]::-webkit-inner-spin-button, .qty-wrapper input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.qty-wrapper input[type="number"]::-webkit-inner-spin-button, .qty-keyword input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .qty-wrapper input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
 .flash-sale-badge { background: #b31320; color: #ffffff; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 800; margin-bottom: 2px; }
 .date-info-box { background: #fffcf7; border-left: 3px solid #d97706; padding: 8px 12px; border-radius: 4px; margin-top: 8px; }
+</style>
+
+<!-- THÊM ĐOẠN NÀY XUỐNG DƯỚI CÙNG CỦA FILE -->
+<style>
+/* ÉP BUỘC SWEETALERT LUÔN NỔI LÊN TRÊN CÙNG TOÀN HỆ THỐNG */
+div.swal2-container {
+  z-index: 9999999 !important;
+}
 </style>
