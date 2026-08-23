@@ -83,7 +83,8 @@
 
             <template v-if="currentPaymentMethod === 'VIETQR'">
               <p class="text-muted small mb-3">
-                Vui lòng mở ứng dụng ngân hàng và quét mã QR bên dưới để hoàn tất.
+                Vui lòng mở ứng dụng ngân hàng và quét mã QR bên dưới để hoàn
+                tất.
               </p>
               <img
                 :src="qrCodeUrl"
@@ -95,7 +96,8 @@
 
             <template v-if="currentPaymentMethod === 'VNPAY'">
               <p class="text-muted small mb-3">
-                Bạn đã chọn thanh toán an toàn qua cổng VNPay. Vui lòng bấm nút bên dưới để chuyển hướng.
+                Bạn đã chọn thanh toán an toàn qua cổng VNPay. Vui lòng bấm nút
+                bên dưới để chuyển hướng.
               </p>
             </template>
 
@@ -112,7 +114,11 @@
                 v-if="currentPaymentMethod === 'VIETQR'"
                 @click="confirmQrPayment"
                 class="btn btn-success flex-grow-1 py-3 fw-bold rounded-3"
-                style="background-color: #10b981; border: none; font-size: 0.9rem;"
+                style="
+                  background-color: #10b981;
+                  border: none;
+                  font-size: 0.9rem;
+                "
               >
                 Đã chuyển khoản <i class="bi bi-check-circle ms-1"></i>
               </button>
@@ -121,7 +127,11 @@
                 v-if="currentPaymentMethod === 'VNPAY'"
                 @click="goToVnpayGateway"
                 class="btn btn-primary flex-grow-1 py-3 fw-bold rounded-3"
-                style="background-color: #0284c7; border: none; font-size: 0.9rem;"
+                style="
+                  background-color: #0284c7;
+                  border: none;
+                  font-size: 0.9rem;
+                "
               >
                 Thanh toán ngay <i class="bi bi-box-arrow-up-right ms-1"></i>
               </button>
@@ -192,7 +202,9 @@ const paymentCountdown = ref(900);
 let paymentTimer: ReturnType<typeof setInterval> | null = null;
 
 const formattedCountdown = computed(() => {
-  const m = Math.floor(paymentCountdown.value / 60).toString().padStart(2, "0");
+  const m = Math.floor(paymentCountdown.value / 60)
+    .toString()
+    .padStart(2, "0");
   const s = (paymentCountdown.value % 60).toString().padStart(2, "0");
   return `${m}:${s}`;
 });
@@ -214,7 +226,9 @@ const stopPaymentTimer = () => {
 };
 
 const successStatusText = ref("");
-const successMessage = ref("Cảm ơn bạn đã mua sắm tại Dominus. Đơn hàng của bạn đang chờ cửa hàng xác nhận.");
+const successMessage = ref(
+  "Cảm ơn bạn đã mua sắm tại Dominus. Đơn hàng của bạn đang chờ cửa hàng xác nhận."
+);
 const successDetails = ref<ResultDetail[]>([]);
 const discountAmount = ref(0);
 const appliedVoucherCode = ref("");
@@ -235,29 +249,46 @@ const orderForm = ref({
 watch(
   () => orderForm.value,
   (newVal) => {
-    const { 
-      profileLoaded, 
-      shippingAddress, 
-      provinceName, 
-      wardName, 
-      specificAddress, 
-      ...draftData 
+    const {
+      profileLoaded,
+      shippingAddress,
+      provinceName,
+      wardName,
+      specificAddress,
+      ...draftData
     } = newVal;
     sessionStorage.setItem("dominus_checkout_draft", JSON.stringify(draftData));
   },
   { deep: true }
 );
 
-const getCartItemKey = (item: any) => item?.cartItemId || item?.id || item?.productVariantId || item?.variantId || item?.sku;
-const getProductVariantId = (item: any) => Number(item?.productVariantId || item?.variantId || item?.productVariant?.id || item?.id || 0);
+const getCartItemKey = (item: any) =>
+  item?.cartItemId ||
+  item?.id ||
+  item?.productVariantId ||
+  item?.variantId ||
+  item?.sku;
+const getProductVariantId = (item: any) =>
+  Number(
+    item?.productVariantId ||
+      item?.variantId ||
+      item?.productVariant?.id ||
+      item?.id ||
+      0
+  );
 const getCartItemId = (item: any) => Number(item?.cartItemId || item?.id || 0);
-const getItemPrice = (item: any) => Number(item?.price ?? item?.salePrice ?? item?.finalPrice ?? item?.originalPrice ?? 0);
+const getItemPrice = (item: any) =>
+  Number(
+    item?.price ??
+      item?.salePrice ??
+      item?.finalPrice ??
+      item?.originalPrice ??
+      0
+  );
 
 const getItemSellableQuantity = (item: any) => {
   const quantity = Number(
-    item?.sellableQuantity ??
-      item?.productVariant?.sellableQuantity ??
-      0
+    item?.sellableQuantity ?? item?.productVariant?.sellableQuantity ?? 0
   );
 
   if (!Number.isFinite(quantity) || quantity <= 0) {
@@ -271,11 +302,18 @@ const getItemDisplayName = (item: any) =>
   String(item?.productName || item?.sku || "Sản phẩm");
 
 const totalAmount = computed(() =>
-  cartItems.value.reduce((sum, item) => sum + getItemPrice(item) * Number(item.quantity || 0), 0)
+  cartItems.value.reduce(
+    (sum, item) => sum + getItemPrice(item) * Number(item.quantity || 0),
+    0
+  )
 );
 
-const finalTotal = computed(() =>
-  Math.max(0, Number(totalAmount.value || 0) - Number(discountAmount.value || 0)) + Number(shippingFee.value || 0)
+const finalTotal = computed(
+  () =>
+    Math.max(
+      0,
+      Number(totalAmount.value || 0) - Number(discountAmount.value || 0)
+    ) + Number(shippingFee.value || 0)
 );
 
 const totalItems = computed(() =>
@@ -290,8 +328,12 @@ const updateCartQuantityApi = async (item: any, quantity: number) => {
   });
 };
 
-const collapseSpacesForProfile = (value: string) => String(value || "").trim().replace(/\s{2,}/g, " ");
-const extractObjectData = (data: any) => data?.data || data?.result || data || {};
+const collapseSpacesForProfile = (value: string) =>
+  String(value || "")
+    .trim()
+    .replace(/\s{2,}/g, " ");
+const extractObjectData = (data: any) =>
+  data?.data || data?.result || data || {};
 
 const getErrorMessage = (error: any, fallback: string) => {
   const data = error?.response?.data;
@@ -301,15 +343,29 @@ const getErrorMessage = (error: any, fallback: string) => {
 };
 
 const showWarning = async (title: string, text: string) => {
-  await Swal.fire({ icon: "warning", title, text, confirmButtonText: "Đã hiểu", confirmButtonColor: "#bd9a5f" });
+  await Swal.fire({
+    icon: "warning",
+    title,
+    text,
+    confirmButtonText: "Đã hiểu",
+    confirmButtonColor: "#bd9a5f",
+  });
 };
 
 const showError = async (title: string, text: string) => {
-  await Swal.fire({ icon: "error", title, text, confirmButtonText: "Đóng", confirmButtonColor: "#bd9a5f" });
+  await Swal.fire({
+    icon: "error",
+    title,
+    text,
+    confirmButtonText: "Đóng",
+    confirmButtonColor: "#bd9a5f",
+  });
 };
 
 const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(value || 0));
+  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(
+    Number(value || 0)
+  );
 
 const formatPaymentMethod = (value: string | null | undefined) => {
   const normalized = String(value || "").toUpperCase();
@@ -321,17 +377,26 @@ const formatPaymentMethod = (value: string | null | undefined) => {
 
 const getStatusText = (status: number) => {
   switch (Number(status)) {
-    case 0: return "Chờ xác nhận";
-    case 1: return "Đã xác nhận";
-    case 2: return "Đang giao hàng";
-    case 3: return "Hoàn thành";
-    case 4: return "Đã hủy";
-    default: return "Không xác định";
+    case 0:
+      return "Chờ xác nhận";
+    case 1:
+      return "Đã xác nhận";
+    case 2:
+      return "Đang giao hàng";
+    case 3:
+      return "Hoàn thành";
+    case 4:
+      return "Đã hủy";
+    default:
+      return "Không xác định";
   }
 };
 
 const handleApplyVoucher = (discount: number, code: string) => {
-  discountAmount.value = Math.min(Math.max(Number(discount || 0), 0), Number(totalAmount.value || 0));
+  discountAmount.value = Math.min(
+    Math.max(Number(discount || 0), 0),
+    Number(totalAmount.value || 0)
+  );
   appliedVoucherCode.value = code || "";
   if (code) localStorage.setItem("applied_voucher", code);
   else localStorage.removeItem("applied_voucher");
@@ -347,16 +412,24 @@ const loadCustomerProfile = async () => {
   try {
     const res = await api.get(`/customer/profile?t=${Date.now()}`);
     const profile = extractObjectData(res.data);
-    
+
     orderForm.value.customerId = profile.userId || profile.id || null;
-    const name = collapseSpacesForProfile(profile.name || profile.fullName || profile.customerName || "");
+    const name = collapseSpacesForProfile(
+      profile.name || profile.fullName || profile.customerName || ""
+    );
     const phone = String(profile.phone || profile.customerPhone || "").trim();
 
     orderForm.value.profileLoaded = true;
     if (!orderForm.value.customerName) orderForm.value.customerName = name;
     if (!orderForm.value.customerPhone) orderForm.value.customerPhone = phone;
   } catch (error: any) {
-    await showError("Vui lòng đăng nhập", getErrorMessage(error, "Bạn cần đăng nhập tài khoản khách hàng để thanh toán."));
+    await showError(
+      "Vui lòng đăng nhập",
+      getErrorMessage(
+        error,
+        "Bạn cần đăng nhập tài khoản khách hàng để thanh toán."
+      )
+    );
     router.replace({ name: "Login", query: { redirect: "/checkout" } });
     return false;
   }
@@ -368,10 +441,15 @@ const validateCheckoutForm = async (): Promise<any | null> => {
   const customerPhone = String(orderForm.value.customerPhone || "").trim();
   const shippingAddress = String(orderForm.value.shippingAddress || "").trim();
   const note = String(orderForm.value.note || "").trim();
-  const paymentMethod = String(orderForm.value.paymentMethod || "").toUpperCase();
+  const paymentMethod = String(
+    orderForm.value.paymentMethod || ""
+  ).toUpperCase();
 
   if (cartItems.value.length === 0) {
-    await showWarning("Giỏ hàng trống", "Vui lòng thêm sản phẩm vào giỏ hàng trước khi đặt hàng.");
+    await showWarning(
+      "Giỏ hàng trống",
+      "Vui lòng thêm sản phẩm vào giỏ hàng trước khi đặt hàng."
+    );
     router.push("/products");
     return null;
   }
@@ -380,9 +458,7 @@ const validateCheckoutForm = async (): Promise<any | null> => {
     const requestedQuantity = Number(item?.quantity || 0);
     const sellableQuantity = getItemSellableQuantity(item);
     const variantStatus = Number(
-      item?.variantStatus ??
-        item?.productVariant?.status ??
-        1
+      item?.variantStatus ?? item?.productVariant?.status ?? 1
     );
 
     if (variantStatus !== 1 || item?.sellable === false) {
@@ -390,7 +466,9 @@ const validateCheckoutForm = async (): Promise<any | null> => {
         "Sản phẩm không thể đặt hàng",
         String(
           item?.unavailableReason ||
-            `${getItemDisplayName(item)} hiện đang ngừng bán hoặc không còn khả dụng.`
+            `${getItemDisplayName(
+              item
+            )} hiện đang ngừng bán hoặc không còn khả dụng.`
         )
       );
       return null;
@@ -403,24 +481,35 @@ const validateCheckoutForm = async (): Promise<any | null> => {
     ) {
       await showWarning(
         "Số lượng không còn đủ",
-        `${getItemDisplayName(item)} chỉ còn ${sellableQuantity} sản phẩm có thể bán. Vui lòng cập nhật lại số lượng.`
+        `${getItemDisplayName(
+          item
+        )} chỉ còn ${sellableQuantity} sản phẩm có thể bán. Vui lòng cập nhật lại số lượng.`
       );
       return null;
     }
   }
 
   if (customerName.length < 2) {
-    await showWarning("Tên người nhận không hợp lệ", "Tên người nhận phải từ 2 ký tự trở lên.");
+    await showWarning(
+      "Tên người nhận không hợp lệ",
+      "Tên người nhận phải từ 2 ký tự trở lên."
+    );
     return null;
   }
 
   if (!/^0\d{9}$/.test(customerPhone)) {
-    await showWarning("Số điện thoại không hợp lệ", "Số điện thoại phải gồm đúng 10 chữ số, bắt đầu bằng 0.");
+    await showWarning(
+      "Số điện thoại không hợp lệ",
+      "Số điện thoại phải gồm đúng 10 chữ số, bắt đầu bằng 0."
+    );
     return null;
   }
 
   if (shippingAddress.length < 5) {
-    await showWarning("Địa chỉ không hợp lệ", "Vui lòng chọn hoặc nhập địa chỉ giao hàng hợp lệ.");
+    await showWarning(
+      "Địa chỉ không hợp lệ",
+      "Vui lòng chọn hoặc nhập địa chỉ giao hàng hợp lệ."
+    );
     return null;
   }
 
@@ -430,7 +519,6 @@ const validateCheckoutForm = async (): Promise<any | null> => {
     shippingAddress,
     note: note || null,
     paymentMethod,
-    shippingFee: shippingFee.value,
     voucherCode: appliedVoucherCode.value || null,
   };
 };
@@ -439,8 +527,13 @@ const fetchProductDetail = async (productId: number) => {
   if (!productId) return null;
   try {
     const t = Date.now();
-    let res = await api.get(`/v1/products/${productId}?t=${t}`).catch(() => null);
-    if (!res) res = await api.get(`/customer/products/${productId}?t=${t}`).catch(() => null);
+    let res = await api
+      .get(`/v1/products/${productId}?t=${t}`)
+      .catch(() => null);
+    if (!res)
+      res = await api
+        .get(`/customer/products/${productId}?t=${t}`)
+        .catch(() => null);
     if (!res) return null;
     return res.data?.data ?? res.data?.result ?? res.data;
   } catch (error) {
@@ -454,131 +547,151 @@ const loadCartSummary = async () => {
     let items = Array.isArray(res.data) ? res.data : [];
 
     if (items.length > 0) {
-      items = await Promise.all(items.map(async (item: any) => {
-        try {
-          const productId = Number(item?.productId || item?.ProductId || item?.product?.id || item?.product?.productId || item?.Product?.id || item?.Product?.productId || item?.productVariant?.productId || item?.productVariant?.product?.id || item?.ProductVariant?.ProductId || item?.ProductVariant?.Product?.Id || item?.variant?.productId || item?.variant?.product?.id || 0);
-          const variantId = Number(item?.productVariantId || item?.ProductVariantId || item?.variantId || item?.VariantId || item?.productVariant?.id || item?.ProductVariant?.Id || item?.productVariant?.productVariantId || item?.variant?.id || item?.Variant?.Id || 0);
-          
-          if (!productId) {
-            const sellableQuantity = Math.max(
-              Number(item?.sellableQuantity ?? 0) || 0,
-              0
+      items = await Promise.all(
+        items.map(async (item: any) => {
+          try {
+            const productId = Number(
+              item?.productId ||
+                item?.ProductId ||
+                item?.product?.id ||
+                item?.product?.productId ||
+                item?.Product?.id ||
+                item?.Product?.productId ||
+                item?.productVariant?.productId ||
+                item?.productVariant?.product?.id ||
+                item?.ProductVariant?.ProductId ||
+                item?.ProductVariant?.Product?.Id ||
+                item?.variant?.productId ||
+                item?.variant?.product?.id ||
+                0
+            );
+            const variantId = Number(
+              item?.productVariantId ||
+                item?.ProductVariantId ||
+                item?.variantId ||
+                item?.VariantId ||
+                item?.productVariant?.id ||
+                item?.ProductVariant?.Id ||
+                item?.productVariant?.productVariantId ||
+                item?.variant?.id ||
+                item?.Variant?.Id ||
+                0
             );
 
-            return {
-              ...item,
-              sellableQuantity,
-              stockQuantity: sellableQuantity,
-              sellable:
-                item?.sellable ??
-                (
-                  Number(item?.variantStatus ?? 1) === 1 &&
-                  sellableQuantity > 0
-                ),
-            };
-          }
+            if (!productId) {
+              const sellableQuantity = Math.max(
+                Number(item?.sellableQuantity ?? 0) || 0,
+                0
+              );
 
-          const productData = await fetchProductDetail(productId);
+              return {
+                ...item,
+                sellableQuantity,
+                stockQuantity: sellableQuantity,
+                sellable:
+                  item?.sellable ??
+                  (Number(item?.variantStatus ?? 1) === 1 &&
+                    sellableQuantity > 0),
+              };
+            }
 
-          if (!productData) {
+            const productData = await fetchProductDetail(productId);
+
+            if (!productData) {
+              return {
+                ...item,
+                variantStatus: 0,
+                sellableQuantity: 0,
+                stockQuantity: 0,
+                sellable: false,
+                unavailableReason:
+                  "Không thể xác minh tồn kho hiện tại của sản phẩm.",
+              };
+            }
+
+            const candidates = [
+              productData?.variants,
+              productData?.Variants,
+              productData?.productVariants,
+              productData?.ProductVariants,
+              productData?.productVariantList,
+              productData?.ProductVariantList,
+              productData?.productVariantResponses,
+              productData?.productVariantDTOs,
+            ];
+
+            let variants = [];
+
+            for (const candidate of candidates) {
+              if (Array.isArray(candidate)) {
+                variants = candidate;
+                break;
+              }
+            }
+
+            const matchedVariant = variants.find(
+              (v: any) =>
+                Number(v?.productVariantId || v?.id || v?.Id || 0) === variantId
+            );
+
+            if (matchedVariant) {
+              const sellableQuantity = Math.max(
+                Number(
+                  matchedVariant?.sellableQuantity ??
+                    item?.sellableQuantity ??
+                    0
+                ) || 0,
+                0
+              );
+
+              const variantStatus = Number(
+                matchedVariant?.status ?? item?.variantStatus ?? 0
+              );
+
+              const sellable =
+                matchedVariant?.sellable ??
+                (variantStatus === 1 && sellableQuantity > 0);
+
+              return {
+                ...item,
+                sellableQuantity,
+                stockQuantity: sellableQuantity,
+                variantStatus,
+                sellable: Boolean(sellable),
+                unavailableReason:
+                  matchedVariant?.unavailableReason ??
+                  item?.unavailableReason ??
+                  (variantStatus !== 1
+                    ? "Sản phẩm đang ngừng bán."
+                    : sellableQuantity <= 0
+                    ? "Sản phẩm hiện không còn tồn có thể bán."
+                    : null),
+
+                product: productData,
+                productVariant: matchedVariant,
+              };
+            }
+
             return {
               ...item,
               variantStatus: 0,
               sellableQuantity: 0,
               stockQuantity: 0,
               sellable: false,
-              unavailableReason: "Không thể xác minh tồn kho hiện tại của sản phẩm.",
+              unavailableReason: "Không tìm thấy biến thể sản phẩm hiện tại.",
             };
-          }
-
-          const candidates = [
-            productData?.variants,
-            productData?.Variants,
-            productData?.productVariants,
-            productData?.ProductVariants,
-            productData?.productVariantList,
-            productData?.ProductVariantList,
-            productData?.productVariantResponses,
-            productData?.productVariantDTOs,
-          ];
-
-          let variants = [];
-
-          for (const candidate of candidates) {
-            if (Array.isArray(candidate)) {
-              variants = candidate;
-              break;
-            }
-          }
-
-          const matchedVariant = variants.find(
-            (v: any) =>
-              Number(v?.productVariantId || v?.id || v?.Id || 0) === variantId
-          );
-
-          if (matchedVariant) {
-            const sellableQuantity = Math.max(
-              Number(
-                matchedVariant?.sellableQuantity ??
-                  item?.sellableQuantity ??
-                  0
-              ) || 0,
-              0
-            );
-
-            const variantStatus = Number(
-              matchedVariant?.status ??
-                item?.variantStatus ??
-                0
-            );
-
-            const sellable =
-              matchedVariant?.sellable ??
-              (
-                variantStatus === 1 &&
-                sellableQuantity > 0
-              );
-
+          } catch (e) {
             return {
               ...item,
-              sellableQuantity,
-              stockQuantity: sellableQuantity,
-              variantStatus,
-              sellable: Boolean(sellable),
+              sellableQuantity: 0,
+              stockQuantity: 0,
+              sellable: false,
               unavailableReason:
-                matchedVariant?.unavailableReason ??
-                item?.unavailableReason ??
-                (
-                  variantStatus !== 1
-                    ? "Sản phẩm đang ngừng bán."
-                    : sellableQuantity <= 0
-                      ? "Sản phẩm hiện không còn tồn có thể bán."
-                      : null
-                ),
-
-              product: productData,
-              productVariant: matchedVariant,
+                "Không thể xác minh tồn kho hiện tại của sản phẩm.",
             };
           }
-
-          return {
-            ...item,
-            variantStatus: 0,
-            sellableQuantity: 0,
-            stockQuantity: 0,
-            sellable: false,
-            unavailableReason: "Không tìm thấy biến thể sản phẩm hiện tại.",
-          };
-        } catch (e) {
-          return {
-            ...item,
-            sellableQuantity: 0,
-            stockQuantity: 0,
-            sellable: false,
-            unavailableReason: "Không thể xác minh tồn kho hiện tại của sản phẩm.",
-          };
-        }
-      }));
+        })
+      );
     }
 
     cartItems.value = items;
@@ -597,44 +710,73 @@ const loadSavedVoucher = async () => {
     const resVouchers = await api.get("/v1/customer/vouchers");
     let vouchers = [];
     if (Array.isArray(resVouchers.data)) vouchers = resVouchers.data;
-    else if (Array.isArray(resVouchers.data?.content)) vouchers = resVouchers.data.content;
-    else if (Array.isArray(resVouchers.data?.data)) vouchers = resVouchers.data.data;
+    else if (Array.isArray(resVouchers.data?.content))
+      vouchers = resVouchers.data.content;
+    else if (Array.isArray(resVouchers.data?.data))
+      vouchers = resVouchers.data.data;
 
-    const matchedVoucher = vouchers.find((v: any) => String(v?.code || v?.voucherCode || v?.name || "").trim().toUpperCase() === savedCode.toUpperCase());
+    const matchedVoucher = vouchers.find(
+      (v: any) =>
+        String(v?.code || v?.voucherCode || v?.name || "")
+          .trim()
+          .toUpperCase() === savedCode.toUpperCase()
+    );
 
     if (matchedVoucher) {
-       const minOrder = Number(matchedVoucher.minOrderValue || matchedVoucher.minimumOrderValue || matchedVoucher.minOrderAmount || 0);
-       if (totalAmount.value >= minOrder) {
-           const type = String(matchedVoucher.discountType || matchedVoucher.type || "").toUpperCase();
-           const value = Number(matchedVoucher.discountValue || matchedVoucher.value || matchedVoucher.discount || 0);
-           const maxDiscount = Number(matchedVoucher.maxDiscount || matchedVoucher.maxDiscountAmount || matchedVoucher.maximumDiscountAmount || matchedVoucher.maxAmount || 0);
+      const minOrder = Number(
+        matchedVoucher.minOrderValue ||
+          matchedVoucher.minimumOrderValue ||
+          matchedVoucher.minOrderAmount ||
+          0
+      );
+      if (totalAmount.value >= minOrder) {
+        const type = String(
+          matchedVoucher.discountType || matchedVoucher.type || ""
+        ).toUpperCase();
+        const value = Number(
+          matchedVoucher.discountValue ||
+            matchedVoucher.value ||
+            matchedVoucher.discount ||
+            0
+        );
+        const maxDiscount = Number(
+          matchedVoucher.maxDiscount ||
+            matchedVoucher.maxDiscountAmount ||
+            matchedVoucher.maximumDiscountAmount ||
+            matchedVoucher.maxAmount ||
+            0
+        );
 
-           let calc = 0;
-           if (type === "PERCENT" || type === "PERCENTAGE") {
-               calc = (totalAmount.value * value) / 100;
-               if (maxDiscount > 0) calc = Math.min(calc, maxDiscount);
-           } else {
-               calc = value;
-           }
-           discountAmount.value = Math.min(calc, totalAmount.value);
-           appliedVoucherCode.value = savedCode;
-           return; 
-       }
+        let calc = 0;
+        if (type === "PERCENT" || type === "PERCENTAGE") {
+          calc = (totalAmount.value * value) / 100;
+          if (maxDiscount > 0) calc = Math.min(calc, maxDiscount);
+        } else {
+          calc = value;
+        }
+        discountAmount.value = Math.min(calc, totalAmount.value);
+        appliedVoucherCode.value = savedCode;
+        return;
+      }
     }
 
     // Nếu không tự tính được thì mới gọi API apply
     const resApply = await api.get("/v1/customer/vouchers/apply", {
       params: { code: savedCode, orderTotal: totalAmount.value },
     });
-    const respData = resApply.data?.data ?? resApply.data?.result ?? resApply.data;
+    const respData =
+      resApply.data?.data ?? resApply.data?.result ?? resApply.data;
     const discount = Number(
-      respData?.discountAmount || 
-      respData?.discountValue || 
-      respData?.discount || 
-      respData?.amount || 
-      0
+      respData?.discountAmount ||
+        respData?.discountValue ||
+        respData?.discount ||
+        respData?.amount ||
+        0
     );
-    discountAmount.value = Math.min(Math.max(discount, 0), Number(totalAmount.value || 0));
+    discountAmount.value = Math.min(
+      Math.max(discount, 0),
+      Number(totalAmount.value || 0)
+    );
     appliedVoucherCode.value = savedCode;
   } catch (error) {
     handleCancelVoucher();
@@ -649,7 +791,9 @@ const handleUpdateQuantity = async (item: any, quantity: number) => {
   if (quantity > sellableQuantity) {
     await showWarning(
       "Không đủ tồn kho",
-      `${getItemDisplayName(item)} chỉ còn ${sellableQuantity} sản phẩm có thể bán.`
+      `${getItemDisplayName(
+        item
+      )} chỉ còn ${sellableQuantity} sản phẩm có thể bán.`
     );
     return;
   }
@@ -665,66 +809,167 @@ const handleUpdateQuantity = async (item: any, quantity: number) => {
   }
 };
 
+const refreshCheckoutAfterConflict = async () => {
+  /*
+   * BE vừa phát hiện checkout đang dùng dữ liệu cũ.
+   * Chỉ refresh state hiện tại, KHÔNG tự submit lại để khách có quyền xem
+   * giá/voucher/tổng tiền mới rồi tự xác nhận lần nữa.
+   */
+  await loadCartSummary();
+
+  if (localStorage.getItem("applied_voucher") || appliedVoucherCode.value) {
+    await loadSavedVoucher();
+  }
+
+  window.dispatchEvent(new Event("cart-updated"));
+};
+
 const handlePlaceOrder = async () => {
   const submitData = await validateCheckoutForm();
   if (!submitData || isSubmitting.value) return;
+
   isSubmitting.value = true;
 
   try {
-    cartSnapshot.value = JSON.parse(JSON.stringify(cartItems.value));
-
-    // CHỐT DATA TRÊN FRONTEND TRƯỚC KHI GỌI API
+    /*
+     * Snapshot này chỉ mô tả đúng những gì khách ĐANG NHÌN THẤY trên FE
+     * tại khoảnh khắc bấm "Xác nhận đặt hàng".
+     *
+     * BE không dùng các expected* để tính tiền; BE tự tính lại từ DB.
+     * Nếu khác nhau, BE trả 409 CONFLICT và chưa tạo Order.
+     */
     const feSubtotal = Number(totalAmount.value || 0);
     const feDiscount = Number(discountAmount.value || 0);
     const feShipping = Number(shippingFee.value || 0);
     const feVoucherCode = appliedVoucherCode.value || null;
     const feFinalTotal = Math.max(0, feSubtotal - feDiscount) + feShipping;
 
-    // 💥 BƯỚC 2: ÉP BACKEND PHẢI NHẬN SỐ TIỀN GIẢM GIÁ TỪ FRONTEND
-    const orderPayload = { 
+    cartSnapshot.value = JSON.parse(JSON.stringify(cartItems.value));
+
+    const orderPayload = {
       ...submitData,
-      shippingFee: feShipping,
       voucherCode: feVoucherCode,
-      
-      // Bọc đủ các loại tên biến phòng khi Backend khó ở
-      discountAmount: feDiscount,
-      discount: feDiscount,
-      voucherDiscount: feDiscount,
-      totalAmount: feSubtotal,
-      subTotal: feSubtotal,
-      finalAmount: feFinalTotal,
-      totalPayment: feFinalTotal
+
+      expectedTotalAmount: feSubtotal,
+      expectedDiscountAmount: feDiscount,
+      expectedShippingFee: feShipping,
+      expectedFinalAmount: feFinalTotal,
     };
 
     const res = await api.post("/v1/orders/checkout", orderPayload);
     const respData = res.data?.data ?? res.data?.result ?? res.data;
-    
-    createdOrderId.value = respData?.orderId || res.data?.orderId || null;
-    successStatusText.value = getStatusText(Number(respData?.status ?? res.data?.status ?? 0));
-    successMessage.value = respData?.message || res.data?.message || "Cảm ơn bạn đã mua sắm tại Dominus.";
 
-    // ÉP BUỘC SỬ DỤNG DỮ LIỆU FRONTEND ĐỂ HIỂN THỊ POPUP
+    createdOrderId.value = respData?.orderId ?? res.data?.orderId ?? null;
+
+    successStatusText.value = getStatusText(
+      Number(respData?.status ?? res.data?.status ?? 0)
+    );
+
+    successMessage.value =
+      respData?.message ??
+      res.data?.message ??
+      "Cảm ơn bạn đã mua sắm tại Dominus.";
+
+    /*
+     * Sau khi BE đã tạo Order thành công, popup phải hiển thị snapshot
+     * BE thực sự đã lưu, không tiếp tục coi số tiền FE là authoritative.
+     */
+    const confirmedSubtotal = Number(
+      respData?.totalAmount ?? res.data?.totalAmount ?? feSubtotal
+    );
+
+    const confirmedDiscount = Number(
+      respData?.discountAmount ?? res.data?.discountAmount ?? feDiscount
+    );
+
+    const confirmedShipping = Number(
+      respData?.shippingFee ?? res.data?.shippingFee ?? feShipping
+    );
+
+    const confirmedFinalTotal = Number(
+      respData?.finalAmount ?? res.data?.finalAmount ?? feFinalTotal
+    );
+
     successDetails.value = [
-      { label: "Mã đơn hàng", value: createdOrderId.value ? `#${createdOrderId.value}` : "-" },
-      { label: "Trạng thái", value: successStatusText.value },
-      { label: "Phương thức", value: formatPaymentMethod(respData?.paymentMethod || res.data?.paymentMethod || orderPayload.paymentMethod) },
-      ...(feDiscount > 0 ? [{ label: "Mã giảm giá", value: feVoucherCode || "Đã áp dụng" }] : []),
-      { label: "Tạm tính", value: formatCurrency(feSubtotal), money: true },
-      ...(feDiscount > 0 ? [{ label: "Giảm giá", value: `-${formatCurrency(feDiscount)}`, money: true }] : []),
-      { label: "Phí vận chuyển", value: formatCurrency(feShipping), money: true },
-      { label: "Tổng thanh toán", value: formatCurrency(feFinalTotal), money: true },
+      {
+        label: "Mã đơn hàng",
+        value: createdOrderId.value ? `#${createdOrderId.value}` : "-",
+      },
+      {
+        label: "Trạng thái",
+        value: successStatusText.value,
+      },
+      {
+        label: "Phương thức",
+        value: formatPaymentMethod(
+          respData?.paymentMethod ??
+            res.data?.paymentMethod ??
+            orderPayload.paymentMethod
+        ),
+      },
+      ...(confirmedDiscount > 0
+        ? [
+            {
+              label: "Mã giảm giá",
+              value: feVoucherCode || "Đã áp dụng",
+            },
+          ]
+        : []),
+      {
+        label: "Tạm tính",
+        value: formatCurrency(confirmedSubtotal),
+        money: true,
+      },
+      ...(confirmedDiscount > 0
+        ? [
+            {
+              label: "Giảm giá",
+              value: `-${formatCurrency(confirmedDiscount)}`,
+              money: true,
+            },
+          ]
+        : []),
+      {
+        label: "Phí vận chuyển",
+        value: formatCurrency(confirmedShipping),
+        money: true,
+      },
+      {
+        label: "Tổng thanh toán",
+        value: formatCurrency(confirmedFinalTotal),
+        money: true,
+      },
     ];
 
-    if (orderPayload.paymentMethod === "VIETQR" || orderPayload.paymentMethod === "VNPAY") {
+    if (
+      orderPayload.paymentMethod === "VIETQR" ||
+      orderPayload.paymentMethod === "VNPAY"
+    ) {
       currentPaymentMethod.value = orderPayload.paymentMethod;
 
       if (orderPayload.paymentMethod === "VIETQR") {
-        const orderId = createdOrderId.value || Math.floor(Math.random() * 100000);
-        const amount = feFinalTotal;
-        qrCodeUrl.value = respData?.qrUrl || res.data?.qrUrl || `https://img.vietqr.io/image/TCB-3714082007-compact2.png?amount=${amount}&addInfo=DH${orderId}&accountName=NGUYEN%20DINH%20HUY`;
+        const orderId =
+          createdOrderId.value || Math.floor(Math.random() * 100000);
+
+        const amount = confirmedFinalTotal;
+
+        qrCodeUrl.value =
+          respData?.qrUrl ??
+          res.data?.qrUrl ??
+          `https://img.vietqr.io/image/TCB-3714082007-compact2.png?amount=${amount}&addInfo=DH${orderId}&accountName=NGUYEN%20DINH%20HUY`;
       } else {
-        const url = respData?.paymentUrl || respData?.vnpUrl || respData?.url || res.data?.paymentUrl || res.data?.vnpUrl || res.data?.url;
-        if (!url) throw new Error("Không lấy được link thanh toán VNPay");
+        const url =
+          respData?.paymentUrl ??
+          respData?.vnpUrl ??
+          respData?.url ??
+          res.data?.paymentUrl ??
+          res.data?.vnpUrl ??
+          res.data?.url;
+
+        if (!url) {
+          throw new Error("Không lấy được link thanh toán VNPay");
+        }
+
         vnpayUrl.value = url;
       }
 
@@ -732,6 +977,7 @@ const handlePlaceOrder = async () => {
       startPaymentTimer();
 
       window.history.pushState({ paymentOpen: true }, "", window.location.href);
+
       window.addEventListener("popstate", handleBrowserBackDuringPayment);
     } else {
       discountAmount.value = 0;
@@ -743,7 +989,28 @@ const handlePlaceOrder = async () => {
       window.dispatchEvent(new Event("cart-updated"));
     }
   } catch (error: any) {
-    await showError("Lỗi đặt hàng", getErrorMessage(error, "Có lỗi xảy ra khi đặt hàng."));
+    if (Number(error?.response?.status) === 409) {
+      /*
+       * PRICE / PROMOTION / VOUCHER / TOTAL snapshot đã stale.
+       * BE chưa tạo Order, nên tuyệt đối không restore cart và không mở payment.
+       */
+      await refreshCheckoutAfterConflict();
+
+      await showWarning(
+        "Thông tin thanh toán đã thay đổi",
+        getErrorMessage(
+          error,
+          "Giá, khuyến mãi hoặc tổng thanh toán đã thay đổi. Hệ thống đã cập nhật dữ liệu mới nhất, vui lòng kiểm tra và xác nhận lại."
+        )
+      );
+
+      return;
+    }
+
+    await showError(
+      "Lỗi đặt hàng",
+      getErrorMessage(error, "Có lỗi xảy ra khi đặt hàng.")
+    );
   } finally {
     isSubmitting.value = false;
   }
@@ -754,7 +1021,11 @@ const cancelAndRestoreCart = async () => {
   try {
     isPageLoading.value = true;
     if (createdOrderId.value) {
-      await api.patch(`/customer/orders/${createdOrderId.value}/cancel`, { cancelReason: "Khác" }).catch(() => {});
+      await api
+        .patch(`/customer/orders/${createdOrderId.value}/cancel`, {
+          cancelReason: "Khác",
+        })
+        .catch(() => {});
     }
 
     if (cartSnapshot.value && cartSnapshot.value.length > 0) {
@@ -774,7 +1045,15 @@ const cancelAndRestoreCart = async () => {
     await loadSavedVoucher();
     formKey.value++;
 
-    Swal.fire({ toast: true, position: "top-end", icon: "info", title: "Chưa thanh toán", text: "Bạn vừa rời khỏi quá trình thanh toán.", showConfirmButton: false, timer: 3500 });
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "info",
+      title: "Chưa thanh toán",
+      text: "Bạn vừa rời khỏi quá trình thanh toán.",
+      showConfirmButton: false,
+      timer: 3500,
+    });
   } catch (error) {
     console.error(error);
   } finally {
@@ -807,10 +1086,14 @@ const handleBrowserBackDuringPayment = async () => {
 const goToVnpayGateway = () => {
   stopPaymentTimer();
   sessionStorage.removeItem("pending_vnpay_outcome");
-  sessionStorage.setItem("pending_vnpay_cart", JSON.stringify(cartSnapshot.value));
+  sessionStorage.setItem(
+    "pending_vnpay_cart",
+    JSON.stringify(cartSnapshot.value)
+  );
   sessionStorage.setItem("pending_vnpay_order", String(createdOrderId.value));
   sessionStorage.setItem("pending_vnpay_form", JSON.stringify(orderForm.value));
-  if (appliedVoucherCode.value) sessionStorage.setItem("pending_vnpay_voucher", appliedVoucherCode.value);
+  if (appliedVoucherCode.value)
+    sessionStorage.setItem("pending_vnpay_voucher", appliedVoucherCode.value);
   window.location.href = vnpayUrl.value;
 };
 
@@ -830,16 +1113,26 @@ const confirmQrPayment = async () => {
       const map = saved ? JSON.parse(saved) : {};
       map[String(createdOrderId.value)] = true;
       localStorage.setItem("dominus_paid_orders", JSON.stringify(map));
-      api.post(`/v1/orders/${createdOrderId.value}/report-payment`).catch(() => {});
+      api
+        .post(`/v1/orders/${createdOrderId.value}/report-payment`)
+        .catch(() => {});
     } catch (e) {}
   }
 
-  setTimeout(() => { showSuccessModal.value = true; }, 200);
+  setTimeout(() => {
+    showSuccessModal.value = true;
+  }, 200);
 };
 
 const goToCart = () => router.push("/cart");
-const goToHome = () => { showSuccessModal.value = false; router.push("/"); };
-const goToOrders = () => { showSuccessModal.value = false; router.push({ path: "/customer/profile", query: { tab: "orders" } }); };
+const goToHome = () => {
+  showSuccessModal.value = false;
+  router.push("/");
+};
+const goToOrders = () => {
+  showSuccessModal.value = false;
+  router.push({ path: "/customer/profile", query: { tab: "orders" } });
+};
 
 interface PendingVnpayOutcome {
   orderId?: string | number | null;
@@ -884,8 +1177,7 @@ const restorePendingVnpayFormAndVoucher = () => {
     try {
       Object.assign(orderForm.value, JSON.parse(pendingForm));
       formKey.value++;
-    } catch {
-    }
+    } catch {}
   }
 
   const pendingVoucher = sessionStorage.getItem("pending_vnpay_voucher");
@@ -938,8 +1230,7 @@ const checkAndRestoreVnpayBackup = async () => {
     const outcome = readPendingVnpayOutcome();
 
     const sameOrder =
-      !outcome?.orderId ||
-      String(outcome.orderId) === String(pendingOrder);
+      !outcome?.orderId || String(outcome.orderId) === String(pendingOrder);
 
     const outcomeStatus =
       outcome?.status === null || outcome?.status === undefined
@@ -948,11 +1239,7 @@ const checkAndRestoreVnpayBackup = async () => {
 
     const alreadyPaidOrCompleted =
       sameOrder &&
-      (
-        outcome?.success === true ||
-        outcomeStatus === 1 ||
-        outcomeStatus === 3
-      );
+      (outcome?.success === true || outcomeStatus === 1 || outcomeStatus === 3);
 
     if (alreadyPaidOrCompleted) {
       clearPendingVnpayBackup();
@@ -961,9 +1248,7 @@ const checkAndRestoreVnpayBackup = async () => {
     }
 
     const confirmedCancelled =
-      sameOrder &&
-      outcome?.success === false &&
-      outcomeStatus === 4;
+      sameOrder && outcome?.success === false && outcomeStatus === 4;
 
     if (!confirmedCancelled) {
       await showWarning(
@@ -1060,12 +1345,67 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.page-wrapper { background-color: #fafbfc; min-height: 100vh; padding-bottom: 50px; color: #06132b; }
-.main-content.full-width { max-width: 1400px; width: 100%; margin: 40px auto; padding: 0 20px; display: flex; gap: 30px; align-items: flex-start; }
-.checkout-loading { width: 100%; min-height: 380px; background: #ffffff; border: 1px solid #eaeaea; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #64748b; flex-direction: column; gap: 12px; }
-.premium-modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(5px); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 24px; }
-@keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
-.fade-modal-enter-active, .fade-modal-leave-active { transition: all 0.3s ease; }
-.fade-modal-enter-from, .fade-modal-leave-to { opacity: 0; transform: scale(0.9); }
-@media (max-width: 992px) { .main-content.full-width { flex-direction: column; } }
+.page-wrapper {
+  background-color: #fafbfc;
+  min-height: 100vh;
+  padding-bottom: 50px;
+  color: #06132b;
+}
+.main-content.full-width {
+  max-width: 1400px;
+  width: 100%;
+  margin: 40px auto;
+  padding: 0 20px;
+  display: flex;
+  gap: 30px;
+  align-items: flex-start;
+}
+.checkout-loading {
+  width: 100%;
+  min-height: 380px;
+  background: #ffffff;
+  border: 1px solid #eaeaea;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  flex-direction: column;
+  gap: 12px;
+}
+.premium-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 24px;
+}
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fade-modal-enter-active,
+.fade-modal-leave-active {
+  transition: all 0.3s ease;
+}
+.fade-modal-enter-from,
+.fade-modal-leave-to {
+  opacity: 0;
+  transform: scale(0.9);
+}
+@media (max-width: 992px) {
+  .main-content.full-width {
+    flex-direction: column;
+  }
+}
 </style>

@@ -193,6 +193,25 @@ public class OrderService {
         }
         finalAmount = normalizeMoney(finalAmount);
 
+        /*
+         * Chặn stale checkout:
+         * FE có thể đang hiển thị dữ liệu cũ vì người dùng không reload trang.
+         * Backend vẫn là source of truth và đã tự tính lại toàn bộ giá/voucher/phí ship.
+         * Nếu FE gửi snapshot số tiền đang hiển thị và snapshot khác dữ liệu hiện tại,
+         * tuyệt đối chưa tạo Order mà trả 409 để FE refetch và cho khách xác nhận lại.
+         *
+         * Các field expected* trong OrderRequest để nullable nhằm giữ tương thích
+         * với caller cũ. Sau khi FE checkout đã gửi đầy đủ snapshot, có thể siết
+         * @NotNull ở DTO nếu muốn bắt buộc mọi caller đều dùng stale-check.
+         */
+        validateCheckoutSnapshot(
+                request,
+                totalAmount,
+                discountAmount,
+                shippingFee,
+                finalAmount
+        );
+
         // 3. Tạo Order
         Order order = new Order();
         order.setCustomer(customer);
@@ -483,6 +502,61 @@ public class OrderService {
             response.put("message", "Lỗi xác thực VNPay");
         }
         return response;
+    }
+
+    /**
+     * So sánh snapshot tiền mà FE đang hiển thị với số tiền Backend vừa tính lại
+     * từ dữ liệu hiện tại trong DB.
+     *
+     * Không tin các expected* để tính tiền; chúng CHỈ dùng để phát hiện stale UI.
+     * Giá trị ghi vào Order/OrderItem vẫn luôn lấy từ Backend.
+     */
+    private void validateCheckoutSnapshot(
+            OrderRequest request,
+            BigDecimal currentTotalAmount,
+            BigDecimal currentDiscountAmount,
+            BigDecimal currentShippingFee,
+            BigDecimal currentFinalAmount
+    ) {
+        if (request == null) {
+            return;
+        }
+
+        List<String> changedFields = new ArrayList<>();
+
+        if (isMoneyChanged(request.getExpectedTotalAmount(), currentTotalAmount)) {
+            changedFields.add("tạm tính");
+        }
+
+        if (isMoneyChanged(request.getExpectedDiscountAmount(), currentDiscountAmount)) {
+            changedFields.add("giảm giá");
+        }
+
+        if (isMoneyChanged(request.getExpectedShippingFee(), currentShippingFee)) {
+            changedFields.add("phí vận chuyển");
+        }
+
+        if (isMoneyChanged(request.getExpectedFinalAmount(), currentFinalAmount)) {
+            changedFields.add("tổng thanh toán");
+        }
+
+        if (!changedFields.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Thông tin thanh toán đã thay đổi ("
+                            + String.join(", ", changedFields)
+                            + "). Vui lòng kiểm tra lại giá, khuyến mãi và tổng tiền trước khi đặt hàng."
+            );
+        }
+    }
+
+    private boolean isMoneyChanged(BigDecimal expectedAmount, BigDecimal currentAmount) {
+        if (expectedAmount == null) {
+            return false;
+        }
+
+        return normalizeMoney(expectedAmount)
+                .compareTo(normalizeMoney(currentAmount)) != 0;
     }
 
     private void validateCheckoutRequest(Integer customerId, OrderRequest request) {
