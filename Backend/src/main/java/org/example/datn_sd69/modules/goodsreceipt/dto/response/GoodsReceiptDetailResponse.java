@@ -22,6 +22,12 @@ public class GoodsReceiptDetailResponse {
     private GoodsReceiptStatus status;
     private String statusLabel;
 
+    /*
+     * Snapshot dùng để FE gửi lại expectedRevision khi sửa DRAFT.
+     * Không phải field nghiệp vụ và không cần thêm cột DB.
+     */
+    private String revision;
+
     private String note;
 
     private Integer createdById;

@@ -1,20 +1,40 @@
 package org.example.datn_sd69.repository;
 
+import jakarta.persistence.LockModeType;
 import org.example.datn_sd69.entity.GoodsReceipt;
 import org.example.datn_sd69.repository.projection.GoodsReceiptListProjection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 public interface GoodsReceiptRepository extends JpaRepository<GoodsReceipt, Integer> {
 
     boolean existsByReceiptNo(String receiptNo);
 
     long countByStatusAndReceiptType(Byte status, Byte receiptType);
+
+    /*
+     * Chỉ dùng cho UPDATE phiếu DRAFT.
+     *
+     * Khóa row GoodsReceipt trong transaction để không xảy ra race:
+     * update DRAFT <-> submit/cancel hoặc 2 update chạy đồng thời.
+     *
+     * Các action submit/approve/reject/cancel vẫn để stored procedure
+     * tự khóa bằng UPDLOCK + HOLDLOCK như logic hiện tại.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT gr
+            FROM GoodsReceipt gr
+            WHERE gr.id = :id
+            """)
+    Optional<GoodsReceipt> findByIdForUpdate(@Param("id") Integer id);
 
     @Query(
             value = """

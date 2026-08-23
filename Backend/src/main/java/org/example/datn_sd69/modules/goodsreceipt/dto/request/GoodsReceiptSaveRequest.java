@@ -23,4 +23,15 @@ public class GoodsReceiptSaveRequest {
     @Size(min = 1, message = "Phiếu nhập phải có ít nhất một sản phẩm")
     @Valid
     private List<GoodsReceiptItemRequest> items;
+
+    /*
+     * Snapshot phiên bản dữ liệu mà FE đang nhìn thấy.
+     *
+     * - CREATE: FE không cần gửi.
+     * - UPDATE DRAFT: FE phải gửi revision nhận từ GoodsReceiptDetailResponse.
+     *
+     * Không dùng field này làm dữ liệu nghiệp vụ, chỉ dùng để phát hiện stale/lost-update.
+     */
+    @Size(max = 64, message = "Revision phiếu nhập không hợp lệ")
+    private String expectedRevision;
 }
