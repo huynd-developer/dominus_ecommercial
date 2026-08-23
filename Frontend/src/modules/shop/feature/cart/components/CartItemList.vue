@@ -6,17 +6,7 @@
 
       <div class="header-icon">
 
-        <svg
-
-          viewBox="0 0 24 24"
-
-          fill="none"
-
-          stroke="currentColor"
-
-          stroke-width="2"
-
-        >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 
           <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
 
@@ -42,27 +32,11 @@
 
     <div v-else class="item-list">
 
-      <div
+      <div v-for="item in cartItems" :key="item.cartItemId"
+        :class="['cart-item', { 'item-unavailable': !isItemAvailable(item) }]">
 
-        v-for="item in cartItems"
-
-        :key="item.cartItemId"
-
-        :class="['cart-item', { 'item-unavailable': !isItemAvailable(item) }]"
-
-      >
-
-        <img
-
-          :src="getItemImage(item)"
-
-          class="item-img"
-
-          :alt="item.productName || 'Sản phẩm'"
-
-          @error="handleImageError"
-
-        />
+        <img :src="getItemImage(item)" class="item-img" :alt="item.productName || 'Sản phẩm'"
+          @error="handleImageError" />
 
         <div class="item-info">
 
@@ -76,43 +50,24 @@
 
             <template v-if="getVariantsList(item).length > 0">
 
-              <select
+              <select class="variant-select" :value="getVariantId(item)" @change="
 
-                class="variant-select"
+                (e) =>
 
-                :value="getVariantId(item)"
+                  $emit(
 
-                @change="
+                    'update-variant',
 
-                  (e) =>
+                    item,
 
-                    $emit(
+                    Number((e.target as HTMLSelectElement).value),
 
-                      'update-variant',
+                  )
 
-                      item,
+              " :disabled="isUpdating">
 
-                      Number((e.target as HTMLSelectElement).value),
-
-                    )
-
-                "
-
-                :disabled="isUpdating"
-
-              >
-
-                <option
-
-                  v-for="v in getVariantsList(item)"
-
-                  :key="v.id || v.productVariantId || v.variantId"
-
-                  :value="v.id || v.productVariantId || v.variantId"
-
-                  :disabled="!isVariantSelectable(v)"
-
-                >
+                <option v-for="v in getVariantsList(item)" :key="v.id || v.productVariantId || v.variantId"
+                  :value="v.id || v.productVariantId || v.variantId" :disabled="!isVariantSelectable(v)">
 
                   {{ formatVariantLabel(v) }}
 
@@ -150,17 +105,13 @@
 
           <div class="status-row">
 
-            <span
+            <span :class="[
 
-              :class="[
+              'status-badge',
 
-                'status-badge',
+              isItemAvailable(item) ? 'status-ok' : 'status-error',
 
-                isItemAvailable(item) ? 'status-ok' : 'status-error',
-
-              ]"
-
-            >
+            ]">
 
               {{ isItemAvailable(item) ? "Có thể mua" : "Không khả dụng" }}
 
@@ -176,43 +127,17 @@
 
           <div class="qty-wrapper">
 
-            <button
-
-              type="button"
-
-              @click="changeQuantity(item, -1)"
-
-              :disabled="Number(item.quantity || 0) <= 1 || isUpdating"
-
-            >
+            <button type="button" @click="changeQuantity(item, -1)"
+              :disabled="Number(item.quantity || 0) <= 1 || isUpdating">
 
               −
 
             </button>
 
-            <input
+            <input type="number" :value="Number(item.quantity || 0)" @input="handleManualQuantity(item, $event)"
+              @blur="handleBlurQuantity(item, $event)" :disabled="isUpdating" />
 
-              type="number"
-
-              :value="Number(item.quantity || 0)"
-
-              @input="handleManualQuantity(item, $event)"
-
-              @blur="handleBlurQuantity(item, $event)"
-
-              :disabled="isUpdating"
-
-            />
-
-            <button
-
-              type="button"
-
-              @click="changeQuantity(item, 1)"
-
-              :disabled="!canIncreaseQuantity(item) || isUpdating"
-
-            >
+            <button type="button" @click="changeQuantity(item, 1)" :disabled="!canIncreaseQuantity(item) || isUpdating">
 
               +
 
@@ -226,13 +151,7 @@
 
           <template v-if="item.hasPromotion">
 
-            <span
-
-              class="unit-price text-muted"
-
-              style="text-decoration: line-through"
-
-            >
+            <span class="unit-price text-muted" style="text-decoration: line-through">
 
               Giá gốc:
 
@@ -248,13 +167,7 @@
 
               </span>
 
-              <span
-
-                class="discount-badge-new"
-
-                v-if="(item.discountPercent || 0) > 0"
-
-              >
+              <span class="discount-badge-new" v-if="(item.discountPercent || 0) > 0">
 
                 -{{ formatDiscount(item.discountPercent || 0) }}%
 
@@ -276,39 +189,14 @@
 
           </template>
 
-          <button
+          <button class="btn-delete" type="button" @click="$emit('remove-item', item.cartItemId)" title="Xóa sản phẩm"
+            :disabled="isUpdating">
 
-            class="btn-delete"
-
-            type="button"
-
-            @click="$emit('remove-item', item.cartItemId)"
-
-            title="Xóa sản phẩm"
-
-            :disabled="isUpdating"
-
-          >
-
-            <svg
-
-              viewBox="0 0 24 24"
-
-              fill="none"
-
-              stroke="currentColor"
-
-              stroke-width="2"
-
-            >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 
               <polyline points="3 6 5 6 21 6" />
 
-              <path
-
-                d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"
-
-              />
+              <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
 
               <line x1="10" y1="11" x2="10" y2="17" />
 
@@ -332,7 +220,7 @@
 
 import { ref } from "vue";
 
-import Swal from "sweetalert2"; 
+import Swal from "sweetalert2";
 
 interface CartItem {
 
@@ -411,6 +299,7 @@ interface CartItem {
   sellable?: boolean | null;
 
   unavailableReason?: string | null;
+  isDeleted?: boolean | null;
 
 }
 
@@ -439,8 +328,8 @@ let updateTimeout: ReturnType<typeof setTimeout> | null = null;
 const getSellableQuantity = (item: CartItem | any) => {
   const value = Number(
     item?.sellableQuantity ??
-      item?.productVariant?.sellableQuantity ??
-      0
+    item?.productVariant?.sellableQuantity ??
+    0
   );
   if (!Number.isFinite(value) || value <= 0) return 0;
   return Math.trunc(value);
@@ -612,7 +501,7 @@ const handleBlurQuantity = (item: CartItem, event: Event) => {
 
     target.value = "1";
 
-    handleManualQuantity(item, event); 
+    handleManualQuantity(item, event);
 
   }
 
@@ -759,25 +648,33 @@ const handleImageError = (event: Event) => {
 
 const getUnavailableReason = (item: CartItem) => {
   if (!item) return "Sản phẩm không hợp lệ";
+
+  // Check data gốc xem có dính cờ xóa không
+  if (item.isDeleted || item.product?.isDeleted || item.product?.deleted || item.productVariant?.isDeleted || item.productVariant?.deleted) return "Sản phẩm đã bị xóa khỏi hệ thống";
+  if (item.product && item.product.status != null && Number(item.product.status) === 0) return "Sản phẩm đã ngừng kinh doanh";
+  if (item.variantStatus != null && Number(item.variantStatus) !== 1) return "Sản phẩm đang ngừng bán";
+  
   if (item.unavailableReason) return item.unavailableReason;
   if (item.available === false || item.sellable === false) return "Sản phẩm hiện không khả dụng";
-  if (item.variantStatus != null && Number(item.variantStatus) !== 1) return "Sản phẩm đang ngừng bán";
 
   const quantity = Number(item.quantity || 0);
   const sellableQuantity = getSellableQuantity(item);
 
   if (quantity <= 0) return "Số lượng sản phẩm không hợp lệ";
   if (sellableQuantity <= 0) return "Sản phẩm đã hết hàng";
-  if (quantity > sellableQuantity) {
-    return `Số lượng vượt quá tồn kho. Sản phẩm chỉ còn ${sellableQuantity} sản phẩm có thể bán`;
-  }
+  if (quantity > sellableQuantity) return `Số lượng vượt quá tồn kho. Chỉ còn ${sellableQuantity} sản phẩm.`;
+  
   return "Sản phẩm hiện không khả dụng";
 };
 
 const isItemAvailable = (item: CartItem) => {
   if (!item) return false;
-  if (item.available === false || item.sellable === false) return false;
+
+  if (item.isDeleted || item.product?.isDeleted || item.product?.deleted || item.productVariant?.isDeleted || item.productVariant?.deleted) return false;
+  if (item.product && item.product.status != null && Number(item.product.status) === 0) return false;
   if (item.variantStatus != null && Number(item.variantStatus) !== 1) return false;
+
+  if (item.available === false || item.sellable === false) return false;
 
   const quantity = Number(item.quantity || 0);
   const sellableQuantity = getSellableQuantity(item);
@@ -822,7 +719,6 @@ const formatDiscount = (value?: number | null) => {
 </script>
 
 <style scoped>
-
 .cart-left {
 
   flex: 2;
@@ -1468,5 +1364,4 @@ const formatDiscount = (value?: number | null) => {
   }
 
 }
-
 </style>

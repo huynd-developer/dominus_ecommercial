@@ -529,6 +529,7 @@ const isCompareUIRenderer = ref(false);
 
 const fullProductData = ref<any>(null);
 
+// ĐÃ SỬA: Hoàn trả logic cũ `...p, ...full` để data mới (từ API) ghi đè lên prop cũ
 const activeProduct = computed(() => {
   const p = props.product as any;
   const full = fullProductData.value;
@@ -729,16 +730,35 @@ const syncProductData = async () => {
   const p = props.product as any;
   const productId = Number(p?.productId || p?.id || 0);
   
-  if (productId > 0 && !fullProductData.value) {
+  // BỎ chặn !fullProductData.value để thẻ luôn lấy giá mới nhất khi được focus
+  if (productId > 0) {
     try {
       const res = await api.get(`/v1/products/${productId}?t=${Date.now()}`);
       const data = res.data?.data || res.data;
+      
+      // Bắt trường hợp sản phẩm vừa bị Ẩn hoặc Xóa bên Admin -> Tự F5 trang để đồng bộ
+      if (!data || data.isDeleted === true || data.status === 0) {
+         if (!window.sessionStorage.getItem('isReloading')) {
+            window.sessionStorage.setItem('isReloading', 'true');
+            setTimeout(() => window.sessionStorage.removeItem('isReloading'), 3000);
+            window.location.reload();
+         }
+         return;
+      }
+
       if (data) {
         fullProductData.value = data; 
         syncedRating.value = Number(data.averageRating || data.avgRating || data.rating || 0);
         syncedReviews.value = Number(data.reviewCount || data.reviews || data.totalReviews || 0);
       }
-    } catch (error) {}
+    } catch (error) {
+       // Bắt lỗi 404 Not Found (sản phẩm đã bị xóa cứng khỏi DB)
+       if (!window.sessionStorage.getItem('isReloading')) {
+          window.sessionStorage.setItem('isReloading', 'true');
+          setTimeout(() => window.sessionStorage.removeItem('isReloading'), 3000);
+          window.location.reload();
+       }
+    }
   }
 };
 
@@ -882,7 +902,6 @@ const handleModalImageError = (event: Event) => {
 };
 const getBottleStyle = (color?: string): Record<string, string> => ({ "--bottle-color": color || "#0a192f" });
 
-// ĐÃ SỬA: Ép z-index lên tận nóc để không bị chìm dưới lớp Modal Overlay
 const showToast = (type: "success" | "warning" | "error", title: string, message: string) => {
   Swal.fire({ 
     toast: true, 
@@ -1569,6 +1588,7 @@ watch(sharedShowCompareModal, async (val) => {
 
 const openVariantModal = async (type: "CART" | "BUY", customProduct: any = null, preselectedVariantId?: number) => {
   if (!checkLoginBeforeAction()) return;
+
   actionType.value = type;
   currentTargetProduct.value = customProduct || activeProduct.value;
   selectedVariant.value = null;
@@ -1601,10 +1621,21 @@ const openVariantModal = async (type: "CART" | "BUY", customProduct: any = null,
 
     const res = await api.get(`/v1/products/${tId}?t=${Date.now()}`);
     const data = res.data?.data || res.data;
+    
+    if (!data || data.isDeleted === true || data.status === 0) {
+      showToast("error", "Lỗi", "Sản phẩm đã bị ẩn hoặc không còn tồn tại!");
+      showVariantModal.value = false;
+      isLoadingVariants.value = false;
+      return;
+    }
+
     let rawVariants = data?.variants || data?.productVariants || data?.productVariantList || [];
     
     if (!rawVariants || rawVariants.length === 0) {
-        rawVariants = tp.variants || [tp];
+      showToast("error", "Lỗi", "Sản phẩm không có phân loại hợp lệ!");
+      showVariantModal.value = false;
+      isLoadingVariants.value = false;
+      return;
     }
 
     const processedVariants = rawVariants.map((v: any) => {
@@ -1618,9 +1649,9 @@ const openVariantModal = async (type: "CART" | "BUY", customProduct: any = null,
       const apiSale = Number(v.salePrice ?? v.promotionPrice ?? v.flashSalePrice ?? v.price ?? 0);
       const apiOrig = Number(v.originalPrice ?? v.oldPrice ?? v.price ?? apiSale);
       
-      let finalSale = salePriceMap.get(vId) ?? apiSale;
-      let finalOrig = origPriceMap.get(vId) ?? apiOrig;
-      let finalDisc = discountMap.get(vId) ?? Number(v.discountPercent ?? tp?.discountPercent ?? tp?.discount ?? 0);
+      let finalSale = apiSale;
+      let finalOrig = apiOrig;
+      let finalDisc = Number(v.discountPercent ?? tp?.discountPercent ?? tp?.discount ?? 0);
       
       if (finalDisc > 0 && finalOrig <= finalSale && finalSale > 0) {
          finalOrig = finalSale;
@@ -1659,13 +1690,8 @@ const openVariantModal = async (type: "CART" | "BUY", customProduct: any = null,
     }
   } catch (error) {
     console.error("Lỗi lấy chi tiết biến thể:", error);
-    const fallbackVariants = currentTargetProduct.value.variants || [currentTargetProduct.value];
-    fullVariants.value = fallbackVariants.map((v: any) => ({ ...v, displayCapacity: formatVariantName(v), numericCapacity: 0 }));
-    if (fullVariants.value.length > 0) {
-      selectedVariant.value =
-        fullVariants.value.find((v: any) => isVariantSellable(v)) ||
-        fullVariants.value[0];
-    }
+    showToast("error", "Lỗi", "Sản phẩm đã bị xóa hoặc không còn tồn tại!");
+    showVariantModal.value = false;
   } finally {
     isLoadingVariants.value = false;
   }
@@ -1782,12 +1808,17 @@ const increaseQuantity = () => {
   quantity.value++;
 };
 
+const handleFocus = () => {
+  syncProductData();
+};
+
 onMounted(() => {
   if (!currentCompareRendererId) {
     currentCompareRendererId = instanceId;
     isCompareUIRenderer.value = true;
   }
   window.addEventListener("favorite-updated", handleFavoriteUpdated);
+  window.addEventListener("focus", handleFocus); // BỔ SUNG LẮNG NGHE CHUYỂN TAB
   loadFavoriteStatus();
 
   if (props.preloadDetail) {
@@ -1800,8 +1831,10 @@ onBeforeUnmount(() => {
     currentCompareRendererId = null;
   }
   window.removeEventListener("favorite-updated", handleFavoriteUpdated);
+  window.removeEventListener("focus", handleFocus); // DỌN DẸP SỰ KIỆN CHUYỂN TAB
 });
 
+// ĐÃ TRẢ LẠI NGUYÊN BẢN CHO BẠN: Khôi phục theo dõi bằng ID để tránh bị lỗi tự nhận diện load ở Component Cha
 watch(
   () => Number((props.product as any)?.productId || (props.product as any)?.id || 0),
   (newProductId, oldProductId) => {
@@ -1864,7 +1897,6 @@ watch(
 .buy-now-btn:disabled, .add-cart-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
 /* COMPARE BAR */
-/* ĐÃ SỬA Z-INDEX XUỐNG 1040 ĐỂ TRÁNH ĐÈ THÔNG BÁO TỐI ĐA SỐ LƯỢNG */
 .compare-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: #ffffff; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1040; padding: 15px 0; border-top: 2px solid #bd9a5f; }
 .compare-bar.show { transform: translateY(0); }
 .cb-container { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; }
@@ -1889,7 +1921,6 @@ watch(
 .cb-btn-compare:hover:not(:disabled) { background: #bd9a5f; box-shadow: 0 4px 12px rgba(189,154,95,0.3); }
 
 /* COMPARE MODAL */
-/* ĐÃ SỬA Z-INDEX XUỐNG 1050 ĐỂ TRÁNH ĐÈ THÔNG BÁO TỐI ĐA SỐ LƯỢNG */
 .compare-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1050; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); }
 .compare-modal-box { background: white; width: 95%; max-width: 1100px; max-height: 90vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; animation: modalFadeIn 0.3s ease; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
 .cm-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid #eaeaea; background: #fdfaf6; }
@@ -1907,30 +1938,10 @@ watch(
   background: #fffdf8;
   border-bottom: 1px solid #eee3d3;
 }
-
-.ai-compare-toolbar-text {
-  min-width: 0;
-}
-
-.ai-compare-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-  color: #0a142f;
-  font-size: 16px;
-  font-weight: 800;
-}
-
-.ai-compare-title i {
-  color: #b78d52;
-}
-
-.ai-compare-subtitle {
-  color: #718096;
-  font-size: 13px;
-  line-height: 1.5;
-}
+.ai-compare-toolbar-text { min-width: 0; }
+.ai-compare-title { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; color: #0a142f; font-size: 16px; font-weight: 800; }
+.ai-compare-title i { color: #b78d52; }
+.ai-compare-subtitle { color: #718096; font-size: 13px; line-height: 1.5; }
 
 .cm-btn-ai {
   flex-shrink: 0;
@@ -1945,76 +1956,19 @@ watch(
   cursor: pointer;
   transition: 0.2s;
 }
+.cm-btn-ai:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(183, 141, 82, 0.24); }
+.cm-btn-ai:disabled { opacity: 0.6; cursor: not-allowed; }
 
-.cm-btn-ai:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 14px rgba(183, 141, 82, 0.24);
-}
+.ai-compare-error { margin: 16px 24px 0; padding: 12px 14px; border: 1px solid #fecaca; border-radius: 10px; background: #fff5f5; color: #b91c1c; font-size: 13px; font-weight: 600; }
+.ai-compare-result { margin: 16px 24px; border: 1px solid #eadfcf; border-radius: 12px; background: #fffdf8; overflow: hidden; }
+.ai-result-block { padding: 15px 16px; }
+.ai-result-block + .ai-result-block { border-top: 1px solid #eadfcf; }
+.ai-result-label { margin-bottom: 6px; color: #0a142f; font-size: 14px; font-weight: 800; }
+.ai-result-label i { color: #b78d52; }
+.ai-result-block p { margin: 0; color: #4a5568; font-size: 14px; line-height: 1.65; }
+.ai-result-recommendation { background: #fffcf7; }
 
-.cm-btn-ai:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.ai-compare-error {
-  margin: 16px 24px 0;
-  padding: 12px 14px;
-  border: 1px solid #fecaca;
-  border-radius: 10px;
-  background: #fff5f5;
-  color: #b91c1c;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.ai-compare-result {
-  margin: 16px 24px;
-  border: 1px solid #eadfcf;
-  border-radius: 12px;
-  background: #fffdf8;
-  overflow: hidden;
-}
-
-.ai-result-block {
-  padding: 15px 16px;
-}
-
-.ai-result-block + .ai-result-block {
-  border-top: 1px solid #eadfcf;
-}
-
-.ai-result-label {
-  margin-bottom: 6px;
-  color: #0a142f;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.ai-result-label i {
-  color: #b78d52;
-}
-
-.ai-result-block p {
-  margin: 0;
-  color: #4a5568;
-  font-size: 14px;
-  line-height: 1.65;
-}
-
-.ai-result-recommendation {
-  background: #fffcf7;
-}
-
-@media (max-width: 768px) {
-  .ai-compare-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .cm-btn-ai {
-    width: 100%;
-  }
-}
+@media (max-width: 768px) { .ai-compare-toolbar { align-items: stretch; flex-direction: column; } .cm-btn-ai { width: 100%; } }
 
 .table-compare { width: 100%; border-collapse: collapse; text-align: left; }
 .sticky-header th, .sticky-header td { position: sticky; top: 0; background: white; z-index: 10; border-bottom: 2px solid #eaeaea; padding-top: 25px; padding-bottom: 20px; }
@@ -2045,26 +1999,9 @@ watch(
 .compare-select { width: 80%; padding: 8px 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 13px; font-weight: 600; color: #0a142f; outline: none; cursor: pointer; margin: 0 auto; display: block; }
 .compare-select:focus { border-color: #bd9a5f; }
 
-.cm-price-val {
-  font-size: 16px;
-  font-weight: 800;
-  color: #e53e3e;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-}
-
-.cm-rating {
-  color: #bd9a5f;
-  font-weight: 700;
-  font-size: 15px;
-  text-align: left;
-}
-
-.cm-rating .d-flex {
-  justify-content: flex-start !important;
-}
-
+.cm-price-val { font-size: 16px; font-weight: 800; color: #e53e3e; display: flex; align-items: center; justify-content: flex-start; }
+.cm-rating { color: #bd9a5f; font-weight: 700; font-size: 15px; text-align: left; }
+.cm-rating .d-flex { justify-content: flex-start !important; }
 .cm-btn-buy { width: 80%; margin: 0 auto; display: flex; justify-content: center; align-items: center; padding: 12px; background: #0a142f; color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.2s; text-transform: uppercase; letter-spacing: 0.5px; font-size: 13px; }
 .cm-btn-buy:hover:not(:disabled) { background: #bd9a5f; box-shadow: 0 4px 15px rgba(189,154,95,0.3); }
 .cm-btn-buy:disabled { opacity: 0.6; cursor: not-allowed; background: #718096; }
@@ -2085,12 +2022,10 @@ watch(
 .picker-info .brand { font-size: 11px; color: #bd9a5f; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
 .picker-info .name { font-size: 13px; font-weight: 700; color: #0a142f; margin: 0 0 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
 .picker-price { font-size: 15px; font-weight: 800; color: #e53e3e; margin-top: auto; }
-
 .picker-check { position: absolute; top: 10px; right: 10px; font-size: 18px; }
 .picker-footer { padding: 15px 24px; border-top: 1px solid #eaeaea; display: flex; justify-content: flex-end; background: #f8fafc; }
 
 /* MODAL CHỌN BIẾN THỂ */
-/* ĐÃ SỬA Z-INDEX XUỐNG 1050 ĐỂ TRÁNH ĐÈ THÔNG BÁO TỐI ĐA SỐ LƯỢNG */
 .custom-modal-overlay { backdrop-filter: blur(5px); position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 1050; display: flex; align-items: center; justify-content: center; }
 .variant-modal-box { background: #ffffff; width: 100%; max-width: 440px; border-radius: 20px; padding: 28px; box-shadow: 0 24px 54px rgba(6, 19, 43, 0.25); animation: modalFadeIn 0.3s ease-out forwards; }
 @keyframes modalFadeIn { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }

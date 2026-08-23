@@ -68,7 +68,12 @@ const normalizeText = (value: unknown) => {
 };
 
 const normalizeCapacityKey = (value: unknown) => {
-  return normalizeText(value).replace("ml", "").replace(/\s+/g, "").trim();
+  // Cắt chữ ml và khoảng trắng
+  const text = normalizeText(value).replace(/ml/g, "").replace(/\s+/g, "").trim();
+  // Ép về số để 10.0 hay 10 đều thành 10
+  const num = parseFloat(text);
+  
+  return !Number.isNaN(num) ? String(num) : text;
 };
 
 const getPlaceholderImage = () => {
@@ -313,9 +318,9 @@ const extractCapacity = (variant: any) => {
   }
 
   const text = String(value).trim();
-  const numeric = Number(text.replace("ml", "").replace("ML", "").trim());
+  const numeric = Number(text.toLowerCase().replace(/ml/g, "").trim());
 
-  if (!Number.isNaN(numeric)) {
+  if (!Number.isNaN(numeric) && numeric > 0) {
     return `${numeric}ml`;
   }
 
@@ -487,8 +492,19 @@ const mapVariant = (variant: any) => {
 const mapProduct = (item: any) => {
   const rawVariants =
     item?.variants ||
+    item?.Variants ||
     item?.productVariants ||
+    item?.ProductVariants ||
     item?.productVariantList ||
+    item?.ProductVariantList ||
+    item?.productVariantResponses ||
+    item?.ProductVariantResponses ||
+    item?.productVariantDTOs ||
+    item?.ProductVariantDTOs ||
+    item?.lstProductVariant ||
+    item?.LstProductVariant ||
+    item?.items ||
+    item?.Items ||
     [];
 
   const mappedVariants = Array.isArray(rawVariants)

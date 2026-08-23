@@ -452,6 +452,11 @@ public class CartService {
             return "Sản phẩm [" + sku + "] không tồn tại";
         }
 
+        // ĐÃ THÊM: Chặn tuyệt đối nếu Sản phẩm cha (Product gốc) bị đánh cờ xóa mềm
+        if (Boolean.TRUE.equals(variant.getProduct().getIsDeleted())) {
+            return "Sản phẩm [" + variant.getProduct().getName() + "] đã bị xóa khỏi hệ thống";
+        }
+
         if (variant.getProduct().getStatus() == null
                 || variant.getProduct().getStatus() != STATUS_ACTIVE) {
             return "Sản phẩm [" + variant.getProduct().getName() + "] hiện không còn kinh doanh";
@@ -468,11 +473,6 @@ public class CartService {
         /*
          * Tồn bán được thật nằm ở InventoryLot:
          * QuantityOnHand > 0 và ExpirationDate >= hôm nay.
-         *
-         * Không dùng:
-         * - ProductVariant.StockQuantity
-         * - ProductVariant.ManufacturingDate
-         * - ProductVariant.ExpirationDate
          */
         int sellableQuantity = getSellableQuantity(variant);
 

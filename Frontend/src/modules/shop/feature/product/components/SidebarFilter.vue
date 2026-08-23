@@ -329,6 +329,7 @@ const getTotalPages = (data: any) => {
   return Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1;
 };
 
+// ĐÃ SỬA: Thêm tham số t để chặn trình duyệt lưu cache dữ liệu cũ
 const fetchAllFilterOptions = async <T,>(url: string): Promise<T[]> => {
   const size = 100;
   let page = 0;
@@ -340,6 +341,7 @@ const fetchAllFilterOptions = async <T,>(url: string): Promise<T[]> => {
       params: {
         page,
         size,
+        t: Date.now() // Tham số chống cache
       },
     });
 
@@ -367,9 +369,17 @@ const formatCapacityValue = (item: FilterOption) => {
     return "N/A";
   }
 
-  const text = String(raw).trim();
+  // Dọn dẹp chữ ml và ép về số
+  const text = String(raw).toLowerCase().replace(/ml/g, "").trim();
+  const numeric = parseFloat(text);
 
-  return text.toLowerCase().includes("ml") ? text : `${text}ml`;
+  // Nếu là số thì trả về đúng chuẩn (VD: 10.0 -> 10ml)
+  if (!Number.isNaN(numeric)) {
+    return `${numeric}ml`;
+  }
+
+  const rawStr = String(raw).trim();
+  return rawStr.toLowerCase().includes("ml") ? rawStr : `${rawStr}ml`;
 };
 
 const emitFilter = () => {

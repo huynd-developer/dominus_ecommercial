@@ -44,11 +44,11 @@
       </div>
 
       <div class="footer-contact mt-3">
-        <span>DOMINUS PERFUME</span>
-        <span class="footer-dot">•</span>
-        <span>Nước hoa chính hãng</span>
-        <span class="footer-dot">•</span>
-        <span>Hà Nội, Việt Nam</span>
+        <div class="d-inline-flex align-items-center justify-content-center flex-wrap gap-2">
+          <span><i class="bi bi-geo-alt-fill text-warning me-1"></i> 123 Đường ABC, Quận Hoàn Kiếm, Hà Nội</span>
+          <span class="footer-dot d-none d-md-inline">•</span>
+          <span><i class="bi bi-telephone-fill text-warning me-1"></i> <strong>0987.654.321</strong></span>
+        </div>
       </div>
 
       <div class="footer-copy mt-2">

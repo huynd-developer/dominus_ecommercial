@@ -976,8 +976,40 @@ const appendImageList = (images: string[], value: any) => {
 
 const getProductImages = (item: any) => {
   const images: string[] = [];
-  appendImage(images, item?.mainImage); appendImage(images, item?.mainImageUrl); appendImage(images, item?.thumbnailUrl); appendImage(images, item?.imageUrl); appendImage(images, item?.ImageUrl); appendImage(images, item?.image);
-  appendImageList(images, item?.images); appendImageList(images, item?.Images); appendImageList(images, item?.galleryImages); appendImageList(images, item?.imageList); appendImageList(images, item?.ImageList); appendImageList(images, item?.productImages); appendImageList(images, item?.ProductImages); appendImageList(images, item?.productImageList); appendImageList(images, item?.ProductImageList);
+  
+  // Ưu tiên tuyệt đối tìm ảnh có đánh dấu isPrimary (giống như logic trong quản lý sản phẩm)
+  const imageArrays = [
+    item?.images,
+    item?.Images,
+    item?.productImages,
+    item?.ProductImages,
+    item?.galleryImages,
+    item?.imageList,
+  ];
+
+  for (const arr of imageArrays) {
+    if (Array.isArray(arr)) {
+      const primaryObj = arr.find((img: any) => 
+        Boolean(img?.isPrimary || img?.is_primary || img?.primary)
+      );
+      if (primaryObj) {
+        appendImage(images, primaryObj?.imageUrl || primaryObj?.url || primaryObj);
+      }
+    }
+  }
+
+  appendImage(images, item?.primaryImageUrl);
+  appendImage(images, item?.mainImage); 
+  appendImage(images, item?.mainImageUrl); 
+  appendImage(images, item?.thumbnailUrl); 
+  appendImage(images, item?.imageUrl); 
+  appendImage(images, item?.ImageUrl); 
+  appendImage(images, item?.image);
+  
+  imageArrays.forEach((arr) => {
+    appendImageList(images, arr);
+  });
+
   if (Array.isArray(item?.variants)) {
     item.variants.forEach((variant: any) => {
       appendImage(images, variant?.mainImage); appendImage(images, variant?.mainImageUrl); appendImage(images, variant?.thumbnailUrl); appendImage(images, variant?.imageUrl); appendImage(images, variant?.ImageUrl); appendImage(images, variant?.image);
@@ -1345,7 +1377,18 @@ watch(() => props.productList, () => { loadMyFavorites(); syncGridRatings(); }, 
 .cb-btn-compare:hover:not(:disabled) { background: #bd9a5f; box-shadow: 0 4px 12px rgba(189,154,95,0.3); }
 
 /* COMPARE MODAL */
-.compare-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 999999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); }
+/* CŨ: z-index: 999999; */
+/* THAY BẰNG: */
+.compare-modal-overlay { 
+  position: fixed; 
+  inset: 0; 
+  background: rgba(0,0,0,0.7); 
+  z-index: 1055; /* ĐÃ HẠ XUỐNG 1055 */
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  backdrop-filter: blur(6px); 
+}
 .compare-modal-box { background: white; width: 95%; max-width: 1100px; max-height: 90vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; animation: modalFadeIn 0.3s ease; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
 .cm-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid #eaeaea; background: #fdfaf6; }
 .cm-header h3 { margin: 0; font-family: "Playfair Display", serif; font-size: 22px; font-weight: 800; color: #0a142f; }
@@ -1449,6 +1492,7 @@ watch(() => props.productList, () => { loadMyFavorites(); syncGridRatings(); }, 
 .cm-btn-buy:hover:not(:disabled) { background: #bd9a5f; box-shadow: 0 4px 15px rgba(189,154,95,0.3); }
 .cm-btn-buy:disabled { opacity: 0.6; cursor: not-allowed; background: #718096; }
 
+/* PICKER MODAL */
 .product-picker-box { background: white; width: 95%; max-width: 700px; max-height: 80vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; animation: modalFadeIn 0.3s ease; }
 .picker-search-bar { padding: 15px 24px; border-bottom: 1px solid #eaeaea; background: #f8fafc; }
 .picker-input { width: 100%; padding: 12px 15px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 14px; outline: none; transition: 0.2s; }
@@ -1468,7 +1512,6 @@ watch(() => props.productList, () => { loadMyFavorites(); syncGridRatings(); }, 
 .picker-footer { padding: 15px 24px; border-top: 1px solid #eaeaea; display: flex; justify-content: flex-end; background: #f8fafc; }
 
 /* MODAL CHỌN BIẾN THỂ */
-/* ĐÃ HẠ Z-INDEX XUỐNG 1050 ĐỂ KHÔNG BỊ ĐÈ THÔNG BÁO VƯỢT TỒN KHO */
 .custom-modal-overlay { backdrop-filter: blur(5px); position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 1050; display: flex; align-items: center; justify-content: center; }
 .variant-modal-box { background: #ffffff; width: 100%; max-width: 440px; border-radius: 20px; padding: 28px; box-shadow: 0 24px 54px rgba(6, 19, 43, 0.25); animation: modalFadeIn 0.3s ease-out forwards; }
 @keyframes modalFadeIn { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -1505,8 +1548,16 @@ watch(() => props.productList, () => { loadMyFavorites(); syncGridRatings(); }, 
 .vm-btn-buy { background: #b78d52; color: #ffffff; }
 .vm-btn-buy:hover:not(:disabled) { background: #9b7541; transform: translateY(-2px); box-shadow: 0 6px 14px rgba(183, 141, 82, 0.25); }
 .vm-btn-cart:disabled, .vm-btn-buy:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
-.qty-wrapper input[type="number"]::-webkit-inner-spin-button, .qty-wrapper input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.qty-wrapper input[type="number"]::-webkit-inner-spin-button, .qty-keyword input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .qty-wrapper input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
 .flash-sale-badge { background: #b31320; color: #ffffff; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 800; margin-bottom: 2px; }
 .date-info-box { background: #fffcf7; border-left: 3px solid #d97706; padding: 8px 12px; border-radius: 4px; margin-top: 8px; }
+</style>
+
+<!-- THÊM ĐOẠN NÀY XUỐNG DƯỚI CÙNG CỦA FILE -->
+<style>
+/* ÉP BUỘC SWEETALERT LUÔN NỔI LÊN TRÊN CÙNG TOÀN HỆ THỐNG */
+div.swal2-container {
+  z-index: 9999999 !important;
+}
 </style>
