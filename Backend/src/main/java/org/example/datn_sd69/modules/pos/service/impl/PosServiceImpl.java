@@ -38,8 +38,10 @@ import org.example.datn_sd69.repository.UserRepository;
 import org.example.datn_sd69.repository.VoucherRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import org.example.datn_sd69.modules.pos.dto.request.PosTransferHeldOrderRequest;
 import org.example.datn_sd69.modules.vietqr.dto.VietQrResponse;
 import org.example.datn_sd69.modules.vietqr.service.VietQrService;
@@ -194,6 +196,8 @@ public class PosServiceImpl implements PosService {
         Customer customer = resolveOrCreateCustomer(request);
 
         Map<String, Integer> skuQuantityMap = mergeItemsBySku(request.getItems());
+        Map<String, BigDecimal> expectedUnitPriceBySku =
+                buildExpectedUnitPriceBySku(request.getItems());
 
         BigDecimal totalAmount = BigDecimal.ZERO;
         List<LineItem> lineItems = new ArrayList<>();
@@ -202,12 +206,23 @@ public class PosServiceImpl implements PosService {
             String sku = entry.getKey();
             Integer quantity = entry.getValue();
 
-            ProductVariant variant = variantRepository.findPosVisibleBySku(sku).orElseThrow(() -> new RuntimeException("SKU không hợp lệ: " + sku));
+            ProductVariant variant = variantRepository.findPosVisibleBySku(sku)
+                    .orElseThrow(() -> new RuntimeException("SKU không hợp lệ: " + sku));
 
             validateVariantCanSell(variant, quantity);
 
-            BigDecimal unitPrice = variant.getPrice();
-            BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(quantity));
+            BigDecimal unitPrice = variant.getPrice() != null
+                    ? variant.getPrice()
+                    : BigDecimal.ZERO;
+
+            validateExpectedUnitPrice(
+                    sku,
+                    expectedUnitPriceBySku.get(sku),
+                    unitPrice
+            );
+
+            BigDecimal lineTotal =
+                    unitPrice.multiply(BigDecimal.valueOf(quantity));
 
             totalAmount = totalAmount.add(lineTotal);
             lineItems.add(new LineItem(variant, quantity, unitPrice, lineTotal));
@@ -222,7 +237,25 @@ public class PosServiceImpl implements PosService {
             finalAmount = BigDecimal.ZERO;
         }
 
-        PaymentSummary paymentSummary = validateAndBuildPaymentSummary(request, finalAmount);
+        /*
+         * Chặn POS checkout dùng dữ liệu FE đã stale.
+         *
+         * expected* chỉ là snapshot FE đang hiển thị.
+         * Backend vẫn tự đọc giá ProductVariant, voucher và InventoryLot hiện tại.
+         * Nếu snapshot khác dữ liệu Backend vừa tính, trả 409 trước khi tạo Order
+         * hoặc xuất kho để thu ngân xem lại số tiền mới.
+         */
+        validatePosSnapshot(
+                request.getExpectedTotalAmount(),
+                request.getExpectedDiscountAmount(),
+                request.getExpectedFinalAmount(),
+                totalAmount,
+                discountAmount,
+                finalAmount
+        );
+
+        PaymentSummary paymentSummary =
+                validateAndBuildPaymentSummary(request, finalAmount);
 
         User customerUser = customer.getUser();
         boolean completedImmediately = paymentSummary.completedImmediately();
@@ -509,6 +542,125 @@ public class PosServiceImpl implements PosService {
         }
     }
 
+    /**
+     * Snapshot từ FE chỉ dùng để phát hiện màn hình POS đang stale.
+     *
+     * Không dùng expected* để tính tiền hoặc ghi Order.
+     */
+    private void validatePosSnapshot(
+            BigDecimal expectedTotalAmount,
+            BigDecimal expectedDiscountAmount,
+            BigDecimal expectedFinalAmount,
+            BigDecimal currentTotalAmount,
+            BigDecimal currentDiscountAmount,
+            BigDecimal currentFinalAmount
+    ) {
+        List<String> changedFields = new ArrayList<>();
+
+        if (isMoneyChanged(expectedTotalAmount, currentTotalAmount)) {
+            changedFields.add("tạm tính");
+        }
+
+        if (isMoneyChanged(expectedDiscountAmount, currentDiscountAmount)) {
+            changedFields.add("giảm giá");
+        }
+
+        if (isMoneyChanged(expectedFinalAmount, currentFinalAmount)) {
+            changedFields.add("tổng thanh toán");
+        }
+
+        if (!changedFields.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Thông tin bán hàng đã thay đổi ("
+                            + String.join(", ", changedFields)
+                            + "). Vui lòng cập nhật lại dữ liệu POS và xác nhận lại."
+            );
+        }
+    }
+
+    private boolean isMoneyChanged(
+            BigDecimal expectedAmount,
+            BigDecimal currentAmount
+    ) {
+        if (expectedAmount == null) {
+            return false;
+        }
+
+        BigDecimal safeCurrent =
+                currentAmount != null
+                        ? currentAmount
+                        : BigDecimal.ZERO;
+
+        return expectedAmount.compareTo(safeCurrent) != 0;
+    }
+
+    private Map<String, BigDecimal> buildExpectedUnitPriceBySku(
+            List<PosItemRequest> items
+    ) {
+        Map<String, BigDecimal> expectedUnitPriceBySku =
+                new LinkedHashMap<>();
+
+        if (items == null || items.isEmpty()) {
+            return expectedUnitPriceBySku;
+        }
+
+        for (PosItemRequest item : items) {
+            if (item == null || item.getExpectedUnitPrice() == null) {
+                continue;
+            }
+
+            String sku = normalizeSku(item.getSku());
+            BigDecimal expectedUnitPrice = item.getExpectedUnitPrice();
+
+            BigDecimal previous =
+                    expectedUnitPriceBySku.putIfAbsent(
+                            sku,
+                            expectedUnitPrice
+                    );
+
+            if (previous != null
+                    && previous.compareTo(expectedUnitPrice) != 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Giá hiển thị của SKU "
+                                + sku
+                                + " không nhất quán. Vui lòng cập nhật lại POS."
+                );
+            }
+        }
+
+        return expectedUnitPriceBySku;
+    }
+
+    private void validateExpectedUnitPrice(
+            String sku,
+            BigDecimal expectedUnitPrice,
+            BigDecimal currentUnitPrice
+    ) {
+        if (expectedUnitPrice == null) {
+            return;
+        }
+
+        BigDecimal safeCurrent =
+                currentUnitPrice != null
+                        ? currentUnitPrice
+                        : BigDecimal.ZERO;
+
+        if (expectedUnitPrice.compareTo(safeCurrent) != 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Giá SKU "
+                            + sku
+                            + " đã thay đổi từ "
+                            + expectedUnitPrice.toPlainString()
+                            + " thành "
+                            + safeCurrent.toPlainString()
+                            + ". Vui lòng cập nhật lại POS và xác nhận lại."
+            );
+        }
+    }
+
     private void validateCheckoutRequest(PosCheckoutRequest request) {
         if (request == null) {
             throw new RuntimeException("Dữ liệu hóa đơn không được để trống");
@@ -678,6 +830,8 @@ public class PosServiceImpl implements PosService {
 
     private List<LineItem> buildLineItemsFromRequestItems(List<PosItemRequest> items) {
         Map<String, Integer> skuQuantityMap = mergeItemsBySku(items);
+        Map<String, BigDecimal> expectedUnitPriceBySku =
+                buildExpectedUnitPriceBySku(items);
 
         BigDecimal totalAmount = BigDecimal.ZERO;
         List<LineItem> lineItems = new ArrayList<>();
@@ -686,13 +840,23 @@ public class PosServiceImpl implements PosService {
             String sku = entry.getKey();
             Integer quantity = entry.getValue();
 
-            ProductVariant variant = variantRepository.findPosVisibleBySku(sku).orElseThrow(() -> new RuntimeException("SKU không hợp lệ: " + sku));
+            ProductVariant variant = variantRepository.findPosVisibleBySku(sku)
+                    .orElseThrow(() -> new RuntimeException("SKU không hợp lệ: " + sku));
 
             validateVariantCanSell(variant, quantity);
 
-            BigDecimal unitPrice = variant.getPrice() != null ? variant.getPrice() : BigDecimal.ZERO;
+            BigDecimal unitPrice = variant.getPrice() != null
+                    ? variant.getPrice()
+                    : BigDecimal.ZERO;
 
-            BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(quantity));
+            validateExpectedUnitPrice(
+                    sku,
+                    expectedUnitPriceBySku.get(sku),
+                    unitPrice
+            );
+
+            BigDecimal lineTotal =
+                    unitPrice.multiply(BigDecimal.valueOf(quantity));
 
             totalAmount = totalAmount.add(lineTotal);
             lineItems.add(new LineItem(variant, quantity, unitPrice, lineTotal));
@@ -756,6 +920,15 @@ public class PosServiceImpl implements PosService {
             finalAmount = BigDecimal.ZERO;
         }
 
+        validatePosSnapshot(
+                request.getExpectedTotalAmount(),
+                request.getExpectedDiscountAmount(),
+                request.getExpectedFinalAmount(),
+                totalAmount,
+                discountAmount,
+                finalAmount
+        );
+
         User customerUser = customer.getUser();
 
         Order order = new Order();
@@ -799,7 +972,7 @@ public class PosServiceImpl implements PosService {
         validateHoldRequest(request);
 
         Employee currentEmployee = resolveCashier(cashierEmail);
-        Order order = getHeldOrderOrThrow(orderId);
+        Order order = getHeldOrderForUpdateOrThrow(orderId);
 
         validateCanTransferHeldOrder(order, currentEmployee);
 
@@ -814,6 +987,15 @@ public class PosServiceImpl implements PosService {
         if (finalAmount.compareTo(BigDecimal.ZERO) < 0) {
             finalAmount = BigDecimal.ZERO;
         }
+
+        validatePosSnapshot(
+                request.getExpectedTotalAmount(),
+                request.getExpectedDiscountAmount(),
+                request.getExpectedFinalAmount(),
+                totalAmount,
+                discountAmount,
+                finalAmount
+        );
 
         /*
          * Phiếu treo chưa trừ kho, nên cập nhật sản phẩm chỉ cần thay OrderItem.
@@ -931,7 +1113,7 @@ public class PosServiceImpl implements PosService {
 
         Employee currentEmployee = resolveCashier(cashierEmail);
 
-        Order order = getHeldOrderOrThrow(orderId);
+        Order order = getHeldOrderForUpdateOrThrow(orderId);
 
         /*
          * Một nhân viên chỉ được thanh toán phiếu/hóa đơn của chính mình.
@@ -945,7 +1127,34 @@ public class PosServiceImpl implements PosService {
             throw new RuntimeException("Phiếu treo không có sản phẩm.");
         }
 
-        BigDecimal finalAmount = order.getFinalAmount() != null ? order.getFinalAmount() : BigDecimal.ZERO;
+        BigDecimal totalAmount =
+                order.getTotalAmount() != null
+                        ? order.getTotalAmount()
+                        : BigDecimal.ZERO;
+
+        BigDecimal discountAmount =
+                order.getDiscountAmount() != null
+                        ? order.getDiscountAmount()
+                        : BigDecimal.ZERO;
+
+        BigDecimal finalAmount =
+                order.getFinalAmount() != null
+                        ? order.getFinalAmount()
+                        : BigDecimal.ZERO;
+
+        /*
+         * Phiếu treo là snapshot đã lưu trong Order/OrderItem.
+         * Không tự re-price theo ProductVariant ở đây để không đổi nghiệp vụ cũ.
+         * Chỉ chặn nếu FE đang mở bản phiếu treo cũ hơn dữ liệu Order hiện tại.
+         */
+        validatePosSnapshot(
+                request.getExpectedTotalAmount(),
+                request.getExpectedDiscountAmount(),
+                request.getExpectedFinalAmount(),
+                totalAmount,
+                discountAmount,
+                finalAmount
+        );
 
         PosCheckoutRequest paymentRequest = new PosCheckoutRequest();
         paymentRequest.setPaymentMethod(request.getPaymentMethod());
@@ -1033,7 +1242,7 @@ public class PosServiceImpl implements PosService {
 
         Employee currentEmployee = resolveCashier(cashierEmail);
 
-        Order order = getHeldOrderOrThrow(orderId);
+        Order order = getHeldOrderForUpdateOrThrow(orderId);
 
         /*
          * Chỉ người đang giữ phiếu hoặc MANAGER/OWNER mới được chuyển phiếu.
@@ -1061,7 +1270,7 @@ public class PosServiceImpl implements PosService {
     public Map<String, Object> cancelHeldOrder(Integer orderId, String cashierEmail) {
         Employee currentEmployee = resolveCashier(cashierEmail);
 
-        Order order = getHeldOrderOrThrow(orderId);
+        Order order = getHeldOrderForUpdateOrThrow(orderId);
 
         /*
          * Quyền hủy phiếu:
@@ -1427,7 +1636,7 @@ public class PosServiceImpl implements PosService {
             throw new RuntimeException("Mã hóa đơn không hợp lệ.");
         }
 
-        Order order = orderRepository.findDetailById(orderId)
+        Order order = orderRepository.findDetailByIdForUpdate(orderId)
                 .orElseThrow(() -> new RuntimeException(
                         "Không tìm thấy hóa đơn POS cần hoàn kho sau VNPay thất bại."
                 ));
@@ -1875,6 +2084,25 @@ public class PosServiceImpl implements PosService {
         return order;
     }
 
+    private Order getHeldOrderForUpdateOrThrow(Integer orderId) {
+        if (orderId == null) {
+            throw new RuntimeException("Mã phiếu treo không được để trống.");
+        }
+
+        Order order = orderRepository.findHeldOrderByIdForUpdate(orderId)
+                .orElseThrow(() -> new RuntimeException(
+                        "Không tìm thấy phiếu treo tại quầy hoặc phiếu không còn ở trạng thái đang treo."
+                ));
+
+        if (!isHeldOrderAtCounter(order)) {
+            throw new RuntimeException(
+                    "Không tìm thấy phiếu treo tại quầy hoặc phiếu không còn ở trạng thái đang treo."
+            );
+        }
+
+        return order;
+    }
+
     private boolean isCounterOrder(Order order) {
         if (order == null || order.getOrderType() == null) {
             return false;
@@ -2118,7 +2346,8 @@ public class PosServiceImpl implements PosService {
             throw new RuntimeException("Mã hóa đơn không hợp lệ.");
         }
 
-        Order order = orderRepository.findDetailById(orderId).orElseThrow(() -> new RuntimeException("Không tìm thấy hóa đơn VietQR."));
+        Order order = orderRepository.findDetailByIdForUpdate(orderId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy hóa đơn VietQR."));
 
         if (order.getStatus() == null || order.getStatus() != ORDER_STATUS_PENDING) {
             throw new RuntimeException("Chỉ hóa đơn đang chờ thanh toán mới được xác nhận VietQR.");
@@ -2317,7 +2546,7 @@ public class PosServiceImpl implements PosService {
 
         Employee currentEmployee = resolveCashier(cashierEmail);
 
-        Order order = orderRepository.findPendingPaymentOrderById(orderId)
+        Order order = orderRepository.findPendingPaymentOrderByIdForUpdate(orderId)
                 .orElseThrow(() -> new RuntimeException(
                         "Không tìm thấy hóa đơn đang chờ thanh toán hoặc hóa đơn không còn ở trạng thái chờ thanh toán."
                 ));
@@ -2409,7 +2638,7 @@ public class PosServiceImpl implements PosService {
 
         Employee currentEmployee = resolveCashier(cashierEmail);
 
-        Order order = orderRepository.findDetailById(orderId)
+        Order order = orderRepository.findDetailByIdForUpdate(orderId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy hóa đơn cần hủy."));
 
         if (!isCounterOrder(order)) {
@@ -2485,7 +2714,7 @@ public class PosServiceImpl implements PosService {
 
         Employee currentEmployee = resolveCashier(cashierEmail);
 
-        Order order = orderRepository.findPendingPaymentOrderById(orderId)
+        Order order = orderRepository.findPendingPaymentOrderByIdForUpdate(orderId)
                 .orElseThrow(() -> new RuntimeException(
                         "Không tìm thấy hóa đơn đang chờ thanh toán hoặc hóa đơn không còn ở trạng thái chờ thanh toán."
                 ));
@@ -2500,9 +2729,29 @@ public class PosServiceImpl implements PosService {
             throw new RuntimeException("Hóa đơn không có sản phẩm.");
         }
 
-        BigDecimal finalAmount = order.getFinalAmount() != null
-                ? order.getFinalAmount()
-                : BigDecimal.ZERO;
+        BigDecimal totalAmount =
+                order.getTotalAmount() != null
+                        ? order.getTotalAmount()
+                        : BigDecimal.ZERO;
+
+        BigDecimal discountAmount =
+                order.getDiscountAmount() != null
+                        ? order.getDiscountAmount()
+                        : BigDecimal.ZERO;
+
+        BigDecimal finalAmount =
+                order.getFinalAmount() != null
+                        ? order.getFinalAmount()
+                        : BigDecimal.ZERO;
+
+        validatePosSnapshot(
+                request.getExpectedTotalAmount(),
+                request.getExpectedDiscountAmount(),
+                request.getExpectedFinalAmount(),
+                totalAmount,
+                discountAmount,
+                finalAmount
+        );
 
         PosCheckoutRequest paymentRequest = new PosCheckoutRequest();
         paymentRequest.setPaymentMethod(request.getPaymentMethod());

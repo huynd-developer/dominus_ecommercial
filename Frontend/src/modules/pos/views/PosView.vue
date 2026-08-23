@@ -15,7 +15,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import api from "@/common/api";
 import { usePosStore } from "../stores/posStore";
@@ -51,10 +51,7 @@ const getVnpayQueryValue = (value: unknown) => {
 
 const getBackendOrderStatus = (data: any): number | null => {
   const value =
-    data?.status ??
-    data?.orderStatus ??
-    data?.order?.status ??
-    null;
+    data?.status ?? data?.orderStatus ?? data?.order?.status ?? null;
 
   if (value === null || value === undefined || value === "") {
     return null;
@@ -62,9 +59,7 @@ const getBackendOrderStatus = (data: any): number | null => {
 
   const numberValue = Number(value);
 
-  return Number.isFinite(numberValue)
-    ? numberValue
-    : null;
+  return Number.isFinite(numberValue) ? numberValue : null;
 };
 
 const clearVnpayPendingLocalState = () => {
@@ -106,18 +101,14 @@ const buildFallbackVnpayInvoice = (backendData: any) => {
       getVnpayQueryValue(route.query.vnp_BankTranNo) ||
       getVnpayQueryValue(route.query.vnp_TransactionNo),
     bankCode:
-      backendData?.bankCode ||
-      getVnpayQueryValue(route.query.vnp_BankCode),
+      backendData?.bankCode || getVnpayQueryValue(route.query.vnp_BankCode),
     orderInfo:
-      backendData?.orderInfo ||
-      getVnpayQueryValue(route.query.vnp_OrderInfo),
+      backendData?.orderInfo || getVnpayQueryValue(route.query.vnp_OrderInfo),
     amount: backendData?.amount || queryAmount,
     finalAmount: backendData?.finalAmount || queryAmount,
     transferAmount: backendData?.transferAmount || queryAmount,
     paidAmount:
-      backendData?.paidAmount ||
-      backendData?.finalAmount ||
-      queryAmount,
+      backendData?.paidAmount || backendData?.finalAmount || queryAmount,
     remainingAmount: 0,
   };
 };
@@ -143,8 +134,12 @@ const syncRecoveredCartWithLatestProducts = () => {
       }
 
       return (
-        String(product?.sku || "").trim().toLowerCase() ===
-        String(currentProduct?.sku || "").trim().toLowerCase()
+        String(product?.sku || "")
+          .trim()
+          .toLowerCase() ===
+        String(currentProduct?.sku || "")
+          .trim()
+          .toLowerCase()
       );
     });
 
@@ -226,9 +221,7 @@ const handleVnpayReturnAtPos = async () => {
     });
 
     const backendData =
-      response.data && typeof response.data === "object"
-        ? response.data
-        : {};
+      response.data && typeof response.data === "object" ? response.data : {};
 
     if (backendData.success === true) {
       const invoice = buildFallbackVnpayInvoice(backendData);
@@ -310,12 +303,40 @@ const handleVnpayReturnAtPos = async () => {
   }
 };
 
+let isFocusRefreshing = false;
+
+const handleWindowFocus = async () => {
+  /*
+   * Không chen vào lúc đang xử lý callback VNPay.
+   * Với payment pending/đã nhận tiền một phần, store chỉ refresh danh sách ngoài
+   * và giữ nguyên payment intent đã khóa.
+   */
+  if (
+    isFocusRefreshing ||
+    posStore.isLoading ||
+    isVnpayReturnQuery() ||
+    posStore.showPaymentSuccess
+  ) {
+    return;
+  }
+
+  isFocusRefreshing = true;
+
+  try {
+    await posStore.refreshStaleSensitiveState();
+  } finally {
+    isFocusRefreshing = false;
+  }
+};
+
 onMounted(async () => {
   /*
    * Không được xóa pos_pending_checkout_draft ở đây.
    * Draft này dùng để khôi phục hóa đơn đang chờ thanh toán VNPay/VietQR
    * khi người dùng back lại trang POS.
    */
+
+  window.addEventListener("focus", handleWindowFocus);
 
   await posStore.fetchPosFilters();
   await posStore.fetchProducts();
@@ -337,6 +358,10 @@ onMounted(async () => {
   posStore.restorePendingCheckoutDraft();
 
   await posStore.fetchHeldOrders();
+});
+
+onUnmounted(() => {
+  window.removeEventListener("focus", handleWindowFocus);
 });
 </script>
 

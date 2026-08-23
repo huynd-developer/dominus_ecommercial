@@ -356,6 +356,40 @@ const getBackendMessage = (error: any, fallback: string): string => {
   return fallback;
 };
 
+const getBackendStatus = (error: any): number => {
+  const status = Number(error?.response?.status || 0);
+  return Number.isFinite(status) ? status : 0;
+};
+
+const isStaleSensitivePosMessage = (message?: string | null): boolean => {
+  const value = String(message || "").trim().toLowerCase();
+
+  if (!value) return false;
+
+  return [
+    "thông tin bán hàng đã thay đổi",
+    "giá sku",
+    "giá hiển thị",
+    "không nhất quán",
+    "không đủ tồn kho",
+    "đã hết hàng",
+    "không còn lô còn hạn",
+    "ngừng bán",
+    "mã giảm giá",
+    "voucher",
+  ].some((keyword) => value.includes(keyword));
+};
+
+const shouldRefreshAfterStaleSensitiveError = (
+  error: any,
+  message?: string | null
+): boolean => {
+  return (
+    getBackendStatus(error) === 409 ||
+    isStaleSensitivePosMessage(message)
+  );
+};
+
 const isPendingPaymentNotFoundMessage = (message?: string | null): boolean => {
   const cleanMessage = String(message || "")
     .trim()
@@ -2347,6 +2381,133 @@ export const usePosStore = defineStore("posStore", {
       return true;
     },
 
+    syncCartWithLatestProducts() {
+      if (!Array.isArray(this.cart) || this.cart.length === 0) {
+        return;
+      }
+
+      this.cart = this.cart.map((item) => {
+        const currentProduct = item?.product;
+
+        if (!currentProduct) {
+          return item;
+        }
+
+        const latestProduct = this.allProducts.find((product) => {
+          if (
+            Number(product?.id || 0) > 0 &&
+            Number(currentProduct?.id || 0) > 0 &&
+            Number(product.id) === Number(currentProduct.id)
+          ) {
+            return true;
+          }
+
+          return (
+            String(product?.sku || "").trim().toLowerCase() ===
+            String(currentProduct?.sku || "").trim().toLowerCase()
+          );
+        });
+
+        /*
+         * Không tự cắt quantity theo tồn mới.
+         * Thu ngân phải nhìn thấy đúng số lượng đã chọn và tự quyết định sửa;
+         * BE vẫn là lớp chặn cuối cùng bằng InventoryLot/FEFO.
+         */
+        const quantity = normalizeExistingOrderQuantity(item.quantity);
+
+        if (!latestProduct) {
+          return {
+            ...item,
+            quantity,
+            product: {
+              ...currentProduct,
+              status: 0,
+              sellable: false,
+              sellableQuantity: 0,
+              stockQuantity: 0,
+              unavailableReason:
+                currentProduct.unavailableReason ||
+                "Sản phẩm không còn khả dụng tại POS.",
+            },
+          };
+        }
+
+        return {
+          ...item,
+          quantity,
+          product: {
+            ...latestProduct,
+          },
+        };
+      });
+    },
+
+    async revalidateSelectedVoucherForCurrentTotal() {
+      const total = Number(this.totalAmount || 0);
+      const cleanCode = normalizeText(this.voucherCode).toUpperCase();
+
+      if (this.cart.length === 0 || total <= 0) {
+        this.clearVoucherLocal(false);
+        this.availableVouchers = [];
+        return;
+      }
+
+      if (!cleanCode) {
+        this.discountAmount = 0;
+        await this.fetchAvailableVouchers();
+        return;
+      }
+
+      try {
+        const { data } = await api.get("/admin/vouchers/apply", {
+          params: {
+            code: cleanCode,
+            orderTotal: total,
+          },
+        });
+
+        this.voucherCode = String(
+          data?.voucherCode || data?.code || cleanCode
+        )
+          .trim()
+          .toUpperCase();
+
+        this.discountAmount = Math.max(
+          Number(data?.discountAmount || 0),
+          0
+        );
+      } catch {
+        /*
+         * Voucher có thể vừa bị khóa/hết hạn/hết lượt/đổi điều kiện.
+         * Chỉ bỏ voucher local, không tự thay bằng voucher khác.
+         */
+        this.clearVoucherLocal(false);
+      }
+
+      await this.fetchAvailableVouchers();
+    },
+
+    async refreshStaleSensitiveState(options?: {
+      preserveLockedPayment?: boolean;
+    }) {
+      const preserveLockedPayment =
+        options?.preserveLockedPayment ??
+        (this.cashPaid > 0 || Boolean(this.activePendingPaymentOrderId));
+
+      /*
+       * Chỉ đọc lại source-of-truth.
+       * Không tự checkout, không tự lưu phiếu, không tự đổi payment state.
+       */
+      await this.fetchProducts();
+
+      if (!preserveLockedPayment) {
+        this.syncCartWithLatestProducts();
+        await this.revalidateSelectedVoucherForCurrentTotal();
+      }
+
+      await this.fetchHeldOrders();
+    },
+
     buildCheckoutPayload(
       selectedPaymentMethod: PosCheckoutPaymentMethod,
       cashGiven: number,
@@ -2384,9 +2545,18 @@ export const usePosStore = defineStore("posStore", {
             ? transferAmount || null
             : null,
 
+        /*
+         * Snapshot FE đang hiển thị.
+         * BE chỉ dùng expected* để phát hiện stale; giá/tổng thật vẫn do BE tính lại.
+         */
+        expectedTotalAmount: Number(this.totalAmount || 0),
+        expectedDiscountAmount: Number(this.discountAmount || 0),
+        expectedFinalAmount: Number(this.finalAmount || 0),
+
         items: this.cart.map((item) => ({
           sku: item.product.sku,
           quantity: normalizeCartQuantity(item.quantity, item.product),
+          expectedUnitPrice: Number(item.product.price || 0),
         })),
       };
     },
@@ -2397,9 +2567,15 @@ export const usePosStore = defineStore("posStore", {
         customerName: normalizeText(this.customer?.name),
         customerEmail: normalizeEmail(this.customer?.email),
         voucherCode: normalizeText(this.voucherCode) || null,
+
+        expectedTotalAmount: Number(this.totalAmount || 0),
+        expectedDiscountAmount: Number(this.discountAmount || 0),
+        expectedFinalAmount: Number(this.finalAmount || 0),
+
         items: this.cart.map((item) => ({
           sku: item.product.sku,
           quantity: normalizeCartQuantity(item.quantity, item.product),
+          expectedUnitPrice: Number(item.product.price || 0),
         })),
       };
     },
@@ -2574,6 +2750,14 @@ export const usePosStore = defineStore("posStore", {
           selectedPaymentMethod === "MIXED"
             ? transferAmount || null
             : null,
+
+        /*
+         * Snapshot tiền đang hiển thị cho checkout phiếu treo / retry payment.
+         * BE không tin các số này để tính tiền; chỉ so với Order hiện tại.
+         */
+        expectedTotalAmount: Number(this.totalAmount || 0),
+        expectedDiscountAmount: Number(this.discountAmount || 0),
+        expectedFinalAmount: Number(this.finalAmount || 0),
       };
 
       this.isLoading = true;
@@ -2716,6 +2900,26 @@ export const usePosStore = defineStore("posStore", {
           error,
           "Thanh toán thất bại. Vui lòng kiểm tra lại!"
         );
+
+        if (shouldRefreshAfterStaleSensitiveError(error, message)) {
+          /*
+           * 409 = FE đang giữ giá/voucher/tổng cũ.
+           * Các lỗi tồn/status cũng cần refetch để POS không phụ thuộc F5.
+           *
+           * Pending payment đã tạo Order và SALE_OUT rồi nên không được re-price
+           * cart/payment intent ở FE; chỉ refresh danh sách bên ngoài.
+           */
+          await this.refreshStaleSensitiveState({
+            preserveLockedPayment: Boolean(retryPaymentOrderId),
+          });
+
+          this.errorMsg =
+            getBackendStatus(error) === 409
+              ? `${message} Dữ liệu POS đã được cập nhật, vui lòng kiểm tra và xác nhận lại.`
+              : message;
+
+          return false;
+        }
 
         if (retryPaymentOrderId && isPendingPaymentNotFoundMessage(message)) {
           this.removeProcessingOrderCard(retryPaymentOrderId);
@@ -2907,6 +3111,17 @@ export const usePosStore = defineStore("posStore", {
             ? "Cập nhật lưu tạm thất bại. Vui lòng kiểm tra lại."
             : "Lưu tạm thất bại. Vui lòng kiểm tra lại."
         );
+
+        if (shouldRefreshAfterStaleSensitiveError(error, message)) {
+          await this.refreshStaleSensitiveState();
+
+          this.errorMsg =
+            getBackendStatus(error) === 409
+              ? `${message} Dữ liệu POS đã được cập nhật, vui lòng kiểm tra lại rồi lưu lại.`
+              : message;
+
+          return false;
+        }
 
         const duplicateHeldOrderId = String(message).match(/#(\d+)/)?.[1];
 
