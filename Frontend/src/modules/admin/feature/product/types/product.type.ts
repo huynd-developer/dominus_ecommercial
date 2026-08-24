@@ -56,8 +56,9 @@ export interface ProductVariant {
   sellableQuantity?: number
 
   /**
-   * LEGACY từ ProductVariant.
-   * Giữ trong response để tương thích BE cũ/mới, nhưng FE Product không sử dụng làm nguồn tồn kho.
+   * Compatibility fields. FE Product không dùng stockQuantity làm nguồn tồn kho.
+   * manufacturingDate/expirationDate hiện được BE map từ lot FEFO tiếp theo,
+   * không còn đọc ProductVariant legacy.
    */
   stockQuantity: number
   manufacturingDate: string | null
@@ -68,6 +69,13 @@ export interface ProductVariant {
 
 export interface Product {
   id: number
+
+  /**
+   * Snapshot revision của dữ liệu Product/SKU có thể chỉnh sửa.
+   * FE gửi lại qua expectedRevision khi PUT để BE phát hiện stale form.
+   */
+  revision?: string | null
+
   name: string
   description?: string
   brandId: number
@@ -107,6 +115,11 @@ export interface ProductRequestDTO {
   status?: number
   fragranceFamilyIds: number[]
   variants: ProductVariantRequest[]
+
+  /**
+   * Chỉ gửi khi update. Create/clone để undefined.
+   */
+  expectedRevision?: string | null
 }
 
 export interface ProductResponse extends Product {}

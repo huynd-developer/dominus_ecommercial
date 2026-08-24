@@ -94,16 +94,41 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     // ================= Inventory =================
 
     /**
-     * Đọc tồn kho thật từ view kho.
-     * Không ghi ngược về ProductVariant.StockQuantity.
+     * Đọc tồn vật lý trực tiếp từ InventoryLot.
+     *
+     * - totalQuantity: tổng QuantityOnHand của mọi lot.
+     * - sellableQuantity: chỉ lot còn số lượng và HSD >= hôm nay.
+     *
+     * Không đọc ProductVariant.StockQuantity và không phụ thuộc ngày legacy của SKU.
      */
     @Query(
             value = """
                 SELECT
-                    CAST(COALESCE(V.TotalQuantity, 0) AS BIGINT) AS totalQuantity,
-                    CAST(COALESCE(V.SellableQuantity, 0) AS BIGINT) AS sellableQuantity
-                FROM dbo.vw_ProductVariantInventory V
-                WHERE V.ProductVariantId = :variantId
+                    CAST(
+                        COALESCE(
+                            SUM(CONVERT(BIGINT, L.QuantityOnHand)),
+                            0
+                        )
+                        AS BIGINT
+                    ) AS totalQuantity,
+
+                    CAST(
+                        COALESCE(
+                            SUM(
+                                CASE
+                                    WHEN L.QuantityOnHand > 0
+                                     AND L.ExpirationDate >= CAST(GETDATE() AS DATE)
+                                    THEN CONVERT(BIGINT, L.QuantityOnHand)
+                                    ELSE 0
+                                END
+                            ),
+                            0
+                        )
+                        AS BIGINT
+                    ) AS sellableQuantity
+
+                FROM dbo.InventoryLot L
+                WHERE L.ProductVariantId = :variantId
                 """,
             nativeQuery = true
     )

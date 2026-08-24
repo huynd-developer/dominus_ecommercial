@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import Swal from 'sweetalert2'
 
@@ -22,6 +22,28 @@ const isCloneMode = ref(false)
 const currentPage = ref(Number(route.query.page) || 1)
 const pageSize = ref(10)
 const loading = ref(false)
+const refreshingOnFocus = ref(false)
+
+const refreshProductsSilently = async () => {
+  if (refreshingOnFocus.value) return
+
+  refreshingOnFocus.value = true
+  try {
+    await store.fetchProducts()
+  } finally {
+    refreshingOnFocus.value = false
+  }
+}
+
+const handleWindowFocus = () => {
+  void refreshProductsSilently()
+}
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    void refreshProductsSilently()
+  }
+}
 
 onMounted(async () => {
   loading.value = true
@@ -30,6 +52,14 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+
+  window.addEventListener('focus', handleWindowFocus)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('focus', handleWindowFocus)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
 const filteredData = computed(() => {
@@ -79,10 +109,21 @@ const openAddModal = () => {
   showModal.value = true
 }
 
-const openEditModal = (item: Product) => {
-  selectedProduct.value = item
-  isCloneMode.value = false
-  showModal.value = true
+const openEditModal = async (item: Product) => {
+  try {
+    // Luôn lấy detail mới nhất khi bắt đầu edit để có revision hiện tại từ BE.
+    const latest = await productService.getProductById(item.id)
+    selectedProduct.value = latest
+    isCloneMode.value = false
+    showModal.value = true
+  } catch (error: any) {
+    await Swal.fire({
+      icon: 'error',
+      title: 'Không thể mở sản phẩm',
+      text: error?.response?.data?.message || 'Không thể tải dữ liệu sản phẩm mới nhất'
+    })
+    await store.fetchProducts()
+  }
 }
 
 const openCloneModal = (item: Product) => {
@@ -95,6 +136,24 @@ const openCloneModal = (item: Product) => {
 const closeModal = () => {
   showModal.value = false
   isCloneMode.value = false
+}
+
+const handleProductConflict = async (error: any) => {
+  if (Number(error?.response?.status) !== 409) return false
+
+  await store.fetchProducts()
+
+  await Swal.fire({
+    icon: 'warning',
+    title: 'Sản phẩm đã thay đổi',
+    text:
+      error?.response?.data?.message ||
+      'Sản phẩm đã được thay đổi ở nơi khác. Danh sách mới nhất đã được tải lại, vui lòng kiểm tra và xác nhận lại.',
+    confirmButtonText: 'Đã hiểu',
+    confirmButtonColor: '#2563eb'
+  })
+
+  return true
 }
 
 // 1. Hàm chuyển trạng thái nhanh cho sản phẩm (Ẩn/Hiện toàn bộ sản phẩm)
@@ -127,6 +186,7 @@ const toggleProductStatus = async (product: Product, newStatus: number) => {
       gender: product.gender,
       isNiche: product.isNiche,
       status: newStatus,
+      expectedRevision: product.revision ?? undefined,
       fragranceFamilyIds: product.fragranceFamilies?.map((f: any) => f.id) || [],
       variants: product.variants?.map((v: any) => ({
         id: v.id,
@@ -143,6 +203,7 @@ const toggleProductStatus = async (product: Product, newStatus: number) => {
     Swal.fire({ icon: 'success', title: 'Thành công', text: `Đã cập nhật trạng thái sản phẩm`, timer: 1200, showConfirmButton: false })
     await store.fetchProducts()
   } catch (error: any) {
+    if (await handleProductConflict(error)) return
     Swal.fire({ icon: 'error', title: 'Lỗi', text: error?.response?.data?.message || 'Không thể thực hiện thao tác' })
   }
 }
@@ -177,6 +238,7 @@ const handleToggleVariantStatus = async (product: Product, variant: ProductVaria
       gender: product.gender,
       isNiche: product.isNiche,
       status: product.status,
+      expectedRevision: product.revision ?? undefined,
       fragranceFamilyIds: product.fragranceFamilies?.map((f: any) => f.id) || [],
       variants: product.variants?.map((v: any) => ({
         id: v.id,
@@ -194,6 +256,7 @@ const handleToggleVariantStatus = async (product: Product, variant: ProductVaria
     Swal.fire({ icon: 'success', title: 'Thành công', text: `Đã cập nhật trạng thái biến thể`, timer: 1200, showConfirmButton: false })
     await store.fetchProducts()
   } catch (error: any) {
+    if (await handleProductConflict(error)) return
     Swal.fire({ icon: 'error', title: 'Lỗi', text: error?.response?.data?.message || 'Không thể cập nhật biến thể' })
   }
 }
@@ -215,6 +278,7 @@ const handleDelete = async (id: number) => {
     Swal.fire({ icon: 'success', title: 'Đã xóa', text: 'Sản phẩm đã bị xóa hoàn toàn', timer: 1200, showConfirmButton: false })
     await store.fetchProducts()
   } catch (error: any) {
+    if (await handleProductConflict(error)) return
     Swal.fire({ icon: 'error', title: 'Lỗi', text: error?.response?.data?.message || 'Không thể xóa sản phẩm' })
   }
 }

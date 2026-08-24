@@ -20,4 +20,9 @@ public interface ProductImageRepository
     Optional<ProductImage> findFirstByProduct_Id(
             Integer productId
     );
+
+    Optional<ProductImage> findByIdAndProduct_Id(
+            Integer imageId,
+            Integer productId
+    );
 }
