@@ -50,7 +50,7 @@
       v-if="!readonly && (!startDate || !endDate)"
       class="alert alert-warning py-3 mb-4 fw-semibold"
     >
-      <i class="bi bi-exclamation-triangle-fill me-2"></i> Chọn thời gian bắt đầu và kết thúc trước để hệ thống kiểm tra trùng khuyến mãi, ngày sản xuất và hạn sử dụng.
+      <i class="bi bi-exclamation-triangle-fill me-2"></i> Chọn thời gian bắt đầu và kết thúc trước để hệ thống kiểm tra trùng khuyến mãi.
     </div>
 
     <div v-if="!readonly" class="card border-0 shadow-sm mb-4">

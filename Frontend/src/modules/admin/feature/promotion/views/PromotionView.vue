@@ -185,7 +185,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import Swal from "sweetalert2";
 import PromotionFormModal from "../components/PromotionFormModal.vue";
 import { usePromotionStore } from "../stores/promotion.store";
@@ -207,6 +207,8 @@ const filters = reactive<{
 const showModal = ref(false);
 const editingPromotion = ref<PromotionResponse | null>(null);
 
+const isConflictError = (error: any) => Number(error?.response?.status) === 409;
+
 const fetchPromotions = async (page = 0) => {
   await store.fetchPromotions({
     keyword: filters.keyword,
@@ -219,17 +221,17 @@ const fetchPromotions = async (page = 0) => {
 // Computed xử lý gom nhóm các biến thể cùng 1 sản phẩm lại thành 1 dòng duy nhất nếu backend trả về phân tách
 const groupedPromotions = computed(() => {
   if (!store.promotions || store.promotions.length === 0) return [];
-  
+
   const map = new Map<number, any>();
 
   store.promotions.forEach((item: any) => {
     // Dùng ID của chiến dịch hoặc ID sản phẩm để làm chuẩn gộp nhóm
-    const key = item.id; 
+    const key = item.id;
 
     if (!map.has(key)) {
       map.set(key, {
         ...item,
-        variants: item.variants ? [...item.variants] : []
+        variants: item.variants ? [...item.variants] : [],
       });
     } else {
       const existing = map.get(key);
@@ -237,7 +239,9 @@ const groupedPromotions = computed(() => {
         // Gộp các biến thể tránh trùng lặp dựa vào id biến thể
         item.variants.forEach((v: any) => {
           const vId = v.productVariantId || v.id;
-          const exists = existing.variants.some((ev: any) => (ev.productVariantId || ev.id) === vId);
+          const exists = existing.variants.some(
+            (ev: any) => (ev.productVariantId || ev.id) === vId
+          );
           if (!exists) {
             existing.variants.push(v);
           }
@@ -256,6 +260,7 @@ const openCreateModal = () => {
 
 const openEditModal = async (id: number) => {
   try {
+    /* Luôn GET detail mới nhất trước khi edit để lấy đúng revision. */
     const detail = await store.fetchDetail(id);
     editingPromotion.value = detail;
     showModal.value = true;
@@ -279,6 +284,32 @@ const closeModal = () => {
 const handleSaved = async () => {
   closeModal();
   await fetchPromotions(store.pageNumber);
+};
+
+const getMutationSnapshot = async (
+  promotion: PromotionResponse | undefined,
+  id: number
+): Promise<PromotionResponse> => {
+  if (promotion?.revision) {
+    return promotion;
+  }
+
+  /*
+   * BE giữ expectedRevision nullable để compatibility caller cũ,
+   * nhưng Admin FE mới không được mutation thiếu revision.
+   */
+  return store.fetchDetail(id);
+};
+
+const handleMutationConflict = async () => {
+  await fetchPromotions(store.pageNumber);
+
+  await Swal.fire({
+    icon: "warning",
+    title: "Chiến dịch đã thay đổi",
+    text: "Dữ liệu mới nhất đã được tải lại. Thao tác cũ không được tự động thực hiện lại.",
+    confirmButtonColor: "#bd9a5f",
+  });
 };
 
 const changeStatus = async (id: number, status: PromotionStatus) => {
@@ -311,10 +342,15 @@ const changeStatus = async (id: number, status: PromotionStatus) => {
   if (!confirm.isConfirmed) return;
 
   try {
-    await store.changeStatus(id, status);
+    const snapshot = await getMutationSnapshot(promotion, id);
+    await store.changeStatus(id, status, snapshot.revision);
     await fetchPromotions(store.pageNumber);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Change promotion status failed:", error);
+
+    if (isConflictError(error)) {
+      await handleMutationConflict();
+    }
   }
 };
 
@@ -343,10 +379,15 @@ const removePromotion = async (promotion: PromotionResponse) => {
   if (!confirm.isConfirmed) return;
 
   try {
-    await store.removePromotion(promotion.id);
+    const snapshot = await getMutationSnapshot(promotion, promotion.id);
+    await store.removePromotion(promotion.id, snapshot.revision);
     await fetchPromotions(store.pageNumber);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Remove promotion failed:", error);
+
+    if (isConflictError(error)) {
+      await handleMutationConflict();
+    }
   }
 };
 
@@ -375,8 +416,35 @@ const isExpiredStatus = (endDate: string) => {
   return new Date(endDate).getTime() < new Date().getTime();
 };
 
+/*
+ * Không-F5: khi quay lại tab/window chỉ refresh LIST.
+ * Không tự reload detail đang edit để tránh ghi đè draft của người dùng;
+ * nếu detail đã stale thì PUT sẽ bị BE trả 409 và modal tự tải snapshot mới nhất.
+ */
+let lastAutoRefreshAt = 0;
+const handleWindowFocus = () => {
+  const now = Date.now();
+  if (now - lastAutoRefreshAt < 300) return;
+  lastAutoRefreshAt = now;
+
+  void fetchPromotions(store.pageNumber);
+};
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === "visible") {
+    handleWindowFocus();
+  }
+};
+
 onMounted(() => {
   fetchPromotions(0);
+  window.addEventListener("focus", handleWindowFocus);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("focus", handleWindowFocus);
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 </script>
 

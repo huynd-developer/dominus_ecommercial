@@ -68,32 +68,34 @@ public class SystemJobScheduler {
         }
     }
 
-    // TASK 2: TỰ ĐỘNG BẬT TẮT FLASH SALE & VOUCHER (MỖI 1 PHÚT)
+    // TASK 2: ĐỒNG BỘ TRẠNG THÁI FLASH SALE & VOUCHER (MỖI 1 PHÚT)
     @Scheduled(fixedRate = 60000)
     @Transactional
     public void syncPromotionAndVoucherStatus() {
 
         LocalDateTime now = LocalDateTime.now();
 
-        // 1. Bật Flash Sale chưa bắt đầu (status = 0) mà đến giờ chạy
-        List<Promotion> startingSales =
-                flashSaleRepo.findToStart(0, now);
+        /*
+         * FLASH SALE / PROMOTION:
+         *
+         * Không tự động chuyển status 0 -> 1.
+         *
+         * Quy ước hiện tại của module Promotion:
+         * - status = 1: Admin cho phép chiến dịch hoạt động.
+         * - status = 0: Admin đã chủ động tắt/tạm dừng, hoặc chiến dịch đã kết thúc.
+         * - activeNow được quyết định thêm bởi khoảng thời gian
+         *   startDate <= now < endDate.
+         *
+         * Promotion được tạo mới với status = 1. Vì vậy campaign tương lai
+         * không cần scheduler "bật" khi tới giờ; các API Flash Sale chỉ xem nó
+         * là active khi thời gian thực sự nằm trong khoảng chạy.
+         *
+         * Nếu scheduler tự bật mọi Promotion status = 0 đang nằm trong thời gian
+         * chạy thì một campaign vừa bị Admin tạm dừng sẽ bị bật lại sau tối đa
+         * 1 phút. Đó là sai nghiệp vụ.
+         */
 
-        for (Promotion sale : startingSales) {
-            sale.setStatus(1);
-        }
-
-        if (!startingSales.isEmpty()) {
-            flashSaleRepo.saveAll(startingSales);
-
-            System.out.println(
-                    "CronJob: Đã TỰ ĐỘNG BẬT "
-                            + startingSales.size()
-                            + " chiến dịch Flash Sale/Promotion."
-            );
-        }
-
-        // 2. Tắt Flash Sale đang chạy (status = 1) mà quá hạn kết thúc
+        // 1. Chỉ tự động tắt Flash Sale đã quá hạn kết thúc.
         List<Promotion> endingSales =
                 flashSaleRepo.findToEnd(1, now);
 
@@ -107,11 +109,18 @@ public class SystemJobScheduler {
             System.out.println(
                     "CronJob: Đã TỰ ĐỘNG TẮT "
                             + endingSales.size()
-                            + " chiến dịch Flash Sale/Promotion."
+                            + " chiến dịch Flash Sale/Promotion đã hết hạn."
             );
         }
 
-        // 3. Bật Voucher
+        /*
+         * VOUCHER:
+         * Giữ nguyên hoàn toàn logic hiện tại.
+         * Voucher sẽ được audit/sửa riêng ở module Voucher, không thay đổi
+         * nghiệp vụ Voucher trong bản fix Promotion này.
+         */
+
+        // 2. Bật Voucher
         List<Voucher> startingVouchers =
                 voucherRepo.findToStart(0, now);
 
@@ -129,7 +138,7 @@ public class SystemJobScheduler {
             );
         }
 
-        // 4. Tắt Voucher
+        // 3. Tắt Voucher
         List<Voucher> endingVouchers =
                 voucherRepo.findToEnd(1, now);
 
