@@ -422,6 +422,11 @@ const submit = async () => {
         reason: resolveReason(row) || null,
       })
     ),
+
+    // CREATE không gửi revision; UPDATE gửi đúng snapshot mà người dùng đang nhìn.
+    expectedRevision: isEdit.value
+      ? props.detail?.revision ?? null
+      : undefined,
   };
 
   emit("save", payload);

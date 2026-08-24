@@ -23,4 +23,18 @@ public class StockAdjustmentSaveRequest {
             message = "Phiếu kiểm kê phải có ít nhất một lô hàng"
     )
     private List<StockAdjustmentItemRequest> items;
+
+    /*
+     * Snapshot phiên bản phiếu mà FE đang nhìn thấy.
+     *
+     * - CREATE: không cần gửi.
+     * - UPDATE DRAFT: FE gửi revision từ StockAdjustmentDetailResponse.
+     *
+     * Chỉ dùng để chống stale/lost-update, không phải dữ liệu nghiệp vụ.
+     */
+    @Size(
+            max = 64,
+            message = "Revision phiếu kiểm kê không hợp lệ"
+    )
+    private String expectedRevision;
 }
