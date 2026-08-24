@@ -123,7 +123,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import Swal from "sweetalert2";
 import OrderFilter from "../components/OrderFilter.vue";
 import OrderTable from "../components/OrderTable.vue";
@@ -136,6 +136,7 @@ const selectedOrder = ref<AdminOrderResponse | null>(null);
 
 const loading = ref(false);
 const detailLoading = ref(false);
+const refreshingOnFocus = ref(false);
 
 const showDetailModal = ref(false);
 
@@ -321,7 +322,89 @@ const pageNumbers = computed(() => {
 
 onMounted(() => {
   loadOrders();
+  window.addEventListener("focus", handleWindowFocus);
 });
+
+onBeforeUnmount(() => {
+  window.removeEventListener("focus", handleWindowFocus);
+});
+
+function isConflict(error: any) {
+  return Number(error?.response?.status) === 409;
+}
+
+async function refreshOrderStateSilently(orderId?: number) {
+  try {
+    const rawData = await orderService.getOrders({
+      keyword: keyword.value,
+      status: status.value,
+      orderType: orderType.value,
+      fromDate: fromDate.value,
+      toDate: toDate.value,
+      page: page.value,
+      size: size.value,
+    });
+
+    const pageData = resolvePageData(rawData);
+    orders.value = getOrdersForCurrentTab(pageData.content);
+    totalElements.value = pageData.totalElements;
+    totalPages.value = pageData.totalPages;
+
+    if (pageData.currentPage !== null) {
+      page.value = pageData.currentPage;
+    }
+
+    if (totalPages.value <= 0 && totalElements.value > 0) {
+      totalPages.value = Math.ceil(totalElements.value / size.value);
+    }
+  } catch {
+    // Refresh nền/no-F5 là best-effort, không bật popup lỗi mạng.
+  }
+
+  const detailOrderId = Number(orderId || selectedOrder.value?.orderId || 0);
+
+  if (showDetailModal.value && detailOrderId > 0) {
+    try {
+      selectedOrder.value = await orderService.getOrderDetail(detailOrderId);
+    } catch {
+      // Giữ modal hiện tại nếu refresh nền thất bại.
+    }
+  }
+}
+
+async function showWorkflowConflict(error: any, orderId: number) {
+  if (!isConflict(error)) {
+    return false;
+  }
+
+  await refreshOrderStateSilently(orderId);
+
+  await Swal.fire({
+    icon: "warning",
+    title: "Đơn hàng đã thay đổi",
+    text:
+      error?.response?.data?.message ||
+      "Đơn hàng đã được xử lý ở nơi khác. Dữ liệu mới nhất đã được tải lại, vui lòng kiểm tra và xác nhận lại.",
+    confirmButtonText: "Đã hiểu",
+    confirmButtonColor: "#bd9a5f",
+  });
+
+  return true;
+}
+
+async function handleWindowFocus() {
+  if (refreshingOnFocus.value || loading.value || detailLoading.value) {
+    return;
+  }
+
+  refreshingOnFocus.value = true;
+
+  try {
+    await refreshOrderStateSilently();
+  } finally {
+    refreshingOnFocus.value = false;
+  }
+}
 
 async function loadOrders() {
   loading.value = true;
@@ -593,6 +676,10 @@ async function confirmChangeStatus(
 
     await refreshOrderAfterWorkflow(order.orderId);
   } catch (error: any) {
+    if (await showWorkflowConflict(error, order.orderId)) {
+      return;
+    }
+
     await Swal.fire({
       icon: "error",
       title: "Không thể cập nhật trạng thái",
@@ -664,6 +751,10 @@ async function confirmAdminConfirmOrder(order: AdminOrderResponse) {
 
     await refreshOrderAfterWorkflow(order.orderId);
   } catch (error: any) {
+    if (await showWorkflowConflict(error, order.orderId)) {
+      return;
+    }
+
     await Swal.fire({
       icon: "error",
       title: "Không thể xác nhận đơn",
@@ -777,6 +868,10 @@ async function confirmDeliveryCompleted(order: AdminOrderResponse) {
 
     await refreshOrderAfterWorkflow(order.orderId);
   } catch (error: any) {
+    if (await showWorkflowConflict(error, order.orderId)) {
+      return;
+    }
+
     await Swal.fire({
       icon: "error",
       title: "Không thể xác nhận giao hàng",
@@ -940,6 +1035,10 @@ async function confirmDeliveryFailed(order: AdminOrderResponse) {
 
     await refreshOrderAfterWorkflow(order.orderId);
   } catch (error: any) {
+    if (await showWorkflowConflict(error, order.orderId)) {
+      return;
+    }
+
     await Swal.fire({
       icon: "error",
       title: "Không thể cập nhật giao hàng thất bại",
@@ -1071,6 +1170,10 @@ async function confirmAdminCancelOrder(order: AdminOrderResponse) {
 
     await refreshOrderAfterWorkflow(order.orderId);
   } catch (error: any) {
+    if (await showWorkflowConflict(error, order.orderId)) {
+      return;
+    }
+
     await Swal.fire({
       icon: "error",
       title: "Không thể hủy đơn hàng",
@@ -1455,6 +1558,10 @@ async function confirmAcceptReturn(order: AdminOrderResponse) {
 
     await refreshOrderAfterWorkflow(order.orderId);
   } catch (error: any) {
+    if (await showWorkflowConflict(error, order.orderId)) {
+      return;
+    }
+
     await Swal.fire({
       icon: "error",
       title: "Không thể chấp nhận hoàn hàng",
@@ -1580,6 +1687,10 @@ async function confirmRejectReturn(order: AdminOrderResponse) {
 
     await refreshOrderAfterWorkflow(order.orderId);
   } catch (error: any) {
+    if (await showWorkflowConflict(error, order.orderId)) {
+      return;
+    }
+
     await Swal.fire({
       icon: "error",
       title: "Không thể từ chối hoàn hàng",
@@ -1879,6 +1990,10 @@ async function confirmMarkDeliveryRefunded(order: AdminOrderResponse) {
 
     await refreshOrderAfterWorkflow(order.orderId);
   } catch (error: any) {
+    if (await showWorkflowConflict(error, order.orderId)) {
+      return;
+    }
+
     await Swal.fire({
       icon: "error",
       title: "Không thể xác nhận hoàn tiền",
@@ -1940,6 +2055,10 @@ async function confirmMarkCancelRefunded(order: AdminOrderResponse) {
 
     await refreshOrderAfterWorkflow(order.orderId);
   } catch (error: any) {
+    if (await showWorkflowConflict(error, order.orderId)) {
+      return;
+    }
+
     await Swal.fire({
       icon: "error",
       title: "Không thể xác nhận hoàn tiền",
@@ -2033,6 +2152,10 @@ async function confirmMarkReturnRefunded(order: AdminOrderResponse) {
 
     await refreshOrderAfterWorkflow(order.orderId);
   } catch (error: any) {
+    if (await showWorkflowConflict(error, order.orderId)) {
+      return;
+    }
+
     await Swal.fire({
       icon: "error",
       title: "Không thể cập nhật hoàn tiền",

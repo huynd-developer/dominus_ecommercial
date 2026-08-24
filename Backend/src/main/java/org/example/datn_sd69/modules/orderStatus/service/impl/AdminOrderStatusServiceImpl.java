@@ -73,7 +73,7 @@ public class AdminOrderStatusServiceImpl implements AdminOrderStatusService {
         Integer oldStatus = safeStatus(order);
 
         if (Objects.equals(oldStatus, newStatus)) {
-            throw badRequest("Đơn hàng đã ở trạng thái này");
+            throw conflict("Đơn hàng đã ở trạng thái này");
         }
 
         switch (newStatus) {
@@ -302,7 +302,7 @@ public class AdminOrderStatusServiceImpl implements AdminOrderStatusService {
 
     private Order findOrder(Integer orderId) {
 
-        return orderRepository.findDetailById(orderId)
+        return orderRepository.findDetailByIdForUpdate(orderId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Không tìm thấy đơn hàng"
@@ -318,13 +318,13 @@ public class AdminOrderStatusServiceImpl implements AdminOrderStatusService {
         Integer oldStatus = safeStatus(order);
 
         if (isTerminalStatus(oldStatus)) {
-            throw badRequest(
+            throw conflict(
                     "Đơn hàng đã ở trạng thái kết thúc, không thể cập nhật tiếp"
             );
         }
 
         if (!Objects.equals(oldStatus, expectedStatus)) {
-            throw badRequest(message);
+            throw conflict(message);
         }
     }
 
@@ -404,6 +404,14 @@ public class AdminOrderStatusServiceImpl implements AdminOrderStatusService {
                 && (
                 "POS".equals(orderType)
                         || "IN_STORE".equals(orderType)
+        );
+    }
+
+    private ResponseStatusException conflict(String message) {
+
+        return new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                message
         );
     }
 
