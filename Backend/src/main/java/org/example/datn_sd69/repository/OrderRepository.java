@@ -264,6 +264,22 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
 
     Optional<Order> findByIdAndCustomer_UserId(Integer orderId, Integer customerId);
 
+    /**
+     * Khóa đúng row Orders thuộc khách hàng hiện tại cho các mutation Customer Order.
+     * Giữ nguyên query đọc thường ở trên cho GET/list/detail.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT o
+        FROM Order o
+        WHERE o.id = :orderId
+          AND o.customer.userId = :customerId
+    """)
+    Optional<Order> findByIdAndCustomer_UserIdForUpdate(
+            @Param("orderId") Integer orderId,
+            @Param("customerId") Integer customerId
+    );
+
     @EntityGraph(attributePaths = {
             "customer",
             "customer.user",

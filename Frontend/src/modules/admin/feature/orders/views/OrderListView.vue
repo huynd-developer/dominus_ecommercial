@@ -129,7 +129,11 @@ import OrderFilter from "../components/OrderFilter.vue";
 import OrderTable from "../components/OrderTable.vue";
 import OrderDetailModal from "../components/OrderDetailModal.vue";
 import { orderService } from "../services/order.service";
-import type { AdminCancelOrderRequest, AdminOrderResponse, MarkDeliveryFailedRequest } from "../types/order.type";
+import type {
+  AdminCancelOrderRequest,
+  AdminOrderResponse,
+  MarkDeliveryFailedRequest,
+} from "../types/order.type";
 
 const orders = ref<AdminOrderResponse[]>([]);
 const selectedOrder = ref<AdminOrderResponse | null>(null);
@@ -320,13 +324,22 @@ const pageNumbers = computed(() => {
   return Array.from({ length: end - start + 1 }, (_, index) => start + index);
 });
 
+const handleVisibilityChange = () => {
+  if (document.visibilityState === "visible") {
+    void handleWindowFocus();
+  }
+};
+
 onMounted(() => {
   loadOrders();
+
   window.addEventListener("focus", handleWindowFocus);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("focus", handleWindowFocus);
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 
 function isConflict(error: any) {
@@ -495,7 +508,8 @@ function getOrdersForCurrentTab(list: AdminOrderResponse[]) {
 }
 
 function getReturnSortTime(order: AdminOrderResponse) {
-  const rawDate = order.returnRequestedAt || order.createdAt || order.completedAt || null;
+  const rawDate =
+    order.returnRequestedAt || order.createdAt || order.completedAt || null;
 
   if (!rawDate) {
     return 0;
@@ -694,7 +708,11 @@ async function confirmChangeStatus(
 async function confirmAdminConfirmOrder(order: AdminOrderResponse) {
   if (!order || !order.orderId) return;
 
-  if (String(order.orderType ?? "").trim().toUpperCase() !== "ONLINE") {
+  if (
+    String(order.orderType ?? "")
+      .trim()
+      .toUpperCase() !== "ONLINE"
+  ) {
     await Swal.fire({
       icon: "warning",
       title: "Không thể xác nhận đơn",
@@ -789,7 +807,9 @@ async function confirmDeliveryCompleted(order: AdminOrderResponse) {
     html: `
       <div style="text-align:left">
         <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
-        <p><b>Trạng thái hiện tại:</b> ${escapeAlertHtml(order.statusText || getStatusText(Number(order.status)))}</p>
+        <p><b>Trạng thái hiện tại:</b> ${escapeAlertHtml(
+          order.statusText || getStatusText(Number(order.status))
+        )}</p>
 
         <label for="delivery-success-files" style="display:block;font-weight:700;margin:14px 0 6px">
           Ảnh minh chứng <span style="color:#dc2626">*</span>
@@ -830,12 +850,15 @@ async function confirmDeliveryCompleted(order: AdminOrderResponse) {
         "delivery-success-files"
       ) as HTMLInputElement | null;
 
-      const files = selectedDeliverySuccessFiles.length > 0
-        ? selectedDeliverySuccessFiles
-        : Array.from(fileInput?.files || []);
+      const files =
+        selectedDeliverySuccessFiles.length > 0
+          ? selectedDeliverySuccessFiles
+          : Array.from(fileInput?.files || []);
 
       if (files.length === 0) {
-        Swal.showValidationMessage("Vui lòng tải lên ảnh minh chứng giao hàng thành công.");
+        Swal.showValidationMessage(
+          "Vui lòng tải lên ảnh minh chứng giao hàng thành công."
+        );
         return false;
       }
 
@@ -906,7 +929,9 @@ async function confirmDeliveryFailed(order: AdminOrderResponse) {
     html: `
       <div style="text-align:left">
         <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
-        <p><b>Trạng thái hiện tại:</b> ${escapeAlertHtml(order.statusText || getStatusText(Number(order.status)))}</p>
+        <p><b>Trạng thái hiện tại:</b> ${escapeAlertHtml(
+          order.statusText || getStatusText(Number(order.status))
+        )}</p>
 
         <label for="delivery-failed-reason-code" style="display:block;font-weight:700;margin:14px 0 6px">
           Lý do giao thất bại <span style="color:#dc2626">*</span>
@@ -977,10 +1002,13 @@ async function confirmDeliveryFailed(order: AdminOrderResponse) {
       ) as HTMLInputElement | null;
 
       const reasonCode = String(reasonCodeElement?.value || "").trim();
-      const description = normalizeAdminCancelDescription(descriptionElement?.value || "");
-      const files = selectedDeliveryFailedFiles.length > 0
-        ? selectedDeliveryFailedFiles
-        : Array.from(fileInput?.files || []);
+      const description = normalizeAdminCancelDescription(
+        descriptionElement?.value || ""
+      );
+      const files =
+        selectedDeliveryFailedFiles.length > 0
+          ? selectedDeliveryFailedFiles
+          : Array.from(fileInput?.files || []);
 
       if (!reasonCode) {
         Swal.showValidationMessage("Vui lòng chọn lý do giao hàng thất bại.");
@@ -988,7 +1016,9 @@ async function confirmDeliveryFailed(order: AdminOrderResponse) {
       }
 
       if (reasonCode === "OTHER" && !description) {
-        Swal.showValidationMessage("Vui lòng nhập mô tả chi tiết khi chọn lý do Khác.");
+        Swal.showValidationMessage(
+          "Vui lòng nhập mô tả chi tiết khi chọn lý do Khác."
+        );
         return false;
       }
 
@@ -1007,7 +1037,9 @@ async function confirmDeliveryFailed(order: AdminOrderResponse) {
       const reasonOption = getDeliveryFailedReasonOption(reasonCode);
 
       if (reasonOption?.evidenceRequired && files.length === 0) {
-        Swal.showValidationMessage("Lý do này cần ảnh minh chứng giao hàng thất bại.");
+        Swal.showValidationMessage(
+          "Lý do này cần ảnh minh chứng giao hàng thất bại."
+        );
         return false;
       }
 
@@ -1055,7 +1087,11 @@ async function confirmDeliveryFailed(order: AdminOrderResponse) {
 async function confirmAdminCancelOrder(order: AdminOrderResponse) {
   if (!order || !order.orderId) return;
 
-  if (String(order.orderType ?? "").trim().toUpperCase() !== "ONLINE") {
+  if (
+    String(order.orderType ?? "")
+      .trim()
+      .toUpperCase() !== "ONLINE"
+  ) {
     await Swal.fire({
       icon: "warning",
       title: "Không thể hủy đơn",
@@ -1081,7 +1117,9 @@ async function confirmAdminCancelOrder(order: AdminOrderResponse) {
     html: `
       <div style="text-align:left">
         <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
-        <p><b>Trạng thái hiện tại:</b> ${escapeAlertHtml(order.statusText || getStatusText(Number(order.status)))}</p>
+        <p><b>Trạng thái hiện tại:</b> ${escapeAlertHtml(
+          order.statusText || getStatusText(Number(order.status))
+        )}</p>
 
         <label for="admin-cancel-reason-code" style="display:block;font-weight:700;margin:14px 0 6px">
           Lý do hủy <span style="color:#dc2626">*</span>
@@ -1122,7 +1160,9 @@ async function confirmAdminCancelOrder(order: AdminOrderResponse) {
       ) as HTMLTextAreaElement | null;
 
       const reasonCode = String(reasonCodeElement?.value || "").trim();
-      const description = normalizeAdminCancelDescription(detailElement?.value || "");
+      const description = normalizeAdminCancelDescription(
+        detailElement?.value || ""
+      );
 
       if (!reasonCode) {
         Swal.showValidationMessage("Vui lòng chọn lý do hủy đơn.");
@@ -1130,7 +1170,9 @@ async function confirmAdminCancelOrder(order: AdminOrderResponse) {
       }
 
       if (reasonCode === "OTHER" && !description) {
-        Swal.showValidationMessage("Vui lòng nhập mô tả chi tiết khi chọn lý do Khác.");
+        Swal.showValidationMessage(
+          "Vui lòng nhập mô tả chi tiết khi chọn lý do Khác."
+        );
         return false;
       }
 
@@ -1140,10 +1182,14 @@ async function confirmAdminCancelOrder(order: AdminOrderResponse) {
       }
 
       const reasonLabel = getAdminCancelReasonLabel(reasonCode);
-      const fullReason = description ? `${reasonLabel} - ${description}` : reasonLabel;
+      const fullReason = description
+        ? `${reasonLabel} - ${description}`
+        : reasonLabel;
 
       if (fullReason.length > 255) {
-        Swal.showValidationMessage("Tổng lý do hủy không được vượt quá 255 ký tự.");
+        Swal.showValidationMessage(
+          "Tổng lý do hủy không được vượt quá 255 ký tự."
+        );
         return false;
       }
 
@@ -1159,7 +1205,10 @@ async function confirmAdminCancelOrder(order: AdminOrderResponse) {
   loading.value = true;
 
   try {
-    const response = await orderService.cancelOrder(order.orderId, result.value);
+    const response = await orderService.cancelOrder(
+      order.orderId,
+      result.value
+    );
 
     await Swal.fire({
       icon: "success",
@@ -1199,7 +1248,9 @@ function buildDeliveryFailedReasonOptionsHtml() {
   return deliveryFailedReasonOptions
     .map(
       (item) =>
-        `<option value="${escapeAlertHtml(item.value)}">${escapeAlertHtml(item.label)}</option>`
+        `<option value="${escapeAlertHtml(item.value)}">${escapeAlertHtml(
+          item.label
+        )}</option>`
     )
     .join("");
 }
@@ -1229,14 +1280,17 @@ function validateDeliveryImageContent(files: File[]) {
   const allowedImageExtensions = /\.(jpg|jpeg|png|webp)$/i;
 
   for (const file of files) {
-    const fileType = String(file.type || "").toLowerCase().trim();
+    const fileType = String(file.type || "")
+      .toLowerCase()
+      .trim();
     const fileName = String(file.name || "").trim();
 
     if (!file || file.size <= 0 || !fileName) {
       return "Ảnh minh chứng không hợp lệ.";
     }
 
-    const isAllowedImageType = !fileType || allowedImageTypes.includes(fileType);
+    const isAllowedImageType =
+      !fileType || allowedImageTypes.includes(fileType);
     const hasAllowedExtension = allowedImageExtensions.test(fileName);
 
     if (!isAllowedImageType || !hasAllowedExtension) {
@@ -1259,7 +1313,6 @@ function formatDeliveryFileSize(size: number) {
   return `${Math.max(1, Math.round(size / 1024))}KB`;
 }
 
-
 type DeliveryImagePickerOptions = {
   inputId: string;
   previewId: string;
@@ -1268,7 +1321,9 @@ type DeliveryImagePickerOptions = {
 };
 
 function setupDeliveryImagePicker(options: DeliveryImagePickerOptions) {
-  const input = document.getElementById(options.inputId) as HTMLInputElement | null;
+  const input = document.getElementById(
+    options.inputId
+  ) as HTMLInputElement | null;
 
   if (!input) {
     return;
@@ -1345,8 +1400,12 @@ function syncDeliveryImageInput(input: HTMLInputElement, files: File[]) {
 }
 
 function renderDeliveryImagePreview(options: DeliveryImagePickerOptions) {
-  const preview = document.getElementById(options.previewId) as HTMLDivElement | null;
-  const input = document.getElementById(options.inputId) as HTMLInputElement | null;
+  const preview = document.getElementById(
+    options.previewId
+  ) as HTMLDivElement | null;
+  const input = document.getElementById(
+    options.inputId
+  ) as HTMLInputElement | null;
 
   if (!preview) {
     return;
@@ -1382,7 +1441,7 @@ function renderDeliveryImagePreview(options: DeliveryImagePickerOptions) {
               >
                 <img
                   src="${imageUrl}"
-                  alt="${escapeAlertHtml(file.name || 'Ảnh minh chứng')}"
+                  alt="${escapeAlertHtml(file.name || "Ảnh minh chứng")}"
                   style="width:100%;height:100%;object-fit:cover;display:block"
                 />
               </button>
@@ -1396,7 +1455,9 @@ function renderDeliveryImagePreview(options: DeliveryImagePickerOptions) {
               >×</button>
 
               <div style="font-size:11px;color:#6b7280;margin-top:4px;line-height:1.25;word-break:break-word">
-                ${escapeAlertHtml(file.name || `Ảnh ${index + 1}`)}<br />${fileSizeText}
+                ${escapeAlertHtml(
+                  file.name || `Ảnh ${index + 1}`
+                )}<br />${fileSizeText}
               </div>
             </div>
           `;
@@ -1404,43 +1465,51 @@ function renderDeliveryImagePreview(options: DeliveryImagePickerOptions) {
         .join("")}
     </div>
     <div style="font-size:12px;color:#6b7280;margin-top:8px">
-      Tổng dung lượng: ${formatDeliveryFileSize(totalSize)} / ${formatDeliveryFileSize(MAX_DELIVERY_EVIDENCE_TOTAL_SIZE)}
+      Tổng dung lượng: ${formatDeliveryFileSize(
+        totalSize
+      )} / ${formatDeliveryFileSize(MAX_DELIVERY_EVIDENCE_TOTAL_SIZE)}
     </div>
   `;
 
-  preview.querySelectorAll<HTMLButtonElement>(".delivery-preview-remove").forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
+  preview
+    .querySelectorAll<HTMLButtonElement>(".delivery-preview-remove")
+    .forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
 
-      const index = Number(button.dataset.index);
-      const currentFiles = options.getFiles();
-      const nextFiles = currentFiles.filter((_, fileIndex) => fileIndex !== index);
+        const index = Number(button.dataset.index);
+        const currentFiles = options.getFiles();
+        const nextFiles = currentFiles.filter(
+          (_, fileIndex) => fileIndex !== index
+        );
 
-      options.setFiles(nextFiles);
+        options.setFiles(nextFiles);
 
-      if (input) {
-        syncDeliveryImageInput(input, nextFiles);
-      }
+        if (input) {
+          syncDeliveryImageInput(input, nextFiles);
+        }
 
-      renderDeliveryImagePreview(options);
-      Swal.resetValidationMessage();
+        renderDeliveryImagePreview(options);
+        Swal.resetValidationMessage();
+      });
     });
-  });
 
-  preview.querySelectorAll<HTMLButtonElement>(".delivery-preview-image").forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
+  preview
+    .querySelectorAll<HTMLButtonElement>(".delivery-preview-image")
+    .forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
 
-      const index = Number(button.dataset.index);
-      const file = options.getFiles()[index];
+        const index = Number(button.dataset.index);
+        const file = options.getFiles()[index];
 
-      if (file) {
-        openDeliveryLocalImagePreview(file);
-      }
+        if (file) {
+          openDeliveryLocalImagePreview(file);
+        }
+      });
     });
-  });
 }
 
 function openDeliveryLocalImagePreview(file: File) {
@@ -1461,7 +1530,7 @@ function openDeliveryLocalImagePreview(file: File) {
     <div style="position:relative;max-width:92vw;max-height:92vh">
       <img
         src="${objectUrl}"
-        alt="${escapeAlertHtml(file.name || 'Ảnh minh chứng')}"
+        alt="${escapeAlertHtml(file.name || "Ảnh minh chứng")}"
         style="max-width:92vw;max-height:92vh;object-fit:contain;border-radius:12px;background:#fff"
       />
       <button
@@ -1530,8 +1599,12 @@ async function confirmAcceptReturn(order: AdminOrderResponse) {
     html: `
       <div style="text-align:left">
         <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
-        <p><b>Số tiền cần hoàn:</b> ${formatMoneyForAlert(getReturnRefundAmount(order))}</p>
-        <p><b>Phương án hoàn tiền:</b> ${escapeAlertHtml(getRefundMethodTextForAlert(order))}</p>
+        <p><b>Số tiền cần hoàn:</b> ${formatMoneyForAlert(
+          getReturnRefundAmount(order)
+        )}</p>
+        <p><b>Phương án hoàn tiền:</b> ${escapeAlertHtml(
+          getRefundMethodTextForAlert(order)
+        )}</p>
         <p class="mb-0 text-danger"><b>Lưu ý:</b> Sau khi chấp nhận, mới được thực hiện bước đã hoàn tiền.</p>
       </div>
     `,
@@ -1594,7 +1667,9 @@ async function confirmRejectReturn(order: AdminOrderResponse) {
     html: `
       <div style="text-align:left">
         <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
-        <p><b>Số tiền khách yêu cầu hoàn:</b> ${formatMoneyForAlert(getReturnRefundAmount(order))}</p>
+        <p><b>Số tiền khách yêu cầu hoàn:</b> ${formatMoneyForAlert(
+          getReturnRefundAmount(order)
+        )}</p>
 
         <label for="return-reject-reason-code" style="display:block;font-weight:700;margin:14px 0 6px">
           Lý do từ chối <span style="color:#dc2626">*</span>
@@ -1842,14 +1917,22 @@ function buildRefundRestockItemsHtml(items: RefundRestockItemView[]) {
     .map(
       (item, index) => `
         <tr>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;color:#64748b">${index + 1}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;color:#64748b">${
+            index + 1
+          }</td>
           <td style="padding:8px;border-bottom:1px solid #e5e7eb">
-            <div style="font-weight:800;color:#0f172a">${escapeAlertHtml(item.productName)}</div>
+            <div style="font-weight:800;color:#0f172a">${escapeAlertHtml(
+              item.productName
+            )}</div>
             <div style="font-size:12px;color:#64748b;margin-top:2px">
-              SKU: ${escapeAlertHtml(item.sku)} · ${escapeAlertHtml(item.capacity)} · ${escapeAlertHtml(item.bottleType)}
+              SKU: ${escapeAlertHtml(item.sku)} · ${escapeAlertHtml(
+        item.capacity
+      )} · ${escapeAlertHtml(item.bottleType)}
             </div>
           </td>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:900;color:#16a34a">+${item.quantity}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:900;color:#16a34a">+${
+            item.quantity
+          }</td>
         </tr>
       `
     )
@@ -1881,9 +1964,7 @@ async function askRestoreStockAfterRefund(
       : getReturnRefundRestockItems(order);
 
   const modeText =
-    mode === "DELIVERY_FAILED"
-      ? "đơn giao hàng thất bại"
-      : "yêu cầu hoàn hàng";
+    mode === "DELIVERY_FAILED" ? "đơn giao hàng thất bại" : "yêu cầu hoàn hàng";
 
   const result = await Swal.fire({
     icon: "question",
@@ -1891,7 +1972,9 @@ async function askRestoreStockAfterRefund(
     html: `
       <div style="text-align:left;line-height:1.55">
         <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
-        <p style="margin-bottom:10px">Shop đã xác nhận bước hoàn tiền cho ${escapeAlertHtml(modeText)}. Chọn tiếp cách xử lý kho:</p>
+        <p style="margin-bottom:10px">Shop đã xác nhận bước hoàn tiền cho ${escapeAlertHtml(
+          modeText
+        )}. Chọn tiếp cách xử lý kho:</p>
         ${buildRefundRestockItemsHtml(items)}
         <div style="margin-top:12px;padding:10px 12px;border-radius:10px;background:#f8fafc;color:#475569;font-size:13px">
           <p style="margin:0 0 4px"><b>Có, nhập kho:</b> hệ thống cộng lại số lượng sản phẩm ở bảng trên.</p>
@@ -1920,7 +2003,6 @@ async function askRestoreStockAfterRefund(
   return null;
 }
 
-
 async function confirmMarkDeliveryRefunded(order: AdminOrderResponse) {
   if (!order || !order.orderId) {
     return;
@@ -1942,10 +2024,18 @@ async function confirmMarkDeliveryRefunded(order: AdminOrderResponse) {
     html: `
       <div style="text-align:left">
         <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
-        <p><b>Số tiền hoàn:</b> ${formatMoneyForAlert(getDeliveryRefundAmount(order))}</p>
-        <p><b>Ngân hàng:</b> ${escapeAlertHtml(order.deliveryRefundBankName || "-")}</p>
-        <p><b>Số tài khoản:</b> ${escapeAlertHtml(order.deliveryRefundBankAccountNumber || "-")}</p>
-        <p><b>Chủ tài khoản:</b> ${escapeAlertHtml(order.deliveryRefundBankAccountHolder || "-")}</p>
+        <p><b>Số tiền hoàn:</b> ${formatMoneyForAlert(
+          getDeliveryRefundAmount(order)
+        )}</p>
+        <p><b>Ngân hàng:</b> ${escapeAlertHtml(
+          order.deliveryRefundBankName || "-"
+        )}</p>
+        <p><b>Số tài khoản:</b> ${escapeAlertHtml(
+          order.deliveryRefundBankAccountNumber || "-"
+        )}</p>
+        <p><b>Chủ tài khoản:</b> ${escapeAlertHtml(
+          order.deliveryRefundBankAccountHolder || "-"
+        )}</p>
         <p class="mb-0 text-danger"><b>Lưu ý:</b> Chỉ bấm khi shop đã chuyển khoản hoàn tiền thực tế cho khách.</p>
       </div>
     `,
@@ -1972,10 +2062,7 @@ async function confirmMarkDeliveryRefunded(order: AdminOrderResponse) {
   loading.value = true;
 
   try {
-    await orderService.markDeliveryRefunded(
-      order.orderId,
-      shouldRestoreStock
-    );
+    await orderService.markDeliveryRefunded(order.orderId, shouldRestoreStock);
 
     await Swal.fire({
       icon: "success",
@@ -2026,10 +2113,18 @@ async function confirmMarkCancelRefunded(order: AdminOrderResponse) {
     html: `
       <div style="text-align:left">
         <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
-        <p><b>Số tiền hoàn:</b> ${formatMoneyForAlert(getDeliveryRefundAmount(order))}</p>
-        <p><b>Ngân hàng:</b> ${escapeAlertHtml(order.deliveryRefundBankName || "-")}</p>
-        <p><b>Số tài khoản:</b> <span class="text-danger fw-bold">${escapeAlertHtml(order.deliveryRefundBankAccountNumber || "-")}</span></p>
-        <p><b>Chủ tài khoản:</b> ${escapeAlertHtml(order.deliveryRefundBankAccountHolder || "-")}</p>
+        <p><b>Số tiền hoàn:</b> ${formatMoneyForAlert(
+          getDeliveryRefundAmount(order)
+        )}</p>
+        <p><b>Ngân hàng:</b> ${escapeAlertHtml(
+          order.deliveryRefundBankName || "-"
+        )}</p>
+        <p><b>Số tài khoản:</b> <span class="text-danger fw-bold">${escapeAlertHtml(
+          order.deliveryRefundBankAccountNumber || "-"
+        )}</span></p>
+        <p><b>Chủ tài khoản:</b> ${escapeAlertHtml(
+          order.deliveryRefundBankAccountHolder || "-"
+        )}</p>
         <p class="mb-0 text-danger mt-2"><b>Lưu ý:</b> Chỉ bấm xác nhận khi shop đã thực sự chuyển khoản trả lại tiền cho khách.</p>
       </div>
     `,
@@ -2045,7 +2140,7 @@ async function confirmMarkCancelRefunded(order: AdminOrderResponse) {
   loading.value = true;
   try {
     await orderService.markCancelRefunded(order.orderId);
-    
+
     await Swal.fire({
       icon: "success",
       title: "Hoàn tất",
@@ -2103,7 +2198,9 @@ async function confirmMarkReturnRefunded(order: AdminOrderResponse) {
     html: `
       <div style="text-align:left">
         <p><b>Đơn hàng:</b> ${escapeAlertHtml(order.orderCode || "-")}</p>
-        <p><b>Số tiền hoàn:</b> ${formatMoneyForAlert(getReturnRefundAmount(order))}</p>
+        <p><b>Số tiền hoàn:</b> ${formatMoneyForAlert(
+          getReturnRefundAmount(order)
+        )}</p>
         <p><b>Phương án:</b> ${escapeAlertHtml(
           getRefundMethodTextForAlert(order)
         )}</p>
@@ -2134,10 +2231,7 @@ async function confirmMarkReturnRefunded(order: AdminOrderResponse) {
   loading.value = true;
 
   try {
-    await orderService.markReturnRefunded(
-      order.orderId,
-      shouldRestoreStock
-    );
+    await orderService.markReturnRefunded(order.orderId, shouldRestoreStock);
 
     await Swal.fire({
       icon: "success",

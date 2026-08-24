@@ -226,15 +226,11 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
         validateId(orderId, "orderId");
 
-        Order order = orderRepository.findByIdAndCustomer_UserId(orderId, customer.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn"
-                ));
+        Order order = findCustomerOrderForUpdate(orderId, customer.getUserId());
 
         // MỞ CHECK: CHOP PHÉP ĐIỀN FORM TÀI KHOẢN KHI STATUS = 5 HOẶC STATUS = 8
         if (order.getStatus() == null || (order.getStatus() != STATUS_DELIVERY_FAILED && order.getStatus() != STATUS_AWAITING_REFUND)) {
-            throw badRequest("Chỉ được nhập thông tin hoàn tiền cho đơn giao hàng thất bại hoặc đơn đã hủy chờ hoàn tiền");
+            throw conflict("Chỉ được nhập thông tin hoàn tiền cho đơn giao hàng thất bại hoặc đơn đã hủy chờ hoàn tiền");
         }
 
         if (!isDeliveryRefundRequired(order)) {
@@ -242,11 +238,11 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         }
 
         if (order.getDeliveryRefundedAt() != null) {
-            throw badRequest("Đơn hàng này đã được shop xác nhận hoàn tiền");
+            throw conflict("Đơn hàng này đã được shop xác nhận hoàn tiền");
         }
 
         if (hasAnyDeliveryRefundBankInfo(order)) {
-            throw badRequest("Thông tin tài khoản hoàn tiền đã được gửi, không thể chỉnh sửa. Vui lòng liên hệ shop nếu cần thay đổi.");
+            throw conflict("Thông tin tài khoản hoàn tiền đã được gửi, không thể chỉnh sửa. Vui lòng liên hệ shop nếu cần thay đổi.");
         }
 
         String bankName = normalizeOptionalCollapsed(request == null ? null : request.bankName());
@@ -280,14 +276,14 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
         String cancelReason = normalizeCancelReason(request);
 
-        Order order = orderRepository.findByIdAndCustomer_UserId(orderId, customer.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn"
-                ));
+        Order order = findCustomerOrderForUpdate(orderId, customer.getUserId());
 
-        if (!canCancelOrder(order)) {
+        if (!isOnlineOrder(order)) {
             throw badRequest("Chỉ được hủy đơn ONLINE khi đơn đang ở trạng thái chờ xác nhận");
+        }
+
+        if (!Integer.valueOf(STATUS_PENDING).equals(order.getStatus())) {
+            throw conflict("Chỉ được hủy đơn ONLINE khi đơn đang ở trạng thái chờ xác nhận");
         }
 
         List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
@@ -334,18 +330,14 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
         validateId(orderId, "orderId");
 
-        Order order = orderRepository.findByIdAndCustomer_UserId(orderId, customer.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn."
-                ));
+        Order order = findCustomerOrderForUpdate(orderId, customer.getUserId());
 
         if (!isOnlineOrder(order)) {
             throw badRequest("Chức năng yêu cầu hoàn hàng này chỉ áp dụng cho đơn ONLINE");
         }
 
         if (order.getStatus() == null || order.getStatus() != STATUS_COMPLETED) {
-            throw badRequest("Chỉ có thể yêu cầu hoàn hàng đối với đơn hàng đã hoàn thành.");
+            throw conflict("Chỉ có thể yêu cầu hoàn hàng đối với đơn hàng đã hoàn thành.");
         }
 
         validateReturnRequestDeadline(order, LocalDateTime.now());
@@ -486,18 +478,14 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
         validateId(orderId, "orderId");
 
-        Order order = orderRepository.findByIdAndCustomer_UserId(orderId, customer.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn."
-                ));
+        Order order = findCustomerOrderForUpdate(orderId, customer.getUserId());
 
         if (!isOnlineOrder(order)) {
             throw badRequest("Chức năng hủy yêu cầu hoàn hàng này chỉ áp dụng cho đơn ONLINE");
         }
 
         if (order.getStatus() == null || order.getStatus() != STATUS_RETURN_REQUESTED) {
-            throw badRequest("Đơn hàng không ở trạng thái yêu cầu hoàn hàng.");
+            throw conflict("Đơn hàng không ở trạng thái yêu cầu hoàn hàng.");
         }
 
         ReturnRequest returnRequest = returnRequestRepository
@@ -516,7 +504,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                         || item.getStatus() != RETURN_ITEM_STATUS_PENDING);
 
         if (hasProcessedItem) {
-            throw badRequest("Yêu cầu hoàn hàng đã được xử lý, không thể hủy.");
+            throw conflict("Yêu cầu hoàn hàng đã được xử lý, không thể hủy.");
         }
 
         for (ReturnRequestItem item : returnItems) {
@@ -1052,6 +1040,14 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.FORBIDDEN,
                         "Tài khoản hiện tại không phải khách hàng"
+                ));
+    }
+
+    private Order findCustomerOrderForUpdate(Integer orderId, Integer customerId) {
+        return orderRepository.findByIdAndCustomer_UserIdForUpdate(orderId, customerId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn"
                 ));
     }
 
@@ -1889,6 +1885,10 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
     private BigDecimal moneyOrZero(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private ResponseStatusException conflict(String message) {
+        return new ResponseStatusException(HttpStatus.CONFLICT, message);
     }
 
     private ResponseStatusException badRequest(String message) {
