@@ -77,11 +77,23 @@ public class OrderMailService {
     }
 
     public void sendPaymentSuccess(Order order) {
+        String paymentMethod = normalizeText(order == null ? null : order.getPaymentMethod());
+        String paymentName;
+
+        if ("VNPAY".equalsIgnoreCase(paymentMethod)) {
+            paymentName = "VNPay";
+        } else if ("VIETQR".equalsIgnoreCase(paymentMethod)) {
+            paymentName = "VietQR";
+        } else {
+            paymentName = formatPaymentMethod(paymentMethod);
+        }
+
         sendOrderMail(
                 order,
-                "Thanh toán VNPay thành công - " + resolveOrderCode(order),
+                "Thanh toán " + paymentName + " thành công - " + resolveOrderCode(order),
                 "Thanh toán thành công",
-                "Shop đã ghi nhận thanh toán VNPay thành công. Đơn hàng vẫn đang ở trạng thái Chờ xác nhận và sẽ được shop xử lý sớm.",
+                "Shop đã ghi nhận thanh toán " + paymentName
+                        + " thành công. Đơn hàng vẫn đang ở trạng thái Chờ xác nhận và sẽ được shop xử lý sớm.",
                 "Đã thanh toán",
                 TONE_SUCCESS,
                 null,

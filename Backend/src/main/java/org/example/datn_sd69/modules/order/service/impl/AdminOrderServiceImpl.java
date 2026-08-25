@@ -11,6 +11,7 @@ import org.example.datn_sd69.entity.OrderItem;
 import org.example.datn_sd69.entity.ProductVariant;
 import org.example.datn_sd69.entity.InventoryLot;
 import org.example.datn_sd69.entity.StockMovement;
+import org.example.datn_sd69.entity.Voucher;
 import org.example.datn_sd69.entity.ReturnRequest;
 import org.example.datn_sd69.entity.ReturnRequestItem;
 import org.example.datn_sd69.entity.ReturnRequestMedia;
@@ -32,6 +33,7 @@ import org.example.datn_sd69.repository.OrderRepository;
 import org.example.datn_sd69.repository.ReturnRequestItemRepository;
 import org.example.datn_sd69.repository.ReturnRequestMediaRepository;
 import org.example.datn_sd69.repository.ReturnRequestRepository;
+import org.example.datn_sd69.repository.VoucherRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -178,6 +180,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private final ReturnRequestRepository returnRequestRepository;
     private final ReturnRequestItemRepository returnRequestItemRepository;
     private final ReturnRequestMediaRepository returnRequestMediaRepository;
+    private final VoucherRepository voucherRepository;
     private final UserRepository userRepository;
     private final Cloudinary cloudinary;
     private final EntityManager entityManager;
@@ -262,7 +265,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     @Override
     @Transactional
     public AdminOrderResponse confirmOrder(Integer orderId) {
-        Order order = findOrderOrThrow(orderId);
+        Order order = findOrderForUpdateOrThrow(orderId);
 
         /*
          * Generic Admin confirm chỉ dành cho đơn ONLINE.
@@ -278,7 +281,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         if (safeStatus(order) != STATUS_PENDING) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+                    HttpStatus.CONFLICT,
                     "Chỉ được xác nhận đơn hàng khi đơn còn ở trạng thái chờ xác nhận"
             );
         }
@@ -299,11 +302,11 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             Integer orderId,
             MarkDeliveryCompletedRequest request
     ) {
-        Order order = findOrderOrThrow(orderId);
+        Order order = findOrderForUpdateOrThrow(orderId);
 
         if (safeStatus(order) != STATUS_SHIPPING) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+                    HttpStatus.CONFLICT,
                     "Chỉ được xác nhận giao hàng thành công khi đơn đang giao hàng"
             );
         }
@@ -331,11 +334,11 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             Integer orderId,
             MarkDeliveryFailedRequest request
     ) {
-        Order order = findOrderOrThrow(orderId);
+        Order order = findOrderForUpdateOrThrow(orderId);
 
         if (safeStatus(order) != STATUS_SHIPPING) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+                    HttpStatus.CONFLICT,
                     "Chỉ được xác nhận giao hàng thất bại khi đơn đang giao hàng"
             );
         }
@@ -392,11 +395,11 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     @Override
     @Transactional
     public AdminOrderResponse markDeliveryRefunded(Integer orderId) {
-        Order order = findOrderOrThrow(orderId);
+        Order order = findOrderForUpdateOrThrow(orderId);
 
         if (safeStatus(order) != STATUS_DELIVERY_FAILED) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+                    HttpStatus.CONFLICT,
                     "Chỉ được xác nhận hoàn tiền cho đơn giao hàng thất bại"
             );
         }
@@ -419,7 +422,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         if (order.getDeliveryRefundedAt() != null) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+                    HttpStatus.CONFLICT,
                     "Đơn hàng này đã được xác nhận hoàn tiền"
             );
         }
@@ -441,7 +444,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     @Override
     @Transactional
     public AdminOrderResponse cancelOrder(Integer orderId, AdminCancelOrderRequest request) {
-        Order order = findOrderOrThrow(orderId);
+        Order order = findOrderForUpdateOrThrow(orderId);
 
         /*
          * Generic Admin cancel chỉ dành cho đơn ONLINE.
@@ -457,7 +460,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         if (safeStatus(order) != STATUS_PENDING) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+                    HttpStatus.CONFLICT,
                     "Chỉ được hủy đơn hàng khi đơn còn ở trạng thái chờ xác nhận"
             );
         }
@@ -475,6 +478,14 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             order.setDeliveryRefundAmount(null);
         }
 
+        /*
+         * ONLINE đã reserve Voucher từ lúc tạo Order PENDING.
+         * Hủy đơn thành công phải hoàn đúng 1 lượt.
+         * Order hiện đã được khóa PESSIMISTIC_WRITE nên thao tác hủy lặp sẽ
+         * bị chặn bởi status và không thể hoàn Voucher lần 2.
+         */
+        restoreVoucherUsage(order);
+
         order.setCancelReason(cancelReason);
         order.setCancelledAt(LocalDateTime.now());
 
@@ -488,11 +499,11 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     @Override
     @Transactional
     public AdminOrderResponse markCancelRefunded(Integer orderId) {
-        Order order = findOrderOrThrow(orderId);
+        Order order = findOrderForUpdateOrThrow(orderId);
 
         if (safeStatus(order) != STATUS_AWAITING_REFUND) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+                    HttpStatus.CONFLICT,
                     "Chỉ được xác nhận hoàn tiền cho đơn đã hủy đang chờ hoàn tiền"
             );
         }
@@ -521,13 +532,13 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     @Override
     @Transactional
     public AdminOrderResponse acceptReturnRequest(Integer orderId) {
-        Order order = findOrderOrThrow(orderId);
+        Order order = findOrderForUpdateOrThrow(orderId);
         ReturnRequest returnRequest = getActiveReturnRequestForAdmin(order);
         List<ReturnRequestItem> returnItems = getReturnItemsOrThrow(returnRequest);
 
         if (!areAllReturnItemsPending(returnItems)) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+                    HttpStatus.CONFLICT,
                     "Chỉ yêu cầu hoàn hàng đang chờ xử lý mới được chấp nhận"
             );
         }
@@ -548,13 +559,13 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     @Override
     @Transactional
     public AdminOrderResponse rejectReturnRequest(Integer orderId, RejectReturnRequest request) {
-        Order order = findOrderOrThrow(orderId);
+        Order order = findOrderForUpdateOrThrow(orderId);
         ReturnRequest returnRequest = getActiveReturnRequestForAdmin(order);
         List<ReturnRequestItem> returnItems = getReturnItemsOrThrow(returnRequest);
 
         if (!areAllReturnItemsPending(returnItems)) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+                    HttpStatus.CONFLICT,
                     "Chỉ yêu cầu hoàn hàng đang chờ xử lý mới được từ chối"
             );
         }
@@ -579,27 +590,27 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     @Override
     @Transactional
     public AdminOrderResponse markReturnRefunded(Integer orderId) {
-        Order order = findOrderOrThrow(orderId);
+        Order order = findOrderForUpdateOrThrow(orderId);
         ReturnRequest returnRequest = getActiveReturnRequestForAdmin(order);
         List<ReturnRequestItem> returnItems = getReturnItemsOrThrow(returnRequest);
 
         if (hasReturnItemStatus(returnItems, RETURN_ITEM_STATUS_REJECTED)) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+                    HttpStatus.CONFLICT,
                     "Yêu cầu hoàn hàng đã bị từ chối, không thể hoàn tiền"
             );
         }
 
         if (hasReturnItemStatus(returnItems, RETURN_ITEM_STATUS_PENDING)) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+                    HttpStatus.CONFLICT,
                     "Phải chấp nhận yêu cầu hoàn hàng trước khi xác nhận đã hoàn tiền"
             );
         }
 
         if (!areAllReturnItemsAccepted(returnItems)) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+                    HttpStatus.CONFLICT,
                     "Chỉ yêu cầu hoàn hàng đã được chấp nhận mới được chuyển sang đã hoàn tiền"
             );
         }
@@ -622,7 +633,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private ReturnRequest getActiveReturnRequestForAdmin(Order order) {
         if (safeStatus(order) != STATUS_RETURN_REQUESTED) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+                    HttpStatus.CONFLICT,
                     "Đơn hàng không ở trạng thái yêu cầu hoàn hàng"
             );
         }
@@ -2538,6 +2549,54 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         }
 
         return orderRepository.findDetailById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy đơn hàng"
+                ));
+    }
+
+    /**
+     * Dùng cho toàn bộ mutation của Admin Order.
+     *
+     * Khóa row Orders trước khi kiểm tra trạng thái để hai request đồng thời
+     * trên cùng một đơn không cùng xử lý từ một trạng thái cũ.
+     *
+     * GET/list/detail vẫn dùng findOrderOrThrow() nên không bị khóa thừa.
+     */
+    private void restoreVoucherUsage(Order order) {
+        if (order == null
+                || order.getVoucher() == null
+                || order.getVoucher().getId() == null) {
+            return;
+        }
+
+        Voucher lockedVoucher = voucherRepository
+                .findByIdForUpdate(order.getVoucher().getId())
+                .orElse(null);
+
+        if (lockedVoucher == null) {
+            return;
+        }
+
+        int usedCount = lockedVoucher.getUsedCount() != null
+                ? lockedVoucher.getUsedCount()
+                : 0;
+
+        if (usedCount > 0) {
+            lockedVoucher.setUsedCount(usedCount - 1);
+            voucherRepository.save(lockedVoucher);
+        }
+    }
+
+    private Order findOrderForUpdateOrThrow(Integer orderId) {
+        if (orderId == null || orderId <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Mã đơn hàng không hợp lệ"
+            );
+        }
+
+        return orderRepository.findDetailByIdForUpdate(orderId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Không tìm thấy đơn hàng"

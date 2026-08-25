@@ -7,6 +7,7 @@ import org.example.datn_sd69.modules.voucher.dto.request.VoucherRequest;
 import org.example.datn_sd69.modules.voucher.service.VoucherService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -34,7 +35,11 @@ public class AdminVoucherController {
             @RequestParam(required = false) Integer status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(voucherService.getVouchers(keyword, status, page, size));
+
+        return ResponseEntity.ok(
+                voucherService.getVouchers(keyword, status, page, size)
+                        .map(this::toAdminVoucherResponse)
+        );
     }
 
     /**
@@ -153,9 +158,13 @@ public class AdminVoucherController {
     @GetMapping("/{id}")
     public ResponseEntity<?> getVoucher(@PathVariable Integer id) {
         try {
-            return ResponseEntity.ok(voucherService.getVoucherById(id));
-        } catch (Exception e) {
+            return ResponseEntity.ok(
+                    toAdminVoucherResponse(voucherService.getVoucherById(id))
+            );
+        } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Lỗi hệ thống: " + e.getMessage());
         }
     }
 
@@ -172,6 +181,8 @@ public class AdminVoucherController {
         try {
             voucherService.updateVoucher(id, request);
             return ResponseEntity.ok().body("Cập nhật voucher thành công!");
+        } catch (ResponseStatusException e) {
+            return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (Exception e) {
@@ -182,16 +193,49 @@ public class AdminVoucherController {
     /**
      * API xóa Voucher.
      *
-     * DELETE /api/admin/vouchers/{id}
+     * DELETE /api/admin/vouchers/{id}?expectedRevision=...
+     *
+     * expectedRevision để nullable nhằm giữ tương thích caller cũ.
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteVoucher(@PathVariable Integer id) {
+    public ResponseEntity<?> deleteVoucher(
+            @PathVariable Integer id,
+            @RequestParam(required = false) String expectedRevision
+    ) {
         try {
-            voucherService.deleteVoucher(id);
+            voucherService.deleteVoucher(id, expectedRevision);
             return ResponseEntity.ok().body("Xóa voucher thành công!");
-        } catch (Exception e) {
+        } catch (ResponseStatusException e) {
+            return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
+        } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Lỗi hệ thống: " + e.getMessage());
         }
+    }
+
+    /**
+     * Response Admin giữ nguyên các field Voucher cũ và chỉ bổ sung revision.
+     * Không sửa Entity/DB schema.
+     */
+    private Map<String, Object> toAdminVoucherResponse(Voucher voucher) {
+        Map<String, Object> response = new LinkedHashMap<>();
+
+        response.put("id", voucher.getId());
+        response.put("code", voucher.getCode());
+        response.put("discountType", voucher.getDiscountType());
+        response.put("discountValue", voucher.getDiscountValue());
+        response.put("minOrderValue", voucher.getMinOrderValue());
+        response.put("maxDiscount", voucher.getMaxDiscount());
+        response.put("usageLimit", voucher.getUsageLimit());
+        response.put("usedCount", voucher.getUsedCount());
+        response.put("startDate", voucher.getStartDate());
+        response.put("endDate", voucher.getEndDate());
+        response.put("status", voucher.getStatus());
+        response.put("isDeleted", voucher.getIsDeleted());
+        response.put("revision", voucherService.getRevision(voucher));
+
+        return response;
     }
 
     private boolean canShowVoucherInPos(Voucher voucher) {
@@ -205,7 +249,7 @@ public class AdminVoucherController {
             return false;
         }
 
-        if (voucher.getEndDate() != null && voucher.getEndDate().isBefore(now)) {
+        if (voucher.getEndDate() != null && !voucher.getEndDate().isAfter(now)) {
             return false;
         }
 
@@ -288,7 +332,7 @@ public class AdminVoucherController {
             return "Voucher chưa đến thời gian sử dụng.";
         }
 
-        if (voucher.getEndDate() != null && voucher.getEndDate().isBefore(now)) {
+        if (voucher.getEndDate() != null && !voucher.getEndDate().isAfter(now)) {
             return "Voucher đã hết hạn sử dụng.";
         }
 
@@ -334,10 +378,8 @@ public class AdminVoucherController {
 
         BigDecimal maxDiscountAmount = safeMoney(voucher.getMaxDiscount());
 
-        if (
-                maxDiscountAmount.compareTo(BigDecimal.ZERO) > 0 &&
-                        discountAmount.compareTo(maxDiscountAmount) > 0
-        ) {
+        if (maxDiscountAmount.compareTo(BigDecimal.ZERO) > 0
+                && discountAmount.compareTo(maxDiscountAmount) > 0) {
             discountAmount = maxDiscountAmount;
         }
 

@@ -104,11 +104,15 @@ public class OrderService {
         LocalDateTime now = LocalDateTime.now();
 
         if (request.getVoucherCode() != null && !request.getVoucherCode().trim().isEmpty()) {
-            appliedVoucher = voucherRepo.findValidByCode(request.getVoucherCode().trim(), now)
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST,
-                            "Rất tiếc! Mã giảm giá không tồn tại, đã hết hạn, hoặc hết lượt sử dụng."
-                    ));
+            /*
+             * Khóa row Voucher trong suốt transaction checkout.
+             * Hai đơn dùng đồng thời lượt cuối sẽ được serialize tại đây,
+             * request đến sau phải đọc lại usedCount hiện tại sau khi lấy lock.
+             */
+            appliedVoucher = lockValidVoucherForCheckout(
+                    request.getVoucherCode(),
+                    now
+            );
         }
 
         // ==========================================
@@ -193,6 +197,25 @@ public class OrderService {
         }
         finalAmount = normalizeMoney(finalAmount);
 
+        /*
+         * Chặn stale checkout:
+         * FE có thể đang hiển thị dữ liệu cũ vì người dùng không reload trang.
+         * Backend vẫn là source of truth và đã tự tính lại toàn bộ giá/voucher/phí ship.
+         * Nếu FE gửi snapshot số tiền đang hiển thị và snapshot khác dữ liệu hiện tại,
+         * tuyệt đối chưa tạo Order mà trả 409 để FE refetch và cho khách xác nhận lại.
+         *
+         * Các field expected* trong OrderRequest để nullable nhằm giữ tương thích
+         * với caller cũ. Sau khi FE checkout đã gửi đầy đủ snapshot, có thể siết
+         * @NotNull ở DTO nếu muốn bắt buộc mọi caller đều dùng stale-check.
+         */
+        validateCheckoutSnapshot(
+                request,
+                totalAmount,
+                discountAmount,
+                shippingFee,
+                finalAmount
+        );
+
         // 3. Tạo Order
         Order order = new Order();
         order.setCustomer(customer);
@@ -230,11 +253,14 @@ public class OrderService {
 
         if (appliedVoucher != null) {
             order.setVoucher(appliedVoucher);
-            appliedVoucher.setUsedCount(appliedVoucher.getUsedCount() + 1);
-            if (appliedVoucher.getUsedCount() >= appliedVoucher.getUsageLimit()) {
-                appliedVoucher.setStatus(0);
-            }
-            voucherRepo.save(appliedVoucher);
+
+            /*
+             * ONLINE giữ 1 lượt Voucher ngay khi tạo Order PENDING.
+             * Không đổi status Voucher khi hết lượt; khả dụng được quyết định bằng
+             * usedCount < usageLimit để sau khi hủy đơn có thể hoàn lượt mà không
+             * vô tình bật lại Voucher Admin đã chủ động tạm dừng.
+             */
+            reserveVoucherUsage(appliedVoucher);
         }
 
         Order savedOrder = orderRepo.save(order);
@@ -294,7 +320,14 @@ public class OrderService {
         cart.getCartItems().clear();
         cartRepo.save(cart);
 
-        orderMailService.sendOrderPlaced(savedOrder);
+        /*
+         * COD trở thành đơn hàng thực sự ngay khi checkout thành công.
+         * VietQR/VNPay trước khi isPaymentReported=true chỉ là payment intent,
+         * nên chưa gửi mail đặt hàng ở thời điểm này.
+         */
+        if (PAYMENT_METHOD_COD.equals(savedOrder.getPaymentMethod())) {
+            orderMailService.sendOrderPlaced(savedOrder);
+        }
 
         // 6. Trả về kết quả
         Map<String, Object> response = new LinkedHashMap<>();
@@ -431,39 +464,52 @@ public class OrderService {
                 String responseCode = params.get("vnp_ResponseCode");
                 String txnRef = params.get("vnp_TxnRef");
                 Integer orderId = Integer.parseInt(txnRef.split("_")[0]);
-                Order order = orderRepo.findById(orderId).orElse(null);
+                /*
+                 * Legacy callback này có thể chạy song song với VNPayController.
+                 * Dùng cùng row lock Orders để không xử lý success/fail hai lần.
+                 */
+                Order order = orderRepo.findDetailByIdForUpdate(orderId).orElse(null);
 
                 if (order != null) {
                     if ("00".equals(responseCode)) {
+                        boolean canReportPayment = Integer.valueOf(ORDER_STATUS_PENDING).equals(order.getStatus());
                         boolean wasPaymentReported = Boolean.TRUE.equals(order.getIsPaymentReported());
-                        order.setStatus(ORDER_STATUS_PENDING);
-                        order.setIsPaymentReported(true);
-                        Order savedOrder = orderRepo.save(order);
 
-                        if (!wasPaymentReported) {
-                            orderMailService.sendPaymentSuccess(savedOrder);
+                        if (canReportPayment) {
+                            order.setStatus(ORDER_STATUS_PENDING);
+                            order.setIsPaymentReported(true);
+                            Order savedOrder = orderRepo.save(order);
+
+                            if (!wasPaymentReported) {
+                                orderMailService.sendPaymentSuccess(savedOrder);
+                            }
+
+                            response.put("success", true);
+                            response.put("message", "Thanh toán VNPay thành công. Đơn hàng đang chờ xác nhận.");
+                        } else {
+                            response.put("success", false);
+                            response.put("message", "Đơn hàng đã được xử lý trước đó.");
                         }
-
-                        response.put("success", true);
-                        response.put("message", "Thanh toán VNPay thành công. Đơn hàng đang chờ xác nhận.");
                     } else if ("24".equals(responseCode)) {
-                        boolean wasCancelled = ORDER_STATUS_CANCELLED == (order.getStatus() == null ? ORDER_STATUS_PENDING : order.getStatus());
-                        order.setStatus(ORDER_STATUS_CANCELLED);
-                        Order savedOrder = orderRepo.save(order);
+                        boolean canCancel = Integer.valueOf(ORDER_STATUS_PENDING).equals(order.getStatus())
+                                && !Boolean.TRUE.equals(order.getIsPaymentReported());
 
-                        if (!wasCancelled) {
-                            orderMailService.sendOrderCancelled(savedOrder, "Khách hàng đã hủy giao dịch VNPay");
+                        if (canCancel) {
+                            order.setStatus(ORDER_STATUS_CANCELLED);
+                            restoreVoucherUsage(order);
+                            orderRepo.save(order);
                         }
 
                         response.put("success", false);
                         response.put("message", "Khách hàng đã hủy giao dịch");
                     } else {
-                        boolean wasCancelled = ORDER_STATUS_CANCELLED == (order.getStatus() == null ? ORDER_STATUS_PENDING : order.getStatus());
-                        order.setStatus(ORDER_STATUS_CANCELLED);
-                        Order savedOrder = orderRepo.save(order);
+                        boolean canCancel = Integer.valueOf(ORDER_STATUS_PENDING).equals(order.getStatus())
+                                && !Boolean.TRUE.equals(order.getIsPaymentReported());
 
-                        if (!wasCancelled) {
-                            orderMailService.sendOrderCancelled(savedOrder, "Giao dịch VNPay không thành công (Mã lỗi: " + responseCode + ")");
+                        if (canCancel) {
+                            order.setStatus(ORDER_STATUS_CANCELLED);
+                            restoreVoucherUsage(order);
+                            orderRepo.save(order);
                         }
 
                         response.put("success", false);
@@ -483,6 +529,151 @@ public class OrderService {
             response.put("message", "Lỗi xác thực VNPay");
         }
         return response;
+    }
+
+    private Voucher lockValidVoucherForCheckout(String rawCode, LocalDateTime now) {
+        String cleanCode = rawCode == null ? "" : rawCode.trim();
+
+        Voucher candidate = voucherRepo.findByCodeIgnoreCase(cleanCode)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Rất tiếc! Mã giảm giá không tồn tại, đã hết hạn, hoặc hết lượt sử dụng."
+                ));
+
+        Voucher lockedVoucher = voucherRepo.findByIdForUpdate(candidate.getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Rất tiếc! Mã giảm giá không tồn tại, đã hết hạn, hoặc hết lượt sử dụng."
+                ));
+
+        int usedCount = lockedVoucher.getUsedCount() != null
+                ? lockedVoucher.getUsedCount()
+                : 0;
+
+        Integer usageLimit = lockedVoucher.getUsageLimit();
+
+        boolean invalid = lockedVoucher.getCode() == null
+                || !lockedVoucher.getCode().equalsIgnoreCase(cleanCode)
+                || Boolean.TRUE.equals(lockedVoucher.getIsDeleted())
+                || !Integer.valueOf(1).equals(lockedVoucher.getStatus())
+                || (lockedVoucher.getStartDate() != null
+                && lockedVoucher.getStartDate().isAfter(now))
+                || (lockedVoucher.getEndDate() != null
+                && !lockedVoucher.getEndDate().isAfter(now))
+                || (usageLimit != null
+                && usageLimit > 0
+                && usedCount >= usageLimit);
+
+        if (invalid) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Rất tiếc! Mã giảm giá không tồn tại, đã hết hạn, hoặc hết lượt sử dụng."
+            );
+        }
+
+        return lockedVoucher;
+    }
+
+    private void reserveVoucherUsage(Voucher voucher) {
+        if (voucher == null) {
+            return;
+        }
+
+        int usedCount = voucher.getUsedCount() != null
+                ? voucher.getUsedCount()
+                : 0;
+
+        Integer usageLimit = voucher.getUsageLimit();
+
+        if (usageLimit != null && usageLimit > 0 && usedCount >= usageLimit) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Rất tiếc! Mã giảm giá đã hết lượt sử dụng."
+            );
+        }
+
+        voucher.setUsedCount(usedCount + 1);
+        voucherRepo.save(voucher);
+    }
+
+    private void restoreVoucherUsage(Order order) {
+        if (order == null
+                || order.getVoucher() == null
+                || order.getVoucher().getId() == null) {
+            return;
+        }
+
+        Voucher lockedVoucher = voucherRepo
+                .findByIdForUpdate(order.getVoucher().getId())
+                .orElse(null);
+
+        if (lockedVoucher == null) {
+            return;
+        }
+
+        int usedCount = lockedVoucher.getUsedCount() != null
+                ? lockedVoucher.getUsedCount()
+                : 0;
+
+        if (usedCount > 0) {
+            lockedVoucher.setUsedCount(usedCount - 1);
+            voucherRepo.save(lockedVoucher);
+        }
+    }
+
+    /**
+     * So sánh snapshot tiền mà FE đang hiển thị với số tiền Backend vừa tính lại
+     * từ dữ liệu hiện tại trong DB.
+     *
+     * Không tin các expected* để tính tiền; chúng CHỈ dùng để phát hiện stale UI.
+     * Giá trị ghi vào Order/OrderItem vẫn luôn lấy từ Backend.
+     */
+    private void validateCheckoutSnapshot(
+            OrderRequest request,
+            BigDecimal currentTotalAmount,
+            BigDecimal currentDiscountAmount,
+            BigDecimal currentShippingFee,
+            BigDecimal currentFinalAmount
+    ) {
+        if (request == null) {
+            return;
+        }
+
+        List<String> changedFields = new ArrayList<>();
+
+        if (isMoneyChanged(request.getExpectedTotalAmount(), currentTotalAmount)) {
+            changedFields.add("tạm tính");
+        }
+
+        if (isMoneyChanged(request.getExpectedDiscountAmount(), currentDiscountAmount)) {
+            changedFields.add("giảm giá");
+        }
+
+        if (isMoneyChanged(request.getExpectedShippingFee(), currentShippingFee)) {
+            changedFields.add("phí vận chuyển");
+        }
+
+        if (isMoneyChanged(request.getExpectedFinalAmount(), currentFinalAmount)) {
+            changedFields.add("tổng thanh toán");
+        }
+
+        if (!changedFields.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Thông tin thanh toán đã thay đổi ("
+                            + String.join(", ", changedFields)
+                            + "). Vui lòng kiểm tra lại giá, khuyến mãi và tổng tiền trước khi đặt hàng."
+            );
+        }
+    }
+
+    private boolean isMoneyChanged(BigDecimal expectedAmount, BigDecimal currentAmount) {
+        if (expectedAmount == null) {
+            return false;
+        }
+
+        return normalizeMoney(expectedAmount)
+                .compareTo(normalizeMoney(currentAmount)) != 0;
     }
 
     private void validateCheckoutRequest(Integer customerId, OrderRequest request) {
@@ -721,13 +912,26 @@ public class OrderService {
 
     @Transactional
     public void reportPayment(Integer orderId) {
-        Order order = orderRepo.findById(orderId)
+        Order order = orderRepo.findDetailByIdForUpdate(orderId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Không tìm thấy đơn hàng"
                 ));
+
+        if (!Integer.valueOf(ORDER_STATUS_PENDING).equals(order.getStatus())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Đơn hàng đã được xử lý trước đó"
+            );
+        }
+
+        if (Boolean.TRUE.equals(order.getIsPaymentReported())) {
+            return;
+        }
+
         order.setIsPaymentReported(true);
-        orderRepo.save(order);
+        Order savedOrder = orderRepo.save(order);
+        orderMailService.sendPaymentSuccess(savedOrder);
     }
 
     private record CheckoutItemPrice(

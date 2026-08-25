@@ -13,7 +13,7 @@
       <button
         class="btn btn-outline-dark btn-sm"
         :disabled="store.orderLoading || reviewLoading"
-        @click="fetchOrdersAndReviews"
+        @click="fetchOrdersAndReviews(true)"
       >
         <span
           v-if="store.orderLoading || reviewLoading"
@@ -770,33 +770,49 @@
                       <div class="delivery-refund-grid">
                         <div class="delivery-refund-line delivery-refund-money">
                           <span>Số tiền cần hoàn:</span>
-                          <strong>{{ formatMoney(getOrderFinalAmount(order)) }}</strong>
+                          <strong>{{
+                            formatMoney(getOrderFinalAmount(order))
+                          }}</strong>
                         </div>
 
                         <template v-if="hasCancelRefundBankInfo(order)">
                           <div class="delivery-refund-line">
                             <span>Ngân hàng:</span>
-                            <strong>{{ (order as any).cancelRefundBankName || '-' }}</strong>
+                            <strong>{{
+                              order.deliveryRefundBankName || "-"
+                            }}</strong>
                           </div>
 
                           <div class="delivery-refund-line">
                             <span>Số tài khoản:</span>
-                            <strong>{{ (order as any).cancelRefundBankAccount || '-' }}</strong>
+                            <strong>{{
+                              order.deliveryRefundBankAccountNumber || "-"
+                            }}</strong>
                           </div>
 
                           <div class="delivery-refund-line">
                             <span>Chủ tài khoản:</span>
-                            <strong>{{ (order as any).cancelRefundAccountName || '-' }}</strong>
+                            <strong>{{
+                              order.deliveryRefundBankAccountHolder || "-"
+                            }}</strong>
                           </div>
                         </template>
 
-                        <div v-if="isCancelRefunded(order)" class="delivery-refund-line">
+                        <div
+                          v-if="isCancelRefunded(order)"
+                          class="delivery-refund-line"
+                        >
                           <span>Hoàn lúc:</span>
-                          <strong>{{ formatDate((order as any).cancelRefundedAt) || 'Đã xử lý' }}</strong>
+                          <strong>{{
+                            formatDate(order.deliveryRefundedAt) || "Đã xử lý"
+                          }}</strong>
                         </div>
                       </div>
 
-                      <div v-if="canSubmitCancelRefundBank(order)" class="delivery-refund-actions">
+                      <div
+                        v-if="canSubmitCancelRefundBank(order)"
+                        class="delivery-refund-actions"
+                      >
                         <button
                           type="button"
                           class="btn btn-sm btn-outline-primary"
@@ -809,11 +825,16 @@
                       </div>
 
                       <div
-                        v-else-if="hasCancelRefundBankInfo(order) && !isCancelRefunded(order)"
+                        v-else-if="
+                          hasCancelRefundBankInfo(order) &&
+                          !isCancelRefunded(order)
+                        "
                         class="delivery-refund-once-note"
                       >
                         <i class="bi bi-info-circle me-1"></i>
-                        Thông tin tài khoản hoàn tiền đã được gửi một lần. Nếu thông tin chưa chính xác, vui lòng liên hệ shop trước khi shop chuyển tiền.
+                        Thông tin tài khoản hoàn tiền đã được gửi một lần. Nếu
+                        thông tin chưa chính xác, vui lòng liên hệ shop trước
+                        khi shop chuyển tiền.
                       </div>
                     </div>
                   </div>
@@ -1110,7 +1131,9 @@
                   <div class="order-total-box">
                     <div>
                       <span>Tạm tính:</span>
-                      <strong>{{ formatMoney(getOrderSubtotal(order)) }}</strong>
+                      <strong>{{
+                        formatMoney(getOrderSubtotal(order))
+                      }}</strong>
                     </div>
 
                     <div v-if="getOrderDiscountAmount(order) > 0">
@@ -1122,10 +1145,14 @@
 
                     <div v-if="getOrderShippingFee(order) > 0">
                       <span>Phí vận chuyển:</span>
-                      <strong>{{ formatMoney(getOrderShippingFee(order)) }}</strong>
+                      <strong>{{
+                        formatMoney(getOrderShippingFee(order))
+                      }}</strong>
                     </div>
 
-                    <div class="d-flex justify-content-between fs-5 mt-2 pt-2 border-top">
+                    <div
+                      class="d-flex justify-content-between fs-5 mt-2 pt-2 border-top"
+                    >
                       <span>Tổng thanh toán:</span>
                       <strong class="text-danger">
                         {{ formatMoney(getOrderFinalAmount(order)) }}
@@ -1279,7 +1306,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import ReviewModal from "./ReviewModal.vue";
@@ -1314,6 +1341,7 @@ const openedOrderId = ref<number | null>(null);
 const returnModalVisible = ref(false);
 const selectedReturnOrder = ref<CustomerOrderResponse | null>(null);
 const submittingReturn = ref(false);
+const refreshingOrdersOnFocus = ref(false);
 
 const reviewableMap = reactive<Record<number, ReviewableOrderItemResponse[]>>(
   {}
@@ -1347,37 +1375,54 @@ const pickMoneyValue = (...values: unknown[]) => {
 
 const getOrderSubtotal = (order: any) => {
   const explicitSubtotal = pickMoneyValue(
-    order?.totalAmount, order?.TotalAmount,
-    order?.subTotal, order?.SubTotal,
-    order?.subTotalAmount, order?.SubTotalAmount,
-    order?.amount, order?.Amount
+    order?.totalAmount,
+    order?.TotalAmount,
+    order?.subTotal,
+    order?.SubTotal,
+    order?.subTotalAmount,
+    order?.SubTotalAmount,
+    order?.amount,
+    order?.Amount
   );
   if (explicitSubtotal > 0) return explicitSubtotal;
 
   if (Array.isArray(order?.items)) {
-    return order.items.reduce((sum: number, item: any) => sum + getItemLineTotal(item), 0);
+    return order.items.reduce(
+      (sum: number, item: any) => sum + getItemLineTotal(item),
+      0
+    );
   }
   return 0;
 };
 
 const getOrderShippingFee = (order: any) => {
   return pickMoneyValue(
-    order?.shippingFee, order?.ShippingFee,
+    order?.shippingFee,
+    order?.ShippingFee,
     order?.shippingfee,
-    order?.shippingFeeAmount, order?.ShippingFeeAmount,
-    order?.shipFee, order?.ShipFee,
-    order?.deliveryFee, order?.DeliveryFee,
-    order?.shippingAmount, order?.ShippingAmount
+    order?.shippingFeeAmount,
+    order?.ShippingFeeAmount,
+    order?.shipFee,
+    order?.ShipFee,
+    order?.deliveryFee,
+    order?.DeliveryFee,
+    order?.shippingAmount,
+    order?.ShippingAmount
   );
 };
 
 const getOrderFinalAmount = (order: any) => {
   const explicitFinal = pickMoneyValue(
-    order?.finalAmount, order?.FinalAmount,
-    order?.totalPayment, order?.TotalPayment,
-    order?.totalPay, order?.TotalPay,
-    order?.paymentTotal, order?.PaymentTotal,
-    order?.totalPrice, order?.TotalPrice
+    order?.finalAmount,
+    order?.FinalAmount,
+    order?.totalPayment,
+    order?.TotalPayment,
+    order?.totalPay,
+    order?.TotalPay,
+    order?.paymentTotal,
+    order?.PaymentTotal,
+    order?.totalPrice,
+    order?.TotalPrice
   );
   if (explicitFinal > 0) return explicitFinal;
 
@@ -1390,37 +1435,58 @@ const getOrderFinalAmount = (order: any) => {
 
 const getOrderDiscountAmount = (order: any) => {
   let explicitDiscount = pickMoneyValue(
-    order?.discountAmount, order?.DiscountAmount,
-    order?.discountValue, order?.DiscountValue,
-    order?.discount, order?.Discount,
-    order?.voucherDiscount, order?.VoucherDiscount,
-    order?.voucherAmount, order?.VoucherAmount,
-    order?.voucherDiscountAmount, order?.VoucherDiscountAmount,
-    order?.promotionAmount, order?.PromotionAmount,
-    order?.promotionDiscount, order?.PromotionDiscount
+    order?.discountAmount,
+    order?.DiscountAmount,
+    order?.discountValue,
+    order?.DiscountValue,
+    order?.discount,
+    order?.Discount,
+    order?.voucherDiscount,
+    order?.VoucherDiscount,
+    order?.voucherAmount,
+    order?.VoucherAmount,
+    order?.voucherDiscountAmount,
+    order?.VoucherDiscountAmount,
+    order?.promotionAmount,
+    order?.PromotionAmount,
+    order?.promotionDiscount,
+    order?.PromotionDiscount
   );
   if (explicitDiscount > 0) return explicitDiscount;
 
   if (Array.isArray(order?.items)) {
-     const sumFromItems = order.items.reduce((sum: number, item: any) => {
-         return sum + pickMoneyValue(item?.voucherAllocatedAmount, item?.allocatedVoucherAmount, item?.discountAmount, item?.itemDiscount);
-     }, 0);
-     if (sumFromItems > 0) return sumFromItems;
+    const sumFromItems = order.items.reduce((sum: number, item: any) => {
+      return (
+        sum +
+        pickMoneyValue(
+          item?.voucherAllocatedAmount,
+          item?.allocatedVoucherAmount,
+          item?.discountAmount,
+          item?.itemDiscount
+        )
+      );
+    }, 0);
+    if (sumFromItems > 0) return sumFromItems;
   }
 
   // TÍNH NGƯỢC GIẢM GIÁ TỪ FRONTEND
   const subtotal = getOrderSubtotal(order);
   const ship = getOrderShippingFee(order);
   const explicitFinal = pickMoneyValue(
-    order?.finalAmount, order?.FinalAmount,
-    order?.totalPayment, order?.TotalPayment,
-    order?.totalPay, order?.TotalPay,
-    order?.paymentTotal, order?.PaymentTotal,
-    order?.totalPrice, order?.TotalPrice
+    order?.finalAmount,
+    order?.FinalAmount,
+    order?.totalPayment,
+    order?.TotalPayment,
+    order?.totalPay,
+    order?.TotalPay,
+    order?.paymentTotal,
+    order?.PaymentTotal,
+    order?.totalPrice,
+    order?.TotalPrice
   );
 
-  if (subtotal > 0 && explicitFinal > 0 && ((subtotal + ship) > explicitFinal)) {
-     return (subtotal + ship) - explicitFinal;
+  if (subtotal > 0 && explicitFinal > 0 && subtotal + ship > explicitFinal) {
+    return subtotal + ship - explicitFinal;
   }
 
   return 0;
@@ -1430,23 +1496,31 @@ const getOrderDiscountAmount = (order: any) => {
 const isPrepaidOrder = (order: any) => {
   if (!order || !order.paymentMethod) return false;
   const pm = String(order.paymentMethod).toUpperCase();
-  return pm.includes('VNPAY') || pm.includes('VIETQR') || pm.includes('MOMO') || pm.includes('BANK') || pm.includes('TRANSFER') || pm.includes('MIXED');
-};
-
-const hasCancelRefundBankInfo = (order: any) => {
-  return Boolean(
-    String((order as any)?.cancelRefundBankName || "").trim() &&
-    String((order as any)?.cancelRefundBankAccount || "").trim() &&
-    String((order as any)?.cancelRefundAccountName || "").trim()
+  return (
+    pm.includes("VNPAY") ||
+    pm.includes("VIETQR") ||
+    pm.includes("MOMO") ||
+    pm.includes("BANK") ||
+    pm.includes("TRANSFER") ||
+    pm.includes("MIXED")
   );
 };
 
+const hasCancelRefundBankInfo = (order: any) => {
+  return hasDeliveryRefundBankInfo(order);
+};
+
 const isCancelRefunded = (order: any) => {
-  return Boolean((order as any)?.cancelRefundedAt || (order as any)?.isRefunded || (order as any)?.cancelRefundStatus === 'COMPLETED');
+  return isDeliveryRefundCompleted(order);
 };
 
 const canSubmitCancelRefundBank = (order: any) => {
-  return isPrepaidOrder(order) && !hasCancelRefundBankInfo(order) && !isCancelRefunded(order);
+  return (
+    Number(order?.status) === 8 &&
+    isPrepaidOrder(order) &&
+    getDeliveryRefundAmount(order) > 0 &&
+    canSubmitDeliveryRefundBank(order)
+  );
 };
 
 const getCancelRefundStatusText = (order: any) => {
@@ -1458,7 +1532,8 @@ const getCancelRefundStatusText = (order: any) => {
 const getCancelRefundDescription = (order: any) => {
   const amount = formatMoney(getOrderFinalAmount(order));
   if (isCancelRefunded(order)) return `Shop đã hoàn ${amount} cho đơn bị hủy.`;
-  if (hasCancelRefundBankInfo(order)) return `Shop đã nhận thông tin tài khoản và sẽ hoàn ${amount} cho bạn.`;
+  if (hasCancelRefundBankInfo(order))
+    return `Shop đã nhận thông tin tài khoản và sẽ hoàn ${amount} cho bạn.`;
   return `Đơn đã thanh toán trước nhưng bị hủy. Vui lòng nhập số tài khoản ngân hàng để shop hoàn ${amount}.`;
 };
 
@@ -1472,27 +1547,39 @@ const openCancelRefundBankModal = async (order: CustomerOrderResponse) => {
   if (!canSubmitCancelRefundBank(order)) return;
 
   try {
-    await fetchDeliveryRefundBanksFromVietQr(); 
+    await fetchDeliveryRefundBanksFromVietQr();
   } catch (error: any) {
     await Swal.fire({
       icon: "error",
       title: "Không tải được ngân hàng",
-      text: error?.message || "Không lấy được danh sách ngân hàng từ VietQR. Vui lòng thử lại sau.",
+      text:
+        error?.message ||
+        "Không lấy được danh sách ngân hàng từ VietQR. Vui lòng thử lại sau.",
       confirmButtonColor: "#bd9a5f",
     });
     return;
   }
 
-  const currentBank = findDeliveryRefundBank((order as any).cancelRefundBankName || "");
+  const currentBank = findDeliveryRefundBank(
+    order.deliveryRefundBankName || ""
+  );
   const currentBankName = currentBank?.displayName || "";
 
-  const result = await Swal.fire<{ bankName: string; bankAccountNumber: string; bankAccountHolder: string; }>({
+  const result = await Swal.fire<{
+    bankName: string;
+    bankAccountNumber: string;
+    bankAccountHolder: string;
+  }>({
     title: "Nhập thông tin hoàn tiền đơn hủy",
     html: `
       <div class="delivery-refund-modal">
         <div class="delivery-refund-modal-alert">
           <i class="bi bi-info-circle"></i>
-          <span>Shop sẽ hoàn <strong>${escapeHtml(formatMoney(getOrderFinalAmount(order)))}</strong> cho đơn hủy ${escapeHtml(generateOrderCode(order.orderId))}. Thông tin này chỉ gửi được 1 lần và không thể tự chỉnh sửa.</span>
+          <span>Shop sẽ hoàn <strong>${escapeHtml(
+            formatMoney(getOrderFinalAmount(order))
+          )}</strong> cho đơn hủy ${escapeHtml(
+      generateOrderCode(order.orderId)
+    )}. Thông tin này chỉ gửi được 1 lần và không thể tự chỉnh sửa.</span>
         </div>
 
         <label for="cancel-refund-bank-search" class="delivery-refund-modal-label">
@@ -1529,7 +1616,7 @@ const openCancelRefundBankModal = async (order: CustomerOrderResponse) => {
           inputmode="numeric"
           maxlength="50"
           placeholder="Ví dụ: 0123456789"
-          value="${escapeHtml((order as any).cancelRefundBankAccount || "")}"
+          value="${escapeHtml(order.deliveryRefundBankAccountNumber || "")}"
         />
 
         <label for="cancel-refund-account-holder" class="delivery-refund-modal-label">
@@ -1540,7 +1627,7 @@ const openCancelRefundBankModal = async (order: CustomerOrderResponse) => {
           class="swal2-input delivery-refund-modal-control"
           maxlength="100"
           placeholder="Ví dụ: NGUYEN VAN NAM"
-          value="${escapeHtml((order as any).cancelRefundAccountName || "")}"
+          value="${escapeHtml(order.deliveryRefundBankAccountHolder || "")}"
         />
       </div>
     `,
@@ -1556,10 +1643,18 @@ const openCancelRefundBankModal = async (order: CustomerOrderResponse) => {
       confirmButton: "swal-gold-confirm",
     },
     didOpen: () => {
-      const bankSearchInput = document.getElementById("cancel-refund-bank-search") as HTMLInputElement | null;
-      const bankHiddenInput = document.getElementById("cancel-refund-bank-name") as HTMLInputElement | null;
-      const accountInput = document.getElementById("cancel-refund-account-number") as HTMLInputElement | null;
-      const accountHolderInput = document.getElementById("cancel-refund-account-holder") as HTMLInputElement | null;
+      const bankSearchInput = document.getElementById(
+        "cancel-refund-bank-search"
+      ) as HTMLInputElement | null;
+      const bankHiddenInput = document.getElementById(
+        "cancel-refund-bank-name"
+      ) as HTMLInputElement | null;
+      const accountInput = document.getElementById(
+        "cancel-refund-account-number"
+      ) as HTMLInputElement | null;
+      const accountHolderInput = document.getElementById(
+        "cancel-refund-account-holder"
+      ) as HTMLInputElement | null;
 
       setCancelRefundBankListHtml("", currentBankName);
 
@@ -1570,7 +1665,8 @@ const openCancelRefundBankModal = async (order: CustomerOrderResponse) => {
         if (bankHiddenInput) {
           bankHiddenInput.value =
             matchedBank &&
-            normalizeBankSearchText(matchedBank.displayName) === normalizeBankSearchText(keyword)
+            normalizeBankSearchText(matchedBank.displayName) ===
+              normalizeBankSearchText(keyword)
               ? matchedBank.displayName
               : "";
         }
@@ -1579,27 +1675,49 @@ const openCancelRefundBankModal = async (order: CustomerOrderResponse) => {
       });
 
       bankSearchInput?.addEventListener("focus", () => {
-        setCancelRefundBankListHtml(normalizeDeliveryRefundInput(bankSearchInput.value), bankHiddenInput?.value || "");
+        setCancelRefundBankListHtml(
+          normalizeDeliveryRefundInput(bankSearchInput.value),
+          bankHiddenInput?.value || ""
+        );
       });
 
       accountInput?.addEventListener("input", () => {
-        accountInput.value = accountInput.value.replace(/[^0-9\s]/g, "").replace(/\s{2,}/g, " ");
+        accountInput.value = accountInput.value
+          .replace(/[^0-9\s]/g, "")
+          .replace(/\s{2,}/g, " ");
       });
 
       accountHolderInput?.addEventListener("input", () => {
-        accountHolderInput.value = accountHolderInput.value.replace(/[^\p{L}\s'.-]/gu, "").replace(/\s{2,}/g, " ").toUpperCase();
+        accountHolderInput.value = accountHolderInput.value
+          .replace(/[^\p{L}\s'.-]/gu, "")
+          .replace(/\s{2,}/g, " ")
+          .toUpperCase();
       });
     },
     preConfirm: () => {
-      const bankElement = document.getElementById("cancel-refund-bank-name") as HTMLInputElement | null;
-      const accountNumberElement = document.getElementById("cancel-refund-account-number") as HTMLInputElement | null;
-      const accountHolderElement = document.getElementById("cancel-refund-account-holder") as HTMLInputElement | null;
+      const bankElement = document.getElementById(
+        "cancel-refund-bank-name"
+      ) as HTMLInputElement | null;
+      const accountNumberElement = document.getElementById(
+        "cancel-refund-account-number"
+      ) as HTMLInputElement | null;
+      const accountHolderElement = document.getElementById(
+        "cancel-refund-account-holder"
+      ) as HTMLInputElement | null;
 
       const bankName = normalizeDeliveryRefundInput(bankElement?.value);
-      const bankAccountNumber = normalizeDeliveryRefundAccountNumber(accountNumberElement?.value);
-      const bankAccountHolder = normalizeDeliveryRefundInput(accountHolderElement?.value).toUpperCase();
+      const bankAccountNumber = normalizeDeliveryRefundAccountNumber(
+        accountNumberElement?.value
+      );
+      const bankAccountHolder = normalizeDeliveryRefundInput(
+        accountHolderElement?.value
+      ).toUpperCase();
 
-      const validationMessage = validateDeliveryRefundBankForm(bankName, bankAccountNumber, bankAccountHolder);
+      const validationMessage = validateDeliveryRefundBankForm(
+        bankName,
+        bankAccountNumber,
+        bankAccountHolder
+      );
 
       if (validationMessage) {
         Swal.showValidationMessage(validationMessage);
@@ -1618,9 +1736,15 @@ const openCancelRefundBankModal = async (order: CustomerOrderResponse) => {
     html: `
       <div style="text-align:left;line-height:1.6">
         <p style="margin-bottom:8px">Thông tin tài khoản hoàn tiền <b>chỉ gửi được 1 lần</b>. Sau khi gửi, bạn không thể tự chỉnh sửa trên hệ thống. Vui lòng kiểm tra thật kĩ</p>
-        <p style="margin-bottom:4px"><b>Ngân hàng:</b> ${escapeHtml(result.value.bankName)}</p>
-        <p style="margin-bottom:4px"><b>Số tài khoản:</b> ${escapeHtml(result.value.bankAccountNumber)}</p>
-        <p style="margin-bottom:0"><b>Chủ tài khoản:</b> ${escapeHtml(result.value.bankAccountHolder)}</p>
+        <p style="margin-bottom:4px"><b>Ngân hàng:</b> ${escapeHtml(
+          result.value.bankName
+        )}</p>
+        <p style="margin-bottom:4px"><b>Số tài khoản:</b> ${escapeHtml(
+          result.value.bankAccountNumber
+        )}</p>
+        <p style="margin-bottom:0"><b>Chủ tài khoản:</b> ${escapeHtml(
+          result.value.bankAccountHolder
+        )}</p>
       </div>
     `,
     showCancelButton: true,
@@ -1639,41 +1763,60 @@ const openCancelRefundBankModal = async (order: CustomerOrderResponse) => {
 
   try {
     store.orderLoading = true;
-    
-    await api.post(`/v1/orders/${order.orderId}/cancel-bank-info`, {
-      bankName: result.value.bankName,
-      bankAccountNumber: result.value.bankAccountNumber,
-      bankAccountHolder: result.value.bankAccountHolder
-    });
-    
+
+    await customerProfileService.submitDeliveryRefundBank(
+      order.orderId,
+      result.value
+    );
+
     await fetchOrdersAndReviews();
     openedOrderId.value = order.orderId;
     toast("success", "Đã gửi thông tin tài khoản hoàn tiền.");
   } catch (error) {
-    showError(error, "Không thể gửi thông tin hoàn tiền lúc này.");
+    if (
+      !(await handleCustomerOrderConflict(
+        error,
+        order.orderId,
+        "Thông tin hoàn tiền hoặc trạng thái đơn hàng đã thay đổi. Dữ liệu mới đã được tải lại, vui lòng kiểm tra lại."
+      ))
+    ) {
+      showError(error, "Không thể gửi thông tin hoàn tiền lúc này.");
+    }
   } finally {
     store.orderLoading = false;
   }
 };
 
-const setCancelRefundBankListHtml = (keyword = "", selectedBank?: string | null) => {
+const setCancelRefundBankListHtml = (
+  keyword = "",
+  selectedBank?: string | null
+) => {
   const bankListElement = document.getElementById("cancel-refund-bank-list");
   if (!bankListElement) return;
 
-  bankListElement.innerHTML = buildDeliveryRefundBankOptionsHtml(keyword, selectedBank);
+  bankListElement.innerHTML = buildDeliveryRefundBankOptionsHtml(
+    keyword,
+    selectedBank
+  );
 
-  bankListElement.querySelectorAll<HTMLButtonElement>(".delivery-refund-bank-option").forEach((button) => {
-    button.addEventListener("click", () => {
-      const bankName = normalizeDeliveryRefundInput(button.dataset.bankValue);
-      const hiddenInput = document.getElementById("cancel-refund-bank-name") as HTMLInputElement | null;
-      const searchInput = document.getElementById("cancel-refund-bank-search") as HTMLInputElement | null;
+  bankListElement
+    .querySelectorAll<HTMLButtonElement>(".delivery-refund-bank-option")
+    .forEach((button) => {
+      button.addEventListener("click", () => {
+        const bankName = normalizeDeliveryRefundInput(button.dataset.bankValue);
+        const hiddenInput = document.getElementById(
+          "cancel-refund-bank-name"
+        ) as HTMLInputElement | null;
+        const searchInput = document.getElementById(
+          "cancel-refund-bank-search"
+        ) as HTMLInputElement | null;
 
-      if (hiddenInput) hiddenInput.value = bankName;
-      if (searchInput) searchInput.value = bankName;
+        if (hiddenInput) hiddenInput.value = bankName;
+        if (searchInput) searchInput.value = bankName;
 
-      setCancelRefundBankListHtml(bankName, bankName);
+        setCancelRefundBankListHtml(bankName, bankName);
+      });
     });
-  });
 };
 
 const isOrderPendingVerification = (order: any) => {
@@ -1797,7 +1940,11 @@ const isCompletedOrder = (order: any) => {
 };
 
 const isOnlineOrder = (order: any) => {
-  return String(order?.orderType ?? "").trim().toUpperCase() === "ONLINE";
+  return (
+    String(order?.orderType ?? "")
+      .trim()
+      .toUpperCase() === "ONLINE"
+  );
 };
 
 const getReturnDeadlineTime = (order: any) => {
@@ -1882,9 +2029,31 @@ const completedOrders = computed(() => {
   );
 });
 
+const handleWindowFocus = async () => {
+  if (
+    refreshingOrdersOnFocus.value ||
+    store.orderLoading ||
+    submittingReturn.value
+  ) {
+    return;
+  }
+
+  refreshingOrdersOnFocus.value = true;
+  try {
+    await fetchOrdersAndReviews(false);
+  } finally {
+    refreshingOrdersOnFocus.value = false;
+  }
+};
+
 onMounted(() => {
+  window.addEventListener("focus", handleWindowFocus);
   initPaidOrders();
   fetchOrdersAndReviews();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("focus", handleWindowFocus);
 });
 
 const toggleOrder = async (orderId: number) => {
@@ -1947,7 +2116,7 @@ const afterLeave = (el: Element) => {
   element.style.transition = "";
 };
 
-const fetchOrdersAndReviews = async () => {
+const fetchOrdersAndReviews = async (showSuccessToast = true) => {
   try {
     await store.fetchOrders();
     await fetchMyReviews();
@@ -1969,10 +2138,42 @@ const fetchOrdersAndReviews = async () => {
       openedOrderId.value = null;
     }
 
-    toast("success", "Đã làm mới lịch sử đơn hàng");
+    if (showSuccessToast) {
+      toast("success", "Đã làm mới lịch sử đơn hàng");
+    }
   } catch (error) {
     showError(error, "Không tải được lịch sử đơn hàng");
   }
+};
+
+const handleCustomerOrderConflict = async (
+  error: any,
+  orderId: number | null | undefined,
+  fallback: string
+) => {
+  if (error?.response?.status !== 409) {
+    return false;
+  }
+
+  await fetchOrdersAndReviews(false);
+
+  if (orderId && store.orders.some((item) => item.orderId === orderId)) {
+    openedOrderId.value = orderId;
+  }
+
+  await Swal.fire({
+    icon: "warning",
+    title: "Đơn hàng đã thay đổi",
+    text: getErrorMessage(
+      error,
+      fallback ||
+        "Trạng thái đơn hàng đã được cập nhật ở nơi khác. Dữ liệu mới đã được tải lại, vui lòng kiểm tra và thao tác lại."
+    ),
+    confirmButtonColor: "#bd9a5f",
+    confirmButtonText: "Đã hiểu",
+  });
+
+  return true;
 };
 
 const fetchMyReviews = async () => {
@@ -4010,7 +4211,15 @@ const openDeliveryRefundBankModal = async (order: CustomerOrderResponse) => {
     openedOrderId.value = order.orderId;
     toast("success", "Đã gửi thông tin tài khoản hoàn tiền.");
   } catch (error) {
-    showError(error, "Không thể gửi thông tin hoàn tiền lúc này.");
+    if (
+      !(await handleCustomerOrderConflict(
+        error,
+        order.orderId,
+        "Thông tin hoàn tiền hoặc trạng thái đơn hàng đã thay đổi. Dữ liệu mới đã được tải lại, vui lòng kiểm tra lại."
+      ))
+    ) {
+      showError(error, "Không thể gửi thông tin hoàn tiền lúc này.");
+    }
   } finally {
     store.orderLoading = false;
   }
@@ -5051,7 +5260,15 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
       await fetchOrdersAndReviews();
       toast("success", "Đã hủy đơn hàng thành công!");
     } catch (error) {
-      showError(error, "Không thể hủy đơn hàng lúc này. Vui lòng thử lại.");
+      if (
+        !(await handleCustomerOrderConflict(
+          error,
+          order.orderId,
+          "Đơn hàng đã được xử lý ở nơi khác. Dữ liệu mới đã được tải lại, vui lòng kiểm tra lại."
+        ))
+      ) {
+        showError(error, "Không thể hủy đơn hàng lúc này. Vui lòng thử lại.");
+      }
     } finally {
       store.orderLoading = false;
     }
@@ -5098,7 +5315,18 @@ const submitReturnRequest = async (payload: ReturnRequestSubmitPayload) => {
 
     toast("success", "Đã gửi yêu cầu hoàn hàng thành công!");
   } catch (error) {
-    showError(error, "Không thể gửi yêu cầu hoàn hàng lúc này.");
+    const conflicted = await handleCustomerOrderConflict(
+      error,
+      payload.orderId,
+      "Điều kiện hoàn hàng hoặc trạng thái đơn đã thay đổi. Dữ liệu mới đã được tải lại, vui lòng kiểm tra lại."
+    );
+
+    if (conflicted) {
+      returnModalVisible.value = false;
+      selectedReturnOrder.value = null;
+    } else {
+      showError(error, "Không thể gửi yêu cầu hoàn hàng lúc này.");
+    }
   } finally {
     submittingReturn.value = false;
     store.orderLoading = false;
@@ -5137,7 +5365,15 @@ const cancelReturnRequest = async (order: CustomerOrderResponse) => {
       await fetchOrdersAndReviews();
       toast("success", "Đã hủy yêu cầu hoàn trả thành công!");
     } catch (error) {
-      showError(error, "Không thể thao tác lúc này.");
+      if (
+        !(await handleCustomerOrderConflict(
+          error,
+          order.orderId,
+          "Yêu cầu hoàn hàng đã được xử lý hoặc thay đổi ở nơi khác. Dữ liệu mới đã được tải lại, vui lòng kiểm tra lại."
+        ))
+      ) {
+        showError(error, "Không thể thao tác lúc này.");
+      }
     } finally {
       store.orderLoading = false;
     }

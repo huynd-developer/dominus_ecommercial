@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import Swal from "sweetalert2";
 
 import { useAuthStore } from "@/modules/auth/stores/authStore";
@@ -21,6 +21,20 @@ const authStore = useAuthStore();
 const activeTab = ref<TabType>("overview");
 
 const configModalVisible = ref(false);
+const configModalKey = ref(0);
+/*
+ * Snapshot đúng giá trị cấu hình mà người dùng đang nhìn thấy
+ * tại thời điểm mở modal.
+ *
+ * Chỉ dùng để gửi expectedExpiryWarningDays cho BE nhằm phát hiện
+ * stale/lost-update. Không dùng snapshot này làm giá trị cấu hình mới.
+ */
+const configSnapshotExpiryWarningDays = ref<number | null>(null);
+
+/*
+ * Tránh chạy chồng nhiều lần khi trình duyệt phát sinh focus liên tiếp.
+ */
+const refreshingOnFocus = ref(false);
 
 const role = computed(() => {
   return String(authStore.role || localStorage.getItem("role") || "")
@@ -57,9 +71,7 @@ const totalPages = computed(() => {
 
   const parsed = Number(value);
 
-  return Number.isFinite(parsed) && parsed > 0
-    ? parsed
-    : 0;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 });
 
 const currentPage = computed(() => {
@@ -70,9 +82,7 @@ const currentPage = computed(() => {
 
   const parsed = Number(value);
 
-  return Number.isFinite(parsed) && parsed >= 0
-    ? parsed
-    : 0;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 });
 
 const totalElements = computed(() => {
@@ -83,9 +93,7 @@ const totalElements = computed(() => {
 
   const parsed = Number(value);
 
-  return Number.isFinite(parsed) && parsed >= 0
-    ? parsed
-    : 0;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 });
 
 const pageSize = computed(() => {
@@ -96,9 +104,7 @@ const pageSize = computed(() => {
 
   const parsed = Number(value);
 
-  return Number.isFinite(parsed) && parsed > 0
-    ? parsed
-    : 20;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 20;
 });
 
 const pageStart = computed(() => {
@@ -128,55 +134,56 @@ const pageNumbers = computed(() => {
   }
 
   const maxVisible = 5;
-  let start = Math.max(
-    0,
-    currentPage.value - Math.floor(maxVisible / 2)
-  );
+  let start = Math.max(0, currentPage.value - Math.floor(maxVisible / 2));
 
-  let end = Math.min(
-    total - 1,
-    start + maxVisible - 1
-  );
+  let end = Math.min(total - 1, start + maxVisible - 1);
 
-  start = Math.max(
-    0,
-    end - maxVisible + 1
-  );
+  start = Math.max(0, end - maxVisible + 1);
 
-  return Array.from(
-    { length: end - start + 1 },
-    (_, index) => start + index
-  );
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index);
 });
+
+const fetchCurrentTabData = async () => {
+  if (activeTab.value === "overview") {
+    await inventoryStore.fetchOverview();
+    return;
+  }
+
+  if (activeTab.value === "near-expiry") {
+    await inventoryStore.fetchNearExpiry();
+    return;
+  }
+
+  if (activeTab.value === "expired") {
+    await inventoryStore.fetchExpired();
+  }
+};
 
 const loadCurrentTab = async () => {
   try {
-    if (activeTab.value === "overview") {
-      await inventoryStore.fetchOverview();
-      return;
-    }
-
-    if (activeTab.value === "near-expiry") {
-      await inventoryStore.fetchNearExpiry();
-      return;
-    }
-
-    if (activeTab.value === "expired") {
-      await inventoryStore.fetchExpired();
-      return;
-    }
-
+    await fetchCurrentTabData();
   } catch (error) {
     await showLoadError(error);
   }
+};
+
+const getBackendMessage = (error: any, fallback: string) => {
+  const data = error?.response?.data;
+
+  if (typeof data === "string" && data.trim()) {
+    return data;
+  }
+
+  return (
+    data?.message || data?.detail || data?.error || error?.message || fallback
+  );
 };
 
 const showLoadError = async (error: any) => {
   await Swal.fire({
     icon: "error",
     title: "Không thể tải dữ liệu",
-    text:
-      error?.response?.data?.message || "Đã xảy ra lỗi khi tải dữ liệu kho.",
+    text: getBackendMessage(error, "Đã xảy ra lỗi khi tải dữ liệu kho."),
     confirmButtonText: "Đóng",
   });
 };
@@ -263,11 +270,7 @@ const nextPage = async () => {
 };
 
 const goToPage = async (page: number) => {
-  if (
-    page < 0 ||
-    page >= totalPages.value ||
-    page === currentPage.value
-  ) {
+  if (page < 0 || page >= totalPages.value || page === currentPage.value) {
     return;
   }
 
@@ -280,8 +283,21 @@ const goToPage = async (page: number) => {
   await loadCurrentTab();
 };
 
-const openConfig = () => {
-  configModalVisible.value = true;
+const openConfig = async () => {
+  /*
+   * Luôn đọc lại cấu hình trước khi mở modal.
+   * Như vậy user không cần F5 để nhìn giá trị mới nhất.
+   */
+  try {
+    await inventoryStore.fetchConfig();
+
+    configSnapshotExpiryWarningDays.value =
+      inventoryStore.config?.expiryWarningDays ?? null;
+
+    configModalVisible.value = true;
+  } catch (error) {
+    await showLoadError(error);
+  }
 };
 
 const closeConfig = () => {
@@ -290,6 +306,7 @@ const closeConfig = () => {
   }
 
   configModalVisible.value = false;
+  configSnapshotExpiryWarningDays.value = null;
 };
 
 const saveConfig = async (value: number) => {
@@ -303,12 +320,46 @@ const saveConfig = async (value: number) => {
     return;
   }
 
+  /*
+   * Snapshot phải là giá trị đã đọc từ BE khi modal được mở.
+   * Nếu vì lý do nào đó snapshot chưa có thì đọc lại config trước,
+   * tuyệt đối không tự đoán bằng giá trị người dùng vừa nhập.
+   */
+  if (configSnapshotExpiryWarningDays.value === null) {
+    try {
+      await inventoryStore.fetchConfig();
+
+      configSnapshotExpiryWarningDays.value =
+        inventoryStore.config?.expiryWarningDays ?? null;
+    } catch (error) {
+      await showLoadError(error);
+      return;
+    }
+  }
+
+  if (configSnapshotExpiryWarningDays.value === null) {
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể cập nhật",
+      text: "Không xác định được cấu hình kho hiện tại. Vui lòng thử lại.",
+    });
+
+    return;
+  }
+
   try {
     await inventoryStore.updateConfig({
       expiryWarningDays: value,
+
+      /*
+       * Khớp BE:
+       * InventoryConfigUpdateRequest.expectedExpiryWarningDays
+       */
+      expectedExpiryWarningDays: configSnapshotExpiryWarningDays.value,
     });
 
     configModalVisible.value = false;
+    configSnapshotExpiryWarningDays.value = null;
 
     await Swal.fire({
       icon: "success",
@@ -332,16 +383,91 @@ const saveConfig = async (value: number) => {
       return;
     }
 
+    /*
+     * BE trả 409 khi:
+     * - FE đang giữ config cũ
+     * - một tab/người khác đã cập nhật config trước
+     *
+     * Không tự submit lại.
+     * Chỉ tải state mới rồi bắt user kiểm tra và xác nhận lại.
+     */
+    if (error?.response?.status === 409) {
+      try {
+        await Promise.all([
+          inventoryStore.fetchConfig(),
+          inventoryStore.fetchSummary(),
+          fetchCurrentTabData(),
+        ]);
+
+        configSnapshotExpiryWarningDays.value =
+          inventoryStore.config?.expiryWarningDays ?? null;
+        configModalKey.value++;
+      } catch {
+        /*
+         * Giữ nguyên conflict gốc để user biết dữ liệu đã thay đổi.
+         * Lần thao tác sau vẫn sẽ đọc lại config trước khi lưu nếu cần.
+         */
+      }
+
+      await Swal.fire({
+        icon: "warning",
+        title: "Cấu hình đã thay đổi",
+        text: getBackendMessage(
+          error,
+          "Cấu hình cảnh báo HSD đã được thay đổi ở nơi khác. Dữ liệu mới đã được tải lại, vui lòng kiểm tra và xác nhận lại."
+        ),
+        confirmButtonText: "Đã hiểu",
+        customClass: {
+          container: "inventory-conflict-alert",
+        },
+      });
+
+      return;
+    }
+
     await Swal.fire({
       icon: "error",
       title: "Cập nhật thất bại",
-      text:
-        error?.response?.data?.message || "Không thể cập nhật cấu hình kho.",
+      text: getBackendMessage(error, "Không thể cập nhật cấu hình kho."),
     });
   }
 };
 
+/*
+ * Không F5:
+ * - Khi quay lại tab, refresh dữ liệu đang nhìn thấy.
+ * - Nếu modal config đang mở thì KHÔNG fetch config để tránh ghi đè
+ *   nội dung user đang nhập. Trường hợp config đã bị người khác đổi,
+ *   BE sẽ chặn bằng 409 khi save.
+ */
+const handleWindowFocus = async () => {
+  if (refreshingOnFocus.value || inventoryStore.savingConfig) {
+    return;
+  }
+
+  refreshingOnFocus.value = true;
+
+  try {
+    const requests: Promise<unknown>[] = [
+      inventoryStore.fetchSummary(),
+      fetchCurrentTabData(),
+    ];
+
+    if (!configModalVisible.value) {
+      requests.push(inventoryStore.fetchConfig());
+    }
+
+    await Promise.all(requests);
+  } catch (error) {
+    await showLoadError(error);
+  } finally {
+    refreshingOnFocus.value = false;
+  }
+};
+
 onMounted(async () => {
+  window.addEventListener("focus", handleWindowFocus);
+
   try {
     await Promise.all([
       inventoryStore.fetchSummary(),
@@ -351,6 +477,10 @@ onMounted(async () => {
   } catch (error) {
     await showLoadError(error);
   }
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("focus", handleWindowFocus);
 });
 </script>
 
@@ -414,7 +544,6 @@ onMounted(async () => {
         >
           Đã hết hạn
         </button>
-
       </div>
 
       <div class="filters">
@@ -461,7 +590,6 @@ onMounted(async () => {
 
             Hết hạn
           </label>
-
         </template>
 
         <button type="button" class="reset-btn" @click="resetFilters">
@@ -524,10 +652,7 @@ onMounted(async () => {
           <button
             type="button"
             class="page-nav"
-            :disabled="
-              totalPages === 0 ||
-              currentPage + 1 >= totalPages
-            "
+            :disabled="totalPages === 0 || currentPage + 1 >= totalPages"
             @click="nextPage"
           >
             Sau
@@ -537,6 +662,7 @@ onMounted(async () => {
     </div>
 
     <InventoryConfigModal
+      :key="configModalKey"
       :visible="configModalVisible"
       :current-value="inventoryStore.config?.expiryWarningDays ?? 30"
       :saving="inventoryStore.savingConfig"
@@ -762,5 +888,14 @@ onMounted(async () => {
     overflow-x: auto;
     padding-bottom: 2px;
   }
+}
+
+/*
+ * InventoryConfigModal dùng z-index 99999.
+ * Chỉ nâng riêng cảnh báo stale/conflict lên trên modal.
+ * Không tác động các SweetAlert khác.
+ */
+:global(.inventory-conflict-alert) {
+  z-index: 100001 !important;
 }
 </style>

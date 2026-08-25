@@ -21,6 +21,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -31,6 +35,13 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class GoodsReceiptServiceImpl implements GoodsReceiptService {
+
+    /*
+     * Các SQL error code biểu thị state conflict/stale, không phải validation 400.
+     * Giữ nguyên stored procedure hiện tại, chỉ map đúng HTTP status.
+     */
+    private static final Set<Integer> GOODS_RECEIPT_CONFLICT_SQL_CODES =
+            Set.of(50011, 50022, 50031, 50033, 50041);
 
     private final GoodsReceiptRepository goodsReceiptRepository;
     private final GoodsReceiptItemRepository goodsReceiptItemRepository;
@@ -128,6 +139,7 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                 .receiptTypeLabel(type.getLabel())
                 .status(status)
                 .statusLabel(status.getLabel())
+                .revision(buildRevision(receipt, items))
                 .note(receipt.getNote())
 
                 .createdById(userId(receipt.getCreatedBy()))
@@ -188,10 +200,30 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
     @Override
     @Transactional
     public GoodsReceiptDetailResponse update(Integer id, GoodsReceiptSaveRequest request) {
-        GoodsReceipt receipt = findReceipt(id);
+        /*
+         * UPDATE là mutation duy nhất không đi qua stored procedure.
+         * Khóa row trước khi kiểm tra state + revision để serialize:
+         * - update <-> update
+         * - update <-> submit
+         * - update <-> cancel
+         */
+        GoodsReceipt receipt = findReceiptForUpdate(id);
 
         requireStatus(receipt, GoodsReceiptStatus.DRAFT,
                 "Chỉ phiếu lưu tạm mới được sửa.");
+
+        /*
+         * Đọc đúng snapshot hiện tại trong DB sau khi đã giữ lock.
+         * Nếu một tab khác đã sửa DRAFT trước đó thì revision sẽ khác,
+         * dù Status vẫn còn là DRAFT.
+         */
+        List<GoodsReceiptItem> currentItems =
+                goodsReceiptItemRepository.findByGoodsReceipt_IdOrderByIdAsc(id);
+
+        validateExpectedRevision(
+                request.getExpectedRevision(),
+                buildRevision(receipt, currentItems)
+        );
 
         GoodsReceiptType currentType =
                 GoodsReceiptType.fromCode(receipt.getReceiptType());
@@ -565,6 +597,103 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                 );
     }
 
+    private GoodsReceipt findReceiptForUpdate(Integer id) {
+        if (id == null || id <= 0) {
+            throw badRequest("Id phiếu nhập không hợp lệ.");
+        }
+
+        return goodsReceiptRepository.findByIdForUpdate(id)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Không tìm thấy phiếu nhập."
+                        )
+                );
+    }
+
+    private void validateExpectedRevision(
+            String expectedRevision,
+            String currentRevision
+    ) {
+        String expected = normalizeOptional(expectedRevision);
+
+        if (expected == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Dữ liệu phiếu nhập trên màn hình chưa có phiên bản hiện tại. "
+                            + "Vui lòng tải lại phiếu và xác nhận lại."
+            );
+        }
+
+        if (!expected.equals(currentRevision)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Phiếu nhập đã được thay đổi ở nơi khác. "
+                            + "Vui lòng tải lại dữ liệu mới nhất và xác nhận lại."
+            );
+        }
+    }
+
+    private String buildRevision(
+            GoodsReceipt receipt,
+            List<GoodsReceiptItem> items
+    ) {
+        StringBuilder source = new StringBuilder();
+
+        appendRevisionPart(source, receipt == null ? null : receipt.getId());
+        appendRevisionPart(source, receipt == null ? null : receipt.getReceiptNo());
+        appendRevisionPart(source, receipt == null ? null : receipt.getReceiptType());
+        appendRevisionPart(source, receipt == null ? null : receipt.getStatus());
+        appendRevisionPart(source, receipt == null ? null : receipt.getNote());
+        appendRevisionPart(source, receipt == null ? null : receipt.getCreatedAt());
+
+        if (items != null) {
+            for (GoodsReceiptItem item : items) {
+                ProductVariant variant = item.getProductVariant();
+
+                appendRevisionPart(source, item.getId());
+                appendRevisionPart(source, variant == null ? null : variant.getId());
+                appendRevisionPart(source, item.getLotCode());
+                appendRevisionPart(source, item.getQuantity());
+                appendRevisionPart(
+                        source,
+                        item.getUnitCost() == null
+                                ? null
+                                : item.getUnitCost().toPlainString()
+                );
+                appendRevisionPart(source, item.getManufacturedDate());
+                appendRevisionPart(source, item.getReceivedDate());
+                appendRevisionPart(source, item.getExpirationDate());
+                appendRevisionPart(source, item.getNote());
+            }
+        }
+
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+
+            byte[] hash = digest.digest(
+                    source.toString().getBytes(StandardCharsets.UTF_8)
+            );
+
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Không thể tạo phiên bản dữ liệu phiếu nhập.",
+                    ex
+            );
+        }
+    }
+
+    private void appendRevisionPart(StringBuilder source, Object value) {
+        String text = value == null ? "<NULL>" : String.valueOf(value);
+
+        source.append(text.length())
+                .append(':')
+                .append(text)
+                .append('|');
+    }
+
     private void requireStatus(
             GoodsReceipt receipt,
             GoodsReceiptStatus expected,
@@ -711,13 +840,35 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                             ? cause.getMessage()
                             : ex.getMessage();
 
+            HttpStatus status =
+                    isGoodsReceiptStateConflict(ex)
+                            ? HttpStatus.CONFLICT
+                            : HttpStatus.BAD_REQUEST;
+
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+                    status,
                     message == null
                             ? "Không thể xử lý nghiệp vụ phiếu nhập."
                             : message
             );
         }
+    }
+
+    private boolean isGoodsReceiptStateConflict(DataAccessException ex) {
+        Throwable current = ex;
+
+        while (current != null) {
+            if (current instanceof SQLException sqlException
+                    && GOODS_RECEIPT_CONFLICT_SQL_CODES.contains(
+                    sqlException.getErrorCode()
+            )) {
+                return true;
+            }
+
+            current = current.getCause();
+        }
+
+        return false;
     }
 
     private void clearPersistenceContext() {

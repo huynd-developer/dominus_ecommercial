@@ -16,7 +16,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -28,6 +33,7 @@ public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
     private final ProductVariantRepository productVariantRepository;
     private final ProductImageRepository productImageRepository;
+    private final InventoryLotRepository inventoryLotRepository;
     private final ReviewRepository reviewRepository;
     private final BrandRepository brandRepository;
     private final CategoryRepository categoryRepository;
@@ -133,9 +139,20 @@ public class ProductServiceImpl implements ProductService {
             ProductRequest request) {
 
         Product product =
-                productRepository.findById(id)
-                        .orElseThrow(() ->
-                                new RuntimeException("Không tìm thấy sản phẩm"));
+                findActiveProductForUpdateOrThrow(id);
+
+        /*
+         * Revision chỉ đại diện dữ liệu Product/SKU mà form quản lý sản phẩm được phép sửa.
+         * Không đưa tồn kho, NSX/HSD theo lot, ảnh hay rating vào revision để tránh conflict giả
+         * khi các module kho/ảnh/đánh giá thay đổi độc lập.
+         */
+        List<ProductVariant> existingVariants =
+                productVariantRepository.findByProduct_IdAndIsDeletedFalse(id);
+
+        validateExpectedRevision(
+                request.getExpectedRevision(),
+                buildProductRevision(product, existingVariants)
+        );
 
         Brand brand = brandRepository.findById(request.getBrandId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy Brand"));
@@ -169,8 +186,6 @@ public class ProductServiceImpl implements ProductService {
         productRepository.save(product);
 
         /* Chỉ sửa variant chưa xóa mềm; variant cũ vẫn giữ để bảo toàn FK/lịch sử kho. */
-        List<ProductVariant> existingVariants =
-                productVariantRepository.findByProduct_IdAndIsDeletedFalse(id);
         Map<Integer, ProductVariant> existingVariantMap = existingVariants.stream()
                 .collect(Collectors.toMap(ProductVariant::getId, v -> v));
 
@@ -302,9 +317,7 @@ public class ProductServiceImpl implements ProductService {
     public void deleteProduct(Integer id) {
 
         Product product =
-                productRepository.findById(id)
-                        .orElseThrow(() ->
-                                new RuntimeException("Không tìm thấy sản phẩm"));
+                findActiveProductForUpdateOrThrow(id);
 
         product.setIsDeleted(true);
 
@@ -319,12 +332,20 @@ public class ProductServiceImpl implements ProductService {
             Boolean isPrimary
     ) throws Exception {
 
+        /*
+         * Kiểm tra sớm để không upload Cloudinary cho product không tồn tại/đã ẩn.
+         * Không giữ DB lock trong lúc gọi dịch vụ ngoài.
+         */
         Product product =
                 productRepository.findById(productId)
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Không tìm thấy sản phẩm"
                                 ));
+
+        if (Boolean.TRUE.equals(product.getIsDeleted())) {
+            throw conflict("Sản phẩm đã được ẩn hoặc đã thay đổi.");
+        }
 
         Map uploadResult =
                 cloudinary.uploader().upload(
@@ -335,6 +356,14 @@ public class ProductServiceImpl implements ProductService {
         String imageUrl =
                 uploadResult.get("secure_url")
                         .toString();
+
+        /*
+         * Khóa đúng Product trước khi đổi trạng thái ảnh primary.
+         * Mọi mutation ảnh của cùng product đi qua cùng row lock nên không thể
+         * kết thúc với nhiều ảnh primary do race.
+         */
+        Product lockedProduct =
+                findActiveProductForUpdateOrThrow(productId);
 
         if (Boolean.TRUE.equals(isPrimary)) {
 
@@ -354,7 +383,7 @@ public class ProductServiceImpl implements ProductService {
         ProductImage image =
                 new ProductImage();
 
-        image.setProduct(product);
+        image.setProduct(lockedProduct);
 
         image.setImageUrl(imageUrl);
 
@@ -373,7 +402,7 @@ public class ProductServiceImpl implements ProductService {
             Integer imageId
     ) {
 
-        ProductImage image =
+        ProductImage initialImage =
                 productImageRepository.findById(
                                 imageId
                         )
@@ -383,7 +412,20 @@ public class ProductServiceImpl implements ProductService {
                                 ));
 
         Integer productId =
-                image.getProduct().getId();
+                initialImage.getProduct().getId();
+
+        /*
+         * Khóa theo Product để serialize delete / set-primary / upload-primary
+         * của cùng một sản phẩm.
+         */
+        findProductForUpdateOrThrow(productId);
+
+        ProductImage image =
+                productImageRepository
+                        .findByIdAndProduct_Id(imageId, productId)
+                        .orElseThrow(() ->
+                                conflict("Ảnh đã thay đổi hoặc đã bị xóa.")
+                        );
 
         boolean wasPrimary =
                 Boolean.TRUE.equals(
@@ -391,6 +433,7 @@ public class ProductServiceImpl implements ProductService {
                 );
 
         productImageRepository.delete(image);
+        productImageRepository.flush();
 
         if (wasPrimary) {
 
@@ -417,6 +460,17 @@ public class ProductServiceImpl implements ProductService {
             Integer imageId
     ) {
 
+        findActiveProductForUpdateOrThrow(productId);
+
+        productImageRepository
+                .findByIdAndProduct_Id(imageId, productId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.BAD_REQUEST,
+                                "Ảnh không thuộc sản phẩm."
+                        )
+                );
+
         List<ProductImage> images =
                 productImageRepository
                         .findByProduct_Id(productId);
@@ -429,6 +483,201 @@ public class ProductServiceImpl implements ProductService {
         }
 
         productImageRepository.saveAll(images);
+    }
+
+
+    private Product findProductForUpdateOrThrow(Integer id) {
+
+        return productRepository.findByIdForUpdate(id)
+                .orElseThrow(() ->
+                        new RuntimeException("Không tìm thấy sản phẩm"));
+    }
+
+    private Product findActiveProductForUpdateOrThrow(Integer id) {
+
+        Product product =
+                findProductForUpdateOrThrow(id);
+
+        if (Boolean.TRUE.equals(product.getIsDeleted())) {
+            throw conflict("Sản phẩm đã được ẩn hoặc đã thay đổi.");
+        }
+
+        return product;
+    }
+
+    private void validateExpectedRevision(
+            String expectedRevision,
+            String currentRevision
+    ) {
+
+        if (expectedRevision == null
+                || expectedRevision.trim().isEmpty()) {
+            /*
+             * Giữ compatibility cho client cũ.
+             * FE quản lý sản phẩm mới phải gửi revision để bật stale protection.
+             */
+            return;
+        }
+
+        if (!expectedRevision.trim().equalsIgnoreCase(currentRevision)) {
+            throw conflict(
+                    "Sản phẩm đã thay đổi. Vui lòng tải lại dữ liệu mới nhất trước khi lưu."
+            );
+        }
+    }
+
+    private String buildProductRevision(
+            Product product,
+            List<ProductVariant> activeVariants
+    ) {
+
+        StringBuilder value =
+                new StringBuilder();
+
+        appendRevisionPart(value, product.getId());
+        appendRevisionPart(value, product.getName());
+        appendRevisionPart(value, product.getDescription());
+        appendRevisionPart(
+                value,
+                product.getBrand() == null
+                        ? null
+                        : product.getBrand().getId()
+        );
+        appendRevisionPart(
+                value,
+                product.getCategory() == null
+                        ? null
+                        : product.getCategory().getId()
+        );
+        appendRevisionPart(
+                value,
+                product.getConcentration() == null
+                        ? null
+                        : product.getConcentration().getId()
+        );
+        appendRevisionPart(value, product.getGender());
+        appendRevisionPart(value, product.getIsNiche());
+        appendRevisionPart(value, product.getStatus());
+        appendRevisionPart(value, product.getIsDeleted());
+
+        List<Integer> fragranceFamilyIds =
+                product.getFragranceFamilies() == null
+                        ? List.of()
+                        : product.getFragranceFamilies()
+                        .stream()
+                        .map(FragranceFamily::getId)
+                        .filter(Objects::nonNull)
+                        .sorted()
+                        .toList();
+
+        for (Integer fragranceFamilyId : fragranceFamilyIds) {
+            appendRevisionPart(
+                    value,
+                    "F:" + fragranceFamilyId
+            );
+        }
+
+        List<ProductVariant> variants =
+                activeVariants == null
+                        ? List.of()
+                        : activeVariants.stream()
+                        .sorted(
+                                Comparator.comparing(
+                                        ProductVariant::getId,
+                                        Comparator.nullsLast(
+                                                Comparator.naturalOrder()
+                                        )
+                                )
+                        )
+                        .toList();
+
+        for (ProductVariant variant : variants) {
+
+            appendRevisionPart(value, "V");
+            appendRevisionPart(value, variant.getId());
+            appendRevisionPart(
+                    value,
+                    variant.getCapacity() == null
+                            ? null
+                            : variant.getCapacity().getId()
+            );
+            appendRevisionPart(
+                    value,
+                    variant.getBottleType() == null
+                            ? null
+                            : variant.getBottleType().getId()
+            );
+            appendRevisionPart(value, variant.getSku());
+            appendRevisionPart(
+                    value,
+                    variant.getPrice() == null
+                            ? null
+                            : variant.getPrice()
+                            .stripTrailingZeros()
+                            .toPlainString()
+            );
+            appendRevisionPart(value, variant.getStatus());
+            appendRevisionPart(value, variant.getIsDeleted());
+
+            /*
+             * Cố ý KHÔNG hash:
+             * - stockQuantity legacy
+             * - manufacturingDate / expirationDate legacy
+             * - InventoryLot
+             * vì chúng không thuộc form Product/SKU và không được gây stale giả.
+             */
+        }
+
+        return sha256(value.toString());
+    }
+
+    private void appendRevisionPart(
+            StringBuilder builder,
+            Object value
+    ) {
+
+        String text =
+                value == null
+                        ? "<null>"
+                        : String.valueOf(value);
+
+        builder.append(text.length())
+                .append(':')
+                .append(text)
+                .append('|');
+    }
+
+    private String sha256(String value) {
+
+        try {
+
+            MessageDigest digest =
+                    MessageDigest.getInstance("SHA-256");
+
+            byte[] hash =
+                    digest.digest(
+                            value.getBytes(StandardCharsets.UTF_8)
+                    );
+
+            return HexFormat.of().formatHex(hash);
+
+        } catch (NoSuchAlgorithmException ex) {
+
+            throw new IllegalStateException(
+                    "Không thể tạo revision sản phẩm.",
+                    ex
+            );
+        }
+    }
+
+    private ResponseStatusException conflict(
+            String message
+    ) {
+
+        return new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                message
+        );
     }
 
     private String generateSku(Product product,
@@ -619,12 +868,24 @@ public class ProductServiceImpl implements ProductService {
                                     v.getPrice()
                             );
 
+                            /*
+                             * Compatibility ngày: không đọc ProductVariant legacy.
+                             * Nếu SKU còn bán được, trả ngày của lot FEFO tiếp theo.
+                             */
+                            InventoryLot nextSellableLot =
+                                    inventoryLotRepository.findNextSellableLot(v.getId())
+                                            .orElse(null);
+
                             dto.setManufacturingDate(
-                                    v.getManufacturingDate()
+                                    nextSellableLot != null
+                                            ? nextSellableLot.getManufacturedDate()
+                                            : null
                             );
 
                             dto.setExpirationDate(
-                                    v.getExpirationDate()
+                                    nextSellableLot != null
+                                            ? nextSellableLot.getExpirationDate()
+                                            : null
                             );
 
                             dto.setStatus(
@@ -662,6 +923,7 @@ public class ProductServiceImpl implements ProductService {
                         .toList();
 
         response.setVariants(variantDTOs);
+        response.setRevision(buildProductRevision(product, variants));
 
         // Điểm trung bình + số lượt đánh giá
         Double avgRating =

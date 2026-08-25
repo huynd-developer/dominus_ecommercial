@@ -26,9 +26,15 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -62,6 +68,10 @@ public class PromotionServiceImpl implements PromotionService {
 
     @Override
     public PromotionResponse create(PromotionRequest request) {
+        /*
+         * validateRequest() khóa các ProductVariant đã chọn trước khi check overlap.
+         * Vì vậy hai request tạo campaign cùng SKU sẽ được serialize theo SKU.
+         */
         validateRequest(request, null);
 
         Promotion promotion = new Promotion();
@@ -79,7 +89,9 @@ public class PromotionServiceImpl implements PromotionService {
 
     @Override
     public PromotionResponse update(Integer id, PromotionRequest request) {
-        Promotion promotion = findActiveRecord(id);
+        Promotion promotion = findActiveRecordForUpdate(id);
+
+        validateExpectedRevision(promotion, request.getExpectedRevision());
 
         if (isEnded(promotion)) {
             throw new ResponseStatusException(
@@ -102,7 +114,15 @@ public class PromotionServiceImpl implements PromotionService {
 
     @Override
     public PromotionResponse changeStatus(Integer id, Integer status) {
-        Promotion promotion = findActiveRecord(id);
+        // Giữ caller cũ hoạt động; Admin FE mới dùng overload có expectedRevision.
+        return changeStatus(id, status, null);
+    }
+
+    @Override
+    public PromotionResponse changeStatus(Integer id, Integer status, String expectedRevision) {
+        Promotion promotion = findActiveRecordForUpdate(id);
+
+        validateExpectedRevision(promotion, expectedRevision);
 
         if (status == null || (status != STATUS_DISABLED && status != STATUS_ENABLED)) {
             throw new ResponseStatusException(
@@ -129,7 +149,15 @@ public class PromotionServiceImpl implements PromotionService {
 
     @Override
     public void softDelete(Integer id) {
-        Promotion promotion = findActiveRecord(id);
+        // Giữ caller cũ hoạt động; Admin FE mới dùng overload có expectedRevision.
+        softDelete(id, null);
+    }
+
+    @Override
+    public void softDelete(Integer id, String expectedRevision) {
+        Promotion promotion = findActiveRecordForUpdate(id);
+
+        validateExpectedRevision(promotion, expectedRevision);
 
         if (isRunningNow(promotion)) {
             throw new ResponseStatusException(
@@ -217,6 +245,9 @@ public class PromotionServiceImpl implements PromotionService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Một chiến dịch chỉ nên áp dụng tối đa 100 biến thể");
         }
 
+        /*
+         * Bước 1: giữ nguyên validate DTO/duplicate cũ, chỉ gom ID.
+         */
         Set<Integer> selectedVariantIds = new HashSet<>();
 
         for (PromotionVariantRequest variantRequest : request.getVariants()) {
@@ -230,12 +261,40 @@ public class PromotionServiceImpl implements PromotionService {
                         "Không được chọn trùng một biến thể trong cùng chiến dịch"
                 );
             }
+        }
 
-            ProductVariant productVariant = productVariantRepository.findById(productVariantId)
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.NOT_FOUND,
-                            "Không tìm thấy biến thể sản phẩm"
-                    ));
+        /*
+         * Bước 2: khóa SKU theo ID tăng dần trước khi check overlap.
+         * Đây là phần chống race create/update/enable giữa hai campaign.
+         */
+        List<Integer> orderedVariantIds = selectedVariantIds.stream()
+                .sorted()
+                .toList();
+
+        List<ProductVariant> lockedVariants =
+                productVariantRepository.findAllByIdInForPromotionUpdate(orderedVariantIds);
+
+        Map<Integer, ProductVariant> variantsById = new HashMap<>();
+        for (ProductVariant variant : lockedVariants) {
+            variantsById.put(variant.getId(), variant);
+        }
+
+        for (Integer variantId : orderedVariantIds) {
+            if (!variantsById.containsKey(variantId)) {
+                throw new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy biến thể sản phẩm"
+                );
+            }
+        }
+
+        /*
+         * Bước 3: giữ nguyên business rule eligibility/overlap hiện tại,
+         * nhưng chạy khi lock SKU vẫn còn giữ trong transaction.
+         */
+        for (PromotionVariantRequest variantRequest : request.getVariants()) {
+            Integer productVariantId = variantRequest.getProductVariantId();
+            ProductVariant productVariant = variantsById.get(productVariantId);
 
             validateVariantCanJoinPromotion(productVariant);
 
@@ -332,8 +391,31 @@ public class PromotionServiceImpl implements PromotionService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chiến dịch chưa có biến thể sản phẩm");
         }
 
-        for (PromotionVariant promotionVariant : variants) {
-            ProductVariant productVariant = promotionVariant.getProductVariant();
+        List<Integer> orderedVariantIds = variants.stream()
+                .map(PromotionVariant::getProductVariant)
+                .filter(v -> v != null && v.getId() != null)
+                .map(ProductVariant::getId)
+                .distinct()
+                .sorted()
+                .toList();
+
+        List<ProductVariant> lockedVariants =
+                productVariantRepository.findAllByIdInForPromotionUpdate(orderedVariantIds);
+
+        Map<Integer, ProductVariant> variantsById = new HashMap<>();
+        for (ProductVariant variant : lockedVariants) {
+            variantsById.put(variant.getId(), variant);
+        }
+
+        for (Integer variantId : orderedVariantIds) {
+            ProductVariant productVariant = variantsById.get(variantId);
+
+            if (productVariant == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy biến thể sản phẩm"
+                );
+            }
 
             validateVariantCanJoinPromotion(productVariant);
 
@@ -390,9 +472,42 @@ public class PromotionServiceImpl implements PromotionService {
                 ));
     }
 
+    /**
+     * Mutation-only lookup. Không dùng cho GET/list để tránh lock không cần thiết.
+     */
+    private Promotion findActiveRecordForUpdate(Integer id) {
+        return promotionRepository.findByIdForUpdate(id)
+                .filter(p -> !Boolean.TRUE.equals(p.getIsDeleted()))
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy chiến dịch khuyến mãi"
+                ));
+    }
+
+    private void validateExpectedRevision(Promotion promotion, String expectedRevision) {
+        if (expectedRevision == null || expectedRevision.trim().isBlank()) {
+            // Compatibility cho caller cũ. FE Admin mới sẽ luôn gửi revision khi mutation.
+            return;
+        }
+
+        List<PromotionVariant> currentVariants = promotionVariantRepository
+                .findDetailByPromotionId(promotion.getId());
+
+        String currentRevision = calculateRevision(promotion, currentVariants);
+
+        if (!currentRevision.equalsIgnoreCase(expectedRevision.trim())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Chiến dịch khuyến mãi đã thay đổi. Vui lòng tải lại dữ liệu mới nhất."
+            );
+        }
+    }
+
     private PromotionResponse toPromotionResponse(Promotion promotion) {
-        List<PromotionVariantResponse> variants = promotionVariantRepository
-                .findDetailByPromotionId(promotion.getId())
+        List<PromotionVariant> promotionVariants = promotionVariantRepository
+                .findDetailByPromotionId(promotion.getId());
+
+        List<PromotionVariantResponse> variants = promotionVariants
                 .stream()
                 .map(this::toPromotionVariantResponse)
                 .toList();
@@ -407,7 +522,77 @@ public class PromotionServiceImpl implements PromotionService {
                 .activeNow(isRunningNow(promotion))
                 .ended(isEnded(promotion))
                 .variants(variants)
+                .revision(calculateRevision(promotion, promotionVariants))
                 .build();
+    }
+
+    /**
+     * Revision chỉ phản ánh dữ liệu thuộc quyền sở hữu Promotion:
+     * name/start/end/status/isDeleted + SKU áp dụng + discountPercent.
+     *
+     * Cố ý KHÔNG đưa ProductVariant.price, tồn kho, NSX/HSD, ảnh vào hash
+     * để thay đổi ở module Product/Inventory không tạo false stale cho Promotion.
+     */
+    private String calculateRevision(
+            Promotion promotion,
+            List<PromotionVariant> promotionVariants
+    ) {
+        StringBuilder snapshot = new StringBuilder();
+
+        appendRevisionPart(snapshot, promotion.getName());
+        appendRevisionPart(snapshot, promotion.getStartDate());
+        appendRevisionPart(snapshot, promotion.getEndDate());
+        appendRevisionPart(snapshot, promotion.getStatus());
+        appendRevisionPart(snapshot, promotion.getIsDeleted());
+
+        if (promotionVariants != null) {
+            promotionVariants.stream()
+                    .sorted(Comparator.comparing(
+                            pv -> pv.getProductVariant() == null
+                                    ? null
+                                    : pv.getProductVariant().getId(),
+                            Comparator.nullsLast(Integer::compareTo)
+                    ))
+                    .forEach(pv -> {
+                        Integer variantId = pv.getProductVariant() == null
+                                ? null
+                                : pv.getProductVariant().getId();
+
+                        appendRevisionPart(snapshot, variantId);
+
+                        Double discountPercent = pv.getDiscountPercent();
+                        String normalizedDiscount = discountPercent == null
+                                ? null
+                                : BigDecimal.valueOf(discountPercent)
+                                .stripTrailingZeros()
+                                .toPlainString();
+
+                        appendRevisionPart(snapshot, normalizedDiscount);
+                    });
+        }
+
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(
+                    snapshot.toString().getBytes(StandardCharsets.UTF_8)
+            );
+
+            StringBuilder hex = new StringBuilder(bytes.length * 2);
+            for (byte b : bytes) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 không khả dụng", ex);
+        }
+    }
+
+    private void appendRevisionPart(StringBuilder snapshot, Object value) {
+        String text = value == null ? "<null>" : String.valueOf(value);
+        snapshot.append(text.length())
+                .append(':')
+                .append(text)
+                .append('|');
     }
 
     private PromotionVariantResponse toPromotionVariantResponse(PromotionVariant promotionVariant) {

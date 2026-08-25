@@ -58,6 +58,14 @@ export interface InventoryConfig {
 
 export interface InventoryConfigUpdateRequest {
   expiryWarningDays: number;
+
+  /**
+   * Snapshot cấu hình FE đang nhìn thấy trước khi bấm lưu.
+   * Khớp BE InventoryConfigUpdateRequest.expectedExpiryWarningDays.
+   *
+   * Optional để không làm vỡ các caller cũ nếu còn tồn tại.
+   */
+  expectedExpiryWarningDays?: number;
 }
 
 export interface InventoryOverviewParams {

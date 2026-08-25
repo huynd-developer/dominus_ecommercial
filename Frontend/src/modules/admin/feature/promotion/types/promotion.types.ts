@@ -10,6 +10,12 @@ export interface PromotionRequest {
   startDate: string;
   endDate: string;
   variants: PromotionVariantRequest[];
+
+  /**
+   * Snapshot revision chỉ gửi khi UPDATE.
+   * CREATE không cần field này.
+   */
+  expectedRevision?: string;
 }
 
 export interface PromotionStatusRequest {
@@ -38,6 +44,9 @@ export interface PromotionResponse {
   activeNow: boolean;
   ended: boolean;
   variants: PromotionVariantResponse[];
+
+  /** SHA-256 snapshot trả từ BE để chống stale update giữa nhiều tab. */
+  revision: string;
 }
 
 export interface PromotionProductVariantOptionResponse {

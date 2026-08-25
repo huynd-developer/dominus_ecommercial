@@ -21,6 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Objects;
+
 @Service
 @RequiredArgsConstructor
 public class InventoryServiceImpl
@@ -205,8 +207,18 @@ public class InventoryServiceImpl
             InventoryConfigUpdateRequest request
     ) {
 
+        /*
+         * Chỉ mutation này dùng row lock.
+         * Các API GET vẫn đọc như cũ, không bị khóa thêm.
+         */
         InventoryConfig config =
-                getInventoryConfig();
+                getInventoryConfigForUpdate();
+
+        /*
+         * expectedExpiryWarningDays chỉ là snapshot FE đang nhìn thấy.
+         * Giá trị thật để ghi vẫn luôn là request.expiryWarningDays.
+         */
+        validateConfigSnapshot(request, config);
 
         config.setExpiryWarningDays(
                 request.getExpiryWarningDays()
@@ -358,6 +370,67 @@ public class InventoryServiceImpl
                                 "Không tìm thấy cấu hình kho"
                         )
                 );
+    }
+
+
+    /**
+     * Chỉ dùng cho UPDATE CONFIG.
+     *
+     * PESSIMISTIC_WRITE đảm bảo:
+     * - Request A khóa row và cập nhật trước.
+     * - Request B phải chờ.
+     * - Sau khi A commit, B đọc được state mới rồi mới so expected snapshot.
+     * - Nếu B vẫn gửi snapshot cũ thì trả 409, không ghi đè A.
+     */
+    private InventoryConfig getInventoryConfigForUpdate() {
+
+        return inventoryConfigRepository
+                .findByIdForUpdate(CONFIG_ID)
+                .orElseThrow(
+                        () -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Không tìm thấy cấu hình kho"
+                        )
+                );
+    }
+
+
+    private void validateConfigSnapshot(
+            InventoryConfigUpdateRequest request,
+            InventoryConfig currentConfig
+    ) {
+
+        if (request == null || currentConfig == null) {
+            return;
+        }
+
+        Short expectedExpiryWarningDays =
+                request.getExpectedExpiryWarningDays();
+
+        /*
+         * Nullable để không làm vỡ caller cũ.
+         * Khi FE mới gửi expected* thì stale-check mới được kích hoạt.
+         */
+        if (expectedExpiryWarningDays == null) {
+            return;
+        }
+
+        Short currentExpiryWarningDays =
+                currentConfig.getExpiryWarningDays();
+
+        if (!Objects.equals(
+                expectedExpiryWarningDays,
+                currentExpiryWarningDays
+        )) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Cấu hình cảnh báo hạn sử dụng đã thay đổi từ "
+                            + expectedExpiryWarningDays
+                            + " ngày thành "
+                            + currentExpiryWarningDays
+                            + " ngày. Vui lòng cập nhật lại dữ liệu và xác nhận lại."
+            );
+        }
     }
 
 

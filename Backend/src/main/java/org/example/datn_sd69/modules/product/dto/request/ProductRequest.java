@@ -41,6 +41,13 @@ public class ProductRequest {
 
     private Set<Integer> fragranceFamilyIds;
 
+    /**
+     * Revision snapshot dùng khi cập nhật để phát hiện form cũ/stale.
+     * Nullable để giữ compatibility cho client cũ; FE admin mới phải gửi field này khi PUT.
+     */
+    @Size(max = 64, message = "Revision sản phẩm không hợp lệ")
+    private String expectedRevision;
+
     @Valid
     @NotEmpty(message = "Sản phẩm phải có ít nhất 1 biến thể")
     private List<VariantRequestDTO> variants;

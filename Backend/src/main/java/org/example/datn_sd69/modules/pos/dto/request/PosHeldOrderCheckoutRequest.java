@@ -1,6 +1,7 @@
 package org.example.datn_sd69.modules.pos.dto.request;
 
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import lombok.Data;
@@ -11,20 +12,6 @@ import java.util.Locale;
 @Data
 public class PosHeldOrderCheckoutRequest {
 
-    /**
-     * CASH:
-     * - Thanh toán tiền mặt toàn phần.
-     *
-     * VNPAY:
-     * - Thanh toán VNPay toàn phần.
-     *
-     * VIETQR:
-     * - Thanh toán VietQR toàn phần.
-     *
-     * MIXED:
-     * - Tiền mặt + VNPAY hoặc VIETQR.
-     * - Phân biệt bằng transferProvider.
-     */
     @NotBlank(message = "Phương thức thanh toán không được để trống")
     @Pattern(
             regexp = "^(CASH|VNPAY|VIETQR|MIXED|MIXED_VNPAY|MIXED_VIETQR)$",
@@ -32,15 +19,6 @@ public class PosHeldOrderCheckoutRequest {
     )
     private String paymentMethod;
 
-    /**
-     * Chỉ cần gửi khi paymentMethod = MIXED.
-     *
-     * MIXED + VNPAY:
-     * transferProvider = VNPAY
-     *
-     * MIXED + VIETQR:
-     * transferProvider = VIETQR
-     */
     @Pattern(
             regexp = "^(VNPAY|VIETQR)$",
             message = "Nhà cung cấp chuyển khoản chỉ được là VNPAY hoặc VIETQR"
@@ -52,6 +30,22 @@ public class PosHeldOrderCheckoutRequest {
 
     @DecimalMin(value = "0.00", message = "Tiền chuyển khoản không được âm")
     private BigDecimal transferAmount;
+
+    /*
+     * Snapshot của phiếu treo/pending mà FE đang nhìn thấy.
+     * Chỉ dùng stale-check, không dùng để tính lại Order.
+     */
+    @DecimalMin(value = "0.00", message = "Tạm tính dự kiến không được âm")
+    @Digits(integer = 18, fraction = 2, message = "Tạm tính dự kiến không hợp lệ")
+    private BigDecimal expectedTotalAmount;
+
+    @DecimalMin(value = "0.00", message = "Giảm giá dự kiến không được âm")
+    @Digits(integer = 18, fraction = 2, message = "Giảm giá dự kiến không hợp lệ")
+    private BigDecimal expectedDiscountAmount;
+
+    @DecimalMin(value = "0.00", message = "Tổng thanh toán dự kiến không được âm")
+    @Digits(integer = 18, fraction = 2, message = "Tổng thanh toán dự kiến không hợp lệ")
+    private BigDecimal expectedFinalAmount;
 
     public void setPaymentMethod(String paymentMethod) {
         this.paymentMethod = paymentMethod == null

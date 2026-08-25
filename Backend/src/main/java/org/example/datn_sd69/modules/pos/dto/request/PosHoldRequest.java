@@ -1,6 +1,8 @@
 package org.example.datn_sd69.modules.pos.dto.request;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -8,6 +10,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Locale;
 
@@ -41,10 +44,22 @@ public class PosHoldRequest {
     @Size(max = 50, message = "Mã voucher không được vượt quá 50 ký tự")
     private String voucherCode;
 
-    /**
-     * Validate từng dòng sản phẩm qua PosItemRequest.
-     * Service sẽ cộng dồn các dòng trùng SKU và kiểm tra theo tồn kho thực tế.
+    /*
+     * Snapshot FE đang hiển thị khi treo/cập nhật phiếu.
+     * Nullable để giữ tương thích caller cũ.
      */
+    @DecimalMin(value = "0.00", message = "Tạm tính dự kiến không được âm")
+    @Digits(integer = 18, fraction = 2, message = "Tạm tính dự kiến không hợp lệ")
+    private BigDecimal expectedTotalAmount;
+
+    @DecimalMin(value = "0.00", message = "Giảm giá dự kiến không được âm")
+    @Digits(integer = 18, fraction = 2, message = "Giảm giá dự kiến không hợp lệ")
+    private BigDecimal expectedDiscountAmount;
+
+    @DecimalMin(value = "0.00", message = "Tổng thanh toán dự kiến không được âm")
+    @Digits(integer = 18, fraction = 2, message = "Tổng thanh toán dự kiến không hợp lệ")
+    private BigDecimal expectedFinalAmount;
+
     @Valid
     @NotEmpty(message = "Phiếu treo phải có ít nhất 1 sản phẩm")
     private List<PosItemRequest> items;

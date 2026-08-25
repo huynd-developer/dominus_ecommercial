@@ -32,6 +32,13 @@ export interface GoodsReceiptSaveRequest {
   receiptType: GoodsReceiptType;
   note?: string | null;
   items: GoodsReceiptItemRequest[];
+
+  /*
+   * Snapshot trả từ GoodsReceiptDetailResponse.revision.
+   * - CREATE: không cần gửi.
+   * - UPDATE DRAFT: gửi lại để BE phát hiện stale/lost-update.
+   */
+  expectedRevision?: string | null;
 }
 
 export interface GoodsReceiptRejectRequest {
@@ -90,6 +97,10 @@ export interface GoodsReceiptDetailResponse {
   receiptTypeLabel: string;
   status: GoodsReceiptStatus;
   statusLabel: string;
+
+  // Snapshot hiện tại của phiếu do BE trả về.
+  revision: string;
+
   note: string | null;
   createdById: number;
   createdByName: string;

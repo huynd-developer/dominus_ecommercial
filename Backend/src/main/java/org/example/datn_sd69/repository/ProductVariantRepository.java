@@ -1,11 +1,13 @@
 package org.example.datn_sd69.repository;
 
+import jakarta.persistence.LockModeType;
 import org.example.datn_sd69.entity.ProductVariant;
 import org.example.datn_sd69.repository.projection.ProductVariantInventoryProjection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -94,16 +96,41 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     // ================= Inventory =================
 
     /**
-     * Đọc tồn kho thật từ view kho.
-     * Không ghi ngược về ProductVariant.StockQuantity.
+     * Đọc tồn vật lý trực tiếp từ InventoryLot.
+     *
+     * - totalQuantity: tổng QuantityOnHand của mọi lot.
+     * - sellableQuantity: chỉ lot còn số lượng và HSD >= hôm nay.
+     *
+     * Không đọc ProductVariant.StockQuantity và không phụ thuộc ngày legacy của SKU.
      */
     @Query(
             value = """
                 SELECT
-                    CAST(COALESCE(V.TotalQuantity, 0) AS BIGINT) AS totalQuantity,
-                    CAST(COALESCE(V.SellableQuantity, 0) AS BIGINT) AS sellableQuantity
-                FROM dbo.vw_ProductVariantInventory V
-                WHERE V.ProductVariantId = :variantId
+                    CAST(
+                        COALESCE(
+                            SUM(CONVERT(BIGINT, L.QuantityOnHand)),
+                            0
+                        )
+                        AS BIGINT
+                    ) AS totalQuantity,
+
+                    CAST(
+                        COALESCE(
+                            SUM(
+                                CASE
+                                    WHEN L.QuantityOnHand > 0
+                                     AND L.ExpirationDate >= CAST(GETDATE() AS DATE)
+                                    THEN CONVERT(BIGINT, L.QuantityOnHand)
+                                    ELSE 0
+                                END
+                            ),
+                            0
+                        )
+                        AS BIGINT
+                    ) AS sellableQuantity
+
+                FROM dbo.InventoryLot L
+                WHERE L.ProductVariantId = :variantId
                 """,
             nativeQuery = true
     )
@@ -132,6 +159,24 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     Page<ProductVariant> searchVariantsForPromotion(
             @Param("keyword") String keyword,
             Pageable pageable
+    );
+
+    /**
+     * Khóa các SKU theo thứ tự ID trước khi Promotion kiểm tra overlap.
+     * Nhờ vậy hai request tạo/sửa/bật campaign cùng SKU không thể cùng lúc
+     * đều nhìn thấy overlap = 0 rồi cùng ghi dữ liệu.
+     *
+     * Không thay đổi query đọc SKU của Product/POS/Cart.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT v
+        FROM ProductVariant v
+        WHERE v.id IN :ids
+        ORDER BY v.id ASC
+    """)
+    List<ProductVariant> findAllByIdInForPromotionUpdate(
+            @Param("ids") List<Integer> ids
     );
 
     @EntityGraph(attributePaths = {

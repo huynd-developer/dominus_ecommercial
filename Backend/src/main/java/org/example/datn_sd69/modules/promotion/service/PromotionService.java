@@ -19,9 +19,17 @@ public interface PromotionService {
 
     PromotionResponse update(Integer id, PromotionRequest request);
 
+    /** Giữ signature cũ để không làm vỡ caller khác. */
     PromotionResponse changeStatus(Integer id, Integer status);
 
+    /** Bản stale-safe dành cho Admin FE mới. */
+    PromotionResponse changeStatus(Integer id, Integer status, String expectedRevision);
+
+    /** Giữ signature cũ để không làm vỡ caller khác. */
     void softDelete(Integer id);
+
+    /** Bản stale-safe dành cho Admin FE mới. */
+    void softDelete(Integer id, String expectedRevision);
 
     int syncExpiredPromotions();
 

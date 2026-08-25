@@ -8,7 +8,7 @@
               {{
                 isReadonly
                   ? "Xem chiến dịch Flash Sale"
-                  : promotion
+                  : effectivePromotion
                     ? "Cập nhật chiến dịch"
                     : "Tạo chiến dịch Flash Sale"
               }}
@@ -77,7 +77,7 @@
             v-model="selectedVariants"
             :start-date="form.startDate"
             :end-date="form.endDate"
-            :ignore-promotion-id="promotion?.id ?? null"
+            :ignore-promotion-id="effectivePromotion?.id ?? null"
             :readonly="isReadonly"
           />
         </div>
@@ -95,7 +95,7 @@
             @click="submit"
           >
             <span v-if="store.saving" class="spinner-border spinner-border-sm me-2"></span>
-            {{ promotion ? "Lưu thay đổi" : "Tạo chiến dịch" }}
+            {{ effectivePromotion ? "Lưu thay đổi" : "Tạo chiến dịch" }}
           </button>
         </div>
       </div>
@@ -134,22 +134,33 @@ const form = reactive({
 
 const selectedVariants = ref<PromotionVariantFormItem[]>([]);
 
+/*
+ * Khi PUT bị 409, giữ modal mở nhưng chuyển sang snapshot mới nhất.
+ * Không mutate prop của parent và không auto retry request cũ.
+ */
+const latestPromotion = ref<PromotionResponse | null>(null);
+const effectivePromotion = computed(
+  () => latestPromotion.value ?? props.promotion
+);
+
 const isReadonly = computed(() => {
-  return props.promotion?.ended === true;
+  return effectivePromotion.value?.ended === true;
 });
+
+const isConflictError = (error: any) => Number(error?.response?.status) === 409;
 
 const toDateTimeLocal = (value?: string | null) => {
   if (!value) return "";
   return value.substring(0, 16);
 };
 
-const resetForm = () => {
-  form.name = props.promotion?.name || "";
-  form.startDate = toDateTimeLocal(props.promotion?.startDate);
-  form.endDate = toDateTimeLocal(props.promotion?.endDate);
+const resetForm = (source: PromotionResponse | null = effectivePromotion.value) => {
+  form.name = source?.name || "";
+  form.startDate = toDateTimeLocal(source?.startDate);
+  form.endDate = toDateTimeLocal(source?.endDate);
 
   selectedVariants.value =
-    props.promotion?.variants?.map((item) => ({
+    source?.variants?.map((item) => ({
       productVariantId: item.productVariantId,
       discountPercent: item.discountPercent,
       sku: item.sku,
@@ -167,7 +178,8 @@ watch(
   () => props.show,
   (value) => {
     if (value) {
-      resetForm();
+      latestPromotion.value = null;
+      resetForm(props.promotion);
     }
   },
   { immediate: true }
@@ -177,7 +189,8 @@ watch(
   () => props.promotion,
   () => {
     if (props.show) {
-      resetForm();
+      latestPromotion.value = null;
+      resetForm(props.promotion);
     }
   }
 );
@@ -321,7 +334,7 @@ const validateBeforeSubmit = async () => {
 };
 
 const buildPayload = (): PromotionRequest => {
-  return {
+  const payload: PromotionRequest = {
     name: form.name.trim(),
     startDate: form.startDate,
     endDate: form.endDate,
@@ -330,21 +343,60 @@ const buildPayload = (): PromotionRequest => {
       discountPercent: Number(item.discountPercent),
     })),
   };
+
+  /* CREATE không gửi revision; UPDATE luôn gửi revision của snapshot đang sửa. */
+  if (effectivePromotion.value?.revision) {
+    payload.expectedRevision = effectivePromotion.value.revision;
+  }
+
+  return payload;
+};
+
+const reloadLatestAfterConflict = async (promotionId: number) => {
+  try {
+    const latest = await store.fetchDetail(promotionId);
+    latestPromotion.value = latest;
+    resetForm(latest);
+
+    await Swal.fire({
+      icon: "warning",
+      title: "Chiến dịch đã thay đổi",
+      text: "Dữ liệu mới nhất đã được tải vào form. Kiểm tra lại rồi lưu lần nữa nếu vẫn muốn cập nhật.",
+      confirmButtonColor: "#bd9a5f",
+    });
+  } catch (refreshError) {
+    console.error("Reload latest promotion after conflict failed:", refreshError);
+
+    await Swal.fire({
+      icon: "error",
+      title: "Chiến dịch đã thay đổi",
+      text: "Không tải được dữ liệu mới nhất. Hãy đóng form và mở lại chiến dịch.",
+      confirmButtonColor: "#bd9a5f",
+    });
+  }
 };
 
 const submit = async () => {
   try {
     const valid = await validateBeforeSubmit();
     if (!valid) return;
-    const payload = buildPayload();
 
-    if (props.promotion) {
-      await store.updatePromotion(props.promotion.id, payload);
+    const payload = buildPayload();
+    const editing = effectivePromotion.value;
+
+    if (editing) {
+      await store.updatePromotion(editing.id, payload);
     } else {
       await store.createPromotion(payload);
     }
+
     emit("saved");
-  } catch (error) {
+  } catch (error: any) {
+    if (isConflictError(error) && effectivePromotion.value?.id) {
+      await reloadLatestAfterConflict(effectivePromotion.value.id);
+      return;
+    }
+
     console.error("Promotion submit failed:", error);
   }
 };

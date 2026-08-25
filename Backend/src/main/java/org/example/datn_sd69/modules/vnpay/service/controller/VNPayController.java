@@ -676,14 +676,15 @@ public class VNPayController {
         }
 
         /*
-         * POS / MIXED / logic cũ:
-         * Giữ nguyên hành vi hiện tại: thanh toán xong thì hoàn thành đơn.
+         * POS / MIXED:
+         * Thanh toán xong thì hoàn thành đơn như nghiệp vụ hiện tại.
+         * Voucher đã được reserve từ lúc POS bắt đầu checkout/payment pending,
+         * callback thành công tuyệt đối không tăng usedCount lần 2.
          */
         order.setStatus(ORDER_STATUS_COMPLETED);
         order.setCompletedAt(LocalDateTime.now());
 
         applyLoyaltyPointsIfNeeded(order);
-        increaseVoucherUsageForOldFlowIfNeeded(order);
 
         orderRepository.save(order);
     }
@@ -719,30 +720,6 @@ public class VNPayController {
 
         order.setLoyaltyPointsApplied(true);
         order.setLoyaltyPointsEarned(pointsEarned);
-    }
-
-    private void increaseVoucherUsageForOldFlowIfNeeded(Order order) {
-        if (order == null || order.getVoucher() == null) {
-            return;
-        }
-
-        /*
-         * ONLINE checkout mới đã giữ lượt voucher khi tạo đơn pending.
-         * POS/MIXED cũ thường chưa tăng usedCount khi tạo đơn,
-         * nên chỉ tăng ở đây cho non-online để tránh phá logic cũ.
-         */
-        if (isOnlineOrder(order)) {
-            return;
-        }
-
-        Voucher voucher = order.getVoucher();
-
-        int usedCount = voucher.getUsedCount() != null
-                ? voucher.getUsedCount()
-                : 0;
-
-        voucher.setUsedCount(usedCount + 1);
-        voucherRepository.save(voucher);
     }
 
     private void updateCustomerRank(Customer customer) {
@@ -798,15 +775,11 @@ public class VNPayController {
         orderRepository.save(order);
 
         /*
-         * ONLINE checkout mới đã giữ lượt voucher khi tạo đơn pending,
-         * nên VNPay fail/cancel phải hoàn lượt voucher.
-         *
-         * POS/MIXED cũ chưa tăng usedCount khi tạo đơn pending,
-         * nên không trừ để tránh âm lượt voucher.
+         * Cả ONLINE và POS/MIXED đều reserve Voucher trước khi chờ VNPay.
+         * Payment fail/cancel phải hoàn đúng 1 lượt.
+         * Order row đã được khóa nên callback lặp không thể hoàn hai lần.
          */
-        if (isOnlineOrder(order)) {
-            restoreVoucherUsage(order);
-        }
+        restoreVoucherUsage(order);
 
         log.info("[VNPay] Đơn #{} đã hủy do thanh toán thất bại. ResponseCode={}",
                 order.getId(), responseCode);
@@ -832,19 +805,27 @@ public class VNPayController {
     }
 
     private void restoreVoucherUsage(Order order) {
-        if (order == null || order.getVoucher() == null) {
+        if (order == null
+                || order.getVoucher() == null
+                || order.getVoucher().getId() == null) {
             return;
         }
 
-        Voucher voucher = order.getVoucher();
+        Voucher lockedVoucher = voucherRepository
+                .findByIdForUpdate(order.getVoucher().getId())
+                .orElse(null);
 
-        int usedCount = voucher.getUsedCount() != null
-                ? voucher.getUsedCount()
+        if (lockedVoucher == null) {
+            return;
+        }
+
+        int usedCount = lockedVoucher.getUsedCount() != null
+                ? lockedVoucher.getUsedCount()
                 : 0;
 
         if (usedCount > 0) {
-            voucher.setUsedCount(usedCount - 1);
-            voucherRepository.save(voucher);
+            lockedVoucher.setUsedCount(usedCount - 1);
+            voucherRepository.save(lockedVoucher);
         }
     }
 
