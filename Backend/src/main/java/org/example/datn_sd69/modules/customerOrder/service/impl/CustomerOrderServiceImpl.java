@@ -18,6 +18,7 @@ import org.example.datn_sd69.entity.ReturnRequest;
 import org.example.datn_sd69.entity.ReturnRequestItem;
 import org.example.datn_sd69.entity.ReturnRequestMedia;
 import org.example.datn_sd69.entity.User;
+import org.example.datn_sd69.entity.Voucher;
 import org.example.datn_sd69.modules.customerOrder.dto.response.CustomerOrderItemResponse;
 import org.example.datn_sd69.modules.customerOrder.dto.response.CustomerOrderResponse;
 import org.example.datn_sd69.modules.customerOrder.dto.response.CustomerReturnItemResponse;
@@ -32,6 +33,7 @@ import org.example.datn_sd69.repository.ReturnRequestItemRepository;
 import org.example.datn_sd69.repository.ReturnRequestMediaRepository;
 import org.example.datn_sd69.repository.ReturnRequestRepository;
 import org.example.datn_sd69.repository.UserRepository;
+import org.example.datn_sd69.repository.VoucherRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -175,6 +177,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     private final ReturnRequestRepository returnRequestRepository;
     private final ReturnRequestItemRepository returnRequestItemRepository;
     private final ReturnRequestMediaRepository returnRequestMediaRepository;
+    private final VoucherRepository voucherRepository;
     private final Cloudinary cloudinary;
     private final ObjectMapper objectMapper;
     private final OrderMailService orderMailService;
@@ -191,6 +194,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
         return orderRepository.findByCustomer_UserIdOrderByCreatedAtDesc(customer.getUserId())
                 .stream()
+                .filter(order -> !isUnpaidPrepaidPaymentIntentHiddenFromCustomerHistory(order))
                 .map(order -> {
                     List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
                     return mapToOrderResponse(order, items);
@@ -210,6 +214,13 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                         HttpStatus.NOT_FOUND,
                         "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn"
                 ));
+
+        if (isUnpaidPrepaidPaymentIntentHiddenFromCustomerHistory(order)) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Không tìm thấy đơn hàng hoặc đơn hàng không thuộc tài khoản của bạn"
+            );
+        }
 
         List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
 
@@ -294,9 +305,19 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
         /*
          * Đơn Chờ xác nhận chưa trừ kho, nên khách hủy ở trạng thái này không cộng lại kho.
-         * Kho chỉ được trừ khi admin xác nhận đơn và chỉ được cộng lại ở các luồng hoàn/hoàn tiền phù hợp.
+         * Chỉ đưa đơn trả trước sang Chờ hoàn tiền khi hệ thống đã ghi nhận thanh toán thật.
+         * Nếu VietQR/VNPay chưa thanh toán mà khách hủy payment thì chỉ hủy đơn, không phát sinh hoàn tiền.
          */
-        if (isPrepaidPaymentMethod(order.getPaymentMethod())) {
+        boolean isPrepaidOrder = isPrepaidPaymentMethod(order.getPaymentMethod());
+        boolean isPaymentReported = Boolean.TRUE.equals(order.getIsPaymentReported());
+
+        boolean isActuallyPaidPrepaidOrder =
+                isPrepaidOrder && isPaymentReported;
+
+        boolean isUnpaidPrepaidPaymentIntent =
+                isPrepaidOrder && !isPaymentReported;
+
+        if (isActuallyPaidPrepaidOrder) {
             order.setStatus(STATUS_AWAITING_REFUND);
             order.setDeliveryRefundAmount(moneyOrZero(order.getFinalAmount()));
         } else {
@@ -304,11 +325,28 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
             order.setDeliveryRefundAmount(null);
         }
 
+        /*
+         * ONLINE đã reserve Voucher từ lúc tạo Order PENDING.
+         * Customer hủy thành công phải hoàn đúng 1 lượt.
+         * Order row đang bị khóa nên request hủy lặp sẽ bị status guard chặn
+         * trước khi có thể hoàn Voucher lần 2.
+         */
+        restoreVoucherUsage(order);
+
         order.setCancelReason(cancelReason);
         order.setCancelledAt(LocalDateTime.now());
 
         Order savedOrder = orderRepository.save(order);
-        orderMailService.sendOrderCancelled(savedOrder, cancelReason);
+
+        /*
+         * VietQR/VNPay chưa ghi nhận thanh toán chỉ là payment intent kỹ thuật,
+         * không gửi email "đơn hàng đã hủy" vì phía khách chưa có đơn hàng thực sự.
+         *
+         * COD hoặc prepaid đã thanh toán vẫn giữ nguyên email hủy như cũ.
+         */
+        if (!isUnpaidPrepaidPaymentIntent) {
+            orderMailService.sendOrderCancelled(savedOrder, cancelReason);
+        }
     }
 
     @Override
@@ -530,6 +568,28 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
                 || upperMethod.contains("TRANSFER")
                 || upperMethod.contains("MOMO");
     }
+
+    private boolean isUnpaidPrepaidPaymentIntentHiddenFromCustomerHistory(Order order) {
+        if (order == null
+                || !isOnlineOrder(order)
+                || Boolean.TRUE.equals(order.getIsPaymentReported())
+                || !isPrepaidPaymentMethod(order.getPaymentMethod())) {
+            return false;
+        }
+
+        Integer status = order.getStatus();
+
+        /*
+         * VietQR/VNPay chưa được ghi nhận thanh toán chỉ là payment intent kỹ thuật.
+         * Dù đang PENDING hay đã CANCELLED do bỏ dở/thất bại, phía khách chưa coi là
+         * một đơn hàng thực sự nên không hiển thị trong lịch sử.
+         *
+         * Không áp dụng cho COD và không áp dụng khi isPaymentReported = true.
+         */
+        return Integer.valueOf(STATUS_PENDING).equals(status)
+                || Integer.valueOf(STATUS_CANCELLED).equals(status);
+    }
+
 
     private void validatePreviousReturnRequestBeforeCreate(Order order) {
         if (order == null || order.getId() == null) {
@@ -974,6 +1034,31 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         }
 
         return order.getCreatedAt();
+    }
+
+    private void restoreVoucherUsage(Order order) {
+        if (order == null
+                || order.getVoucher() == null
+                || order.getVoucher().getId() == null) {
+            return;
+        }
+
+        Voucher lockedVoucher = voucherRepository
+                .findByIdForUpdate(order.getVoucher().getId())
+                .orElse(null);
+
+        if (lockedVoucher == null) {
+            return;
+        }
+
+        int usedCount = lockedVoucher.getUsedCount() != null
+                ? lockedVoucher.getUsedCount()
+                : 0;
+
+        if (usedCount > 0) {
+            lockedVoucher.setUsedCount(usedCount - 1);
+            voucherRepository.save(lockedVoucher);
+        }
     }
 
     private boolean canCancelOrder(Order order) {

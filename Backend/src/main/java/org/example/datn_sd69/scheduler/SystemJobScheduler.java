@@ -42,29 +42,78 @@ public class SystemJobScheduler {
 
         if (!timeoutOrders.isEmpty()) {
 
-            for (Order order : timeoutOrders) {
+            int cancelledCount = 0;
+
+            for (Order candidate : timeoutOrders) {
+                if (candidate == null || candidate.getId() == null) {
+                    continue;
+                }
 
                 /*
-                 * Đơn PENDING chưa xuất kho thực tế.
-                 *
-                 * InventoryLot là nguồn tồn kho duy nhất.
-                 * Không hoàn ProductVariant.stockQuantity.
-                 * Không tạo StockMovement vì chưa có SALE_OUT.
+                 * Khóa lại đúng Order trước khi hủy.
+                 * VNPay callback cũng khóa Order nên scheduler không thể hủy một
+                 * đơn vừa được ghi nhận thanh toán ở transaction song song.
                  */
+                Order order = orderRepository.findDetailByIdForUpdate(candidate.getId())
+                        .orElse(null);
+
+                if (order == null
+                        || !Integer.valueOf(0).equals(order.getStatus())
+                        || Boolean.TRUE.equals(order.getIsPaymentReported())) {
+                    continue;
+                }
+
+                /*
+                 * Đơn ONLINE PENDING chưa SALE_OUT InventoryLot.
+                 * Không hoàn ProductVariant.stockQuantity, không tạo StockMovement.
+                 *
+                 * Voucher đã reserve từ lúc tạo Order nên auto-cancel phải hoàn
+                 * đúng 1 lượt trong cùng transaction.
+                 */
+                restoreVoucherUsage(order);
+
                 order.setStatus(4);
                 order.setCancelReason(
                         "Hệ thống tự động hủy do quá hạn 15 phút không thanh toán"
                 );
                 order.setCancelledAt(LocalDateTime.now());
+
+                orderRepository.save(order);
+                cancelledCount++;
             }
 
-            orderRepository.saveAll(timeoutOrders);
+            if (cancelledCount > 0) {
+                System.out.println(
+                        "CronJob: Tự động hủy "
+                                + cancelledCount
+                                + " đơn hàng treo thanh toán (Quá 15 phút)."
+                );
+            }
+        }
+    }
 
-            System.out.println(
-                    "CronJob: Tự động hủy "
-                            + timeoutOrders.size()
-                            + " đơn hàng treo thanh toán (Quá 15 phút)."
-            );
+    private void restoreVoucherUsage(Order order) {
+        if (order == null
+                || order.getVoucher() == null
+                || order.getVoucher().getId() == null) {
+            return;
+        }
+
+        Voucher lockedVoucher = voucherRepo
+                .findByIdForUpdate(order.getVoucher().getId())
+                .orElse(null);
+
+        if (lockedVoucher == null) {
+            return;
+        }
+
+        int usedCount = lockedVoucher.getUsedCount() != null
+                ? lockedVoucher.getUsedCount()
+                : 0;
+
+        if (usedCount > 0) {
+            lockedVoucher.setUsedCount(usedCount - 1);
+            voucherRepo.save(lockedVoucher);
         }
     }
 
@@ -77,25 +126,9 @@ public class SystemJobScheduler {
 
         /*
          * FLASH SALE / PROMOTION:
-         *
-         * Không tự động chuyển status 0 -> 1.
-         *
-         * Quy ước hiện tại của module Promotion:
-         * - status = 1: Admin cho phép chiến dịch hoạt động.
-         * - status = 0: Admin đã chủ động tắt/tạm dừng, hoặc chiến dịch đã kết thúc.
-         * - activeNow được quyết định thêm bởi khoảng thời gian
-         *   startDate <= now < endDate.
-         *
-         * Promotion được tạo mới với status = 1. Vì vậy campaign tương lai
-         * không cần scheduler "bật" khi tới giờ; các API Flash Sale chỉ xem nó
-         * là active khi thời gian thực sự nằm trong khoảng chạy.
-         *
-         * Nếu scheduler tự bật mọi Promotion status = 0 đang nằm trong thời gian
-         * chạy thì một campaign vừa bị Admin tạm dừng sẽ bị bật lại sau tối đa
-         * 1 phút. Đó là sai nghiệp vụ.
+         * Giữ nguyên logic đã sửa trước đó: không auto 0 -> 1,
+         * chỉ tự động tắt khi hết hạn.
          */
-
-        // 1. Chỉ tự động tắt Flash Sale đã quá hạn kết thúc.
         List<Promotion> endingSales =
                 flashSaleRepo.findToEnd(1, now);
 
@@ -115,30 +148,15 @@ public class SystemJobScheduler {
 
         /*
          * VOUCHER:
-         * Giữ nguyên hoàn toàn logic hiện tại.
-         * Voucher sẽ được audit/sửa riêng ở module Voucher, không thay đổi
-         * nghiệp vụ Voucher trong bản fix Promotion này.
+         * - status = 1: Admin cho phép sử dụng.
+         * - status = 0: Admin tạm dừng/khóa, hoặc hệ thống đã kết thúc voucher.
+         * - hiệu lực thực tế còn phụ thuộc startDate <= now < endDate.
+         *
+         * KHÔNG tự động chuyển status 0 -> 1.
+         * Nếu làm vậy Voucher vừa bị Admin tạm dừng sẽ tự bật lại sau tối đa 1 phút.
+         *
+         * Chỉ giữ auto-end tại SystemJobScheduler để tránh 2 scheduler cùng sửa Voucher.
          */
-
-        // 2. Bật Voucher
-        List<Voucher> startingVouchers =
-                voucherRepo.findToStart(0, now);
-
-        for (Voucher voucher : startingVouchers) {
-            voucher.setStatus(1);
-        }
-
-        if (!startingVouchers.isEmpty()) {
-            voucherRepo.saveAll(startingVouchers);
-
-            System.out.println(
-                    "CronJob: Đã TỰ ĐỘNG BẬT "
-                            + startingVouchers.size()
-                            + " mã Voucher."
-            );
-        }
-
-        // 3. Tắt Voucher
         List<Voucher> endingVouchers =
                 voucherRepo.findToEnd(1, now);
 
@@ -152,7 +170,7 @@ public class SystemJobScheduler {
             System.out.println(
                     "CronJob: Đã TỰ ĐỘNG TẮT "
                             + endingVouchers.size()
-                            + " mã Voucher."
+                            + " mã Voucher đã hết hạn."
             );
         }
     }

@@ -3,13 +3,14 @@ package org.example.datn_sd69.modules.voucher.dto.request;
 import jakarta.validation.constraints.*;
 import lombok.Getter;
 import lombok.Setter;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Getter
 @Setter
 public class VoucherRequest {
-    private String code; // Để trống để backend tự sinh
+    private String code; // Để trống khi tạo mới thì backend tự sinh
 
     @NotBlank(message = "Kiểu giảm giá không được để trống")
     private String discountType;
@@ -38,4 +39,11 @@ public class VoucherRequest {
     private LocalDateTime endDate;
 
     private Integer status;
+
+    /**
+     * Snapshot revision FE đọc được khi mở form sửa.
+     * Nullable để không làm vỡ caller cũ; FE Admin mới sẽ gửi field này
+     * để kích hoạt stale-check 409.
+     */
+    private String expectedRevision;
 }

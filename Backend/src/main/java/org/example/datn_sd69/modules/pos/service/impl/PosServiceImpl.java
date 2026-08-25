@@ -228,7 +228,7 @@ public class PosServiceImpl implements PosService {
             lineItems.add(new LineItem(variant, quantity, unitPrice, lineTotal));
         }
 
-        Voucher appliedVoucher = resolveVoucher(request.getVoucherCode(), totalAmount);
+        Voucher appliedVoucher = resolveVoucherForMutation(request.getVoucherCode(), totalAmount);
 
         BigDecimal discountAmount = calculateDiscountAmount(appliedVoucher, totalAmount);
         BigDecimal finalAmount = totalAmount.subtract(discountAmount);
@@ -256,6 +256,14 @@ public class PosServiceImpl implements PosService {
 
         PaymentSummary paymentSummary =
                 validateAndBuildPaymentSummary(request, finalAmount);
+
+        /*
+         * POS giữ 1 lượt Voucher ngay khi bắt đầu checkout, kể cả payment online
+         * còn PENDING. Nhờ vậy Voucher không thể bị đơn khác lấy mất lượt trong
+         * lúc VNPay/VietQR đang chờ callback. Nếu payment bị hủy/thất bại thì
+         * các flow rollback bên dưới sẽ hoàn đúng 1 lượt.
+         */
+        reserveVoucherUsage(appliedVoucher);
 
         User customerUser = customer.getUser();
         boolean completedImmediately = paymentSummary.completedImmediately();
@@ -328,10 +336,6 @@ public class PosServiceImpl implements PosService {
         if (completedImmediately) {
             loyaltyPointsEarned = applyLoyaltyPointsIfNeeded(savedOrder, customer);
             customerLoyaltyPointsAfter = customer.getLoyaltyPoints();
-
-            if (appliedVoucher != null) {
-                increaseVoucherUsedCount(appliedVoucher);
-            }
         }
 
         String vnpayUrl = null;
@@ -1169,6 +1173,17 @@ public class PosServiceImpl implements PosService {
         PaymentSummary paymentSummary = validateAndBuildPaymentSummary(paymentRequest, finalAmount);
 
         /*
+         * Phiếu treo không giữ lượt Voucher. Chỉ khi bắt đầu thanh toán mới
+         * khóa + revalidate Voucher hiện tại rồi reserve đúng 1 lượt.
+         * Tổng tiền của phiếu treo vẫn giữ snapshot cũ như nghiệp vụ hiện tại.
+         */
+        Voucher reservedVoucher = reserveVoucherForHeldCheckout(
+                order.getVoucher(),
+                totalAmount
+        );
+        order.setVoucher(reservedVoucher);
+
+        /*
          * Phiếu treo chưa trừ kho.
          * Khi thanh toán mới re-check tồn kho và trừ kho.
          */
@@ -1207,10 +1222,6 @@ public class PosServiceImpl implements PosService {
 
         if (completedImmediately && savedOrder.getCustomer() != null) {
             loyaltyPointsEarned = applyLoyaltyPointsIfNeeded(savedOrder, savedOrder.getCustomer());
-
-            if (savedOrder.getVoucher() != null) {
-                increaseVoucherUsedCount(savedOrder.getVoucher());
-            }
         }
 
         String vnpayUrl = null;
@@ -1908,6 +1919,10 @@ public class PosServiceImpl implements PosService {
 
         LocalDateTime now = LocalDateTime.now();
 
+        if (Boolean.TRUE.equals(voucher.getIsDeleted())) {
+            throw new RuntimeException("Mã giảm giá không tồn tại.");
+        }
+
         if (voucher.getStatus() == null || voucher.getStatus() != STATUS_ACTIVE) {
             throw new RuntimeException("Mã giảm giá đã ngừng hoạt động.");
         }
@@ -1916,7 +1931,7 @@ public class PosServiceImpl implements PosService {
             throw new RuntimeException("Mã giảm giá chưa đến thời gian sử dụng.");
         }
 
-        if (voucher.getEndDate() != null && voucher.getEndDate().isBefore(now)) {
+        if (voucher.getEndDate() != null && !voucher.getEndDate().isAfter(now)) {
             throw new RuntimeException("Mã giảm giá đã hết hạn sử dụng.");
         }
 
@@ -2015,19 +2030,88 @@ public class PosServiceImpl implements PosService {
         }
     }
 
-    private void increaseVoucherUsedCount(Voucher voucher) {
+    private Voucher resolveVoucherForMutation(String voucherCode, BigDecimal totalAmount) {
+        if (voucherCode == null || voucherCode.trim().isBlank()) {
+            return null;
+        }
+
+        String cleanCode = voucherCode.trim();
+
+        Voucher candidate = voucherRepository.findByCodeIgnoreCase(cleanCode)
+                .orElseThrow(() -> new RuntimeException("Mã giảm giá không tồn tại."));
+
+        Voucher lockedVoucher = voucherRepository.findByIdForUpdate(candidate.getId())
+                .orElseThrow(() -> new RuntimeException("Mã giảm giá không tồn tại."));
+
+        if (lockedVoucher.getCode() == null
+                || !lockedVoucher.getCode().equalsIgnoreCase(cleanCode)) {
+            throw new RuntimeException("Mã giảm giá đã thay đổi. Vui lòng áp dụng lại mã.");
+        }
+
+        validateVoucherCanApply(lockedVoucher, totalAmount);
+
+        return lockedVoucher;
+    }
+
+    private void reserveVoucherUsage(Voucher voucher) {
         if (voucher == null) {
             return;
         }
 
-        int usedCount = voucher.getUsedCount() != null ? voucher.getUsedCount() : 0;
+        int usedCount = voucher.getUsedCount() != null
+                ? voucher.getUsedCount()
+                : 0;
 
-        if (voucher.getUsageLimit() != null && voucher.getUsageLimit() > 0 && usedCount >= voucher.getUsageLimit()) {
+        Integer usageLimit = voucher.getUsageLimit();
+
+        if (usageLimit != null && usageLimit > 0 && usedCount >= usageLimit) {
             throw new RuntimeException("Voucher đã hết lượt sử dụng.");
         }
 
         voucher.setUsedCount(usedCount + 1);
         voucherRepository.save(voucher);
+    }
+
+    private Voucher reserveVoucherForHeldCheckout(
+            Voucher voucher,
+            BigDecimal totalAmount
+    ) {
+        if (voucher == null || voucher.getId() == null) {
+            return null;
+        }
+
+        Voucher lockedVoucher = voucherRepository.findByIdForUpdate(voucher.getId())
+                .orElseThrow(() -> new RuntimeException("Mã giảm giá không tồn tại."));
+
+        validateVoucherCanApply(lockedVoucher, totalAmount);
+        reserveVoucherUsage(lockedVoucher);
+
+        return lockedVoucher;
+    }
+
+    private void restoreVoucherUsage(Order order) {
+        if (order == null
+                || order.getVoucher() == null
+                || order.getVoucher().getId() == null) {
+            return;
+        }
+
+        Voucher lockedVoucher = voucherRepository
+                .findByIdForUpdate(order.getVoucher().getId())
+                .orElse(null);
+
+        if (lockedVoucher == null) {
+            return;
+        }
+
+        int usedCount = lockedVoucher.getUsedCount() != null
+                ? lockedVoucher.getUsedCount()
+                : 0;
+
+        if (usedCount > 0) {
+            lockedVoucher.setUsedCount(usedCount - 1);
+            voucherRepository.save(lockedVoucher);
+        }
     }
 
     private String buildCapacityLabel(ProductVariant variant) {
@@ -2380,10 +2464,10 @@ public class PosServiceImpl implements PosService {
             loyaltyPointsEarned = applyLoyaltyPointsIfNeeded(savedOrder, savedOrder.getCustomer());
         }
 
-        if (savedOrder.getVoucher() != null) {
-            increaseVoucherUsedCount(savedOrder.getVoucher());
-        }
-
+        /*
+         * Voucher đã được reserve từ lúc checkout bắt đầu payment.
+         * Xác nhận VietQR chỉ hoàn tất Order, tuyệt đối không tăng usedCount lần 2.
+         */
         Integer customerPointAfter = savedOrder.getCustomer() != null ? savedOrder.getCustomer().getLoyaltyPoints() : 0;
 
         BigDecimal finalAmount = savedOrder.getFinalAmount() != null ? savedOrder.getFinalAmount() : BigDecimal.ZERO;
@@ -2592,6 +2676,12 @@ public class PosServiceImpl implements PosService {
                 "Hoàn kho POS do hủy thanh toán online - Order #" + order.getId()
         );
 
+        /*
+         * Payment pending đã reserve Voucher ở lúc checkout.
+         * Khi quay lại HOLD phải hoàn đúng 1 lượt; HOLD không giữ lượt Voucher.
+         */
+        restoreVoucherUsage(order);
+
         order.setPaymentMethod(PAYMENT_HOLD);
         order.setStatus(ORDER_STATUS_PENDING);
         order.setCompletedAt(null);
@@ -2684,9 +2774,11 @@ public class PosServiceImpl implements PosService {
         );
 
         /*
-         * Voucher chỉ tăng usedCount khi đơn hoàn thành,
-         * nên hóa đơn đang pending không cần giảm usedCount.
+         * Hóa đơn payment pending đã reserve Voucher từ lúc bắt đầu checkout.
+         * Hủy hóa đơn phải hoàn đúng 1 lượt.
          */
+        restoreVoucherUsage(order);
+
         order.setStatus(ORDER_STATUS_CANCELLED);
         order.setCompletedAt(null);
 
@@ -2792,10 +2884,7 @@ public class PosServiceImpl implements PosService {
 
         if (completedImmediately && savedOrder.getCustomer() != null) {
             loyaltyPointsEarned = applyLoyaltyPointsIfNeeded(savedOrder, savedOrder.getCustomer());
-
-            if (savedOrder.getVoucher() != null) {
-                increaseVoucherUsedCount(savedOrder.getVoucher());
-            }
+            // Voucher đã reserve từ lần checkout đầu nên retry không tăng usedCount lần 2.
         }
 
         String vnpayUrl = null;

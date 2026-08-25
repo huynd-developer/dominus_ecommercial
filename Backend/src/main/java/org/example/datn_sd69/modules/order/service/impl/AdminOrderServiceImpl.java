@@ -11,6 +11,7 @@ import org.example.datn_sd69.entity.OrderItem;
 import org.example.datn_sd69.entity.ProductVariant;
 import org.example.datn_sd69.entity.InventoryLot;
 import org.example.datn_sd69.entity.StockMovement;
+import org.example.datn_sd69.entity.Voucher;
 import org.example.datn_sd69.entity.ReturnRequest;
 import org.example.datn_sd69.entity.ReturnRequestItem;
 import org.example.datn_sd69.entity.ReturnRequestMedia;
@@ -32,6 +33,7 @@ import org.example.datn_sd69.repository.OrderRepository;
 import org.example.datn_sd69.repository.ReturnRequestItemRepository;
 import org.example.datn_sd69.repository.ReturnRequestMediaRepository;
 import org.example.datn_sd69.repository.ReturnRequestRepository;
+import org.example.datn_sd69.repository.VoucherRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -178,6 +180,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private final ReturnRequestRepository returnRequestRepository;
     private final ReturnRequestItemRepository returnRequestItemRepository;
     private final ReturnRequestMediaRepository returnRequestMediaRepository;
+    private final VoucherRepository voucherRepository;
     private final UserRepository userRepository;
     private final Cloudinary cloudinary;
     private final EntityManager entityManager;
@@ -474,6 +477,14 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             order.setStatus(STATUS_CANCELLED);
             order.setDeliveryRefundAmount(null);
         }
+
+        /*
+         * ONLINE đã reserve Voucher từ lúc tạo Order PENDING.
+         * Hủy đơn thành công phải hoàn đúng 1 lượt.
+         * Order hiện đã được khóa PESSIMISTIC_WRITE nên thao tác hủy lặp sẽ
+         * bị chặn bởi status và không thể hoàn Voucher lần 2.
+         */
+        restoreVoucherUsage(order);
 
         order.setCancelReason(cancelReason);
         order.setCancelledAt(LocalDateTime.now());
@@ -2552,6 +2563,31 @@ public class AdminOrderServiceImpl implements AdminOrderService {
      *
      * GET/list/detail vẫn dùng findOrderOrThrow() nên không bị khóa thừa.
      */
+    private void restoreVoucherUsage(Order order) {
+        if (order == null
+                || order.getVoucher() == null
+                || order.getVoucher().getId() == null) {
+            return;
+        }
+
+        Voucher lockedVoucher = voucherRepository
+                .findByIdForUpdate(order.getVoucher().getId())
+                .orElse(null);
+
+        if (lockedVoucher == null) {
+            return;
+        }
+
+        int usedCount = lockedVoucher.getUsedCount() != null
+                ? lockedVoucher.getUsedCount()
+                : 0;
+
+        if (usedCount > 0) {
+            lockedVoucher.setUsedCount(usedCount - 1);
+            voucherRepository.save(lockedVoucher);
+        }
+    }
+
     private Order findOrderForUpdateOrThrow(Integer orderId) {
         if (orderId == null || orderId <= 0) {
             throw new ResponseStatusException(

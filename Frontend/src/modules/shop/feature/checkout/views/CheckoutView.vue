@@ -1021,11 +1021,9 @@ const cancelAndRestoreCart = async () => {
   try {
     isPageLoading.value = true;
     if (createdOrderId.value) {
-      await api
-        .patch(`/customer/orders/${createdOrderId.value}/cancel`, {
-          cancelReason: "Khác",
-        })
-        .catch(() => {});
+      await api.patch(`/customer/orders/${createdOrderId.value}/cancel`, {
+        cancelReason: "Muốn thay đổi phương thức thanh toán",
+      });
     }
 
     if (cartSnapshot.value && cartSnapshot.value.length > 0) {
@@ -1054,8 +1052,15 @@ const cancelAndRestoreCart = async () => {
       showConfirmButton: false,
       timer: 3500,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
+    await showError(
+      "Không thể hủy thanh toán",
+      getErrorMessage(
+        error,
+        "Hệ thống chưa hủy được phiên thanh toán. Giỏ hàng chưa được khôi phục để tránh tạo đơn trùng. Vui lòng thử lại."
+      )
+    );
   } finally {
     isPageLoading.value = false;
   }
