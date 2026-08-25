@@ -10,6 +10,8 @@ public interface InventoryLotViewProjection {
     String getSku();
     String getProductName();
     String getImageUrl();
+    Double getCapacityValue();
+    String getBottleTypeName();
     String getLotCode();
     LocalDate getManufacturedDate();
     LocalDate getReceivedDate();

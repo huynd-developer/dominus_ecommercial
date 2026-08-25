@@ -32,6 +32,10 @@ public class StockMovementDetailResponse {
      */
     private String imageUrl;
 
+    private Double capacityValue;
+
+    private String bottleTypeName;
+
     private String lotCode;
 
 

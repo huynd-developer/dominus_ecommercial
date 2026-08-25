@@ -315,6 +315,12 @@ public class InventoryServiceImpl
                 .imageUrl(
                         projection.getImageUrl()
                 )
+                .capacityValue(
+                        projection.getCapacityValue()
+                )
+                .bottleTypeName(
+                        projection.getBottleTypeName()
+                )
                 .lotCode(
                         projection.getLotCode()
                 )

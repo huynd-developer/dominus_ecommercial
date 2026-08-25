@@ -191,6 +191,14 @@ public class StockMovementServiceImpl
                         projection.getImageUrl()
                 )
 
+                .capacityValue(
+                        projection.getCapacityValue()
+                )
+
+                .bottleTypeName(
+                        projection.getBottleTypeName()
+                )
+
                 .lotCode(
                         projection.getLotCode()
                 )
@@ -283,6 +291,14 @@ public class StockMovementServiceImpl
 
                 .imageUrl(
                         projection.getImageUrl()
+                )
+
+                .capacityValue(
+                        projection.getCapacityValue()
+                )
+
+                .bottleTypeName(
+                        projection.getBottleTypeName()
                 )
 
                 .lotCode(

@@ -742,7 +742,7 @@ if (receiptNoFromLot) {
             <tr>
               <th>Mã phiếu</th>
               <th>Trạng thái</th>
-              <th>SKU</th>
+              <th>Số SKU</th>
               <th>Tổng SL</th>
               <th>Người tạo</th>
               <th>Ngày tạo</th>

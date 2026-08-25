@@ -34,6 +34,8 @@ export interface InventoryLotListResponse {
   sku: string;
   productName: string;
   imageUrl: string | null;
+  capacityValue: number | null;
+  bottleTypeName: string | null;
   lotCode: string;
   receivedDate: string;
   expirationDate: string;
@@ -54,6 +56,8 @@ export interface InventoryLotDetailResponse {
   sku: string;
   productName: string;
   imageUrl: string | null;
+  capacityValue: number | null;
+  bottleTypeName: string | null;
   lotCode: string;
 
   manufacturedDate: string | null;

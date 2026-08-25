@@ -294,6 +294,8 @@ public interface InventoryQueryRepository
                         v.Sku AS sku,
                         v.ProductName AS productName,
                         productImage.ImageUrl AS imageUrl,
+                        c.Value AS capacityValue,
+                        bt.Name AS bottleTypeName,
                         v.LotCode AS lotCode,
                         v.ManufacturedDate AS manufacturedDate,
                         v.ReceivedDate AS receivedDate,
@@ -308,6 +310,10 @@ public interface InventoryQueryRepository
                     FROM dbo.vw_InventoryLotStatus v
                     LEFT JOIN dbo.ProductVariant pv
                         ON pv.Id = v.ProductVariantId
+                    LEFT JOIN dbo.Capacity c
+                        ON c.Id = pv.CapacityId
+                    LEFT JOIN dbo.BottleType bt
+                        ON bt.Id = pv.BottleTypeId
                     OUTER APPLY (
                         SELECT TOP 1
                             pi.ImageUrl
@@ -380,6 +386,8 @@ public interface InventoryQueryRepository
                         v.Sku AS sku,
                         v.ProductName AS productName,
                         productImage.ImageUrl AS imageUrl,
+                        c.Value AS capacityValue,
+                        bt.Name AS bottleTypeName,
                         v.LotCode AS lotCode,
                         v.ManufacturedDate AS manufacturedDate,
                         v.ReceivedDate AS receivedDate,
@@ -394,6 +402,10 @@ public interface InventoryQueryRepository
                     FROM dbo.vw_InventoryLotStatus v
                     LEFT JOIN dbo.ProductVariant pv
                         ON pv.Id = v.ProductVariantId
+                    LEFT JOIN dbo.Capacity c
+                        ON c.Id = pv.CapacityId
+                    LEFT JOIN dbo.BottleType bt
+                        ON bt.Id = pv.BottleTypeId
                     OUTER APPLY (
                         SELECT TOP 1
                             pi.ImageUrl

@@ -16,6 +16,16 @@ const formatNumber = (value?: number | null) => {
   return new Intl.NumberFormat("vi-VN").format(Number(value ?? 0));
 };
 
+const formatCapacity = (value?: number | null) => {
+  if (value == null || !Number.isFinite(Number(value))) {
+    return "—";
+  }
+
+  return `${new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 2,
+  }).format(Number(value))} ml`;
+};
+
 const formatDate = (value?: string | null) => {
   if (!value) {
     return "—";
@@ -203,6 +213,20 @@ const close = () => {
                     <span>Tên sản phẩm</span>
                     <strong>
                       {{ detail.productName }}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>Dung tích</span>
+                    <strong>
+                      {{ formatCapacity(detail.capacityValue) }}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>Loại chai</span>
+                    <strong>
+                      {{ detail.bottleTypeName || "—" }}
                     </strong>
                   </div>
 

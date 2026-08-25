@@ -21,6 +21,26 @@ const formatSigned = (value?: number | null) => {
   return number > 0 ? `+${formatNumber(number)}` : formatNumber(number);
 };
 
+const formatCapacity = (value?: number | null) => {
+  if (value == null || !Number.isFinite(Number(value))) return "";
+
+  return `${new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 2,
+  }).format(Number(value))} ml`;
+};
+
+const variantLabel = (item: {
+  capacityValue?: number | null;
+  bottleTypeName?: string | null;
+}) => {
+  const parts = [
+    formatCapacity(item.capacityValue),
+    String(item.bottleTypeName ?? "").trim(),
+  ].filter(Boolean);
+
+  return parts.join(" · ");
+};
+
 const formatDateTime = (value?: string | null) =>
   value
     ? new Intl.DateTimeFormat("vi-VN", {
@@ -250,7 +270,17 @@ const onPreviewImageError = () => {
                     </td>
                     <td>{{ item.lotCode || "—" }}</td>
                     <td><strong>{{ item.sku || "—" }}</strong></td>
-                    <td>{{ item.productName || "—" }}</td>
+                    <td>
+                      <div class="product-cell">
+                        <strong>{{ item.productName || "—" }}</strong>
+                        <span
+                          v-if="variantLabel(item)"
+                          class="variant-info"
+                        >
+                          {{ variantLabel(item) }}
+                        </span>
+                      </div>
+                    </td>
                     <td>{{ formatNumber(item.systemQuantity) }}</td>
                     <td>{{ formatNumber(item.actualQuantity) }}</td>
                     <td>
@@ -527,6 +557,24 @@ th {
   width: 78px;
   min-width: 78px;
   text-align: center;
+}
+
+.product-cell {
+  display: flex;
+  min-width: 150px;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.product-cell > strong {
+  color: #111827;
+}
+
+.variant-info {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .product-thumb {

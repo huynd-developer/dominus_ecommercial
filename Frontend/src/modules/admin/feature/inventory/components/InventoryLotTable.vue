@@ -148,7 +148,37 @@ const onPreviewImageError = () => {
 
           <!-- PRODUCT -->
           <td>
-            {{ item.productName }}
+            <div class="product-info">
+              <div class="product-name">
+                {{ item.productName }}
+              </div>
+
+              <div
+                v-if="
+                  item.capacityValue != null ||
+                  item.bottleTypeName
+                "
+                class="variant-meta"
+              >
+                <span v-if="item.capacityValue != null">
+                  {{ item.capacityValue }} ml
+                </span>
+
+                <span
+                  v-if="
+                    item.capacityValue != null &&
+                    item.bottleTypeName
+                  "
+                  class="variant-separator"
+                >
+                  •
+                </span>
+
+                <span v-if="item.bottleTypeName">
+                  {{ item.bottleTypeName }}
+                </span>
+              </div>
+            </div>
           </td>
 
           <!-- QUANTITY -->
@@ -284,6 +314,30 @@ td {
 
 .sku {
   font-weight: 600;
+}
+
+.product-info {
+  min-width: 180px;
+}
+
+.product-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.variant-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.variant-separator {
+  color: #9ca3af;
 }
 
 .image-column,

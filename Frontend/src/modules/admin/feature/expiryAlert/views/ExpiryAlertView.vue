@@ -90,6 +90,28 @@ const pageEnd = computed(() =>
 const formatNumber = (value?: number | null) =>
   new Intl.NumberFormat("vi-VN").format(Number(value ?? 0));
 
+const formatCapacity = (value?: number | null) => {
+  if (value == null || !Number.isFinite(Number(value))) {
+    return "";
+  }
+
+  return `${new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 2,
+  }).format(Number(value))} ml`;
+};
+
+const variantLabel = (item: {
+  capacityValue?: number | null;
+  bottleTypeName?: string | null;
+}) => {
+  const parts = [
+    formatCapacity(item.capacityValue),
+    String(item.bottleTypeName ?? "").trim(),
+  ].filter(Boolean);
+
+  return parts.join(" · ");
+};
+
 const formatDate = (value?: string | null) => {
   if (!value) {
     return "—";
@@ -726,7 +748,16 @@ onMounted(loadPage);
               </td>
 
               <td>
-                {{ item.productName }}
+                <div class="product-cell">
+                  <strong>{{ item.productName }}</strong>
+
+                  <span
+                    v-if="variantLabel(item)"
+                    class="variant-info"
+                  >
+                    {{ variantLabel(item) }}
+                  </span>
+                </div>
               </td>
 
               <td>
@@ -1324,6 +1355,24 @@ tbody tr:last-child td {
   color: #111827;
 
   white-space: nowrap;
+}
+
+.product-cell {
+  display: flex;
+  min-width: 160px;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.product-cell > strong {
+  color: #111827;
+}
+
+.variant-info {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .lot-link {

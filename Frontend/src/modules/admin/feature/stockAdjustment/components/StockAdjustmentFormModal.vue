@@ -15,6 +15,8 @@ interface EditableItem {
   sku: string;
   productName: string;
   imageUrl: string | null;
+  capacityValue: number | null;
+  bottleTypeName: string | null;
   lotCode: string;
   systemQuantity: number;
   actualQuantity: number | null;
@@ -172,6 +174,8 @@ const resetForm = () => {
         sku: item.sku ?? "",
         productName: item.productName ?? "",
         imageUrl: item.imageUrl ?? null,
+        capacityValue: item.capacityValue ?? null,
+        bottleTypeName: item.bottleTypeName ?? null,
         lotCode: item.lotCode ?? "",
         systemQuantity,
         actualQuantity,
@@ -244,6 +248,8 @@ const selectLot = (lot: InventoryLotListResponse) => {
     sku: lot.sku,
     productName: lot.productName,
     imageUrl: lot.imageUrl ?? null,
+    capacityValue: lot.capacityValue ?? null,
+    bottleTypeName: lot.bottleTypeName ?? null,
     lotCode: lot.lotCode,
     systemQuantity: Number(lot.quantityOnHand ?? 0),
     actualQuantity: null,
@@ -322,6 +328,26 @@ const differenceClass = (row: EditableItem) => {
 
 const formatNumber = (value?: number | null) =>
   new Intl.NumberFormat("vi-VN").format(Number(value ?? 0));
+
+const formatCapacity = (value?: number | null) => {
+  if (value == null || !Number.isFinite(Number(value))) return "";
+
+  return `${new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 2,
+  }).format(Number(value))} ml`;
+};
+
+const variantLabel = (item: {
+  capacityValue?: number | null;
+  bottleTypeName?: string | null;
+}) => {
+  const parts = [
+    formatCapacity(item.capacityValue),
+    String(item.bottleTypeName ?? "").trim(),
+  ].filter(Boolean);
+
+  return parts.join(" · ");
+};
 
 const validate = async () => {
   if (String(note.value ?? "").trim().length > 1000) {
@@ -575,6 +601,12 @@ const close = () => {
 
                 <span class="lot-card-body">
                   <strong>{{ option.productName }}</strong>
+                  <span
+                    v-if="variantLabel(option)"
+                    class="variant-info"
+                  >
+                    {{ variantLabel(option) }}
+                  </span>
                   <span class="sku-code">{{ option.sku }}</span>
                   <span class="lot-code">Lô {{ option.lotCode }}</span>
 
@@ -665,6 +697,12 @@ const close = () => {
                     <td>
                       <div class="product-cell">
                         <strong>{{ row.productName }}</strong>
+                        <span
+                          v-if="variantLabel(row)"
+                          class="variant-info"
+                        >
+                          {{ variantLabel(row) }}
+                        </span>
                         <span>{{ row.sku }}</span>
                         <span>Lô {{ row.lotCode }}</span>
                       </div>
@@ -1086,6 +1124,13 @@ const close = () => {
   color: #6b7280;
   font-size: 12px;
   word-break: break-word;
+}
+
+.variant-info {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .lot-meta {

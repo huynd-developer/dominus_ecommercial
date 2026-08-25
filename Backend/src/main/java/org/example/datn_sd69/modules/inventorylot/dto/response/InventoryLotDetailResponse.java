@@ -20,6 +20,8 @@ public class InventoryLotDetailResponse {
     private String sku;
     private String productName;
     private String imageUrl;
+    private Double capacityValue;
+    private String bottleTypeName;
     private String lotCode;
 
     private LocalDate manufacturedDate;
