@@ -15,7 +15,7 @@
           <span class="input-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/></svg>
           </span>
-          <input v-model="form.name" type="text" class="form-control-custom" placeholder="Nhập họ và tên của bạn" />
+          <input v-model="form.name" type="text" class="form-control-custom" placeholder="Nhập họ và tên của bạn" maxlength="50" />
         </div>
         <span class="field-error-text" v-if="validationErrors.name">{{ validationErrors.name }}</span>
       </div>
@@ -26,7 +26,7 @@
           <span class="input-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1zm13 2.383-4.708 2.825L15 11.105zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741zM1 11.105l4.708-2.897L1 5.383z"/></svg>
           </span>
-          <input v-model="form.email" type="email" class="form-control-custom" placeholder="name@example.com" />
+          <input v-model="form.email" type="email" class="form-control-custom" placeholder="name@example.com" maxlength="50" />
         </div>
         <span class="field-error-text" v-if="validationErrors.email">{{ validationErrors.email }}</span>
       </div>
@@ -37,7 +37,15 @@
           <span class="input-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M3.654 1.328a.678.678 0 0 0-.58-.506L1.51.714A.678.678 0 0 0 .79 1.166l-.718 3.123a.678.678 0 0 0 .413.75l3.123 1.25a.678.678 0 0 0 .75-.413l1.25-3.123a.678.678 0 0 0-.413-.75l-3.122-1.25zM1.884.511a1.745 1.745 0 0 1 1.492 1.3l.534 2.2a1.745 1.745 0 0 1-.346 1.557l-1.03 1.256A11.234 11.234 0 0 0 6.64 10.93l1.256-1.03a1.745 1.745 0 0 1 1.557-.346l2.2.534a1.745 1.745 0 0 1 1.3 1.492l.51 2.053a1.745 1.745 0 0 1-1.165 2.046l-2.053.51a1.745 1.745 0 0 1-2.046-1.165l-.51-2.053a1.745 1.745 0 0 1 1.165-2.046l2.053-.51z"/></svg>
           </span>
-          <input v-model="form.phone" type="text" class="form-control-custom" placeholder="Nhập số điện thoại" />
+          <input 
+            v-model="form.phone" 
+            type="text" 
+            inputmode="numeric"
+            class="form-control-custom" 
+            placeholder="Nhập số điện thoại" 
+            maxlength="10"
+            @input="form.phone = form.phone.replace(/[^0-9]/g, '')"
+          />
         </div>
         <span class="field-error-text" v-if="validationErrors.phone">{{ validationErrors.phone }}</span>
       </div>
@@ -48,7 +56,7 @@
           <span class="input-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zM5 8h6a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/></svg>
           </span>
-          <input v-model="form.password" type="password" class="form-control-custom" placeholder="Ít nhất 6 ký tự" />
+          <input v-model="form.password" type="password" class="form-control-custom" placeholder="Ít nhất 6 ký tự" maxlength="50" />
         </div>
         <span class="field-error-text" v-if="validationErrors.password">{{ validationErrors.password }}</span>
       </div>
@@ -89,6 +97,37 @@ const handleRegister = async () => {
   successMessage.value = '';
   validationErrors.value = {};
 
+  // Validate Frontend
+  let hasLocalError = false;
+  
+  if (form.name && form.name.length > 50) {
+    validationErrors.value.name = "Họ và tên không được vượt quá 50 ký tự";
+    hasLocalError = true;
+  }
+  
+  if (form.email && form.email.length > 50) {
+    validationErrors.value.email = "Email không được vượt quá 50 ký tự";
+    hasLocalError = true;
+  }
+  
+  if (form.phone) {
+    // Chỉ bắt buộc là 10 chữ số, KHÔNG ép phải bắt đầu bằng đầu số Việt Nam
+    if (!/^\d{10}$/.test(form.phone)) {
+      validationErrors.value.phone = "Số điện thoại không đúng định dạng";
+      hasLocalError = true;
+    }
+  }
+  
+  if (form.password && form.password.length > 50) {
+    validationErrors.value.password = "Mật khẩu không được vượt quá 50 ký tự";
+    hasLocalError = true;
+  }
+  
+  if (hasLocalError) {
+    loading.value = false;
+    return;
+  }
+
   const result = await authStore.registerCustomer(form);
 
   if (result.success) {
@@ -97,8 +136,16 @@ const handleRegister = async () => {
       router.push('/login');
     }, 2000);
   } else {
+    // Nếu bị Backend trả lỗi về (bao gồm cả lỗi "số VN" của BE), ta đè lại câu lỗi cho đẹp
     if (result.validationErrors) {
-      validationErrors.value = result.validationErrors;
+      const beErrors = { ...result.validationErrors };
+      
+      // Chặn và thay thế câu lỗi từ Backend
+      if (beErrors.phone && (beErrors.phone.includes('VN') || beErrors.phone.includes('hợp lệ'))) {
+        beErrors.phone = "Số điện thoại không đúng định dạng";
+      }
+      
+      validationErrors.value = beErrors;
     } else {
       generalError.value = result.message ?? '';
     }
@@ -130,7 +177,6 @@ const handleRegister = async () => {
   box-shadow: 0 0 0 3px rgba(10, 25, 49, 0.08);
 }
 
-/* Đổi màu viền sang đỏ nếu input dính validation error */
 .has-error .form-control-custom {
   border-color: #dc2626;
   background-color: #fef2f2;
@@ -151,10 +197,10 @@ const handleRegister = async () => {
 .decoration-none { text-decoration: none; }
 .decoration-none:hover { text-decoration: underline; }
 .logo-img {
-  width: 80px;          /* Chiều rộng của logo (ông tùy chỉnh theo ý muốn) */
-  height: 80px;         /* Chiều cao của logo */
-  object-fit: contain;  /* Giữ nguyên tỉ lệ ảnh, không lo bị méo góc */
-  border-radius: 8px;   /* Bo góc nhẹ cho logo (nếu logo hình tròn thì đổi thành 50%) */
+  width: 80px;          
+  height: 80px;         
+  object-fit: contain;  
+  border-radius: 8px;   
   transition: transform 0.3s ease;
 }
 </style>

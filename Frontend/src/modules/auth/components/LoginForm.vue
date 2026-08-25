@@ -36,6 +36,7 @@
             class="form-control-custom"
             placeholder="Nhập email của bạn"
             required
+            maxlength="50"
           />
         </div>
         <span class="field-error-text" v-if="validationErrors.email">{{
@@ -68,6 +69,7 @@
             class="form-control-custom pe-5"
             placeholder="Nhập mật khẩu của bạn"
             required
+            maxlength="50"
           />
           <span class="password-toggle" @click="showPassword = !showPassword">
             <svg
@@ -151,7 +153,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, onMounted, onUnmounted } from "vue"; // BỔ SUNG: onMounted và onUnmounted
+import { reactive, ref, onMounted, onUnmounted } from "vue";
 import { useAuthStore } from "../stores/authStore";
 import { useRouter, useRoute } from "vue-router";
 
@@ -168,11 +170,8 @@ const loading = ref(false);
 const errorMessage = ref("");
 const showPassword = ref(false);
 
-// Biến lưu mảng lỗi từng dòng
 const validationErrors = ref<Record<string, string>>({});
 
-// ==========================================
-// TẤM KHIÊN BẢO VỆ: Đuổi người dùng ra nếu họ đã đăng nhập thành công
 const checkAuthAndRedirect = () => {
   if (authStore.isAuthenticated) {
     const userRole = (authStore.role || "").toUpperCase().replace("ROLE_", "");
@@ -189,32 +188,40 @@ const checkAuthAndRedirect = () => {
   }
 };
 
-// Hàm xử lý phá vỡ bộ nhớ đệm BFCache của trình duyệt khi ấn nút Back
 const handlePageShow = (event: PageTransitionEvent) => {
   if (event.persisted) {
-    // Nếu trang bị ép tải lại từ lịch sử đóng băng
     checkAuthAndRedirect();
   }
 };
 
 onMounted(() => {
-  // 1. Chạy ngay khi vừa vào trang để kiểm tra xem đã có Token chưa
   checkAuthAndRedirect();
-
-  // 2. Lắng nghe trình duyệt xem có ai vừa ấn nút "Quay lại" không
   window.addEventListener("pageshow", handlePageShow);
 });
 
 onUnmounted(() => {
-  // Hủy lắng nghe khi rời khỏi trang để tránh rò rỉ bộ nhớ
   window.removeEventListener("pageshow", handlePageShow);
 });
-// ==========================================
 
 const handleLogin = async () => {
   loading.value = true;
   errorMessage.value = "";
   validationErrors.value = {};
+
+  // Validate Frontend tối đa 50 ký tự
+  let hasLocalError = false;
+  if (credentials.email && credentials.email.length > 50) {
+    validationErrors.value.email = "Email không được vượt quá 50 ký tự";
+    hasLocalError = true;
+  }
+  if (credentials.password && credentials.password.length > 50) {
+    validationErrors.value.password = "Mật khẩu không được vượt quá 50 ký tự";
+    hasLocalError = true;
+  }
+  if (hasLocalError) {
+    loading.value = false;
+    return;
+  }
 
   const result = props.isAdminMode
     ? await authStore.loginEmployee(credentials)
@@ -240,7 +247,6 @@ const handleLogin = async () => {
 </script>
 
 <style scoped>
-/* Giữ nguyên 100% CSS cũ của ông */
 .auth-card {
   width: 100%;
   max-width: 440px;
@@ -348,7 +354,6 @@ const handleLogin = async () => {
   transition: transform 0.3s ease;
 }
 
-/* Chỉ BỔ SUNG CSS báo lỗi đỏ */
 .has-error .form-control-custom {
   border-color: #dc2626;
   background-color: #fef2f2;
