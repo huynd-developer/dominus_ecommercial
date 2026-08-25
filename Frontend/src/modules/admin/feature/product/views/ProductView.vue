@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, onActivated, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import Swal from 'sweetalert2'
 
@@ -23,13 +23,17 @@ const currentPage = ref(Number(route.query.page) || 1)
 const pageSize = ref(10)
 const loading = ref(false)
 const refreshingOnFocus = ref(false)
+let hasActivatedOnce = false
 
 const refreshProductsSilently = async () => {
   if (refreshingOnFocus.value) return
 
   refreshingOnFocus.value = true
   try {
-    await store.fetchProducts()
+    await Promise.all([
+      store.fetchDropdowns(),
+      store.fetchProducts(),
+    ])
   } finally {
     refreshingOnFocus.value = false
   }
@@ -55,6 +59,15 @@ onMounted(async () => {
 
   window.addEventListener('focus', handleWindowFocus)
   document.addEventListener('visibilitychange', handleVisibilityChange)
+})
+
+onActivated(() => {
+  // Nếu ProductView được bọc bởi <KeepAlive>, lần quay lại trang cũng phải lấy master data mới nhất.
+  if (!hasActivatedOnce) {
+    hasActivatedOnce = true
+    return
+  }
+  void refreshProductsSilently()
 })
 
 onBeforeUnmount(() => {
@@ -97,22 +110,39 @@ const refreshProducts = async () => {
   if (loading.value) return
   loading.value = true
   try {
-    await store.fetchProducts()
+    await Promise.all([
+      store.fetchDropdowns(),
+      store.fetchProducts(),
+    ])
   } finally {
     loading.value = false
   }
 }
 
-const openAddModal = () => {
-  selectedProduct.value = null
-  isCloneMode.value = false
-  showModal.value = true
+const openAddModal = async () => {
+  try {
+    await store.fetchDropdowns()
+
+    selectedProduct.value = null
+    isCloneMode.value = false
+    showModal.value = true
+  } catch (error: any) {
+    await Swal.fire({
+      icon: 'error',
+      title: 'Không thể mở form sản phẩm',
+      text: error?.response?.data?.message || 'Không thể tải dữ liệu danh mục mới nhất'
+    })
+  }
 }
 
 const openEditModal = async (item: Product) => {
   try {
-    // Luôn lấy detail mới nhất khi bắt đầu edit để có revision hiện tại từ BE.
-    const latest = await productService.getProductById(item.id)
+    // Lấy đồng thời master data và detail mới nhất để form không giữ ID đã bị xóa ở module khác.
+    const [, latest] = await Promise.all([
+      store.fetchDropdowns(),
+      productService.getProductById(item.id),
+    ])
+
     selectedProduct.value = latest
     isCloneMode.value = false
     showModal.value = true
@@ -126,11 +156,24 @@ const openEditModal = async (item: Product) => {
   }
 }
 
-const openCloneModal = (item: Product) => {
-  // Chỉ truyền object gốc qua, việc gán lại ID, Tên, Biến thể để File Con lo cho an toàn!
-  selectedProduct.value = item
-  isCloneMode.value = true
-  showModal.value = true
+const openCloneModal = async (item: Product) => {
+  try {
+    // Clone cũng lấy detail + master mới nhất, tránh nhân bản các ID master đã bị xóa.
+    const [, latest] = await Promise.all([
+      store.fetchDropdowns(),
+      productService.getProductById(item.id),
+    ])
+
+    selectedProduct.value = latest
+    isCloneMode.value = true
+    showModal.value = true
+  } catch (error: any) {
+    await Swal.fire({
+      icon: 'error',
+      title: 'Không thể nhân bản sản phẩm',
+      text: error?.response?.data?.message || 'Không thể tải dữ liệu sản phẩm mới nhất'
+    })
+  }
 }
 
 const closeModal = () => {
