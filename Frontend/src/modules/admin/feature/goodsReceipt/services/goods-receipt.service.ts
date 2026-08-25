@@ -15,8 +15,8 @@ import type {
 
 const cleanParams = (params: Record<string, unknown>) =>
   Object.fromEntries(
-    Object.entries(params).filter(([, value]) =>
-      value !== undefined && value !== null && value !== ""
+    Object.entries(params).filter(
+      ([, value]) => value !== undefined && value !== null && value !== ""
     )
   );
 
@@ -24,31 +24,20 @@ const mapInventorySkuOption = (item: any): InventorySkuOption => ({
   productVariantId: Number(item.productVariantId),
   sku: String(item.sku ?? ""),
   productName: String(item.productName ?? ""),
-  imageUrl:
-    item.imageUrl == null
-      ? null
-      : String(item.imageUrl),
+  imageUrl: item.imageUrl == null ? null : String(item.imageUrl),
 
   // Metadata nhận diện biến thể.
-  capacityValue:
-    item.capacityValue == null
-      ? null
-      : Number(item.capacityValue),
+  capacityValue: item.capacityValue == null ? null : Number(item.capacityValue),
 
   bottleTypeName:
-    item.bottleTypeName == null
-      ? null
-      : String(item.bottleTypeName),
+    item.bottleTypeName == null ? null : String(item.bottleTypeName),
 
   // Dùng riêng cho việc ưu tiên SKU cần nhập thêm.
   totalQuantity: Number(item.totalQuantity ?? 0),
   sellableQuantity: Number(item.sellableQuantity ?? 0),
 });
 
-const compareLowStockFirst = (
-  a: InventorySkuOption,
-  b: InventorySkuOption
-) => {
+const compareLowStockFirst = (a: InventorySkuOption, b: InventorySkuOption) => {
   const sellableA = Number(a.sellableQuantity ?? 0);
   const sellableB = Number(b.sellableQuantity ?? 0);
 
@@ -63,10 +52,7 @@ const compareLowStockFirst = (
     return totalA - totalB;
   }
 
-  const productCompare = a.productName.localeCompare(
-    b.productName,
-    "vi"
-  );
+  const productCompare = a.productName.localeCompare(b.productName, "vi");
 
   if (productCompare !== 0) {
     return productCompare;
@@ -111,26 +97,19 @@ const goodsReceiptService = {
     id: number,
     request: GoodsReceiptSaveRequest
   ): Promise<GoodsReceiptDetailResponse> {
-    const response = await api.put(
-      `/admin/goods-receipts/${id}`,
-      request
-    );
+    const response = await api.put(`/admin/goods-receipts/${id}`, request);
 
     return response.data;
   },
 
   async submit(id: number): Promise<GoodsReceiptDetailResponse> {
-    const response = await api.post(
-      `/admin/goods-receipts/${id}/submit`
-    );
+    const response = await api.post(`/admin/goods-receipts/${id}/submit`);
 
     return response.data;
   },
 
   async approve(id: number): Promise<GoodsReceiptDetailResponse> {
-    const response = await api.post(
-      `/admin/goods-receipts/${id}/approve`
-    );
+    const response = await api.post(`/admin/goods-receipts/${id}/approve`);
 
     return response.data;
   },
@@ -170,9 +149,7 @@ const goodsReceiptService = {
   },
 
   async getPendingCount(): Promise<PendingReceiptCountResponse> {
-    const response = await api.get(
-      "/admin/goods-receipts/pending-count"
-    );
+    const response = await api.get("/admin/goods-receipts/pending-count");
 
     return response.data;
   },
@@ -191,6 +168,7 @@ const goodsReceiptService = {
         params: {
           keyword: normalizedKeyword || undefined,
           stockStatus: "ALL",
+          selectableOnly: true,
           page,
           size: pageSize,
         },
@@ -212,9 +190,7 @@ const goodsReceiptService = {
 
     const totalPages = Math.max(
       0,
-      Number.isFinite(Number(totalPagesRaw))
-        ? Number(totalPagesRaw)
-        : 0
+      Number.isFinite(Number(totalPagesRaw)) ? Number(totalPagesRaw) : 0
     );
 
     const allItems: any[] = [...firstContent];
@@ -243,9 +219,7 @@ const goodsReceiptService = {
       }
     });
 
-    return Array.from(uniqueOptions.values()).sort(
-      compareLowStockFirst
-    );
+    return Array.from(uniqueOptions.values()).sort(compareLowStockFirst);
   },
 };
 
