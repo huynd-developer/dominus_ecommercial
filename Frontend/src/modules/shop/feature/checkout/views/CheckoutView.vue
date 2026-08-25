@@ -402,6 +402,7 @@ const handleApplyVoucher = (discount: number, code: string) => {
   else localStorage.removeItem("applied_voucher");
 };
 
+// ĐÃ SỬA: Xóa tận gốc mọi tàn dư của Voucher khi nhấn nút Hủy
 const handleCancelVoucher = () => {
   discountAmount.value = 0;
   appliedVoucherCode.value = "";
@@ -700,13 +701,11 @@ const loadCartSummary = async () => {
   }
 };
 
-// 💥 BƯỚC 1: FIX VỤ TỰ ĐỘNG RESET VOUCHER VỀ 0
 const loadSavedVoucher = async () => {
   const savedCode = localStorage.getItem("applied_voucher");
   if (!savedCode || totalAmount.value <= 0) return;
 
   try {
-    // Ưu tiên tự tính toán giống như CheckoutSummary để Frontend tự lo
     const resVouchers = await api.get("/v1/customer/vouchers");
     let vouchers = [];
     if (Array.isArray(resVouchers.data)) vouchers = resVouchers.data;
@@ -760,7 +759,6 @@ const loadSavedVoucher = async () => {
       }
     }
 
-    // Nếu không tự tính được thì mới gọi API apply
     const resApply = await api.get("/v1/customer/vouchers/apply", {
       params: { code: savedCode, orderTotal: totalAmount.value },
     });
@@ -788,7 +786,9 @@ const handleUpdateQuantity = async (item: any, quantity: number) => {
 
   const sellableQuantity = getItemSellableQuantity(item);
 
-  if (quantity > sellableQuantity) {
+  // 💥 ĐÃ SỬA: CHỈ CHẶN NẾU ĐANG CỐ TÌNH TĂNG THÊM VƯỢT TỒN KHO. 
+  // NẾU GIẢM (quantity < item.quantity) THÌ VẪN PHẢI CHO GIẢM ĐỂ FIX LỖI "KẸT GIỎ"
+  if (quantity > sellableQuantity && quantity > Number(item.quantity || 0)) {
     await showWarning(
       "Không đủ tồn kho",
       `${getItemDisplayName(
@@ -798,9 +798,12 @@ const handleUpdateQuantity = async (item: any, quantity: number) => {
     return;
   }
 
+  // Ép số lượng cập nhật không được vượt quá số lượng tối đa hiện có trong kho
+  const finalQuantity = Math.min(quantity, sellableQuantity);
+
   try {
     updatingItemKey.value = getCartItemKey(item);
-    await updateCartQuantityApi(item, quantity);
+    await updateCartQuantityApi(item, finalQuantity);
     window.dispatchEvent(new Event("cart-updated"));
     await loadCartSummary();
     if (appliedVoucherCode.value) await loadSavedVoucher();
@@ -810,11 +813,6 @@ const handleUpdateQuantity = async (item: any, quantity: number) => {
 };
 
 const refreshCheckoutAfterConflict = async () => {
-  /*
-   * BE vừa phát hiện checkout đang dùng dữ liệu cũ.
-   * Chỉ refresh state hiện tại, KHÔNG tự submit lại để khách có quyền xem
-   * giá/voucher/tổng tiền mới rồi tự xác nhận lần nữa.
-   */
   await loadCartSummary();
 
   if (localStorage.getItem("applied_voucher") || appliedVoucherCode.value) {
@@ -831,13 +829,6 @@ const handlePlaceOrder = async () => {
   isSubmitting.value = true;
 
   try {
-    /*
-     * Snapshot này chỉ mô tả đúng những gì khách ĐANG NHÌN THẤY trên FE
-     * tại khoảnh khắc bấm "Xác nhận đặt hàng".
-     *
-     * BE không dùng các expected* để tính tiền; BE tự tính lại từ DB.
-     * Nếu khác nhau, BE trả 409 CONFLICT và chưa tạo Order.
-     */
     const feSubtotal = Number(totalAmount.value || 0);
     const feDiscount = Number(discountAmount.value || 0);
     const feShipping = Number(shippingFee.value || 0);
@@ -870,10 +861,6 @@ const handlePlaceOrder = async () => {
       res.data?.message ??
       "Cảm ơn bạn đã mua sắm tại Dominus.";
 
-    /*
-     * Sau khi BE đã tạo Order thành công, popup phải hiển thị snapshot
-     * BE thực sự đã lưu, không tiếp tục coi số tiền FE là authoritative.
-     */
     const confirmedSubtotal = Number(
       respData?.totalAmount ?? res.data?.totalAmount ?? feSubtotal
     );
@@ -990,10 +977,6 @@ const handlePlaceOrder = async () => {
     }
   } catch (error: any) {
     if (Number(error?.response?.status) === 409) {
-      /*
-       * PRICE / PROMOTION / VOUCHER / TOTAL snapshot đã stale.
-       * BE chưa tạo Order, nên tuyệt đối không restore cart và không mở payment.
-       */
       await refreshCheckoutAfterConflict();
 
       await showWarning(
