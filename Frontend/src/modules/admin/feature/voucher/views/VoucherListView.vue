@@ -82,9 +82,14 @@
                     <span v-if="isExpired(v.endDate)" class="badge bg-secondary-subtle text-secondary rounded-pill px-3 py-2">
                       Đã hết hạn
                     </span>
-                    <span v-else class="badge rounded-pill px-3 py-2" 
-                          :class="v.status === 1 ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning'">
-                      {{ v.status === 1 ? 'Đang hoạt động' : 'Tạm dừng' }}
+                    <span v-else-if="v.status === 0" class="badge bg-warning-subtle text-warning rounded-pill px-3 py-2">
+                      Tạm dừng
+                    </span>
+                    <span v-else-if="isNotStarted(v.startDate)" class="badge bg-info-subtle text-info rounded-pill px-3 py-2">
+                      Chưa bắt đầu
+                    </span>
+                    <span v-else class="badge bg-success-subtle text-success rounded-pill px-3 py-2">
+                      Đang hoạt động
                     </span>
                   </td>
                   <td class="text-end pe-3">
@@ -109,7 +114,7 @@
                         <i class="bi bi-play-circle"></i>
                       </button>
 
-                      <button @click="handleDelete(v.id)" class="btn btn-sm btn-light text-danger rounded-circle action-btn" title="Xóa">
+                      <button @click="handleDelete(v)" class="btn btn-sm btn-light text-danger rounded-circle action-btn" title="Xóa">
                         <i class="bi bi-trash3"></i>
                       </button>
                     </div>
@@ -156,7 +161,7 @@
             <form @submit.prevent="handleSubmit">
               <div class="row g-4">
                 <div class="col-md-12">
-                  <label class="form-label fw-bold">Mã Voucher</label>
+                  <label class="form-label fw-bold">Mã Voucher <span class="text-danger">*</span></label>
                   <div class="input-group">
                     <input 
                       type="text" 
@@ -164,7 +169,8 @@
                       v-model="form.code" 
                       @input="handleCodeInput"
                       maxlength="20" 
-                      placeholder="Vui lòng nhập hoặc chọn mã" 
+                      placeholder="Vui lòng nhập hoặc chọn mã"
+                      required
                     />
                     <button class="btn btn-outline-secondary px-4 fw-bold" type="button" @click="generateRandomCode">
                       <i class="bi bi-magic me-1"></i> Tạo ngẫu nhiên
@@ -274,7 +280,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'; 
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 
@@ -285,6 +291,7 @@ const currentPage = ref(0);
 const totalPages = ref(0);
 const searchKeyword = ref('');
 const filterStatus = ref<number | ''>('');
+const isWindowRefreshing = ref(false);
 
 // State của Modal
 const showModal = ref(false);
@@ -294,27 +301,72 @@ const editId = ref<number | null>(null);
 const dateError = ref('');
 
 const initialForm = {
-  code: '', discountType: 'PERCENT', discountValue: 0, minOrderValue: 0,
-  maxDiscount: 0, usageLimit: 1, startDate: '', endDate: '', status: 1
+  code: '',
+  discountType: 'PERCENT',
+  discountValue: 0,
+  minOrderValue: 0,
+  maxDiscount: 0,
+  usageLimit: 1,
+  startDate: '',
+  endDate: '',
+  status: 1,
+  // Revision chỉ dùng khi update để BE phát hiện stale edit.
+  expectedRevision: null as string | null
 };
 const form = ref({ ...initialForm });
 
-watch(() => form.value.endDate, (newEndDate) => {
-  if (newEndDate) {
-    const end = new Date(newEndDate).getTime();
-    const now = new Date().getTime();
-    const used = (form.value as any).usedCount || 0;
-    const limit = form.value.usageLimit || 0;
+/*
+ * Không tự đổi status theo endDate ở FE.
+ * BE hiện quy ước status = 0 là Admin chủ động tạm dừng (hoặc scheduler auto-end),
+ * status = 1 là Admin cho phép Voucher hoạt động; thời gian hiệu lực được BE kiểm tra
+ * riêng bằng startDate <= now < endDate.
+ * Nếu FE tự set lại status = 1 khi sửa ngày, Voucher Admin vừa pause có thể bị bật lại.
+ */
 
-    if (end > now) {
-      if (limit === 0 || used < limit) {
-        form.value.status = 1; 
-      }
-    } else {
-      form.value.status = 0; 
-    }
+const getErrorMessage = (error: any, fallback = 'Có lỗi xảy ra!') => {
+  const data = error?.response?.data;
+
+  if (!data) return fallback;
+  if (typeof data === 'string') return data;
+  if (data.message) return String(data.message);
+
+  if (data.errors && typeof data.errors === 'object') {
+    const firstError = Object.values(data.errors)[0];
+    if (firstError) return String(firstError);
   }
-});
+
+  return fallback;
+};
+
+const toDateTimeLocal = (value: any) => {
+  if (!value) return '';
+  return String(value).substring(0, 16);
+};
+
+const buildVoucherPayload = (
+  source: any,
+  options?: { status?: number; expectedRevision?: string | null }
+) => {
+  const discountType = String(source?.discountType || 'PERCENT').trim().toUpperCase();
+
+  const payload: any = {
+    code: String(source?.code || '').trim().toUpperCase(),
+    discountType,
+    discountValue: Number(source?.discountValue || 0),
+    minOrderValue: Number(source?.minOrderValue || 0),
+    maxDiscount: discountType === 'FIXED' ? 0 : Number(source?.maxDiscount || 0),
+    usageLimit: Number(source?.usageLimit || 0),
+    startDate: toDateTimeLocal(source?.startDate),
+    endDate: toDateTimeLocal(source?.endDate),
+    status: options?.status ?? Number(source?.status ?? 1)
+  };
+
+  if (options?.expectedRevision) {
+    payload.expectedRevision = options.expectedRevision;
+  }
+
+  return payload;
+};
 
 const handleCodeInput = (event: Event) => {
   const target = event.target as HTMLInputElement;
@@ -331,19 +383,19 @@ const formatNumber = (value: any) => {
 const resetDiscountValue = () => {
   form.value.discountValue = 0;
   if (form.value.discountType === 'FIXED') {
-    form.value.maxDiscount = 0; 
+    form.value.maxDiscount = 0;
   }
 };
 
 const handleCurrencyInput = (field: string, event: Event) => {
   const target = event.target as HTMLInputElement;
-  let rawValue = target.value.replace(/\D/g, ''); 
+  let rawValue = target.value.replace(/\D/g, '');
   let numValue = Number(rawValue);
 
   if (numValue > 100000000) {
     Swal.fire({
-      toast: true, position: 'top-end', icon: 'warning', 
-      title: 'Số tiền tối đa là 100.000.000 VNĐ', 
+      toast: true, position: 'top-end', icon: 'warning',
+      title: 'Số tiền tối đa là 100.000.000 VNĐ',
       showConfirmButton: false, timer: 2000
     });
     numValue = 100000000;
@@ -355,13 +407,13 @@ const handleCurrencyInput = (field: string, event: Event) => {
 
 const handlePercentInput = (event: Event) => {
   const target = event.target as HTMLInputElement;
-  let rawValue = target.value.replace(/\D/g, ''); 
+  let rawValue = target.value.replace(/\D/g, '');
   let numValue = Number(rawValue);
 
   if (numValue > 100) {
     Swal.fire({
-      toast: true, position: 'top-end', icon: 'warning', 
-      title: 'Mức giảm phần trăm không vượt quá 100%', 
+      toast: true, position: 'top-end', icon: 'warning',
+      title: 'Mức giảm phần trăm không vượt quá 100%',
       showConfirmButton: false, timer: 2000
     });
     numValue = 100;
@@ -373,13 +425,13 @@ const handlePercentInput = (event: Event) => {
 
 const handleUsageLimitInput = (event: Event) => {
   const target = event.target as HTMLInputElement;
-  let rawValue = target.value.replace(/\D/g, ''); 
+  let rawValue = target.value.replace(/\D/g, '');
   let numValue = Number(rawValue);
 
   if (numValue > 1000) {
     Swal.fire({
-      toast: true, position: 'top-end', icon: 'warning', 
-      title: 'Giới hạn tối đa là 1.000 lượt', 
+      toast: true, position: 'top-end', icon: 'warning',
+      title: 'Giới hạn tối đa là 1.000 lượt',
       showConfirmButton: false, timer: 20000
     });
     numValue = 1000;
@@ -391,7 +443,7 @@ const handleUsageLimitInput = (event: Event) => {
 
 const generateRandomCode = () => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = 'SALE'; 
+  let code = 'SALE';
   for (let i = 0; i < 6; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
@@ -403,22 +455,50 @@ const fetchVouchers = async () => {
   try {
     const token = localStorage.getItem('token');
     const res = await axios.get('http://localhost:8080/api/admin/vouchers', {
-      params: { 
-        page: currentPage.value, 
+      params: {
+        page: currentPage.value,
         size: 10,
         keyword: searchKeyword.value || null,
         status: filterStatus.value === '' ? null : filterStatus.value
       },
       headers: { Authorization: `Bearer ${token}` }
     });
-    
+
     vouchers.value = res.data.content || [];
     totalPages.value = res.data.totalPages || 0;
   } catch (error) {
-    console.error("Lỗi lấy danh sách Voucher:", error);
+    console.error('Lỗi lấy danh sách Voucher:', error);
   } finally {
     isLoading.value = false;
   }
+};
+
+const fetchVoucherDetail = async (id: number) => {
+  const token = localStorage.getItem('token');
+  const res = await axios.get(`http://localhost:8080/api/admin/vouchers/${id}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return res.data;
+};
+
+const fillEditForm = (voucher: any) => {
+  form.value = {
+    code: String(voucher?.code || '').trim().toUpperCase(),
+    discountType: String(voucher?.discountType || 'PERCENT').trim().toUpperCase(),
+    discountValue: Number(voucher?.discountValue || 0),
+    minOrderValue: Number(voucher?.minOrderValue || 0),
+    maxDiscount: Number(voucher?.maxDiscount || 0),
+    usageLimit: Number(voucher?.usageLimit || 1),
+    startDate: toDateTimeLocal(voucher?.startDate),
+    endDate: toDateTimeLocal(voucher?.endDate),
+    status: Number(voucher?.status ?? 1),
+    expectedRevision: voucher?.revision ? String(voucher.revision) : null
+  };
+};
+
+const resolveExpectedRevision = (voucher: any) => {
+  const rowRevision = voucher?.revision ? String(voucher.revision).trim() : '';
+  return rowRevision || null;
 };
 
 const changePage = (page: number) => {
@@ -429,7 +509,7 @@ const changePage = (page: number) => {
 };
 
 const handleSearch = () => {
-  currentPage.value = 0; 
+  currentPage.value = 0;
   fetchVouchers();
 };
 
@@ -441,16 +521,22 @@ const openCreateModal = () => {
   showModal.value = true;
 };
 
-const openEditModal = (voucher: any) => {
-  isEditing.value = true;
-  editId.value = voucher.id;
-  
-  const sDate = voucher.startDate ? voucher.startDate.substring(0, 16) : '';
-  const eDate = voucher.endDate ? voucher.endDate.substring(0, 16) : '';
-  
-  form.value = { ...voucher, startDate: sDate, endDate: eDate };
-  dateError.value = '';
-  showModal.value = true;
+const openEditModal = async (voucher: any) => {
+  if (!voucher?.id) return;
+
+  try {
+    // Luôn GET detail mới nhất khi mở form để lấy đúng revision hiện tại từ BE.
+    const latest = await fetchVoucherDetail(voucher.id);
+
+    isEditing.value = true;
+    editId.value = voucher.id;
+    fillEditForm(latest);
+    dateError.value = '';
+    showModal.value = true;
+  } catch (error: any) {
+    await Swal.fire('Lỗi', getErrorMessage(error, 'Không thể tải chi tiết Voucher.'), 'error');
+    await fetchVouchers();
+  }
 };
 
 const closeModal = () => {
@@ -464,11 +550,26 @@ const validateDates = () => {
       return false;
     }
   }
-  dateError.value = ''; return true;
+  dateError.value = '';
+  return true;
+};
+
+const reloadEditingVoucherAfterConflict = async () => {
+  if (!editId.value) return;
+
+  const latest = await fetchVoucherDetail(editId.value);
+  fillEditForm(latest);
+  validateDates();
 };
 
 const handleSubmit = async () => {
-  if (!form.value.discountType || !form.value.startDate || !form.value.endDate || !form.value.usageLimit) {
+  if (
+    !String(form.value.code || '').trim()
+    || !form.value.discountType
+    || !form.value.startDate
+    || !form.value.endDate
+    || !form.value.usageLimit
+  ) {
     Swal.fire('Lỗi', 'Vui lòng nhập đầy đủ các trường bắt buộc có dấu (*)!', 'error');
     return;
   }
@@ -483,30 +584,72 @@ const handleSubmit = async () => {
   isSaving.value = true;
   try {
     const token = localStorage.getItem('token');
+
     if (isEditing.value) {
-      await axios.put(`http://localhost:8080/api/admin/vouchers/${editId.value}`, form.value, {
-        headers: { Authorization: `Bearer ${token}` }
+      if (!editId.value || !form.value.expectedRevision) {
+        await fetchVouchers();
+        await Swal.fire(
+          'Lỗi',
+          'Không lấy được phiên bản Voucher hiện tại. Danh sách đã được tải lại, vui lòng đóng form và mở lại.',
+          'error'
+        );
+        return;
+      }
+
+      const payload = buildVoucherPayload(form.value, {
+        expectedRevision: form.value.expectedRevision
       });
+
+      await axios.put(
+        `http://localhost:8080/api/admin/vouchers/${editId.value}`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
       Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Cập nhật thành công', showConfirmButton: false, timer: 1500 });
     } else {
-      await axios.post('http://localhost:8080/api/admin/vouchers', form.value, {
+      const payload = buildVoucherPayload(form.value);
+
+      await axios.post('http://localhost:8080/api/admin/vouchers', payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
+
       Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Thêm mới thành công', showConfirmButton: false, timer: 1500 });
     }
+
     closeModal();
-    fetchVouchers();
+    await fetchVouchers();
   } catch (error: any) {
-    Swal.fire('Lỗi', error.response?.data || 'Có lỗi xảy ra!', 'error');
+    if (error?.response?.status === 409 && isEditing.value && editId.value) {
+      try {
+        // Không retry mutation. Nạp dữ liệu BE mới nhất vào modal để Admin xem lại.
+        await reloadEditingVoucherAfterConflict();
+        await fetchVouchers();
+      } catch (reloadError) {
+        console.error('Không thể tải lại Voucher sau conflict:', reloadError);
+      }
+
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Voucher đã thay đổi',
+        text: getErrorMessage(error, 'Voucher đã thay đổi bởi thao tác khác. Dữ liệu mới nhất đã được tải lại, vui lòng kiểm tra rồi lưu lại.'),
+        confirmButtonText: 'Đã hiểu'
+      });
+      return;
+    }
+
+    Swal.fire('Lỗi', getErrorMessage(error), 'error');
   } finally {
     isSaving.value = false;
   }
 };
 
-const handleDelete = async (id: number) => {
+const handleDelete = async (voucher: any) => {
+  if (!voucher?.id) return;
+
   const result = await Swal.fire({
     title: 'Xác nhận xóa?',
-    text: "Voucher này sẽ bị ẩn khỏi hệ thống!",
+    text: 'Voucher này sẽ bị ẩn khỏi hệ thống!',
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#dc3545',
@@ -515,17 +658,42 @@ const handleDelete = async (id: number) => {
     cancelButtonText: 'Hủy'
   });
 
-  if (result.isConfirmed) {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`http://localhost:8080/api/admin/vouchers/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Đã xóa voucher', showConfirmButton: false, timer: 1500 });
-      fetchVouchers();
-    } catch (error) {
-      Swal.fire('Lỗi', 'Không thể xóa voucher này', 'error');
+  if (!result.isConfirmed) return;
+
+  try {
+    const token = localStorage.getItem('token');
+    const expectedRevision = resolveExpectedRevision(voucher);
+
+    if (!expectedRevision) {
+      await fetchVouchers();
+      await Swal.fire(
+        'Lỗi',
+        'Không lấy được phiên bản Voucher hiện tại. Danh sách đã được tải lại, vui lòng thử lại.',
+        'error'
+      );
+      return;
     }
+
+    await axios.delete(`http://localhost:8080/api/admin/vouchers/${voucher.id}`, {
+      params: { expectedRevision },
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Đã xóa voucher', showConfirmButton: false, timer: 1500 });
+    await fetchVouchers();
+  } catch (error: any) {
+    if (error?.response?.status === 409) {
+      await fetchVouchers();
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Voucher đã thay đổi',
+        text: getErrorMessage(error, 'Voucher đã thay đổi bởi thao tác khác. Danh sách mới nhất đã được tải lại, vui lòng kiểm tra rồi xóa lại.'),
+        confirmButtonText: 'Đã hiểu'
+      });
+      return;
+    }
+
+    Swal.fire('Lỗi', getErrorMessage(error, 'Không thể xóa voucher này'), 'error');
   }
 };
 
@@ -534,51 +702,112 @@ const formatDate = (dateStr: string) => {
   if (!dateStr) return '';
   return new Date(dateStr).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
 };
-const isExpired = (endDate: string) => new Date(endDate) < new Date();
+const isExpired = (endDate: string) => new Date(endDate).getTime() <= Date.now();
+const isNotStarted = (startDate: string) => new Date(startDate).getTime() > Date.now();
 
 const changeStatus = async (voucher: any, newStatus: number) => {
   if (isExpired(voucher.endDate)) {
     Swal.fire({
-      icon: "warning",
-      title: "Không thể đổi trạng thái",
-      text: "Voucher này đã hết hạn sử dụng.",
-      confirmButtonColor: "#bd9a5f",
+      icon: 'warning',
+      title: 'Không thể đổi trạng thái',
+      text: 'Voucher này đã hết hạn sử dụng.',
+      confirmButtonColor: '#bd9a5f'
     });
     return;
   }
 
   const confirm = await Swal.fire({
-    icon: "question",
-    title: newStatus === 1 ? "Kích hoạt Voucher?" : "Tạm dừng Voucher?",
-    text: newStatus === 1 ? "Khách hàng sẽ có thể áp dụng mã giảm giá này." : "Khách hàng sẽ không thể áp dụng mã này để thanh toán nữa.",
+    icon: 'question',
+    title: newStatus === 1 ? 'Kích hoạt Voucher?' : 'Tạm dừng Voucher?',
+    text: newStatus === 1 ? 'Khách hàng sẽ có thể áp dụng mã giảm giá này.' : 'Khách hàng sẽ không thể áp dụng mã này để thanh toán nữa.',
     showCancelButton: true,
-    confirmButtonText: newStatus === 1 ? "Kích hoạt" : "Tạm dừng",
-    cancelButtonText: "Hủy",
-    confirmButtonColor: "#0d6efd",
+    confirmButtonText: newStatus === 1 ? 'Kích hoạt' : 'Tạm dừng',
+    cancelButtonText: 'Hủy',
+    confirmButtonColor: '#0d6efd'
   });
 
   if (!confirm.isConfirmed) return;
 
   try {
     const token = localStorage.getItem('token');
-    
-    // Format lại ngày tháng tránh lỗi định dạng khi gửi về Spring Boot
-    const sDate = voucher.startDate ? voucher.startDate.substring(0, 16) : '';
-    const eDate = voucher.endDate ? voucher.endDate.substring(0, 16) : '';
-    const payload = { ...voucher, startDate: sDate, endDate: eDate, status: newStatus };
+    const expectedRevision = resolveExpectedRevision(voucher);
+
+    if (!expectedRevision) {
+      await fetchVouchers();
+      await Swal.fire(
+        'Lỗi',
+        'Không lấy được phiên bản Voucher hiện tại. Danh sách đã được tải lại, vui lòng thử lại.',
+        'error'
+      );
+      return;
+    }
+
+    const payload = buildVoucherPayload(voucher, {
+      status: newStatus,
+      expectedRevision
+    });
 
     await axios.put(`http://localhost:8080/api/admin/vouchers/${voucher.id}`, payload, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    
+
     Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Đã cập nhật trạng thái', showConfirmButton: false, timer: 1500 });
-    fetchVouchers();
+    await fetchVouchers();
   } catch (error: any) {
-    Swal.fire('Lỗi', error.response?.data || 'Không thể thay đổi trạng thái!', 'error');
+    if (error?.response?.status === 409) {
+      await fetchVouchers();
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Voucher đã thay đổi',
+        text: getErrorMessage(error, 'Voucher đã thay đổi bởi thao tác khác. Danh sách mới nhất đã được tải lại, vui lòng kiểm tra rồi thao tác lại.'),
+        confirmButtonText: 'Đã hiểu'
+      });
+      return;
+    }
+
+    Swal.fire('Lỗi', getErrorMessage(error, 'Không thể thay đổi trạng thái!'), 'error');
   }
 };
 
-onMounted(fetchVouchers);
+/*
+ * Không-F5:
+ * - Khi quay lại tab/window, chỉ refresh LIST từ BE.
+ * - Nếu modal edit đang mở thì tuyệt đối không ghi đè draft trong form.
+ * - Nếu dữ liệu đã đổi ở nơi khác, expectedRevision cũ sẽ làm PUT trả 409.
+ */
+const refreshVoucherListOnWindowReturn = async () => {
+  if (document.visibilityState === 'hidden' || isWindowRefreshing.value || isSaving.value) {
+    return;
+  }
+
+  isWindowRefreshing.value = true;
+  try {
+    await fetchVouchers();
+  } finally {
+    isWindowRefreshing.value = false;
+  }
+};
+
+const handleWindowFocus = () => {
+  void refreshVoucherListOnWindowReturn();
+};
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    void refreshVoucherListOnWindowReturn();
+  }
+};
+
+onMounted(() => {
+  void fetchVouchers();
+  window.addEventListener('focus', handleWindowFocus);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('focus', handleWindowFocus);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+});
 </script>
 
 <style scoped>
@@ -621,6 +850,12 @@ onMounted(fetchVouchers);
 }
 .text-warning {
   color: #ffc107 !important;
+}
+.bg-info-subtle {
+  background-color: #cff4fc !important;
+}
+.text-info {
+  color: #087990 !important;
 }
 
 /* Modal CSS */

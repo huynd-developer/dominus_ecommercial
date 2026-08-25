@@ -2,6 +2,7 @@ package org.example.datn_sd69.modules.pos.dto.request;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -44,14 +45,6 @@ public class PosCheckoutRequest {
 
     /**
      * Nhà cung cấp phần chuyển khoản khi paymentMethod = MIXED.
-     *
-     * MIXED + VNPAY:
-     * transferProvider = VNPAY
-     *
-     * MIXED + VIETQR:
-     * transferProvider = VIETQR
-     *
-     * Nếu paymentMethod là VNPAY hoặc VIETQR toàn phần thì field này có thể bỏ trống.
      */
     @Pattern(
             regexp = "^(VNPAY|VIETQR)$",
@@ -78,37 +71,33 @@ public class PosCheckoutRequest {
     @Size(max = 50, message = "Mã voucher không được vượt quá 50 ký tự")
     private String voucherCode;
 
-    /**
-     * Tiền mặt khách đưa.
-     *
-     * CASH:
-     * - cashGiven >= finalAmount.
-     *
-     * MIXED:
-     * - cashGiven là phần tiền mặt đã nhận.
-     * - Không xử lý tiền thừa trong MIXED.
-     */
     @DecimalMin(value = "0.00", message = "Tiền mặt không được âm")
     private BigDecimal cashGiven;
 
-    /**
-     * Tiền chuyển khoản.
-     *
-     * VNPAY:
-     * - Nếu FE không gửi, BE tự hiểu là thanh toán toàn bộ finalAmount bằng VNPay.
-     *
-     * VIETQR:
-     * - Nếu FE không gửi, BE tự hiểu là thanh toán toàn bộ finalAmount bằng VietQR.
-     *
-     * MIXED:
-     * - transferAmount là phần còn lại cần thanh toán bằng transferProvider.
-     */
     @DecimalMin(value = "0.00", message = "Tiền chuyển khoản không được âm")
     private BigDecimal transferAmount;
 
+    /*
+     * Snapshot FE đang hiển thị tại thời điểm bấm thanh toán.
+     * BE KHÔNG dùng các field này để tính tiền.
+     * Chúng chỉ dùng để phát hiện POS đang stale và trả 409.
+     *
+     * Để nullable nhằm không làm vỡ FE/caller cũ trong lúc migrate.
+     */
+    @DecimalMin(value = "0.00", message = "Tạm tính dự kiến không được âm")
+    @Digits(integer = 18, fraction = 2, message = "Tạm tính dự kiến không hợp lệ")
+    private BigDecimal expectedTotalAmount;
+
+    @DecimalMin(value = "0.00", message = "Giảm giá dự kiến không được âm")
+    @Digits(integer = 18, fraction = 2, message = "Giảm giá dự kiến không hợp lệ")
+    private BigDecimal expectedDiscountAmount;
+
+    @DecimalMin(value = "0.00", message = "Tổng thanh toán dự kiến không được âm")
+    @Digits(integer = 18, fraction = 2, message = "Tổng thanh toán dự kiến không hợp lệ")
+    private BigDecimal expectedFinalAmount;
+
     /**
-     * Validate từng dòng sản phẩm qua PosItemRequest.
-     * Service sẽ cộng dồn các dòng trùng SKU và kiểm tra theo tồn kho thực tế.
+     * Service cộng dồn các dòng trùng SKU và kiểm tra theo InventoryLot.
      */
     @Valid
     @NotEmpty(message = "Hóa đơn phải có ít nhất 1 sản phẩm")

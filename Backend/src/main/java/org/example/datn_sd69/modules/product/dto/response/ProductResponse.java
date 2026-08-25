@@ -11,6 +11,12 @@ import java.util.Set;
 public class ProductResponse {
     private Integer id;
 
+    /**
+     * Revision của dữ liệu Product/SKU có thể chỉnh sửa.
+     * FE admin gửi lại qua ProductRequest.expectedRevision khi PUT.
+     */
+    private String revision;
+
     private String name;
 
     private String description;
@@ -63,10 +69,16 @@ public class ProductResponse {
          */
         private Integer stockQuantity;
 
-        /** LEGACY: NSX thật thuộc InventoryLot/GoodsReceiptItem. */
+        /**
+         * Compatibility: ngày của lot FEFO bán tiếp theo nếu SKU còn hàng bán được.
+         * Không lấy từ ProductVariant legacy.
+         */
         private LocalDate manufacturingDate;
 
-        /** LEGACY: HSD thật thuộc InventoryLot/GoodsReceiptItem. */
+        /**
+         * Compatibility: HSD của lot FEFO bán tiếp theo nếu SKU còn hàng bán được.
+         * Không lấy từ ProductVariant legacy.
+         */
         private LocalDate expirationDate;
 
         /** Tổng tồn vật lý thật của SKU. */

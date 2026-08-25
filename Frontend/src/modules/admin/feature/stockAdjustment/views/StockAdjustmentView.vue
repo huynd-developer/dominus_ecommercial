@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import Swal from "sweetalert2";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
 
@@ -20,6 +20,7 @@ const authStore = useAuthStore();
 const formVisible = ref(false);
 const detailVisible = ref(false);
 const editingDetail = ref<StockAdjustmentDetailResponse | null>(null);
+const refreshingOnFocus = ref(false);
 
 const userRole = computed(() =>
   (authStore.role || localStorage.getItem("role") || "")
@@ -184,6 +185,44 @@ const getErrorMessage = (error: any) =>
   store.error ||
   "Đã xảy ra lỗi.";
 
+const isConflict = (error: any) =>
+  Number(error?.response?.status) === 409;
+
+const refreshAfterWorkflowConflict = async (id: number) => {
+  await Promise.allSettled([
+    store.fetchList(),
+    store.fetchPendingCount(),
+  ]);
+
+  if (detailVisible.value && store.detail?.id === id) {
+    await Promise.allSettled([
+      store.fetchDetail(id),
+    ]);
+  }
+};
+
+const showWorkflowConflict = async (
+  error: any,
+  id: number
+): Promise<boolean> => {
+  if (!isConflict(error)) return false;
+
+  const message = getErrorMessage(error);
+
+  await refreshAfterWorkflowConflict(id);
+
+  await Swal.fire({
+    icon: "warning",
+    title: "Phiếu kiểm kê đã thay đổi",
+    text: message,
+    customClass: {
+      container: "stock-adjustment-conflict-alert",
+    },
+  });
+
+  return true;
+};
+
 const ensureCanCreate = async () => {
   if (canCreate.value) return true;
 
@@ -343,6 +382,39 @@ const saveForm = async (payload: StockAdjustmentSaveRequest) => {
 
     closeForm();
   } catch (error) {
+    if (isConflict(error) && editingDetail.value?.id) {
+      const id = editingDetail.value.id;
+      const message = getErrorMessage(error);
+
+      /*
+       * Không đóng form và không tự submit lại.
+       * Lấy bản DB mới nhất; FormModal đang watch props.detail nên sẽ
+       * tự reset về revision + dữ liệu mới sau conflict.
+       */
+      try {
+        const latest = await store.fetchDetail(id);
+        editingDetail.value = latest;
+      } catch {
+        // Best effort: vẫn giữ form mở và báo conflict gốc.
+      }
+
+      await Promise.allSettled([
+        store.fetchList(),
+        store.fetchPendingCount(),
+      ]);
+
+      await Swal.fire({
+        icon: "warning",
+        title: "Phiếu kiểm kê đã thay đổi",
+        text: message,
+        customClass: {
+          container: "stock-adjustment-conflict-alert",
+        },
+      });
+
+      return;
+    }
+
     await Swal.fire({
       icon: "error",
       title: "Không thể lưu phiếu",
@@ -398,6 +470,8 @@ const submitAdjustment = async (item: StockAdjustmentListResponse) => {
       showConfirmButton: false,
     });
   } catch (error) {
+    if (await showWorkflowConflict(error, item.id)) return;
+
     await Swal.fire({
       icon: "error",
       title: "Không thể gửi duyệt",
@@ -518,6 +592,8 @@ const cancelAdjustment = async (item: StockAdjustmentListResponse) => {
       showConfirmButton: false,
     });
   } catch (error) {
+    if (await showWorkflowConflict(error, item.id)) return;
+
     await Swal.fire({
       icon: "error",
       title: "Không thể hủy phiếu",
@@ -551,6 +627,14 @@ const approveAdjustment = async (item: StockAdjustmentListResponse) => {
       showConfirmButton: false,
     });
   } catch (error) {
+    /*
+     * Bao gồm cả:
+     * - trạng thái phiếu đã đổi ở nơi khác;
+     * - InventoryLot đã đổi sau thời điểm kiểm kê (BE/SQL trả 409).
+     * Không tự retry approve.
+     */
+    if (await showWorkflowConflict(error, item.id)) return;
+
     await Swal.fire({
       icon: "error",
       title: "Không thể phê duyệt",
@@ -667,6 +751,8 @@ const rejectAdjustment = async (item: StockAdjustmentListResponse) => {
       showConfirmButton: false,
     });
   } catch (error) {
+    if (await showWorkflowConflict(error, item.id)) return;
+
     await Swal.fire({
       icon: "error",
       title: "Không thể từ chối",
@@ -675,8 +761,57 @@ const rejectAdjustment = async (item: StockAdjustmentListResponse) => {
   }
 };
 
+const handleWindowFocus = async () => {
+  if (
+    refreshingOnFocus.value ||
+    store.saving ||
+    store.processing
+  ) {
+    return;
+  }
+
+  /*
+   * Không gọi validateDateFilter() ở focus để tránh tự bật popup.
+   * Nếu filter đang nhập dở/không hợp lệ thì bỏ qua lần refresh này.
+   */
+  if (
+    store.fromDate &&
+    store.toDate &&
+    store.fromDate > store.toDate
+  ) {
+    return;
+  }
+
+  refreshingOnFocus.value = true;
+
+  try {
+    await Promise.allSettled([
+      store.fetchList(),
+      store.fetchPendingCount(),
+    ]);
+
+    /*
+     * Detail chỉ để xem nên refresh khi quay lại tab.
+     * Không thay editingDetail khi form sửa đang mở để không xóa dữ liệu
+     * người dùng đang nhập; nếu snapshot đã cũ, Save sẽ bị BE trả 409.
+     */
+    if (detailVisible.value && store.detail?.id) {
+      await Promise.allSettled([
+        store.fetchDetail(store.detail.id),
+      ]);
+    }
+  } finally {
+    refreshingOnFocus.value = false;
+  }
+};
+
 onMounted(async () => {
   await Promise.allSettled([loadList(), store.fetchPendingCount()]);
+  window.addEventListener("focus", handleWindowFocus);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("focus", handleWindowFocus);
 });
 </script>
 
@@ -976,6 +1111,10 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+:global(.stock-adjustment-conflict-alert) {
+  z-index: 100001 !important;
+}
+
 .stock-adjustment-page {
   min-height: 100%;
   padding: 24px;

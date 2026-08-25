@@ -19,6 +19,12 @@ public class StockAdjustmentDetailResponse {
 
     private String statusLabel;
 
+    /*
+     * Snapshot dùng để FE gửi lại expectedRevision khi sửa DRAFT.
+     * Không thêm cột DB.
+     */
+    private String revision;
+
     private String note;
 
     private Integer totalLots;

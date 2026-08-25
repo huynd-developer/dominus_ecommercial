@@ -378,7 +378,8 @@
             </div>
 
             <div class="font-xs text-muted-custom mt-1">
-              Đơn đã nhận tiền, không được sửa sản phẩm/khách/voucher. Có thể chọn VNPay/VietQR rồi bấm thanh toán lại.
+              Đơn đã nhận tiền, không được sửa sản phẩm/khách/voucher. Có thể
+              chọn VNPay/VietQR rồi bấm thanh toán lại.
             </div>
           </div>
 
@@ -505,13 +506,18 @@
 
           <div class="payment-success-row">
             <span>Phương thức</span>
-            <strong>{{ getReceiptPaymentLabel(posStore.lastCompletedOrder) }}</strong>
+            <strong>{{
+              getReceiptPaymentLabel(posStore.lastCompletedOrder)
+            }}</strong>
           </div>
 
           <div class="payment-success-row payment-success-total">
             <span>Thành tiền</span>
             <strong>
-              {{ formatPrice(getReceiptFinalAmount(posStore.lastCompletedOrder)) }} ₫
+              {{
+                formatPrice(getReceiptFinalAmount(posStore.lastCompletedOrder))
+              }}
+              ₫
             </strong>
           </div>
 
@@ -1001,6 +1007,9 @@ const posToast = Swal.mixin({
   timerProgressBar: true,
   background: "#0f172a",
   color: "#f8fafc",
+  customClass: {
+    container: "pos-toast-container",
+  },
 });
 
 const getSwalIcon = (message: string): SweetAlertIcon => {
@@ -1108,7 +1117,11 @@ const shouldShowCustomerSaveControls = computed(() => {
 });
 
 const isCashierTransferTarget = (employee: any) => {
-  return String(employee?.roleName || "").trim().toUpperCase() === "CASHIER";
+  return (
+    String(employee?.roleName || "")
+      .trim()
+      .toUpperCase() === "CASHIER"
+  );
 };
 
 const filteredTransferTargets = computed(() => {
@@ -1667,8 +1680,12 @@ const clearPaymentChangingUiState = () => {
   }
 };
 
-const preparePartialCashTransferRetry = (preferredOrderId?: number | string | null) => {
-  const orderId = preferredOrderId ? Number(preferredOrderId) : getActiveOnlinePaymentOrderId();
+const preparePartialCashTransferRetry = (
+  preferredOrderId?: number | string | null
+) => {
+  const orderId = preferredOrderId
+    ? Number(preferredOrderId)
+    : getActiveOnlinePaymentOrderId();
 
   if (!orderId) {
     /*
@@ -1719,7 +1736,9 @@ const handleCancelOrder = async () => {
   if (posStore.hasPartialCashPayment) {
     const refundAmount = Number(posStore.cashPaid || 0);
     const orderId =
-      posStore.activePendingPaymentOrderId || posStore.pendingVietQrOrderId || null;
+      posStore.activePendingPaymentOrderId ||
+      posStore.pendingVietQrOrderId ||
+      null;
 
     const confirmResult = await Swal.fire({
       icon: "warning",
@@ -1765,7 +1784,9 @@ const handleCancelOrder = async () => {
     closeTransferModal();
 
     showPosToast(
-      `Đã hủy hóa đơn và hoàn lại ${formatPrice(refundAmount)} ₫ tiền mặt cho khách.`
+      `Đã hủy hóa đơn và hoàn lại ${formatPrice(
+        refundAmount
+      )} ₫ tiền mặt cho khách.`
     );
     return;
   }
@@ -2084,7 +2105,12 @@ const closeVietQrModal = async () => {
    * - chỉ đóng QR và giữ activePendingPaymentOrderId để retry-payment
    *   bằng VNPay/VietQR khác.
    */
-  if (orderId && (posStore.activePendingPaymentOrderId || posStore.pendingVietQrOrderId || posStore.hasPartialCashPayment)) {
+  if (
+    orderId &&
+    (posStore.activePendingPaymentOrderId ||
+      posStore.pendingVietQrOrderId ||
+      posStore.hasPartialCashPayment)
+  ) {
     if (posStore.hasPartialCashPayment) {
       preparePartialCashTransferRetry(orderId);
 
@@ -2578,6 +2604,22 @@ const processCashPayment = async () => {
   });
 
   if (!isCheckoutSuccess(checkoutResult)) {
+    const message = String(posStore.errorMsg || "");
+
+    const isStaleConflict =
+      message.includes("Dữ liệu POS đã được cập nhật") ||
+      message.includes("đã thay đổi") ||
+      message.includes("không nhất quán");
+
+    if (isStaleConflict) {
+      // Dữ liệu giá/voucher/tổng đã được store refresh.
+      // Đóng modal cũ để thu ngân nhìn lại đơn mới trước khi xác nhận.
+      showCashModal.value = false;
+      displayCash.value = "";
+
+      setPosError(message);
+    }
+
     return;
   }
 
@@ -3866,5 +3908,8 @@ const processCashPayment = async () => {
   font-size: 0.68rem;
   font-weight: 900;
   line-height: 1.25;
+}
+:global(.pos-toast-container) {
+  z-index: 5000 !important;
 }
 </style>

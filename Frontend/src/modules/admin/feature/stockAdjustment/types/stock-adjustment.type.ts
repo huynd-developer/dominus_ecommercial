@@ -30,6 +30,12 @@ export interface StockAdjustmentItemRequest {
 export interface StockAdjustmentSaveRequest {
   note: string | null;
   items: StockAdjustmentItemRequest[];
+
+  /**
+   * Chỉ gửi khi UPDATE DRAFT.
+   * CREATE không cần field này.
+   */
+  expectedRevision?: string | null;
 }
 
 export interface StockAdjustmentRejectRequest {
@@ -95,6 +101,12 @@ export interface StockAdjustmentDetailResponse extends StockAdjustmentSummary {
   adjustmentNo: string;
   status: StockAdjustmentStatus;
   statusLabel: string;
+
+  /**
+   * Revision do BE trả về để chống stale/lost-update khi sửa DRAFT.
+   */
+  revision: string;
+
   note: string | null;
 
   createdById: number;

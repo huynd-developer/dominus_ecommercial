@@ -155,14 +155,23 @@
           </div>
 
           <div class="voucher-desc">
+
   Giảm
+
   <strong class="text-danger">
+
     {{ formatVoucherDiscount(v) }}
+
   </strong>
+
   <!-- Bổ sung điều kiện chỉ hiển thị "tối đa" nếu là mã phần trăm -->
+
   <span v-if="getMaxDiscount(v) > 0 && ['PERCENT', 'PERCENTAGE'].includes(getVoucherDiscountType(v))">
+
     · tối đa {{ formatCurrency(getMaxDiscount(v)) }}
+
   </span>
+
 </div>
 
           <div class="voucher-min">
@@ -354,35 +363,53 @@ const getActualDiscountAmount = (voucher: any) => {
 // =====================================
 
 // =====================================
+
 // SẮP XẾP LẠI MÃ NGON LÊN ĐẦU VÀ LỌC MÃ BỎ ĐI
+
 // =====================================
+
 const filteredVouchers = computed(() => {
+
   const keyword = voucherCode.value.trim().toLowerCase();
 
   const vouchers = availableVouchers.value.filter((voucher) => {
+
     // THÊM 2 DÒNG NÀY: Ẩn hoàn toàn các mã đã bị xóa hoặc ngừng hoạt động
+
     if (voucher?.isDeleted === true || voucher?.deleted === true) return false;
+
     if (!isVoucherStatusActive(voucher)) return false;
 
     const code = getVoucherCode(voucher).toLowerCase();
+
     if (!keyword) return true;
+
     return code.includes(keyword);
+
   });
 
   return vouchers.sort((a, b) => {
+
     const aUsable = getVoucherEligibility(a).usable;
+
     const bUsable = getVoucherEligibility(b).usable;
 
     // 1. Ưu tiên mã đủ điều kiện lên trước
+
     if (aUsable && !bUsable) return -1;
+
     if (!aUsable && bUsable) return 1;
 
     // 2. Nếu cùng đủ điều kiện (hoặc cùng không), xếp theo số tiền giảm được
+
     const aDiscount = getActualDiscountAmount(a);
+
     const bDiscount = getActualDiscountAmount(b);
 
     return bDiscount - aDiscount;
+
   });
+
 });
 
 const getErrorMessage = (error: any) => {
@@ -840,20 +867,42 @@ watch(
 );
 
 // BẮT SỰ KIỆN QUAY LẠI TAB ĐỂ LOAD LẠI VOUCHER
-const handleFocus = async () => {
-  await fetchAvailableVouchers();
-  
-  // Tự động hủy mã nếu mã đang dùng vừa bị khóa hoặc xóa bên Admin
-  if (isVoucherApplied.value && voucherCode.value) {
-    const currentVoucher = availableVouchers.value.find(
-      (voucher) => getVoucherCode(voucher).toUpperCase() === voucherCode.value.trim().toUpperCase()
-    );
+let voucherRefreshInProgress = false;
 
-    if (!currentVoucher || !getVoucherEligibility(currentVoucher).usable) {
-      handleCancelVoucher();
-      voucherMessage.value = "Mã giảm giá đã bị thay đổi hoặc không còn khả dụng.";
-      messageType.value = "text-danger";
+const refreshVoucherState = async () => {
+  if (voucherRefreshInProgress) return;
+
+  voucherRefreshInProgress = true;
+  try {
+    await fetchAvailableVouchers();
+
+    // Hủy mã nếu mã đang dùng vừa bị khóa/xóa/hết điều kiện.
+    if (isVoucherApplied.value && voucherCode.value) {
+      const currentVoucher = availableVouchers.value.find(
+        (voucher) =>
+          getVoucherCode(voucher).toUpperCase() ===
+          voucherCode.value.trim().toUpperCase()
+      );
+
+      if (!currentVoucher || !getVoucherEligibility(currentVoucher).usable) {
+        handleCancelVoucher();
+        voucherMessage.value =
+          "Mã giảm giá đã bị thay đổi hoặc không còn khả dụng.";
+        messageType.value = "text-danger";
+      }
     }
+  } finally {
+    voucherRefreshInProgress = false;
+  }
+};
+
+const handleFocus = () => {
+  void refreshVoucherState();
+};
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === "visible") {
+    void refreshVoucherState();
   }
 };
 
@@ -861,19 +910,20 @@ onMounted(async () => {
   await fetchAvailableVouchers();
 
   const savedVoucher = localStorage.getItem("applied_voucher");
-  // Áp dụng lại đúng mã khách đã chọn nếu họ tải lại trang giỏ hàng
+
+  // Áp dụng lại đúng mã khách đã chọn nếu họ tải lại trang giỏ hàng.
   if (savedVoucher && props.totalAmount > 0 && props.canCheckout) {
     voucherCode.value = savedVoucher;
     await handleApplyVoucher();
   }
-  
-  // Lắng nghe sự kiện chuyển tab
+
   window.addEventListener("focus", handleFocus);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
 });
 
-// Xóa sự kiện khi chuyển trang khác
 onUnmounted(() => {
   window.removeEventListener("focus", handleFocus);
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 
 </script>

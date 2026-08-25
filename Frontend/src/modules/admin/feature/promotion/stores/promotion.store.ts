@@ -31,6 +31,8 @@ const getErrorMessage = (error: any): string => {
   return "Có lỗi xảy ra, vui lòng thử lại";
 };
 
+const isConflictError = (error: any) => Number(error?.response?.status) === 409;
+
 const getPageContent = <T>(page: PageResponse<T> | T[] | any): T[] => {
   if (Array.isArray(page)) return page;
   if (Array.isArray(page?.content)) return page.content;
@@ -192,12 +194,20 @@ export const usePromotionStore = defineStore("promotionStore", {
 
         return res.data;
       } catch (error: any) {
-        await Swal.fire({
-          icon: "error",
-          title: "Cập nhật chiến dịch thất bại",
-          html: getErrorMessage(error),
-          confirmButtonColor: "#bd9a5f",
-        });
+        /*
+         * 409 được component xử lý riêng để:
+         * - không hiện popup lỗi chung rồi popup stale lần nữa;
+         * - giữ modal mở;
+         * - tải lại snapshot mới nhất và không auto retry.
+         */
+        if (!isConflictError(error)) {
+          await Swal.fire({
+            icon: "error",
+            title: "Cập nhật chiến dịch thất bại",
+            html: getErrorMessage(error),
+            confirmButtonColor: "#bd9a5f",
+          });
+        }
 
         throw error;
       } finally {
@@ -205,9 +215,17 @@ export const usePromotionStore = defineStore("promotionStore", {
       }
     },
 
-    async changeStatus(id: number, status: PromotionStatus) {
+    async changeStatus(
+      id: number,
+      status: PromotionStatus,
+      expectedRevision?: string | null
+    ) {
       try {
-        const res = await promotionService.changeStatus(id, { status });
+        const res = await promotionService.changeStatus(
+          id,
+          { status },
+          expectedRevision
+        );
 
         await Swal.fire({
           icon: "success",
@@ -218,20 +236,22 @@ export const usePromotionStore = defineStore("promotionStore", {
 
         return res.data;
       } catch (error: any) {
-        await Swal.fire({
-          icon: "error",
-          title: "Đổi trạng thái thất bại",
-          html: getErrorMessage(error),
-          confirmButtonColor: "#bd9a5f",
-        });
+        if (!isConflictError(error)) {
+          await Swal.fire({
+            icon: "error",
+            title: "Đổi trạng thái thất bại",
+            html: getErrorMessage(error),
+            confirmButtonColor: "#bd9a5f",
+          });
+        }
 
         throw error;
       }
     },
 
-    async removePromotion(id: number) {
+    async removePromotion(id: number, expectedRevision?: string | null) {
       try {
-        await promotionService.remove(id);
+        await promotionService.remove(id, expectedRevision);
 
         await Swal.fire({
           icon: "success",
@@ -240,12 +260,14 @@ export const usePromotionStore = defineStore("promotionStore", {
           showConfirmButton: false,
         });
       } catch (error: any) {
-        await Swal.fire({
-          icon: "error",
-          title: "Xóa chiến dịch thất bại",
-          html: getErrorMessage(error),
-          confirmButtonColor: "#bd9a5f",
-        });
+        if (!isConflictError(error)) {
+          await Swal.fire({
+            icon: "error",
+            title: "Xóa chiến dịch thất bại",
+            html: getErrorMessage(error),
+            confirmButtonColor: "#bd9a5f",
+          });
+        }
 
         throw error;
       }

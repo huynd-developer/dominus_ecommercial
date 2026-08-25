@@ -84,14 +84,24 @@ public class AdminPromotionController {
     @PatchMapping("/{id}/status")
     public ResponseEntity<?> changeStatus(
             @PathVariable Integer id,
-            @Valid @RequestBody PromotionStatusRequest request
+            @Valid @RequestBody PromotionStatusRequest request,
+            @RequestParam(required = false) String expectedRevision
     ) {
-        return ResponseEntity.ok(promotionService.changeStatus(id, request.getStatus()));
+        return ResponseEntity.ok(
+                promotionService.changeStatus(
+                        id,
+                        request.getStatus(),
+                        expectedRevision
+                )
+        );
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> delete(@PathVariable Integer id) {
-        promotionService.softDelete(id);
+    public ResponseEntity<?> delete(
+            @PathVariable Integer id,
+            @RequestParam(required = false) String expectedRevision
+    ) {
+        promotionService.softDelete(id, expectedRevision);
         return ResponseEntity.ok(Map.of("message", "Xóa chiến dịch khuyến mãi thành công"));
     }
 }

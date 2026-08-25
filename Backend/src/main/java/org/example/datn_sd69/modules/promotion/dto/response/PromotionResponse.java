@@ -31,4 +31,10 @@ public class PromotionResponse {
     private Boolean ended;
 
     private List<PromotionVariantResponse> variants;
+
+    /**
+     * SHA-256 snapshot của dữ liệu Promotion + danh sách SKU/% giảm.
+     * Không chứa tồn kho, NSX/HSD, giá ProductVariant hoặc ảnh.
+     */
+    private String revision;
 }

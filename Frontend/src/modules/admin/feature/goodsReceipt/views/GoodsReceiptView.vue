@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRoute } from "vue-router";
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import Swal from "sweetalert2";
 import { useAuthStore } from "@/modules/auth/stores/authStore";
 import { useGoodsReceiptStore } from "../stores/goods-receipt.store";
@@ -30,6 +30,11 @@ const canApproveOrReject = computed(() =>
 const formVisible = ref(false);
 const detailVisible = ref(false);
 const editingDetail = ref<GoodsReceiptDetailResponse | null>(null);
+
+/*
+ * Chặn nhiều focus event chạy chồng nhau.
+ */
+const refreshingOnFocus = ref(false);
 
 const statusOptions: Array<{ value: GoodsReceiptStatus | ""; label: string }> =
   [
@@ -101,6 +106,56 @@ const getErrorMessage = (error: any) =>
   error?.response?.data?.detail ||
   store.error ||
   "Đã xảy ra lỗi.";
+
+const isConflict = (error: any) =>
+  error?.response?.status === 409;
+
+/*
+ * Refresh state sau workflow conflict.
+ * Không tự chạy lại submit/approve/reject/cancel.
+ */
+const refreshAfterWorkflowConflict = async (id: number) => {
+  const requests: Promise<unknown>[] = [
+    store.fetchList(),
+    store.fetchPendingCount(),
+  ];
+
+  if (detailVisible.value && store.detail?.id === id) {
+    requests.push(
+      store.fetchDetail(id),
+      store.fetchHistory(id)
+    );
+  }
+
+  await Promise.all(requests);
+};
+
+const showWorkflowConflict = async (
+  error: any,
+  id: number
+) => {
+  if (!isConflict(error)) {
+    return false;
+  }
+
+  try {
+    await refreshAfterWorkflowConflict(id);
+  } catch {
+    /*
+     * Giữ nguyên conflict gốc.
+     * Không che mất lý do state đã thay đổi.
+     */
+  }
+
+  await Swal.fire({
+    icon: "warning",
+    title: "Phiếu nhập đã thay đổi",
+    text: getErrorMessage(error),
+    confirmButtonText: "Đã hiểu",
+  });
+
+  return true;
+};
 
 const validateDateFilter = async () => {
   if (store.fromDate && store.toDate && store.fromDate > store.toDate) {
@@ -185,6 +240,7 @@ const saveForm = async (payload: GoodsReceiptSaveRequest) => {
   try {
     if (editingDetail.value?.id) {
       await store.update(editingDetail.value.id, payload);
+
       await Swal.fire({
         icon: "success",
         title: "Cập nhật thành công",
@@ -193,6 +249,7 @@ const saveForm = async (payload: GoodsReceiptSaveRequest) => {
       });
     } else {
       const created = await store.create(payload);
+
       await Swal.fire({
         icon: "success",
         title: "Tạo phiếu thành công",
@@ -201,8 +258,43 @@ const saveForm = async (payload: GoodsReceiptSaveRequest) => {
         showConfirmButton: false,
       });
     }
+
     closeForm();
-  } catch (error) {
+  } catch (error: any) {
+    /*
+     * UPDATE DRAFT stale:
+     * - không đóng form;
+     * - không auto-submit lại;
+     * - đọc detail mới nhất từ BE;
+     * - FormModal đang watch props.detail nên tự reset về dữ liệu mới.
+     */
+    if (editingDetail.value?.id && isConflict(error)) {
+      const id = editingDetail.value.id;
+
+      try {
+        const latestDetail = await store.fetchDetail(id);
+        editingDetail.value = latestDetail;
+
+        await Promise.all([
+          store.fetchList(),
+          store.fetchPendingCount(),
+        ]);
+      } catch {
+        /*
+         * Giữ conflict gốc để user vẫn biết phiếu đã thay đổi.
+         */
+      }
+
+      await Swal.fire({
+        icon: "warning",
+        title: "Phiếu nhập đã thay đổi",
+        text: getErrorMessage(error),
+        confirmButtonText: "Đã hiểu",
+      });
+
+      return;
+    }
+
     await Swal.fire({
       icon: "error",
       title: "Không thể lưu phiếu",
@@ -245,6 +337,10 @@ const submitReceipt = async (item: GoodsReceiptListResponse) => {
       showConfirmButton: false,
     });
   } catch (error) {
+    if (await showWorkflowConflict(error, item.id)) {
+      return;
+    }
+
     await Swal.fire({
       icon: "error",
       title: "Không thể gửi duyệt",
@@ -274,6 +370,10 @@ const approveReceipt = async (item: GoodsReceiptListResponse) => {
       showConfirmButton: false,
     });
   } catch (error) {
+    if (await showWorkflowConflict(error, item.id)) {
+      return;
+    }
+
     await Swal.fire({
       icon: "error",
       title: "Không thể phê duyệt",
@@ -389,6 +489,10 @@ const rejectReceipt = async (item: GoodsReceiptListResponse) => {
       showConfirmButton: false,
     });
   } catch (error) {
+    if (await showWorkflowConflict(error, item.id)) {
+      return;
+    }
+
     await Swal.fire({
       icon: "error",
       title: "Không thể từ chối",
@@ -502,6 +606,10 @@ const cancelReceipt = async (item: GoodsReceiptListResponse) => {
       showConfirmButton: false,
     });
   } catch (error) {
+    if (await showWorkflowConflict(error, item.id)) {
+      return;
+    }
+
     await Swal.fire({
       icon: "error",
       title: "Không thể hủy phiếu",
@@ -510,9 +618,72 @@ const cancelReceipt = async (item: GoodsReceiptListResponse) => {
   }
 };
 
+/*
+ * Không F5:
+ * - khi quay lại tab, refresh list + pending count;
+ * - nếu đang mở detail thì refresh detail + history;
+ * - nếu đang sửa DRAFT thì KHÔNG ghi đè form user đang nhập.
+ *   Nếu dữ liệu đã đổi ở nơi khác, BE sẽ chặn bằng 409 khi save.
+ */
+const handleWindowFocus = async () => {
+  if (
+    refreshingOnFocus.value ||
+    store.saving ||
+    store.processing
+  ) {
+    return;
+  }
+
+  /*
+   * Không tự gọi list API khi user đang gõ một khoảng ngày chưa hợp lệ.
+   */
+  if (
+    store.fromDate &&
+    store.toDate &&
+    store.fromDate > store.toDate
+  ) {
+    return;
+  }
+
+  refreshingOnFocus.value = true;
+
+  try {
+    const requests: Promise<unknown>[] = [
+      store.fetchList(),
+      store.fetchPendingCount(),
+    ];
+
+    if (detailVisible.value && store.detail?.id) {
+      requests.push(
+        store.fetchDetail(store.detail.id),
+        store.fetchHistory(store.detail.id)
+      );
+    }
+
+    await Promise.all(requests);
+  } catch {
+    /*
+     * Focus refresh là best-effort.
+     * Không bật popup lỗi chỉ vì user chuyển tab/window.
+     */
+  } finally {
+    refreshingOnFocus.value = false;
+  }
+};
+
 onMounted(async () => {
-  await Promise.all([loadList(), store.fetchPendingCount()]);
+  window.addEventListener("focus", handleWindowFocus);
+
+  await Promise.all([
+    loadList(),
+    store.fetchPendingCount(),
+  ]);
 });
+
+onBeforeUnmount(() => {
+  window.removeEventListener("focus", handleWindowFocus);
+});
+
 const receiptNoFromLot = String(route.query.receiptNo || "").trim();
 if (receiptNoFromLot) {
   store.keyword = receiptNoFromLot;

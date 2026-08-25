@@ -1,15 +1,18 @@
 package org.example.datn_sd69.repository;
 
+import jakarta.persistence.LockModeType;
 import org.example.datn_sd69.entity.Promotion;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface PromotionRepository extends JpaRepository<Promotion, Integer> {
 
@@ -26,6 +29,18 @@ public interface PromotionRepository extends JpaRepository<Promotion, Integer> {
             Integer status,
             Pageable pageable
     );
+
+    /**
+     * Dùng riêng cho mutation Promotion để serialize các thao tác trên cùng chiến dịch.
+     * GET/list vẫn dùng query cũ, không bị lock.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT p
+        FROM Promotion p
+        WHERE p.id = :id
+    """)
+    Optional<Promotion> findByIdForUpdate(@Param("id") Integer id);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""

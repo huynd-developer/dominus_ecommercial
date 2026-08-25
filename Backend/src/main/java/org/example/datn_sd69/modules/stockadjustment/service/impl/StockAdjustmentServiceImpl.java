@@ -29,10 +29,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -181,6 +185,16 @@ public class StockAdjustmentServiceImpl
                 adjustment,
                 currentUser,
                 "Chỉ người tạo phiếu hoặc OWNER được sửa phiếu Lưu tạm."
+        );
+
+        /*
+         * Row StockAdjustment đã được khóa bởi findByIdForUpdate().
+         * So sánh snapshot trước khi thay đổi note/items để chống:
+         * A và B cùng mở DRAFT, B lưu trước, A lưu màn hình cũ sau.
+         */
+        validateExpectedRevision(
+                request.getExpectedRevision(),
+                buildRevision(adjustment)
         );
 
         adjustment.setNote(
@@ -408,7 +422,8 @@ public class StockAdjustmentServiceImpl
                     currentUser.getId(),
                     adjustment.getId(),
                     item.getId(),
-                    reason
+                    reason,
+                    safeInt(item.getSystemQuantity())
             );
         }
 
@@ -639,7 +654,8 @@ public class StockAdjustmentServiceImpl
             Integer createdBy,
             Integer referenceId,
             Integer referenceLineId,
-            String reason
+            String reason,
+            int expectedQuantityBefore
     ) {
 
         try {
@@ -654,7 +670,8 @@ public class StockAdjustmentServiceImpl
                         @ReferenceType = ?,
                         @ReferenceId = ?,
                         @ReferenceLineId = ?,
-                        @Reason = ?
+                        @Reason = ?,
+                        @ExpectedQuantityBefore = ?
                     """,
                     inventoryLotId,
                     movementType,
@@ -663,7 +680,8 @@ public class StockAdjustmentServiceImpl
                     REFERENCE_TYPE,
                     referenceId,
                     referenceLineId,
-                    reason
+                    reason,
+                    expectedQuantityBefore
             );
 
         } catch (DataAccessException ex) {
@@ -917,6 +935,10 @@ public class StockAdjustmentServiceImpl
                 status != null
                         ? status.getLabel()
                         : "—"
+        );
+
+        response.setRevision(
+                buildRevision(adjustment)
         );
 
         response.setNote(
@@ -1390,6 +1412,104 @@ public class StockAdjustmentServiceImpl
                     ex
             );
         }
+    }
+
+    // =========================================================
+    // STALE / REVISION
+    // =========================================================
+
+    private void validateExpectedRevision(
+            String expectedRevision,
+            String currentRevision
+    ) {
+
+        String expected =
+                normalizeOptional(expectedRevision);
+
+        if (expected == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Dữ liệu phiếu kiểm kê trên màn hình chưa có phiên bản hiện tại. "
+                            + "Vui lòng tải lại phiếu và xác nhận lại."
+            );
+        }
+
+        if (!expected.equals(currentRevision)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Phiếu kiểm kê đã được thay đổi ở nơi khác. "
+                            + "Vui lòng tải lại dữ liệu mới nhất và xác nhận lại."
+            );
+        }
+    }
+
+    private String buildRevision(
+            StockAdjustment adjustment
+    ) {
+
+        StringBuilder source =
+                new StringBuilder();
+
+        appendRevisionPart(source, adjustment == null ? null : adjustment.getId());
+        appendRevisionPart(source, adjustment == null ? null : adjustment.getAdjustmentNo());
+        appendRevisionPart(source, adjustment == null ? null : adjustment.getStatus());
+        appendRevisionPart(source, adjustment == null ? null : adjustment.getNote());
+        appendRevisionPart(source, adjustment == null ? null : adjustment.getCreatedAt());
+
+        if (adjustment != null
+                && adjustment.getItems() != null) {
+
+            for (StockAdjustmentItem item
+                    : adjustment.getItems()) {
+
+                InventoryLot lot =
+                        item.getInventoryLot();
+
+                appendRevisionPart(source, item.getId());
+                appendRevisionPart(source, lot != null ? lot.getId() : null);
+                appendRevisionPart(source, item.getSystemQuantity());
+                appendRevisionPart(source, item.getActualQuantity());
+                appendRevisionPart(source, item.getReason());
+            }
+        }
+
+        try {
+
+            MessageDigest digest =
+                    MessageDigest.getInstance("SHA-256");
+
+            byte[] hash =
+                    digest.digest(
+                            source.toString()
+                                    .getBytes(StandardCharsets.UTF_8)
+                    );
+
+            return HexFormat.of().formatHex(hash);
+
+        } catch (NoSuchAlgorithmException ex) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Không thể tạo phiên bản dữ liệu phiếu kiểm kê.",
+                    ex
+            );
+        }
+    }
+
+    private void appendRevisionPart(
+            StringBuilder source,
+            Object value
+    ) {
+
+        String text =
+                value == null
+                        ? "<NULL>"
+                        : String.valueOf(value);
+
+        source.append(text.length())
+                .append(':')
+                .append(text)
+                .append('|');
     }
 
     // =========================================================

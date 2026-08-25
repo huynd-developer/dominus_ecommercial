@@ -68,18 +68,32 @@ export const promotionService = {
       startDate: normalizeDateTime(payload.startDate),
       endDate: normalizeDateTime(payload.endDate),
       variants: payload.variants,
+      expectedRevision: payload.expectedRevision || undefined,
     });
   },
 
-  changeStatus(id: number, payload: PromotionStatusRequest) {
+  changeStatus(
+    id: number,
+    payload: PromotionStatusRequest,
+    expectedRevision?: string | null
+  ) {
     return api.patch<PromotionResponse>(
       `/admin/promotions/${id}/status`,
-      payload
+      payload,
+      {
+        params: {
+          expectedRevision: expectedRevision || undefined,
+        },
+      }
     );
   },
 
-  remove(id: number) {
-    return api.delete(`/admin/promotions/${id}`);
+  remove(id: number, expectedRevision?: string | null) {
+    return api.delete(`/admin/promotions/${id}`, {
+      params: {
+        expectedRevision: expectedRevision || undefined,
+      },
+    });
   },
 
   getFlashSaleProducts(params: FlashSaleSearchParams = {}) {

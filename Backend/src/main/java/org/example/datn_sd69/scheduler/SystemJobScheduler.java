@@ -42,58 +42,93 @@ public class SystemJobScheduler {
 
         if (!timeoutOrders.isEmpty()) {
 
-            for (Order order : timeoutOrders) {
+            int cancelledCount = 0;
+
+            for (Order candidate : timeoutOrders) {
+                if (candidate == null || candidate.getId() == null) {
+                    continue;
+                }
 
                 /*
-                 * Đơn PENDING chưa xuất kho thực tế.
-                 *
-                 * InventoryLot là nguồn tồn kho duy nhất.
-                 * Không hoàn ProductVariant.stockQuantity.
-                 * Không tạo StockMovement vì chưa có SALE_OUT.
+                 * Khóa lại đúng Order trước khi hủy.
+                 * VNPay callback cũng khóa Order nên scheduler không thể hủy một
+                 * đơn vừa được ghi nhận thanh toán ở transaction song song.
                  */
+                Order order = orderRepository.findDetailByIdForUpdate(candidate.getId())
+                        .orElse(null);
+
+                if (order == null
+                        || !Integer.valueOf(0).equals(order.getStatus())
+                        || Boolean.TRUE.equals(order.getIsPaymentReported())) {
+                    continue;
+                }
+
+                /*
+                 * Đơn ONLINE PENDING chưa SALE_OUT InventoryLot.
+                 * Không hoàn ProductVariant.stockQuantity, không tạo StockMovement.
+                 *
+                 * Voucher đã reserve từ lúc tạo Order nên auto-cancel phải hoàn
+                 * đúng 1 lượt trong cùng transaction.
+                 */
+                restoreVoucherUsage(order);
+
                 order.setStatus(4);
                 order.setCancelReason(
                         "Hệ thống tự động hủy do quá hạn 15 phút không thanh toán"
                 );
                 order.setCancelledAt(LocalDateTime.now());
+
+                orderRepository.save(order);
+                cancelledCount++;
             }
 
-            orderRepository.saveAll(timeoutOrders);
-
-            System.out.println(
-                    "CronJob: Tự động hủy "
-                            + timeoutOrders.size()
-                            + " đơn hàng treo thanh toán (Quá 15 phút)."
-            );
+            if (cancelledCount > 0) {
+                System.out.println(
+                        "CronJob: Tự động hủy "
+                                + cancelledCount
+                                + " đơn hàng treo thanh toán (Quá 15 phút)."
+                );
+            }
         }
     }
 
-    // TASK 2: TỰ ĐỘNG BẬT TẮT FLASH SALE & VOUCHER (MỖI 1 PHÚT)
+    private void restoreVoucherUsage(Order order) {
+        if (order == null
+                || order.getVoucher() == null
+                || order.getVoucher().getId() == null) {
+            return;
+        }
+
+        Voucher lockedVoucher = voucherRepo
+                .findByIdForUpdate(order.getVoucher().getId())
+                .orElse(null);
+
+        if (lockedVoucher == null) {
+            return;
+        }
+
+        int usedCount = lockedVoucher.getUsedCount() != null
+                ? lockedVoucher.getUsedCount()
+                : 0;
+
+        if (usedCount > 0) {
+            lockedVoucher.setUsedCount(usedCount - 1);
+            voucherRepo.save(lockedVoucher);
+        }
+    }
+
+    // TASK 2: ĐỒNG BỘ TRẠNG THÁI FLASH SALE & VOUCHER (MỖI 1 PHÚT)
     @Scheduled(fixedRate = 60000)
     @Transactional
     public void syncPromotionAndVoucherStatus() {
 
         LocalDateTime now = LocalDateTime.now();
 
-        // 1. Bật Flash Sale chưa bắt đầu (status = 0) mà đến giờ chạy
-        List<Promotion> startingSales =
-                flashSaleRepo.findToStart(0, now);
-
-        for (Promotion sale : startingSales) {
-            sale.setStatus(1);
-        }
-
-        if (!startingSales.isEmpty()) {
-            flashSaleRepo.saveAll(startingSales);
-
-            System.out.println(
-                    "CronJob: Đã TỰ ĐỘNG BẬT "
-                            + startingSales.size()
-                            + " chiến dịch Flash Sale/Promotion."
-            );
-        }
-
-        // 2. Tắt Flash Sale đang chạy (status = 1) mà quá hạn kết thúc
+        /*
+         * FLASH SALE / PROMOTION:
+         * Giữ nguyên logic đã sửa trước đó: không auto 0 -> 1,
+         * chỉ tự động tắt khi hết hạn.
+         */
         List<Promotion> endingSales =
                 flashSaleRepo.findToEnd(1, now);
 
@@ -107,29 +142,21 @@ public class SystemJobScheduler {
             System.out.println(
                     "CronJob: Đã TỰ ĐỘNG TẮT "
                             + endingSales.size()
-                            + " chiến dịch Flash Sale/Promotion."
+                            + " chiến dịch Flash Sale/Promotion đã hết hạn."
             );
         }
 
-        // 3. Bật Voucher
-        List<Voucher> startingVouchers =
-                voucherRepo.findToStart(0, now);
-
-        for (Voucher voucher : startingVouchers) {
-            voucher.setStatus(1);
-        }
-
-        if (!startingVouchers.isEmpty()) {
-            voucherRepo.saveAll(startingVouchers);
-
-            System.out.println(
-                    "CronJob: Đã TỰ ĐỘNG BẬT "
-                            + startingVouchers.size()
-                            + " mã Voucher."
-            );
-        }
-
-        // 4. Tắt Voucher
+        /*
+         * VOUCHER:
+         * - status = 1: Admin cho phép sử dụng.
+         * - status = 0: Admin tạm dừng/khóa, hoặc hệ thống đã kết thúc voucher.
+         * - hiệu lực thực tế còn phụ thuộc startDate <= now < endDate.
+         *
+         * KHÔNG tự động chuyển status 0 -> 1.
+         * Nếu làm vậy Voucher vừa bị Admin tạm dừng sẽ tự bật lại sau tối đa 1 phút.
+         *
+         * Chỉ giữ auto-end tại SystemJobScheduler để tránh 2 scheduler cùng sửa Voucher.
+         */
         List<Voucher> endingVouchers =
                 voucherRepo.findToEnd(1, now);
 
@@ -143,7 +170,7 @@ public class SystemJobScheduler {
             System.out.println(
                     "CronJob: Đã TỰ ĐỘNG TẮT "
                             + endingVouchers.size()
-                            + " mã Voucher."
+                            + " mã Voucher đã hết hạn."
             );
         }
     }

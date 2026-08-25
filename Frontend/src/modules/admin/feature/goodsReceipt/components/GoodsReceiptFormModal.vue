@@ -361,6 +361,15 @@ const submit = async () => {
         note: row.note.trim() || null,
       })
     ),
+
+    /*
+     * Khớp BE GoodsReceiptSaveRequest.expectedRevision.
+     * CREATE không gửi snapshot.
+     * UPDATE DRAFT gửi đúng revision của detail mà user đang nhìn thấy.
+     */
+    expectedRevision: isEdit.value
+      ? props.detail?.revision ?? null
+      : undefined,
   };
 
   emit("save", payload);

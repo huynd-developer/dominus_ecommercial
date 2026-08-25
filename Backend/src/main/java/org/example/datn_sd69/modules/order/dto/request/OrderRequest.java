@@ -1,9 +1,13 @@
 package org.example.datn_sd69.modules.order.dto.request;
 
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+
+import java.math.BigDecimal;
 
 @Data
 public class OrderRequest {
@@ -55,7 +59,31 @@ public class OrderRequest {
     private String companyName;
     private String companyAddress;
 
-    // SỬA Ở ĐÂY: Thêm @Data và keyword 'static' để Spring Boot parse được JSON
+    /*
+     * Snapshot số tiền mà FE đang hiển thị tại thời điểm khách bấm đặt hàng.
+     *
+     * Backend KHÔNG dùng các field này để tính Order.
+     * Backend vẫn tự tính lại từ ProductVariant/FlashSale/Voucher/Inventory hiện tại.
+     * Các field này chỉ để phát hiện trang checkout đã stale khi người dùng không F5.
+     *
+     * Để nullable nhằm không làm vỡ caller cũ. FE checkout mới nên gửi đủ 4 field.
+     */
+    @DecimalMin(value = "0.00", message = "Tạm tính dự kiến không được âm")
+    @Digits(integer = 18, fraction = 2, message = "Tạm tính dự kiến không hợp lệ")
+    private BigDecimal expectedTotalAmount;
+
+    @DecimalMin(value = "0.00", message = "Giảm giá dự kiến không được âm")
+    @Digits(integer = 18, fraction = 2, message = "Giảm giá dự kiến không hợp lệ")
+    private BigDecimal expectedDiscountAmount;
+
+    @DecimalMin(value = "0.00", message = "Phí vận chuyển dự kiến không được âm")
+    @Digits(integer = 18, fraction = 2, message = "Phí vận chuyển dự kiến không hợp lệ")
+    private BigDecimal expectedShippingFee;
+
+    @DecimalMin(value = "0.00", message = "Tổng thanh toán dự kiến không được âm")
+    @Digits(integer = 18, fraction = 2, message = "Tổng thanh toán dự kiến không hợp lệ")
+    private BigDecimal expectedFinalAmount;
+
     @Data
     public static class CancelRefundBankRequest {
         private String bankName;

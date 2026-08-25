@@ -10,7 +10,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.example.datn_sd69.entity.base.BaseEntity;
-import org.hibernate.annotations.Nationalized;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -41,16 +40,17 @@ public class ProductVariant extends BaseEntity {
     private Integer stockQuantity = 0;
 
     /**
-     * Ngày sản xuất.
-     * SQL Server: DATE NOT NULL.
+     * LEGACY compatibility.
+     * NSX thật thuộc InventoryLot; DB hiện cho phép NULL.
      */
-    @Column(name = "ManufacturingDate", nullable = false)
+    @Column(name = "ManufacturingDate")
     private LocalDate manufacturingDate;
+
     /**
-     * Hạn sử dụng.
-     * SQL Server: DATE NOT NULL.
+     * LEGACY compatibility.
+     * HSD thật thuộc InventoryLot; DB hiện cho phép NULL.
      */
-    @Column(name = "ExpirationDate", nullable = false)
+    @Column(name = "ExpirationDate")
     private LocalDate expirationDate;
 
     @Column(name = "Status")

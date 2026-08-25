@@ -29,6 +29,14 @@ public class PromotionRequest {
     @Valid
     private List<PromotionVariantRequest> variants;
 
+    /**
+     * Snapshot revision dùng khi UPDATE để phát hiện tab cũ.
+     * Nullable để không làm vỡ client cũ; FE mới sẽ gửi field này khi edit.
+     * CREATE không dùng field này.
+     */
+    @Size(max = 64, message = "Revision không hợp lệ")
+    private String expectedRevision;
+
     public void setName(String name) {
         this.name = name == null ? null : name.trim().replaceAll("\\s+", " ");
     }

@@ -1,10 +1,12 @@
 package org.example.datn_sd69.repository;
 
+import jakarta.persistence.LockModeType;
 import org.example.datn_sd69.entity.Order;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -262,6 +264,22 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
 
     Optional<Order> findByIdAndCustomer_UserId(Integer orderId, Integer customerId);
 
+    /**
+     * Khóa đúng row Orders thuộc khách hàng hiện tại cho các mutation Customer Order.
+     * Giữ nguyên query đọc thường ở trên cho GET/list/detail.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT o
+        FROM Order o
+        WHERE o.id = :orderId
+          AND o.customer.userId = :customerId
+    """)
+    Optional<Order> findByIdAndCustomer_UserIdForUpdate(
+            @Param("orderId") Integer orderId,
+            @Param("customerId") Integer customerId
+    );
+
     @EntityGraph(attributePaths = {
             "customer",
             "customer.user",
@@ -294,6 +312,27 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     """)
     Optional<Order> findDetailById(@Param("orderId") Integer orderId);
 
+    /**
+     * Khóa row Orders cho các mutation POS để hai request đồng thời
+     * không cùng confirm/cancel/rollback một hóa đơn.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {
+            "customer",
+            "customer.user",
+            "cashier",
+            "cashier.user",
+            "voucher"
+    })
+    @Query("""
+        SELECT o
+        FROM Order o
+        WHERE o.id = :orderId
+    """)
+    Optional<Order> findDetailByIdForUpdate(
+            @Param("orderId") Integer orderId
+    );
+
     @EntityGraph(attributePaths = {
             "customer",
             "customer.user",
@@ -310,6 +349,26 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
           AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
     """)
     Optional<Order> findHeldOrderById(@Param("orderId") Integer orderId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {
+            "customer",
+            "customer.user",
+            "cashier",
+            "cashier.user",
+            "voucher"
+    })
+    @Query("""
+        SELECT o
+        FROM Order o
+        WHERE o.id = :orderId
+          AND o.status = 0
+          AND UPPER(o.paymentMethod) = 'HOLD'
+          AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
+    """)
+    Optional<Order> findHeldOrderByIdForUpdate(
+            @Param("orderId") Integer orderId
+    );
 
     List<Order> findByStatusAndCreatedAtBefore(
             Integer status,
@@ -356,6 +415,32 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
           )
     """)
     Optional<Order> findPendingPaymentOrderById(@Param("orderId") Integer orderId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {
+            "customer",
+            "customer.user",
+            "cashier",
+            "cashier.user",
+            "voucher"
+    })
+    @Query("""
+        SELECT o
+        FROM Order o
+        WHERE o.id = :orderId
+          AND o.status = 0
+          AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
+          AND UPPER(o.paymentMethod) IN (
+              'VNPAY',
+              'VIETQR',
+              'MIXED',
+              'MIXED_VNPAY',
+              'MIXED_VIETQR'
+          )
+    """)
+    Optional<Order> findPendingPaymentOrderByIdForUpdate(
+            @Param("orderId") Integer orderId
+    );
 
     @Query(value = """
         SELECT COALESCE(SUM(o.FinalAmount - ISNULL(o.Shippingfee, 0)), 0)
