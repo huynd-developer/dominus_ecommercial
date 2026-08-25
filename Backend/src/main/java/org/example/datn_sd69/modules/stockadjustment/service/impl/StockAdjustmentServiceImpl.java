@@ -18,6 +18,7 @@ import org.example.datn_sd69.modules.stockadjustment.dto.response.StockAdjustmen
 import org.example.datn_sd69.modules.stockadjustment.service.StockAdjustmentService;
 import org.example.datn_sd69.modules.stockadjustment.specification.StockAdjustmentSpecification;
 import org.example.datn_sd69.repository.StockAdjustmentRepository;
+import org.springframework.jdbc.core.PreparedStatementCallback;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -643,10 +644,6 @@ public class StockAdjustmentServiceImpl
         }
     }
 
-    // =========================================================
-    // STORED PROCEDURE
-    // =========================================================
-
     private void postStockMovement(
             Integer inventoryLotId,
             byte movementType,
@@ -660,28 +657,98 @@ public class StockAdjustmentServiceImpl
 
         try {
 
-            jdbcTemplate.update(
+            jdbcTemplate.execute(
                     """
-                    EXEC dbo.usp_PostStockMovement
-                        @InventoryLotId = ?,
-                        @MovementType = ?,
-                        @QuantityChange = ?,
-                        @CreatedBy = ?,
-                        @ReferenceType = ?,
-                        @ReferenceId = ?,
-                        @ReferenceLineId = ?,
-                        @Reason = ?,
-                        @ExpectedQuantityBefore = ?
-                    """,
-                    inventoryLotId,
-                    movementType,
-                    quantityChange,
-                    createdBy,
-                    REFERENCE_TYPE,
-                    referenceId,
-                    referenceLineId,
-                    reason,
-                    expectedQuantityBefore
+                            EXEC dbo.usp_PostStockMovement
+                                @InventoryLotId = ?,
+                                @MovementType = ?,
+                                @QuantityChange = ?,
+                                @CreatedBy = ?,
+                                @ReferenceType = ?,
+                                @ReferenceId = ?,
+                                @ReferenceLineId = ?,
+                                @Reason = ?,
+                                @ExpectedQuantityBefore = ?
+                            """,
+                    (PreparedStatementCallback<Void>) statement -> {
+
+                        statement.setObject(
+                                1,
+                                inventoryLotId
+                        );
+
+                        statement.setByte(
+                                2,
+                                movementType
+                        );
+
+                        statement.setInt(
+                                3,
+                                quantityChange
+                        );
+
+                        statement.setObject(
+                                4,
+                                createdBy
+                        );
+
+                        statement.setString(
+                                5,
+                                REFERENCE_TYPE
+                        );
+
+                        statement.setObject(
+                                6,
+                                referenceId
+                        );
+
+                        statement.setObject(
+                                7,
+                                referenceLineId
+                        );
+
+                        statement.setString(
+                                8,
+                                reason
+                        );
+
+                        statement.setInt(
+                                9,
+                                expectedQuantityBefore
+                        );
+
+                        boolean hasResultSet =
+                                statement.execute();
+
+                        while (true) {
+
+                            if (hasResultSet) {
+
+                                try (var resultSet =
+                                             statement.getResultSet()) {
+
+                                    while (resultSet != null
+                                            && resultSet.next()) {
+                                        // Procedure có trả result set thì consume hết.
+                                    }
+                                }
+
+                            } else {
+
+                                int updateCount =
+                                        statement.getUpdateCount();
+
+                                if (updateCount == -1) {
+                                    break;
+                                }
+                            }
+
+                            hasResultSet =
+                                    statement.getMoreResults();
+                        }
+
+                        return null;
+                    }
             );
 
         } catch (DataAccessException ex) {
@@ -731,7 +798,7 @@ public class StockAdjustmentServiceImpl
      * OWNER:
      * - toàn quyền
      * - được tự duyệt/từ chối phiếu mình tạo.
-     *
+     * <p>
      * MANAGER:
      * - được duyệt/từ chối
      * - KHÔNG được xử lý phiếu do chính mình tạo.
@@ -823,11 +890,11 @@ public class StockAdjustmentServiceImpl
             return entityManager
                     .createQuery(
                             """
-                            select u
-                            from User u
-                            join fetch u.role
-                            where lower(u.email) = lower(:email)
-                            """,
+                                    select u
+                                    from User u
+                                    join fetch u.role
+                                    where lower(u.email) = lower(:email)
+                                    """,
                             User.class
                     )
                     .setParameter("email", email)
@@ -1153,30 +1220,30 @@ public class StockAdjustmentServiceImpl
         List<Map<String, Object>> rows =
                 jdbcTemplate.queryForList(
                         """
-                        SELECT
-                            IL.ProductVariantId,
-                            PV.Sku,
-                            P.Name AS ProductName,
-                            ImageData.ImageUrl AS ImageUrl
-                        FROM dbo.InventoryLot IL
-                        INNER JOIN dbo.ProductVariant PV
-                            ON PV.Id = IL.ProductVariantId
-                        INNER JOIN dbo.Product P
-                            ON P.Id = PV.ProductId
-                        OUTER APPLY (
-                            SELECT TOP 1
-                                PI.ImageUrl
-                            FROM dbo.ProductImage PI
-                            WHERE PI.ProductId = P.Id
-                            ORDER BY
-                                CASE
-                                    WHEN PI.IsPrimary = 1 THEN 0
-                                    ELSE 1
-                                END,
-                                PI.Id ASC
-                        ) ImageData
-                        WHERE IL.Id = ?
-                        """,
+                                SELECT
+                                    IL.ProductVariantId,
+                                    PV.Sku,
+                                    P.Name AS ProductName,
+                                    ImageData.ImageUrl AS ImageUrl
+                                FROM dbo.InventoryLot IL
+                                INNER JOIN dbo.ProductVariant PV
+                                    ON PV.Id = IL.ProductVariantId
+                                INNER JOIN dbo.Product P
+                                    ON P.Id = PV.ProductId
+                                OUTER APPLY (
+                                    SELECT TOP 1
+                                        PI.ImageUrl
+                                    FROM dbo.ProductImage PI
+                                    WHERE PI.ProductId = P.Id
+                                    ORDER BY
+                                        CASE
+                                            WHEN PI.IsPrimary = 1 THEN 0
+                                            ELSE 1
+                                        END,
+                                        PI.Id ASC
+                                ) ImageData
+                                WHERE IL.Id = ?
+                                """,
                         inventoryLotId
                 );
 
