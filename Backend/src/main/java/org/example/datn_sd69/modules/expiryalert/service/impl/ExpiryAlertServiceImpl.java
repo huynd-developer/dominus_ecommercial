@@ -131,6 +131,14 @@ public class ExpiryAlertServiceImpl implements ExpiryAlertService {
                         projection.getImageUrl()
                 )
 
+                .capacityValue(
+                        projection.getCapacityValue()
+                )
+
+                .bottleTypeName(
+                        projection.getBottleTypeName()
+                )
+
                 .lotCode(
                         projection.getLotCode()
                 )

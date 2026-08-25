@@ -101,6 +101,24 @@ const formatNumber = (
   new Intl.NumberFormat("vi-VN")
     .format(Number(value ?? 0));
 
+const formatCapacity = (
+  value?: number | null
+) => {
+  if (
+    value == null ||
+    !Number.isFinite(Number(value))
+  ) {
+    return "—";
+  }
+
+  return `${new Intl.NumberFormat(
+    "vi-VN",
+    {
+      maximumFractionDigits: 2,
+    }
+  ).format(Number(value))} ml`;
+};
+
 const formatSignedNumber = (
   value?: number | null
 ) => {
@@ -412,6 +430,33 @@ const referenceLabel = (
                     <strong>
                       {{
                         detail.productName
+                      }}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      Dung tích
+                    </span>
+
+                    <strong>
+                      {{
+                        formatCapacity(
+                          detail.capacityValue
+                        )
+                      }}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      Loại chai
+                    </span>
+
+                    <strong>
+                      {{
+                        detail.bottleTypeName ||
+                        "—"
                       }}
                     </strong>
                   </div>

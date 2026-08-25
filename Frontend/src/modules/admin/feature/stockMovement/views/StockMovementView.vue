@@ -128,6 +128,28 @@ const pageEnd = computed(() =>
 const formatNumber = (value?: number | null) =>
   new Intl.NumberFormat("vi-VN").format(Number(value ?? 0));
 
+const formatCapacity = (value?: number | null) => {
+  if (value == null || !Number.isFinite(Number(value))) {
+    return "";
+  }
+
+  return `${new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 2,
+  }).format(Number(value))} ml`;
+};
+
+const variantLabel = (item: {
+  capacityValue?: number | null;
+  bottleTypeName?: string | null;
+}) => {
+  const parts = [
+    formatCapacity(item.capacityValue),
+    String(item.bottleTypeName ?? "").trim(),
+  ].filter(Boolean);
+
+  return parts.join(" · ");
+};
+
 const formatSignedNumber = (value?: number | null) => {
   const numberValue = Number(value ?? 0);
 
@@ -630,6 +652,13 @@ onUnmounted(() => {
                 <span class="product-name" :title="item.productName">
                   {{ item.productName }}
                 </span>
+
+                <span
+                  v-if="variantLabel(item)"
+                  class="variant-info"
+                >
+                  {{ variantLabel(item) }}
+                </span>
               </td>
 
               <!-- MOVEMENT -->
@@ -1111,6 +1140,16 @@ tbody tr:last-child td {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.variant-info {
+  display: block;
+  margin-top: 3px;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
 
 td small {
   display: block;

@@ -35,6 +35,10 @@ export interface InventoryLotStatus {
   sku: string;
   productName: string;
   imageUrl: string | null;
+
+  capacityValue: number | null;
+  bottleTypeName: string | null;
+
   lotCode: string;
 
   manufacturedDate: string | null;

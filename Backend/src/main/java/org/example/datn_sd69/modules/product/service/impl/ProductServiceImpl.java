@@ -68,18 +68,11 @@ public class ProductServiceImpl implements ProductService {
         product.setStatus(request.getStatus());
         product.setIsDeleted(false);
 
-        if (request.getFragranceFamilyIds() != null
-                && !request.getFragranceFamilyIds().isEmpty()) {
-
-            Set<FragranceFamily> families =
-                    new HashSet<>(
-                            fragranceFamilyRepository.findAllById(
-                                    request.getFragranceFamilyIds()
-                            )
-                    );
-
-            product.setFragranceFamilies(families);
-        }
+        product.setFragranceFamilies(
+                resolveFragranceFamilies(
+                        request.getFragranceFamilyIds()
+                )
+        );
 
         Product savedProduct = productRepository.save(product);
 
@@ -174,14 +167,11 @@ public class ProductServiceImpl implements ProductService {
         product.setIsNiche(request.getIsNiche());
         product.setStatus(request.getStatus());
 
-        Set<FragranceFamily> families =
-                new HashSet<>(
-                        fragranceFamilyRepository.findAllById(
-                                request.getFragranceFamilyIds()
-                        )
-                );
-
-        product.setFragranceFamilies(families);
+        product.setFragranceFamilies(
+                resolveFragranceFamilies(
+                        request.getFragranceFamilyIds()
+                )
+        );
 
         productRepository.save(product);
 
@@ -483,6 +473,37 @@ public class ProductServiceImpl implements ProductService {
         }
 
         productImageRepository.saveAll(images);
+    }
+
+
+    private Set<FragranceFamily> resolveFragranceFamilies(
+            Collection<Integer> ids
+    ) {
+
+        if (ids == null || ids.isEmpty()) {
+            return new HashSet<>();
+        }
+
+        Set<Integer> requestedIds =
+                ids.stream()
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+
+        if (requestedIds.isEmpty()) {
+            return new HashSet<>();
+        }
+
+        List<FragranceFamily> found =
+                fragranceFamilyRepository.findAllById(requestedIds);
+
+        if (found.size() != requestedIds.size()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Có nhóm hương không tồn tại. Vui lòng tải lại danh sách nhóm hương."
+            );
+        }
+
+        return new HashSet<>(found);
     }
 
 

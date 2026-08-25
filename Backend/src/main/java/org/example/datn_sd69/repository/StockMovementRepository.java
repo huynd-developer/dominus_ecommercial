@@ -55,6 +55,10 @@ public interface StockMovementRepository
 
                         PIMG.ImageUrl AS ImageUrl,
 
+                        C.Value AS CapacityValue,
+
+                        BT.Name AS BottleTypeName,
+
                         IL.LotCode AS LotCode,
 
                         SM.MovementType AS MovementType,
@@ -86,6 +90,12 @@ public interface StockMovementRepository
 
                     INNER JOIN dbo.ProductVariant PV
                         ON PV.Id = IL.ProductVariantId
+
+                    LEFT JOIN dbo.Capacity C
+                        ON C.Id = PV.CapacityId
+
+                    LEFT JOIN dbo.BottleType BT
+                        ON BT.Id = PV.BottleTypeId
 
                     INNER JOIN dbo.Product P
                         ON P.Id = PV.ProductId
@@ -318,6 +328,10 @@ public interface StockMovementRepository
 
                         PIMG.ImageUrl AS ImageUrl,
 
+                        C.Value AS CapacityValue,
+
+                        BT.Name AS BottleTypeName,
+
                         IL.LotCode AS LotCode,
 
                         SM.MovementType AS MovementType,
@@ -349,6 +363,12 @@ public interface StockMovementRepository
 
                     INNER JOIN dbo.ProductVariant PV
                         ON PV.Id = IL.ProductVariantId
+
+                    LEFT JOIN dbo.Capacity C
+                        ON C.Id = PV.CapacityId
+
+                    LEFT JOIN dbo.BottleType BT
+                        ON BT.Id = PV.BottleTypeId
 
                     INNER JOIN dbo.Product P
                         ON P.Id = PV.ProductId

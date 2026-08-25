@@ -14,6 +14,10 @@ public interface ExpiryAlertViewProjection {
 
     String getImageUrl();
 
+    Double getCapacityValue();
+
+    String getBottleTypeName();
+
     String getLotCode();
 
     Integer getQuantityOnHand();

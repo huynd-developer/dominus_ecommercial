@@ -25,6 +25,10 @@ public class InventoryLotStatusResponse {
 
     private String imageUrl;
 
+    private Double capacityValue;
+
+    private String bottleTypeName;
+
     private String lotCode;
 
     private LocalDate manufacturedDate;

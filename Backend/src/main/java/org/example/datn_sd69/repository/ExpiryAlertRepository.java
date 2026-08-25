@@ -20,6 +20,8 @@ public interface ExpiryAlertRepository
                         LS.Sku AS sku,
                         LS.ProductName AS productName,
                         ImageData.ImageUrl AS imageUrl,
+                        C.Value AS capacityValue,
+                        BT.Name AS bottleTypeName,
                         LS.LotCode AS lotCode,
                         LS.QuantityOnHand AS quantityOnHand,
                         LS.SellableQuantity AS sellableQuantity,
@@ -31,6 +33,12 @@ public interface ExpiryAlertRepository
 
                     LEFT JOIN dbo.ProductVariant PV
                         ON PV.Id = LS.ProductVariantId
+
+                    LEFT JOIN dbo.Capacity C
+                        ON C.Id = PV.CapacityId
+
+                    LEFT JOIN dbo.BottleType BT
+                        ON BT.Id = PV.BottleTypeId
 
                     OUTER APPLY (
                         SELECT TOP 1
