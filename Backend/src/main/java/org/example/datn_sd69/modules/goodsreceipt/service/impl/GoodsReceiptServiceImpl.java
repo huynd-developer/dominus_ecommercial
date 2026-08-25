@@ -395,7 +395,8 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
             );
         }
 
-        List<ProductVariant> variants = productVariantRepository.findAllById(variantIds);
+        List<ProductVariant> variants =
+                productVariantRepository.findAvailableForGoodsReceiptByIds(variantIds);
 
         Map<Integer, ProductVariant> variantMap = variants.stream()
                 .collect(Collectors.toMap(
@@ -403,12 +404,16 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                         Function.identity()
                 ));
 
-        List<Integer> missingIds = variantIds.stream()
+        List<Integer> unavailableIds = variantIds.stream()
                 .filter(id -> !variantMap.containsKey(id))
                 .toList();
 
-        if (!missingIds.isEmpty()) {
-            throw badRequest("Không tìm thấy ProductVariant: " + missingIds);
+        if (!unavailableIds.isEmpty()) {
+            throw badRequest(
+                    "SKU không tồn tại hoặc thuộc sản phẩm/SKU đã bị xóa, "
+                            + "không thể thêm vào phiếu nhập: "
+                            + unavailableIds
+            );
         }
 
         for (int i = 0; i < items.size(); i++) {

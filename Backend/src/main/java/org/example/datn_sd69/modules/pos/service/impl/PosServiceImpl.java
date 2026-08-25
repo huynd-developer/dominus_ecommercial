@@ -365,13 +365,13 @@ public class PosServiceImpl implements PosService {
     /**
      * DB hiện tại Customer.UserId là PK/FK tới Users.Id.
      * <p>
-     * Logic POS đúng:
-     * 1. Ưu tiên tìm Customer theo SĐT.
-     * 2. Nếu không thấy theo SĐT nhưng email đã thuộc Customer cũ:
-     * dùng lại Customer đó và cập nhật SĐT mới nếu SĐT chưa thuộc người khác.
-     * 3. Nếu Users tồn tại nhưng chưa có Customer:
-     * chỉ tạo Customer nếu user đó là role USER.
-     * 4. Không tạo email giả.
+     * Nghiệp vụ POS:
+     * 1. POS chỉ tìm/dùng lại khách hàng hoặc tạo khách hàng mới.
+     * 2. SĐT + email của khách đã tồn tại phải khớp cùng một User/Customer.
+     * 3. POS không tự cập nhật name/phone/email của User đã tồn tại.
+     * 4. Nếu phone/email xung đột thì chặn để tránh ghi đè dữ liệu khách hàng.
+     * 5. User role USER đã tồn tại nhưng chưa có Customer chỉ được tạo Customer
+     * khi cả phone và email đều cùng thuộc chính User đó.
      */
     private Customer resolveOrCreateCustomer(PosCheckoutRequest request) {
         if (request == null) {
@@ -386,57 +386,82 @@ public class PosServiceImpl implements PosService {
         String name = normalizeRequiredName(rawName);
         String email = normalizeRequiredEmail(rawEmail);
 
+        /*
+         * 1. Customer đã tồn tại theo SĐT.
+         * Chỉ dùng lại khi email request đúng với email hiện tại của Customer đó.
+         * Tuyệt đối không dùng POS để đổi email/phone/name của khách cũ.
+         */
         Customer customerByPhone = customerRepository.findByUserPhone(phone).orElse(null);
 
         if (customerByPhone != null) {
             User user = requireCustomerUser(customerByPhone);
 
-            User userByEmail = userRepository.findByEmailIgnoreCase(email).orElse(null);
-
-            if (userByEmail != null && !userByEmail.getId().equals(user.getId())) {
-                throw new RuntimeException("Email đã thuộc khách hàng khác.");
+            if (!sameEmail(user.getEmail(), email)) {
+                throw new RuntimeException(
+                        "Số điện thoại đã thuộc khách hàng có email khác. Vui lòng kiểm tra lại thông tin khách hàng."
+                );
             }
-            updateUserBasicInfo(user, name, phone, email);
-            normalizeCustomerDefaultInfo(customerByPhone);
 
+            normalizeCustomerDefaultInfo(customerByPhone);
             return customerRepository.save(customerByPhone);
         }
 
+        /*
+         * 2. Không có Customer theo SĐT nhưng email đã thuộc Customer khác.
+         * Đây là case gây lỗi cũ: phone mới + email cũ làm đổi SĐT của User.
+         * Logic đúng là chặn, không update User.
+         */
         Customer customerByEmail = customerRepository.findByUserEmailIgnoreCase(email).orElse(null);
 
         if (customerByEmail != null) {
             User user = requireCustomerUser(customerByEmail);
 
-            User userByPhone = userRepository.findByPhone(phone).orElse(null);
-
-            if (userByPhone != null && !userByPhone.getId().equals(user.getId())) {
-                throw new RuntimeException("Số điện thoại đã thuộc khách hàng khác.");
+            if (!samePhone(user.getPhone(), phone)) {
+                throw new RuntimeException(
+                        "Email đã thuộc khách hàng có số điện thoại khác. Vui lòng sử dụng đúng thông tin khách hàng."
+                );
             }
 
-            updateUserBasicInfo(user, name, phone, email);
             normalizeCustomerDefaultInfo(customerByEmail);
-
             return customerRepository.save(customerByEmail);
         }
 
+        /*
+         * 3. Chưa có Customer tương ứng, kiểm tra trực tiếp bảng Users.
+         * Trường hợp này giữ tương thích với dữ liệu User role USER đã tồn tại
+         * nhưng chưa có bản ghi Customer.
+         */
         User userByPhone = userRepository.findByPhone(phone).orElse(null);
+        User userByEmail = userRepository.findByEmailIgnoreCase(email).orElse(null);
+
+        if (userByPhone != null
+                && userByEmail != null
+                && !userByPhone.getId().equals(userByEmail.getId())) {
+            throw new RuntimeException(
+                    "Số điện thoại và email đang thuộc hai tài khoản khác nhau. Vui lòng kiểm tra lại thông tin khách hàng."
+            );
+        }
 
         if (userByPhone != null) {
             if (!isUserRole(userByPhone)) {
-                throw new RuntimeException("Số điện thoại này đã thuộc tài khoản nhân viên/quản trị. Vui lòng nhập số điện thoại khác cho khách hàng.");
-            }
-
-            User userByEmail = userRepository.findByEmailIgnoreCase(email).orElse(null);
-
-            if (userByEmail != null && !userByEmail.getId().equals(userByPhone.getId())) {
-                throw new RuntimeException("Email đã thuộc tài khoản khác.");
+                throw new RuntimeException(
+                        "Số điện thoại này đã thuộc tài khoản nhân viên/quản trị. Vui lòng nhập số điện thoại khác cho khách hàng."
+                );
             }
 
             if (userByPhone.getStatus() == null || userByPhone.getStatus() != STATUS_ACTIVE) {
                 throw new RuntimeException("Tài khoản khách hàng đã bị khóa.");
             }
 
-            updateUserBasicInfo(userByPhone, name, phone, email);
+            if (!sameEmail(userByPhone.getEmail(), email)) {
+                throw new RuntimeException(
+                        "Số điện thoại đã thuộc tài khoản có email khác. Vui lòng kiểm tra lại thông tin khách hàng."
+                );
+            }
+
+            if (userByEmail != null && !userByEmail.getId().equals(userByPhone.getId())) {
+                throw new RuntimeException("Email đã thuộc tài khoản khác.");
+            }
 
             Customer newCustomer = new Customer();
             newCustomer.setUser(userByPhone);
@@ -448,30 +473,31 @@ public class PosServiceImpl implements PosService {
             return customerRepository.save(newCustomer);
         }
 
-        User userByEmail = userRepository.findByEmailIgnoreCase(email).orElse(null);
-
         if (userByEmail != null) {
             if (!isUserRole(userByEmail)) {
-                throw new RuntimeException("Email này đã thuộc tài khoản nhân viên/quản trị. Vui lòng nhập email khác cho khách hàng.");
+                throw new RuntimeException(
+                        "Email này đã thuộc tài khoản nhân viên/quản trị. Vui lòng nhập email khác cho khách hàng."
+                );
             }
 
             if (userByEmail.getStatus() == null || userByEmail.getStatus() != STATUS_ACTIVE) {
                 throw new RuntimeException("Tài khoản khách hàng đã bị khóa.");
             }
 
-            updateUserBasicInfo(userByEmail, name, phone, email);
-
-            Customer newCustomer = new Customer();
-            newCustomer.setUser(userByEmail);
-            newCustomer.setCustomerRank("BRONZE");
-            newCustomer.setLoyaltyPoints(0);
-            newCustomer.setDateOfBirth(null);
-            newCustomer.setGender(null);
-
-            return customerRepository.save(newCustomer);
+            /*
+             * Có User theo email nhưng không có User theo phone => phone request
+             * không phải phone hiện tại của User đó. Không được tự đổi phone.
+             */
+            throw new RuntimeException(
+                    "Email đã thuộc tài khoản có số điện thoại khác. Vui lòng sử dụng đúng thông tin khách hàng."
+            );
         }
 
-        Role userRole = roleRepository.findByNameIgnoreCase("USER").orElseThrow(() -> new RuntimeException("Hệ thống chưa có Role USER. Vui lòng kiểm tra bảng Roles."));
+        /*
+         * 4. Cả phone và email đều chưa tồn tại => tạo User + Customer mới.
+         */
+        Role userRole = roleRepository.findByNameIgnoreCase("USER")
+                .orElseThrow(() -> new RuntimeException("Hệ thống chưa có Role USER. Vui lòng kiểm tra bảng Roles."));
 
         User newUser = new User();
         newUser.setRole(userRole);
@@ -529,11 +555,21 @@ public class PosServiceImpl implements PosService {
         return "USER".equals(roleName) || "ROLE_USER".equals(roleName);
     }
 
-    private void updateUserBasicInfo(User user, String name, String phone, String email) {
-        user.setName(name);
-        user.setPhone(phone);
-        user.setEmail(email);
-        userRepository.save(user);
+    private boolean samePhone(String dbPhone, String normalizedPhone) {
+        if (dbPhone == null || normalizedPhone == null) {
+            return false;
+        }
+
+        String cleanDbPhone = dbPhone.replaceAll("[\\s.-]", "").trim();
+        return cleanDbPhone.equals(normalizedPhone);
+    }
+
+    private boolean sameEmail(String dbEmail, String normalizedEmail) {
+        if (dbEmail == null || normalizedEmail == null) {
+            return false;
+        }
+
+        return dbEmail.trim().equalsIgnoreCase(normalizedEmail);
     }
 
     private void normalizeCustomerDefaultInfo(Customer customer) {

@@ -18,6 +18,7 @@ public interface InventoryService {
             String keyword,
             Boolean nearExpiry,
             Boolean expired,
+            Boolean selectableOnly,
             InventoryStockStatus stockStatus,
             Pageable pageable
     );

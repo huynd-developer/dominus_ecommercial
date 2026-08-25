@@ -104,6 +104,7 @@ public class InventoryServiceImpl
             String keyword,
             Boolean nearExpiry,
             Boolean expired,
+            Boolean selectableOnly,
             InventoryStockStatus stockStatus,
             Pageable pageable
     ) {
@@ -117,6 +118,16 @@ public class InventoryServiceImpl
         Integer expiredFlag =
                 toFlag(expired);
 
+        /*
+         * Chỉ bật filter soft-delete khi caller thực sự cần danh sách SKU
+         * cho giao dịch mới (ví dụ picker của Phiếu nhập kho).
+         *
+         * Mặc định false để màn Tổng quan kho vẫn nhìn thấy tồn vật lý/lịch sử
+         * của SKU đã được archive.
+         */
+        Integer selectableOnlyFlag =
+                Boolean.TRUE.equals(selectableOnly) ? 1 : 0;
+
         String stockStatusValue =
                 stockStatus == null
                         ? InventoryStockStatus.ALL.name()
@@ -127,6 +138,7 @@ public class InventoryServiceImpl
                         normalizedKeyword,
                         nearExpiryFlag,
                         expiredFlag,
+                        selectableOnlyFlag,
                         stockStatusValue,
                         pageable
                 )

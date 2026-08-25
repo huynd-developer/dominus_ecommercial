@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -92,6 +93,33 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
             "bottleType"
     })
     Optional<ProductVariant> findBySkuAndIsDeletedFalse(String sku);
+
+    // ================= Goods Receipt =================
+
+    /**
+     * Chỉ dùng cho giao dịch Phiếu nhập mới / sửa DRAFT.
+     *
+     * Không được dùng method này để đọc phiếu nhập cũ hoặc lịch sử kho,
+     * vì dữ liệu lịch sử vẫn phải đọc được dù Product/ProductVariant
+     * đã bị soft-delete.
+     */
+    @EntityGraph(attributePaths = {
+            "product",
+            "product.brand",
+            "capacity",
+            "bottleType"
+    })
+    @Query("""
+        SELECT v
+        FROM ProductVariant v
+        JOIN v.product p
+        WHERE v.id IN :ids
+          AND COALESCE(v.isDeleted, false) = false
+          AND COALESCE(p.isDeleted, false) = false
+    """)
+    List<ProductVariant> findAvailableForGoodsReceiptByIds(
+            @Param("ids") Collection<Integer> ids
+    );
 
     // ================= Inventory =================
 
