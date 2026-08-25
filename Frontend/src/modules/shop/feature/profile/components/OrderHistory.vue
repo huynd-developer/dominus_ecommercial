@@ -1411,6 +1411,28 @@ const getOrderShippingFee = (order: any) => {
   );
 };
 
+// 💥 ĐÃ SỬA: LẤY TRỰC TIẾP GIẢM GIÁ TỪ BACKEND ĐỂ CHÍNH XÁC NHẤT THAY VÌ TỰ TÍNH LẠI
+const getOrderDiscountAmount = (order: any) => {
+  return pickMoneyValue(
+    order?.discountAmount,
+    order?.DiscountAmount,
+    order?.discountValue,
+    order?.DiscountValue,
+    order?.discount,
+    order?.Discount,
+    order?.voucherDiscount,
+    order?.VoucherDiscount,
+    order?.voucherAmount,
+    order?.VoucherAmount,
+    order?.voucherDiscountAmount,
+    order?.VoucherDiscountAmount,
+    order?.promotionAmount,
+    order?.PromotionAmount,
+    order?.promotionDiscount,
+    order?.PromotionDiscount
+  );
+};
+
 const getOrderFinalAmount = (order: any) => {
   const explicitFinal = pickMoneyValue(
     order?.finalAmount,
@@ -1431,65 +1453,6 @@ const getOrderFinalAmount = (order: any) => {
   const ship = getOrderShippingFee(order);
 
   return Math.max(0, subtotal - discount) + ship;
-};
-
-const getOrderDiscountAmount = (order: any) => {
-  let explicitDiscount = pickMoneyValue(
-    order?.discountAmount,
-    order?.DiscountAmount,
-    order?.discountValue,
-    order?.DiscountValue,
-    order?.discount,
-    order?.Discount,
-    order?.voucherDiscount,
-    order?.VoucherDiscount,
-    order?.voucherAmount,
-    order?.VoucherAmount,
-    order?.voucherDiscountAmount,
-    order?.VoucherDiscountAmount,
-    order?.promotionAmount,
-    order?.PromotionAmount,
-    order?.promotionDiscount,
-    order?.PromotionDiscount
-  );
-  if (explicitDiscount > 0) return explicitDiscount;
-
-  if (Array.isArray(order?.items)) {
-    const sumFromItems = order.items.reduce((sum: number, item: any) => {
-      return (
-        sum +
-        pickMoneyValue(
-          item?.voucherAllocatedAmount,
-          item?.allocatedVoucherAmount,
-          item?.discountAmount,
-          item?.itemDiscount
-        )
-      );
-    }, 0);
-    if (sumFromItems > 0) return sumFromItems;
-  }
-
-  // TÍNH NGƯỢC GIẢM GIÁ TỪ FRONTEND
-  const subtotal = getOrderSubtotal(order);
-  const ship = getOrderShippingFee(order);
-  const explicitFinal = pickMoneyValue(
-    order?.finalAmount,
-    order?.FinalAmount,
-    order?.totalPayment,
-    order?.TotalPayment,
-    order?.totalPay,
-    order?.TotalPay,
-    order?.paymentTotal,
-    order?.PaymentTotal,
-    order?.totalPrice,
-    order?.TotalPrice
-  );
-
-  if (subtotal > 0 && explicitFinal > 0 && subtotal + ship > explicitFinal) {
-    return subtotal + ship - explicitFinal;
-  }
-
-  return 0;
 };
 // 💥 KẾT THÚC BƯỚC 1
 

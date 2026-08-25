@@ -3132,7 +3132,7 @@ watch(
 }
 
 /* === CSS CHO SO SÁNH SẢN PHẨM === */
-.compare-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: #ffffff; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1050; padding: 15px 0; border-top: 2px solid #bd9a5f; }
+.compare-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: #ffffff; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1040; padding: 15px 0; border-top: 2px solid #bd9a5f; }
 .compare-bar.show { transform: translateY(0); }
 .cb-container { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; }
 .cb-left { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
@@ -3155,12 +3155,12 @@ watch(
 .cb-btn-compare:disabled { opacity: 0.5; cursor: not-allowed; }
 .cb-btn-compare:hover:not(:disabled) { background: #bd9a5f; box-shadow: 0 4px 12px rgba(189,154,95,0.3); }
 
-/* COMPARE MODAL - ĐÃ ĐẶT Z-INDEX 1040 ĐỂ NẰM DƯỚI THANH NỔI (1050) */
+/* COMPARE MODAL */
 .compare-modal-overlay { 
   position: fixed; 
   inset: 0; 
   background: rgba(0,0,0,0.7); 
-  z-index: 1040; 
+  z-index: 1050; 
   display: flex; 
   align-items: center; 
   justify-content: center; 
@@ -3294,11 +3294,11 @@ watch(
 .picker-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
 .picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; }
 
-.picker-item { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 15px; border: 1px solid #eaeaea; border-radius: 12px; cursor: pointer; transition: 0.2s; position: relative; justify-content: space-between; }
+.picker-item { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 15px; border: 1px solid #eaeaea; border-radius: 12px; cursor: pointer; transition: 0.2s; position: relative; justify-content: space-between; height: 100%; }
 .picker-item:hover { border-color: #bd9a5f; transform: translateY(-3px); box-shadow: 0 6px 15px rgba(0,0,0,0.05); }
 .picker-item.selected { border-color: #bd9a5f; background: #fdfaf6; }
 .picker-item img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; margin-bottom: 12px; flex-shrink: 0; }
-.picker-info { display: flex; flex-direction: column; align-items: center; width: 100%; flex: 1; }
+.picker-info { display: flex; flex-direction: column; align-items: center; width: 100%; flex: 1; justify-content: space-between; }
 .picker-info .brand { font-size: 11px; color: #bd9a5f; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
 .picker-info .name { font-size: 13px; font-weight: 700; color: #0a142f; margin: 0 0 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
 .picker-price { font-size: 15px; font-weight: 800; color: #e53e3e; margin-top: auto; }
