@@ -815,17 +815,34 @@ const fetchFlashSaleProducts = async (showLoading = true) => {
       flashSaleLoading.value = true;
     }
 
-    const res = await api.get<PageResponse<FlashSaleProductResponse>>(
-      "/promotions/flash-sale",
-      {
-        params: {
-          page: 0,
-          size: 20,
-        },
-      }
-    );
+    // Lấy song song 2 API: Danh sách Flash Sale và Danh sách Sản phẩm hợp lệ
+    const [res, validRes] = await Promise.all([
+      api.get<PageResponse<FlashSaleProductResponse>>(
+        "/promotions/flash-sale",
+        {
+          params: {
+            page: 0,
+            size: 20,
+            t: Date.now() // Ép không lưu cache
+          },
+        }
+      ),
+      api.get("/v1/products", { params: { size: 500, t: Date.now() } }).catch(() => null)
+    ]);
 
     const rows = resolvePageContent<FlashSaleProductResponse>(res.data);
+
+    // 💥 TRÍCH XUẤT TẬP HỢP ID CỦA CÁC SẢN PHẨM HỢP LỆ (Đang mở bán, chưa bị xóa)
+    const validProductIds = new Set<number>();
+    if (validRes) {
+      const validData = validRes.data?.data?.content || validRes.data?.data || validRes.data?.content || validRes.data || [];
+      if (Array.isArray(validData)) {
+        validData.forEach((p: any) => {
+          const id = Number(p.id || p.productId || 0);
+          if (id > 0) validProductIds.add(id);
+        });
+      }
+    }
 
     const productMap = new Map<number, FlashSaleProductResponse[]>();
     rows.forEach((item) => {
@@ -919,16 +936,17 @@ const fetchFlashSaleProducts = async (showLoading = true) => {
       });
     });
 
-    flashSaleProducts.value = groupedProducts;
+    // 💥 BỘ LỌC ĐỒNG BỘ: Chỉ giữ lại các sản phẩm Flash Sale nếu nó thực sự tồn tại trong danh sách Sản phẩm hợp lệ của hệ thống
+    if (validProductIds.size > 0) {
+      flashSaleProducts.value = groupedProducts.filter(p => validProductIds.has(Number(p.productId)));
+    } else {
+      flashSaleProducts.value = groupedProducts; // Fallback
+    }
+    
     refreshHomeProductSections();
   } catch (error) {
     console.error("Lỗi tải Flash Sale:", error);
 
-    /*
-     * Lần tải đầu: giữ nguyên hành vi cũ, API lỗi thì hiển thị trạng thái rỗng.
-     * Refresh nền: giữ dữ liệu hiện tại để không làm trang nháy/rỗng
-     * chỉ vì một request nền lỗi tạm thời.
-     */
     if (showLoading) {
       flashSaleProducts.value = [];
       refreshHomeProductSections();

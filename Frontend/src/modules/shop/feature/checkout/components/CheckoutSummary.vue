@@ -65,6 +65,7 @@
           </div>
 
           <div class="quantity-control">
+            <!-- ĐÃ SỬA CHỖ NÀY: Xóa bỏ việc phụ thuộc vào canIncrease ở nút Trừ -->
             <button
               type="button"
               class="qty-btn"
@@ -323,7 +324,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import api from "@/common/api";
 
 const props = withDefaults(
@@ -394,11 +395,22 @@ const getActualDiscountAmount = (voucher: any) => {
   return value;
 };
 
+const isVoucherStatusActive = (voucher: any) => {
+  const status = voucher?.status;
+  if (status == null) return true;
+  if (typeof status === "number") return status === 1;
+  return ["1", "ACTIVE", "ENABLE", "ENABLED", "VALID", "AVAILABLE"].includes(String(status).toUpperCase().trim());
+};
+
 const filteredVouchers = computed(() => {
   const keyword = voucherCode.value.trim().toLowerCase();
 
   const vouchers = availableVouchers.value
     .filter((voucher) => {
+      // ĐÃ SỬA: Chặn mã bị xóa hoặc bị tắt giống như bên giỏ hàng
+      if (voucher?.isDeleted === true || voucher?.deleted === true) return false;
+      if (!isVoucherStatusActive(voucher)) return false;
+
       const code = getVoucherCode(voucher).toLowerCase();
       if (!keyword) return true;
       return code.includes(keyword);
@@ -534,7 +546,7 @@ const emitUpdateQuantity = (item: any, quantity: number) => {
 const fetchAvailableVouchers = async () => {
   try {
     voucherLoading.value = true;
-    const res = await api.get("/v1/customer/vouchers");
+    const res = await api.get(`/v1/customer/vouchers?t=${Date.now()}`);
 
     if (Array.isArray(res.data)) {
       availableVouchers.value = res.data;
@@ -672,9 +684,11 @@ const handleApplyVoucher = async () => {
 };
 
 const handleCancelVoucher = () => {
+  if (props.isSubmitting) return;
+
   isVoucherApplied.value = false;
   voucherCode.value = "";
-  voucherMessage.value = "Đã hủy voucher.";
+  voucherMessage.value = "Đã hủy mã giảm giá.";
   voucherMessageClass.value = "text-muted";
 
   localStorage.removeItem("applied_voucher");
@@ -788,9 +802,67 @@ watch(
   (value) => {
     if (Number(value || 0) <= 0 && isVoucherApplied.value && !isApplyingVoucher.value) {
       isVoucherApplied.value = false;
+      voucherCode.value = "";
+      voucherMessage.value = "";
     }
   }
 );
+
+watch(
+  () => props.selectedVoucherCode,
+  (newCode) => {
+    if (newCode && newCode !== voucherCode.value) {
+      voucherCode.value = newCode;
+      handleApplyVoucher();
+    } else if (!newCode && isVoucherApplied.value) {
+      isVoucherApplied.value = false;
+      voucherCode.value = "";
+      voucherMessage.value = "";
+    }
+  }
+);
+
+// Tải lại voucher khi tab được focus (ví dụ khách sang tab admin để đổi trạng thái voucher xong quay lại)
+let voucherRefreshInProgress = false;
+const refreshVoucherState = async () => {
+  if (voucherRefreshInProgress) return;
+  voucherRefreshInProgress = true;
+
+  try {
+    await fetchAvailableVouchers();
+
+    // Hủy mã nếu mã đang dùng vừa bị khóa/xóa/hết điều kiện.
+    if (isVoucherApplied.value && voucherCode.value) {
+      const currentVoucher = availableVouchers.value.find(
+        (voucher) =>
+          getVoucherCode(voucher).toUpperCase() ===
+          voucherCode.value.trim().toUpperCase()
+      );
+
+      if (!currentVoucher) {
+        handleCancelVoucher();
+        voucherMessage.value = "Mã giảm giá đã bị xóa hoặc không còn khả dụng.";
+        voucherMessageClass.value = "text-danger";
+      } else if (!canUseVoucherLocally(currentVoucher)) {
+        handleCancelVoucher();
+        voucherMessage.value = "Đơn hàng không đủ điều kiện sử dụng mã này nữa.";
+        voucherMessageClass.value = "text-danger";
+      }
+    }
+  } finally {
+    voucherRefreshInProgress = false;
+  }
+};
+
+const handleFocus = () => {
+  void refreshVoucherState();
+};
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === "visible") {
+    void refreshVoucherState();
+  }
+};
 
 onMounted(async () => {
   await fetchAvailableVouchers();
@@ -801,6 +873,14 @@ onMounted(async () => {
     voucherCode.value = savedVoucher;
     await handleApplyVoucher();
   }
+
+  window.addEventListener("focus", handleFocus);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("focus", handleFocus);
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 </script>
 

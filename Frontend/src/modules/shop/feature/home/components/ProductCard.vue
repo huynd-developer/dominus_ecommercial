@@ -737,7 +737,7 @@ const syncProductData = async () => {
       const data = res.data?.data || res.data;
       
       // Bắt trường hợp sản phẩm vừa bị Ẩn hoặc Xóa bên Admin -> Tự F5 trang để đồng bộ
-      if (!data || data.isDeleted === true || data.status === 0) {
+      if (!data || data.isDeleted === true || data.deleted === true || Number(data.status) === 0) {
          if (!window.sessionStorage.getItem('isReloading')) {
             window.sessionStorage.setItem('isReloading', 'true');
             setTimeout(() => window.sessionStorage.removeItem('isReloading'), 3000);
@@ -1622,7 +1622,8 @@ const openVariantModal = async (type: "CART" | "BUY", customProduct: any = null,
     const res = await api.get(`/v1/products/${tId}?t=${Date.now()}`);
     const data = res.data?.data || res.data;
     
-    if (!data || data.isDeleted === true || data.status === 0) {
+    // SỬA DÒNG IF THÀNH THẾ NÀY:
+    if (!data || data.isDeleted === true || data.deleted === true || Number(data.status) === 0) {
       showToast("error", "Lỗi", "Sản phẩm đã bị ẩn hoặc không còn tồn tại!");
       showVariantModal.value = false;
       isLoadingVariants.value = false;
