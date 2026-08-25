@@ -1315,10 +1315,10 @@ const validateQuantity = () => {
     quantity.value = 1;
   } else if (val > 10) {
     quantity.value = 10;
-    Swal.fire({ icon: 'warning', title: 'Vượt quá giới hạn', text: 'Bạn chỉ có thể mua tối đa 10 sản phẩm cho mỗi phân loại.', confirmButtonColor: '#bd9a5f' });
+    Swal.fire({ icon: 'warning', title: 'Vượt quá giới hạn', text: 'Bạn chỉ có thể mua tối đa 10 sản phẩm cho mỗi phân loại.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
   } else if (val > stock) {
     quantity.value = stock;
-    Swal.fire({ icon: 'warning', title: 'Vượt quá tồn kho', text: `Sản phẩm chỉ còn ${stock} trong kho.`, confirmButtonColor: '#bd9a5f' });
+    Swal.fire({ icon: 'warning', title: 'Vượt quá tồn kho', text: `Sản phẩm chỉ còn ${stock} trong kho.`, confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
   } else {
     quantity.value = Math.floor(val);
   }
@@ -1336,11 +1336,11 @@ const increaseQty = () => {
   }
   const stock = normalizeStock(selectedVariant.value);
   if (quantity.value >= 10) {
-    Swal.fire({ icon: 'warning', title: 'Vượt quá giới hạn', text: 'Bạn chỉ có thể mua tối đa 10 sản phẩm cho mỗi phân loại.', confirmButtonColor: '#bd9a5f' });
+    Swal.fire({ icon: 'warning', title: 'Vượt quá giới hạn', text: 'Bạn chỉ có thể mua tối đa 10 sản phẩm cho mỗi phân loại.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
     return;
   }
   if (quantity.value >= stock) {
-    Swal.fire({ icon: 'warning', title: 'Vượt quá tồn kho', text: `Sản phẩm chỉ còn ${stock} trong kho.`, confirmButtonColor: '#bd9a5f' });
+    Swal.fire({ icon: 'warning', title: 'Vượt quá tồn kho', text: `Sản phẩm chỉ còn ${stock} trong kho.`, confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
     return;
   }
   quantity.value++;
@@ -1358,6 +1358,10 @@ const askLogin = async (
     cancelButtonText: "Ở lại xem tiếp",
     confirmButtonColor: "#bd9a5f",
     cancelButtonColor: "#6b7280",
+    didOpen: () => {
+      const container = Swal.getContainer();
+      if (container) container.style.setProperty('z-index', '9999999', 'important');
+    }
   });
   if (result.isConfirmed) {
     router.push({
@@ -1391,7 +1395,7 @@ const loadFavoriteStatus = async () => {
 const toggleFavorite = async () => {
   const variantId = getVariantId();
   if (!variantId || Number.isNaN(variantId)) {
-    await Swal.fire({ icon: 'warning', title: 'Chưa chọn dung tích', text: 'Vui lòng chọn dung tích trước khi thêm yêu thích.', confirmButtonColor: '#bd9a5f' });
+    await Swal.fire({ icon: 'warning', title: 'Chưa chọn dung tích', text: 'Vui lòng chọn dung tích trước khi thêm yêu thích.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
     return;
   }
   if (!hasToken()) {
@@ -1399,7 +1403,7 @@ const toggleFavorite = async () => {
     return;
   }
   if (!isCustomerLoggedIn()) {
-    await Swal.fire({ icon: 'warning', title: 'Không thể sử dụng chức năng này', text: 'Chỉ tài khoản khách hàng mới được thêm sản phẩm yêu thích.', confirmButtonColor: '#bd9a5f' });
+    await Swal.fire({ icon: 'warning', title: 'Không thể sử dụng chức năng này', text: 'Chỉ tài khoản khách hàng mới được thêm sản phẩm yêu thích.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
     return;
   }
   try {
@@ -1424,10 +1428,14 @@ const toggleFavorite = async () => {
       showConfirmButton: false,
       timer: 1600,
       timerProgressBar: true,
+      didOpen: () => {
+        const container = Swal.getContainer();
+        if (container) container.style.setProperty('z-index', '9999999', 'important');
+      }
     });
   } catch (error: any) {
     console.error("Lỗi yêu thích sản phẩm:", error);
-    await Swal.fire({ icon: 'error', title: 'Không thể xử lý yêu thích', text: getErrorMessage(error), confirmButtonColor: '#bd9a5f' });
+    await Swal.fire({ icon: 'error', title: 'Không thể xử lý yêu thích', text: getErrorMessage(error), confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
   } finally {
     isFavoriteLoading.value = false;
   }
@@ -1449,20 +1457,20 @@ const getCurrentCartQuantity = async (productVariantId: number) => {
 
 const validateBeforeCartAction = async () => {
   if (!selectedVariant.value) {
-    await Swal.fire({ icon: 'warning', title: 'Chưa chọn dung tích', text: 'Vui lòng chọn dung tích trước khi mua hàng.', confirmButtonColor: '#bd9a5f' });
+    await Swal.fire({ icon: 'warning', title: 'Chưa chọn dung tích', text: 'Vui lòng chọn dung tích trước khi mua hàng.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
     return false;
   }
   const variantId = getVariantId();
   if (!variantId || Number.isNaN(variantId)) {
-    await Swal.fire({ icon: 'error', title: 'Biến thể không hợp lệ', text: 'Không xác định được biến thể sản phẩm. Vui lòng tải lại trang.', confirmButtonColor: '#bd9a5f' });
+    await Swal.fire({ icon: 'error', title: 'Biến thể không hợp lệ', text: 'Không xác định được biến thể sản phẩm. Vui lòng tải lại trang.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
     return false;
   }
   if (isVariantInvalidPrice.value) {
-    await Swal.fire({ icon: 'warning', title: 'Sản phẩm chưa có giá', text: 'Sản phẩm chưa có giá bán. Vui lòng liên hệ cửa hàng.', confirmButtonColor: '#bd9a5f' });
+    await Swal.fire({ icon: 'warning', title: 'Sản phẩm chưa có giá', text: 'Sản phẩm chưa có giá bán. Vui lòng liên hệ cửa hàng.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
     return false;
   }
   if (isVariantOutOfStock.value) {
-    await Swal.fire({ icon: 'warning', title: 'Tạm hết hàng', text: 'Sản phẩm này hiện đã hết hàng.', confirmButtonColor: '#bd9a5f' });
+    await Swal.fire({ icon: 'warning', title: 'Tạm hết hàng', text: 'Sản phẩm này hiện đã hết hàng.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
     return false;
   }
   if (!hasToken()) {
@@ -1470,27 +1478,27 @@ const validateBeforeCartAction = async () => {
     return false;
   }
   if (!isCustomerLoggedIn()) {
-    await Swal.fire({ icon: 'warning', title: 'Không thể mua hàng', text: 'Chỉ tài khoản khách hàng mới được thêm sản phẩm vào giỏ hàng.', confirmButtonColor: '#bd9a5f' });
+    await Swal.fire({ icon: 'warning', title: 'Không thể mua hàng', text: 'Chỉ tài khoản khách hàng mới được thêm sản phẩm vào giỏ hàng.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
     return false;
   }
   const stockQuantity = normalizeStock(selectedVariant.value);
   const quantityToAdd = Number(quantity.value || 1);
   if (quantityToAdd <= 0) {
-    await Swal.fire({ icon: 'warning', title: 'Số lượng không hợp lệ', text: 'Số lượng phải lớn hơn 0.', confirmButtonColor: '#bd9a5f' });
+    await Swal.fire({ icon: 'warning', title: 'Số lượng không hợp lệ', text: 'Số lượng phải lớn hơn 0.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
     return false;
   }
   if (quantityToAdd > stockQuantity) {
-    await Swal.fire({ icon: 'warning', title: 'Vượt quá tồn kho', text: `Sản phẩm chỉ còn ${stockQuantity} trong kho.`, confirmButtonColor: '#bd9a5f' });
+    await Swal.fire({ icon: 'warning', title: 'Vượt quá tồn kho', text: `Sản phẩm chỉ còn ${stockQuantity} trong kho.`, confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
     return false;
   }
   const currentCartQuantity = await getCurrentCartQuantity(variantId);
   const totalAfterAdd = currentCartQuantity + quantityToAdd;
   if (totalAfterAdd > 10) {
-    await Swal.fire({ icon: 'warning', title: 'Vượt quá giới hạn', html: `Bạn chỉ có thể mua tối đa <b>10</b> sản phẩm cho mỗi phân loại.<br/>Trong giỏ hàng của bạn hiện đã có <b>${currentCartQuantity}</b> sản phẩm.`, confirmButtonColor: '#bd9a5f' });
+    await Swal.fire({ icon: 'warning', title: 'Vượt quá giới hạn', html: `Bạn chỉ có thể mua tối đa <b>10</b> sản phẩm cho mỗi phân loại.<br/>Trong giỏ hàng của bạn hiện đã có <b>${currentCartQuantity}</b> sản phẩm.`, confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
     return false;
   }
   if (totalAfterAdd > stockQuantity) {
-    await Swal.fire({ icon: 'warning', title: 'Vượt quá tồn kho', html: `Sản phẩm này chỉ còn <b>${stockQuantity}</b> trong kho.<br/>Trong giỏ hàng của bạn hiện đã có <b>${currentCartQuantity}</b> sản phẩm.<br/>Bạn chỉ có thể thêm tối đa <b>${Math.max(stockQuantity - currentCartQuantity, 0)}</b> sản phẩm nữa.`, confirmButtonColor: '#bd9a5f' });
+    await Swal.fire({ icon: 'warning', title: 'Vượt quá tồn kho', html: `Sản phẩm này chỉ còn <b>${stockQuantity}</b> trong kho.<br/>Trong giỏ hàng của bạn hiện đã có <b>${currentCartQuantity}</b> sản phẩm.<br/>Bạn chỉ có thể thêm tối đa <b>${Math.max(stockQuantity - currentCartQuantity, 0)}</b> sản phẩm nữa.`, confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
     return false;
   }
   return true;
@@ -1517,7 +1525,7 @@ const addToCart = async () => {
     }, 3000);
   } catch (error: any) {
     console.error("Lỗi khi thêm vào giỏ hàng:", error);
-    await Swal.fire({ icon: 'error', title: 'Không thể thêm vào giỏ', text: getErrorMessage(error), confirmButtonColor: '#bd9a5f' });
+    await Swal.fire({ icon: 'error', title: 'Không thể thêm vào giỏ', text: getErrorMessage(error), confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
   } finally {
     isAdding.value = false;
   }
@@ -1541,7 +1549,7 @@ const buyNow = async () => {
     emit("buy-now");
   } catch (error: any) {
     console.error("Lỗi khi xử lý Mua ngay:", error);
-    await Swal.fire({ icon: 'error', title: 'Không thể mua ngay', text: getErrorMessage(error), confirmButtonColor: '#bd9a5f' });
+    await Swal.fire({ icon: 'error', title: 'Không thể mua ngay', text: getErrorMessage(error), confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
   } finally {
     isAdding.value = false;
   }
@@ -1600,7 +1608,7 @@ const toggleCompare = (item: any) => {
     resetCompareAiResult();
   }
   else {
-    if (compareList.value.length >= MAX_COMPARE) { Swal.fire({ icon: 'warning', title: 'Giới hạn', text: `Chỉ được so sánh tối đa ${MAX_COMPARE} sản phẩm!`, confirmButtonColor: '#bd9a5f' }); return; }
+    if (compareList.value.length >= MAX_COMPARE) { Swal.fire({ icon: 'warning', title: 'Giới hạn', text: `Chỉ được so sánh tối đa ${MAX_COMPARE} sản phẩm!`, confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } }); return; }
     compareList.value.push(item);
     resetCompareAiResult();
   }
@@ -2007,7 +2015,7 @@ const handleAiCompare = async () => {
 
   const productIds = getCompareProductIds();
   if (productIds.length < 2 || productIds.length > 3) {
-    await Swal.fire({ icon: 'warning', title: 'Chưa đủ sản phẩm', text: 'Vui lòng chọn từ 2 đến 3 sản phẩm để so sánh bằng AI.', confirmButtonColor: '#bd9a5f' });
+    await Swal.fire({ icon: 'warning', title: 'Chưa đủ sản phẩm', text: 'Vui lòng chọn từ 2 đến 3 sản phẩm để so sánh bằng AI.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
     return;
   }
 
@@ -3124,7 +3132,7 @@ watch(
 }
 
 /* === CSS CHO SO SÁNH SẢN PHẨM === */
-.compare-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: #ffffff; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 9998; padding: 15px 0; border-top: 2px solid #bd9a5f; }
+.compare-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: #ffffff; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1050; padding: 15px 0; border-top: 2px solid #bd9a5f; }
 .compare-bar.show { transform: translateY(0); }
 .cb-container { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; }
 .cb-left { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
@@ -3147,8 +3155,17 @@ watch(
 .cb-btn-compare:disabled { opacity: 0.5; cursor: not-allowed; }
 .cb-btn-compare:hover:not(:disabled) { background: #bd9a5f; box-shadow: 0 4px 12px rgba(189,154,95,0.3); }
 
-/* COMPARE MODAL */
-.compare-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 999999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); }
+/* COMPARE MODAL - ĐÃ ĐẶT Z-INDEX 1040 ĐỂ NẰM DƯỚI THANH NỔI (1050) */
+.compare-modal-overlay { 
+  position: fixed; 
+  inset: 0; 
+  background: rgba(0,0,0,0.7); 
+  z-index: 1040; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  backdrop-filter: blur(6px); 
+}
 .compare-modal-box { background: white; width: 95%; max-width: 1100px; max-height: 90vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; animation: modalFadeIn 0.3s ease; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
 .cm-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid #eaeaea; background: #fdfaf6; }
 .cm-header h3 { margin: 0; font-family: "Playfair Display", serif; font-size: 22px; font-weight: 800; color: #0a142f; }
@@ -3165,30 +3182,10 @@ watch(
   background: #fffdf8;
   border-bottom: 1px solid #eee3d3;
 }
-
-.ai-compare-toolbar-text {
-  min-width: 0;
-}
-
-.ai-compare-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-  color: #0a142f;
-  font-size: 16px;
-  font-weight: 800;
-}
-
-.ai-compare-title i {
-  color: #b78d52;
-}
-
-.ai-compare-subtitle {
-  color: #718096;
-  font-size: 13px;
-  line-height: 1.5;
-}
+.ai-compare-toolbar-text { min-width: 0; }
+.ai-compare-title { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; color: #0a142f; font-size: 16px; font-weight: 800; }
+.ai-compare-title i { color: #b78d52; }
+.ai-compare-subtitle { color: #718096; font-size: 13px; line-height: 1.5; }
 
 .cm-btn-ai {
   flex-shrink: 0;
@@ -3203,16 +3200,8 @@ watch(
   cursor: pointer;
   transition: 0.2s;
 }
-
-.cm-btn-ai:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 14px rgba(183, 141, 82, 0.24);
-}
-
-.cm-btn-ai:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+.cm-btn-ai:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(183, 141, 82, 0.24); }
+.cm-btn-ai:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .ai-compare-error {
   margin: 16px 24px 0;
@@ -3232,46 +3221,16 @@ watch(
   background: #fffdf8;
   overflow: hidden;
 }
-
-.ai-result-block {
-  padding: 15px 16px;
-}
-
-.ai-result-block + .ai-result-block {
-  border-top: 1px solid #eadfcf;
-}
-
-.ai-result-label {
-  margin-bottom: 6px;
-  color: #0a142f;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.ai-result-label i {
-  color: #b78d52;
-}
-
-.ai-result-block p {
-  margin: 0;
-  color: #4a5568;
-  font-size: 14px;
-  line-height: 1.65;
-}
-
-.ai-result-recommendation {
-  background: #fffcf7;
-}
+.ai-result-block { padding: 15px 16px; }
+.ai-result-block + .ai-result-block { border-top: 1px solid #eadfcf; }
+.ai-result-label { margin-bottom: 6px; color: #0a142f; font-size: 14px; font-weight: 800; }
+.ai-result-label i { color: #b78d52; }
+.ai-result-block p { margin: 0; color: #4a5568; font-size: 14px; line-height: 1.65; }
+.ai-result-recommendation { background: #fffcf7; }
 
 @media (max-width: 768px) {
-  .ai-compare-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .cm-btn-ai {
-    width: 100%;
-  }
+  .ai-compare-toolbar { align-items: stretch; flex-direction: column; }
+  .cm-btn-ai { width: 100%; }
 }
 
 .table-compare { width: 100%; border-collapse: collapse; text-align: left; }

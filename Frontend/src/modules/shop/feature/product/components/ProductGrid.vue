@@ -1377,18 +1377,7 @@ watch(() => props.productList, () => { loadMyFavorites(); syncGridRatings(); }, 
 .cb-btn-compare:hover:not(:disabled) { background: #bd9a5f; box-shadow: 0 4px 12px rgba(189,154,95,0.3); }
 
 /* COMPARE MODAL */
-/* CŨ: z-index: 999999; */
-/* THAY BẰNG: */
-.compare-modal-overlay { 
-  position: fixed; 
-  inset: 0; 
-  background: rgba(0,0,0,0.7); 
-  z-index: 1055; /* ĐÃ HẠ XUỐNG 1055 */
-  display: flex; 
-  align-items: center; 
-  justify-content: center; 
-  backdrop-filter: blur(6px); 
-}
+.compare-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 999999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); }
 .compare-modal-box { background: white; width: 95%; max-width: 1100px; max-height: 90vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; animation: modalFadeIn 0.3s ease; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
 .cm-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid #eaeaea; background: #fdfaf6; }
 .cm-header h3 { margin: 0; font-family: "Playfair Display", serif; font-size: 22px; font-weight: 800; color: #0a142f; }
@@ -1485,9 +1474,26 @@ watch(() => props.productList, () => { loadMyFavorites(); syncGridRatings(); }, 
 .compare-select { width: 80%; padding: 8px 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 13px; font-weight: 600; color: #0a142f; outline: none; cursor: pointer; margin: 0 auto; display: block; }
 .compare-select:focus { border-color: #bd9a5f; }
 
-.cm-price-val { font-size: 16px; font-weight: 800; color: #e53e3e; display: flex; align-items: center; justify-content: flex-start; }
-.cm-rating { color: #bd9a5f; font-weight: 700; font-size: 15px; text-align: left; }
-.cm-rating .d-flex { justify-content: flex-start !important; }
+.cm-price-val {
+  font-size: 16px;
+  font-weight: 800;
+  color: #e53e3e;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.cm-rating {
+  color: #bd9a5f;
+  font-weight: 700;
+  font-size: 15px;
+  text-align: left;
+}
+
+.cm-rating .d-flex {
+  justify-content: flex-start !important;
+}
+
 .cm-btn-buy { width: 80%; margin: 0 auto; display: flex; justify-content: center; align-items: center; padding: 12px; background: #0a142f; color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.2s; text-transform: uppercase; letter-spacing: 0.5px; font-size: 13px; }
 .cm-btn-buy:hover:not(:disabled) { background: #bd9a5f; box-shadow: 0 4px 15px rgba(189,154,95,0.3); }
 .cm-btn-buy:disabled { opacity: 0.6; cursor: not-allowed; background: #718096; }
@@ -1508,6 +1514,7 @@ watch(() => props.productList, () => { loadMyFavorites(); syncGridRatings(); }, 
 .picker-info .brand { font-size: 11px; color: #bd9a5f; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
 .picker-info .name { font-size: 13px; font-weight: 700; color: #0a142f; margin: 0 0 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
 .picker-price { font-size: 15px; font-weight: 800; color: #e53e3e; margin-top: auto; }
+
 .picker-check { position: absolute; top: 10px; right: 10px; font-size: 18px; }
 .picker-footer { padding: 15px 24px; border-top: 1px solid #eaeaea; display: flex; justify-content: flex-end; background: #f8fafc; }
 
@@ -1548,16 +1555,8 @@ watch(() => props.productList, () => { loadMyFavorites(); syncGridRatings(); }, 
 .vm-btn-buy { background: #b78d52; color: #ffffff; }
 .vm-btn-buy:hover:not(:disabled) { background: #9b7541; transform: translateY(-2px); box-shadow: 0 6px 14px rgba(183, 141, 82, 0.25); }
 .vm-btn-cart:disabled, .vm-btn-buy:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
-.qty-wrapper input[type="number"]::-webkit-inner-spin-button, .qty-keyword input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.qty-wrapper input[type="number"]::-webkit-inner-spin-button, .qty-wrapper input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .qty-wrapper input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
 .flash-sale-badge { background: #b31320; color: #ffffff; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 800; margin-bottom: 2px; }
 .date-info-box { background: #fffcf7; border-left: 3px solid #d97706; padding: 8px 12px; border-radius: 4px; margin-top: 8px; }
-</style>
-
-<!-- THÊM ĐOẠN NÀY XUỐNG DƯỚI CÙNG CỦA FILE -->
-<style>
-/* ÉP BUỘC SWEETALERT LUÔN NỔI LÊN TRÊN CÙNG TOÀN HỆ THỐNG */
-div.swal2-container {
-  z-index: 9999999 !important;
-}
 </style>
