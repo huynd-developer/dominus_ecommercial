@@ -649,38 +649,46 @@ const handleImageError = (event: Event) => {
 const getUnavailableReason = (item: CartItem) => {
   if (!item) return "Sản phẩm không hợp lệ";
 
-  // Check data gốc xem có dính cờ xóa không
-  if (item.isDeleted || item.product?.isDeleted || item.product?.deleted || item.productVariant?.isDeleted || item.productVariant?.deleted) return "Sản phẩm đã bị xóa khỏi hệ thống";
-  if (item.product && item.product.status != null && Number(item.product.status) === 0) return "Sản phẩm đã ngừng kinh doanh";
-  if (item.variantStatus != null && Number(item.variantStatus) !== 1) return "Sản phẩm đang ngừng bán";
-  
+  /*
+   * Cart BE là nguồn quyết định trạng thái mua được.
+   * Product detail enrich chỉ phục vụ hiển thị/dropdown, không được ghi đè.
+   */
   if (item.unavailableReason) return item.unavailableReason;
-  if (item.available === false || item.sellable === false) return "Sản phẩm hiện không khả dụng";
+  if (item.available === false || item.sellable === false) {
+    return "Sản phẩm hiện không khả dụng";
+  }
+  if (item.variantStatus != null && Number(item.variantStatus) !== 1) {
+    return "Sản phẩm đang ngừng bán";
+  }
 
   const quantity = Number(item.quantity || 0);
   const sellableQuantity = getSellableQuantity(item);
 
   if (quantity <= 0) return "Số lượng sản phẩm không hợp lệ";
   if (sellableQuantity <= 0) return "Sản phẩm đã hết hàng";
-  if (quantity > sellableQuantity) return `Số lượng vượt quá tồn kho. Chỉ còn ${sellableQuantity} sản phẩm.`;
-  
+  if (quantity > sellableQuantity) {
+    return `Số lượng vượt quá tồn kho. Chỉ còn ${sellableQuantity} sản phẩm.`;
+  }
+
   return "Sản phẩm hiện không khả dụng";
 };
 
 const isItemAvailable = (item: CartItem) => {
   if (!item) return false;
 
-  if (item.isDeleted || item.product?.isDeleted || item.product?.deleted || item.productVariant?.isDeleted || item.productVariant?.deleted) return false;
-  if (item.product && item.product.status != null && Number(item.product.status) === 0) return false;
-  if (item.variantStatus != null && Number(item.variantStatus) !== 1) return false;
-
+  /*
+   * available/sellable/variantStatus/sellableQuantity đều lấy từ Cart BE,
+   * mà BE đã kiểm Product/SKU hiện tại + InventoryLot hiện tại.
+   */
   if (item.available === false || item.sellable === false) return false;
+  if (item.variantStatus != null && Number(item.variantStatus) !== 1) return false;
 
   const quantity = Number(item.quantity || 0);
   const sellableQuantity = getSellableQuantity(item);
 
   return quantity > 0 && sellableQuantity > 0 && quantity <= sellableQuantity;
 };
+
 
 const formatVariantLabel = (v: any) => {
 

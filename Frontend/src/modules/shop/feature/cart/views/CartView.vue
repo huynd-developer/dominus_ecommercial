@@ -111,16 +111,17 @@ const getSellableQuantity = (item: CartItem | any) => {
 const getUnavailableReason = (item: CartItem) => {
   if (!item) return "Sản phẩm không hợp lệ.";
 
-  if (item.unavailableReason) return item.unavailableReason; // Dành cho trường hợp mất ID ở trên
-  if (item.isDeleted === true || item.product?.isDeleted === true || item.product?.deleted === true || item.productVariant?.isDeleted === true || item.productVariant?.deleted === true) {
-    return "Sản phẩm đã bị xóa khỏi hệ thống.";
+  /*
+   * Cart BE là nguồn nghiệp vụ cho trạng thái mua được.
+   * Không dùng Product detail bổ sung để ghi đè kết luận này.
+   */
+  if (item.unavailableReason) return item.unavailableReason;
+  if (item.available === false || item.sellable === false) {
+    return "Sản phẩm hiện không khả dụng.";
   }
-  if (item.product && Number(item.product.status) === 0) {
-    return "Sản phẩm đã ngừng kinh doanh.";
+  if (item.variantStatus != null && Number(item.variantStatus) !== 1) {
+    return "Sản phẩm đang ngừng bán.";
   }
-
-  if (item.available === false || item.sellable === false) return "Sản phẩm hiện không khả dụng.";
-  if (item.variantStatus != null && Number(item.variantStatus) !== 1) return "Sản phẩm đang ngừng bán.";
 
   const quantity = Number(item.quantity || 0);
   const sellableQuantity = getSellableQuantity(item);
@@ -136,9 +137,6 @@ const getUnavailableReason = (item: CartItem) => {
 const isItemAvailable = (item: CartItem) => {
   if (!item) return false;
 
-  if (item.isDeleted === true || item.product?.isDeleted === true || item.product?.deleted === true || item.productVariant?.isDeleted === true || item.productVariant?.deleted === true) return false;
-  if (item.product && Number(item.product.status) === 0) return false;
-
   if (item.available === false || item.sellable === false) return false;
   if (item.variantStatus != null && Number(item.variantStatus) !== 1) return false;
 
@@ -147,6 +145,7 @@ const isItemAvailable = (item: CartItem) => {
 
   return quantity > 0 && sellableQuantity > 0 && quantity <= sellableQuantity;
 };
+
 
 const totalAmount = computed(() => cartItems.value.reduce((sum, item) => isItemAvailable(item) ? sum + getItemPrice(item) * getItemQuantity(item) : sum, 0));
 const canCheckout = computed(() => cartItems.value.length > 0 && cartItems.value.every((item) => isItemAvailable(item)));
@@ -275,47 +274,49 @@ const fetchProductDetail = async (productId: number) => {
   }
 };
 
-const enrichCartItemImage = async (item: CartItem): Promise<CartItem> => {
+const enrichCartItemForDisplay = async (item: CartItem): Promise<CartItem> => {
   if (!item) return item;
-  
+
+  /*
+   * Cart BE là nguồn dữ liệu nghiệp vụ:
+   * - price / Flash Sale
+   * - available / sellable / unavailableReason
+   * - sellableQuantity từ InventoryLot
+   * - variantStatus
+   *
+   * Product detail chỉ bổ sung danh sách variant cho dropdown và ảnh fallback.
+   * Nếu request Product detail lỗi hoặc không còn trả current variant thì
+   * không được tự kết luận Product/SKU đã bị xóa.
+   */
   const productId = getItemProductId(item);
   const variantId = getItemVariantId(item);
-  
-  // Chặn gắt 1: Nếu mất ID (do xóa cứng)
-  if (!productId || !variantId) {
-      return { ...item, isDeleted: true, available: false, sellable: false, variantStatus: 0, sellableQuantity: 0, unavailableReason: "Sản phẩm đã bị xóa khỏi hệ thống." };
-  }
+
+  if (!productId) return item;
 
   const productData = await fetchProductDetail(productId);
-  
-  // Chặn gắt 2: Bắt xóa mềm, ngừng kinh doanh
-  if (!productData || productData.isDeleted === true || productData.deleted === true || Number(productData.status) === 0) {
-      return { ...item, isDeleted: true, available: false, sellable: false, variantStatus: 0, sellableQuantity: 0, unavailableReason: "Sản phẩm đã ngừng kinh doanh hoặc bị xóa." };
-  }
+  if (!productData) return item;
 
-  const matchedVariant = findMatchingVariant(productData, variantId);
-  
-  // Chặn gắt 3: Bắt biến thể bị khóa, ngừng bán
-  if (!matchedVariant || matchedVariant.isDeleted === true || matchedVariant.deleted === true || Number(matchedVariant.status) === 0) {
-       return { ...item, isDeleted: true, available: false, sellable: false, variantStatus: 0, sellableQuantity: 0, unavailableReason: "Phân loại này đã ngừng bán." };
-  }
+  const matchedVariant = variantId
+    ? findMatchingVariant(productData, variantId)
+    : null;
 
-  const imageUrl = extractImageValue(matchedVariant) || extractImageValue(productData);
+  const fallbackImage =
+    extractImageValue(matchedVariant) ||
+    extractImageValue(productData);
 
   return {
-    ...item, // Trả lại toàn bộ data gốc từ Backend để giữ nguyên cờ available: false
-    imageUrl: extractImageValue(item) || imageUrl, 
-    product: productData, 
-    productVariant: matchedVariant,
-    isDeleted: false,
-    // ĐÃ XÓA 3 DÒNG ÉP CỨNG LÀM LỖI LOGIC Ở ĐÂY
-    sellableQuantity: Math.max(0, Number(matchedVariant.sellableQuantity || 0))
+    ...item,
+    // Ưu tiên ảnh hiện tại từ Cart BE; Product detail chỉ fallback.
+    imageUrl: item.imageUrl || item.thumbnailUrl || fallbackImage || null,
+    product: productData,
+    productVariant: matchedVariant || item.productVariant || null,
   };
 };
 
-const enrichCartItemsWithImages = async (items: CartItem[]) => {
-  return await Promise.all(items.map((item) => enrichCartItemImage(item)));
+const enrichCartItemsForDisplay = async (items: CartItem[]) => {
+  return await Promise.all(items.map((item) => enrichCartItemForDisplay(item)));
 };
+
 
 const preserveCartOrder = (items: CartItem[]) => {
   if (!cartItems.value.length) return items;
@@ -336,20 +337,22 @@ const preserveCartOrder = (items: CartItem[]) => {
   });
 };
 
-const loadCart = async (options: { preserveOrder?: boolean } = {}) => {
+const loadCart = async (options: { preserveOrder?: boolean } = {}): Promise<boolean> => {
   try {
     isLoading.value = true;
     const res = await api.get(`/v1/customer/cart/my-cart?t=${Date.now()}`);
     let items = extractCartItems(res.data);
     
-    // Gọi thẳng hàm enrich, trong hàm enrich sẽ tự check data rác
-    const enrichedItems = await enrichCartItemsWithImages(items);
+    // Cart BE quyết định nghiệp vụ; enrich chỉ bổ sung dữ liệu hiển thị/dropdown.
+    const enrichedItems = await enrichCartItemsForDisplay(items);
     cartItems.value = options.preserveOrder ? preserveCartOrder(enrichedItems) : enrichedItems;
     
     if (!canCheckout.value) resetVoucher();
+    return true;
   } catch (err: any) {
     showError("Lỗi", "Không tải được giỏ hàng");
     if (err?.response?.status === 401 || err?.response?.status === 403) router.push("/login");
+    return false;
   } finally {
     isLoading.value = false;
   }
@@ -377,11 +380,22 @@ const updateQty = async (item: CartItem, newQty: number) => {
       productVariantId: getItemVariantId(item),
       quantity: newQty,
     });
-    item.quantity = newQty;
+
     resetVoucher();
+
+    /*
+     * Mutation thành công vẫn refetch Cart để nhận giá/Flash Sale/tồn/status
+     * mới nhất nếu module khác vừa thay đổi đồng thời.
+     */
+    await loadCart({ preserveOrder: true });
   } catch (err: any) {
-    showError("Lỗi", "Không thể cập nhật giỏ hàng");
-    loadCart();
+    const message =
+      err?.response?.data?.message ||
+      err?.response?.data?.error ||
+      "Không thể cập nhật giỏ hàng";
+
+    await showError("Giỏ hàng đã thay đổi", message);
+    await loadCart({ preserveOrder: true });
   } finally {
     isUpdating.value = false;
   }
@@ -425,11 +439,14 @@ const removeItem = async (cartItemId: number) => {
   try {
     isUpdating.value = true;
     await api.delete(`/v1/customer/cart/remove/${cartItemId}`);
-    cartItems.value = cartItems.value.filter((item) => item.cartItemId !== cartItemId);
     resetVoucher();
+    await loadCart({ preserveOrder: true });
   } catch (err: any) {
-    showError("Lỗi", "Không thể xóa sản phẩm");
-    loadCart();
+    await showError(
+      "Lỗi",
+      err?.response?.data?.message || "Không thể xóa sản phẩm"
+    );
+    await loadCart({ preserveOrder: true });
   } finally {
     isUpdating.value = false;
   }
@@ -440,13 +457,30 @@ const goToCheckout = async () => {
     showToast("warning", "Giỏ hàng đang trống");
     return;
   }
+
+  /*
+   * Re-read Cart ngay trước khi rời trang.
+   * Checkout vẫn revalidate lần cuối ở BE; bước này chỉ bảo đảm Cart không
+   * đưa người dùng sang Checkout bằng UI đã cũ.
+   */
+  const refreshed = await loadCart({ preserveOrder: true });
+  if (!refreshed) return;
+
+  await loadSavedVoucher();
+
   const invalidItem = cartItems.value.find((item) => !isItemAvailable(item));
   if (invalidItem) {
-    await Swal.fire({ icon: "warning", title: "Cảnh báo", text: getUnavailableReason(invalidItem) });
-    return loadCart();
+    await Swal.fire({
+      icon: "warning",
+      title: "Giỏ hàng đã thay đổi",
+      text: getUnavailableReason(invalidItem),
+    });
+    return;
   }
+
   router.push("/checkout");
 };
+
 
 const shippingFee = ref(30000);
 
@@ -458,10 +492,8 @@ const finalTotal = computed(() => {
 const loadSavedVoucher = async () => {
   const savedCode = localStorage.getItem("applied_voucher");
   if (!savedCode || totalAmount.value <= 0) {
-    if (discountAmount.value > 0) {
-      discountAmount.value = 0;
-      appliedVoucherCode.value = "";
-    }
+    discountAmount.value = 0;
+    appliedVoucherCode.value = "";
     return;
   }
 
@@ -480,20 +512,45 @@ const loadSavedVoucher = async () => {
   }
 };
 
-const handleFocus = async () => {
-  await loadCart({ preserveOrder: true });
-  await loadSavedVoucher();
+let externalRefreshInProgress = false;
+
+const refreshCurrentCart = async () => {
+  if (externalRefreshInProgress || isUpdating.value) return;
+
+  externalRefreshInProgress = true;
+  try {
+    const loaded = await loadCart({ preserveOrder: true });
+    if (loaded) {
+      await loadSavedVoucher();
+    }
+  } finally {
+    externalRefreshInProgress = false;
+  }
+};
+
+const handleFocus = () => {
+  void refreshCurrentCart();
+};
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === "visible") {
+    void refreshCurrentCart();
+  }
 };
 
 onMounted(async () => {
   await loadCart();
   await loadSavedVoucher();
+
   window.addEventListener("focus", handleFocus);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
 });
 
 onUnmounted(() => {
   window.removeEventListener("focus", handleFocus);
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
+
 </script>
 
 <style scoped>

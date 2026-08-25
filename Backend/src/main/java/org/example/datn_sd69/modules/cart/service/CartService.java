@@ -5,7 +5,6 @@ import org.example.datn_sd69.entity.Cart;
 import org.example.datn_sd69.entity.CartItem;
 import org.example.datn_sd69.entity.Customer;
 import org.example.datn_sd69.entity.InventoryLot;
-import org.example.datn_sd69.entity.ProductImage;
 import org.example.datn_sd69.entity.ProductVariant;
 import org.example.datn_sd69.entity.PromotionVariant;
 import org.example.datn_sd69.modules.cart.dto.response.CartItemResponse;
@@ -22,7 +21,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -40,7 +38,6 @@ public class CartService {
     private final ProductVariantRepository variantRepo;
     private final CustomerRepository customerRepo;
     private final InventoryLotRepository inventoryLotRepository;
-    private final jakarta.persistence.EntityManager entityManager;
 
     @Transactional
     public void addVariantToCart(
@@ -246,34 +243,20 @@ public class CartService {
         );
 
         res.setVariantStatus(variant.getStatus());
-        res.setExpired(isVariantExpired(variant));
+
+        /*
+         * Dùng chính sellableQuantity đã đọc ở trên để tính expired/sellable.
+         * Không query lại sellableQuantity lần hai trong cùng response, tránh
+         * trường hợp tồn vừa thay đổi giữa hai query làm response tự mâu thuẫn.
+         */
+        boolean expired = isVariantExpired(variant, sellableQuantity);
+        res.setExpired(expired);
 
         applyCurrentPrice(res, variant);
 
         if (variant.getProduct() != null) {
             res.setProductId(variant.getProduct().getId());
             res.setProductName(variant.getProduct().getName());
-
-            // XỬ LÝ LẤY ẢNH TRỰC TIẾP TỪ DB BẰNG JPQL (An toàn tuyệt đối, không sợ lỗi tên hàm Entity)
-            // XỬ LÝ LẤY ẢNH TRỰC TIẾP TỪ DB BẰNG JPQL (Đã fix lỗi báo đỏ của IntelliJ)
-            // XỬ LÝ LẤY ẢNH TRỰC TIẾP TỪ DB BẰNG JPQL (Đã tháo cờ isPrimary)
-            try {
-                String primaryImg = entityManager.createQuery(
-                                "SELECT img.imageUrl FROM ProductImage img WHERE img.product.id = :productId",
-                                String.class
-                        )
-                        .setParameter("productId", variant.getProduct().getId())
-                        .setMaxResults(1)
-                        .getResultStream()
-                        .findFirst()
-                        .orElse(null);
-
-                if (primaryImg != null && !primaryImg.trim().isEmpty()) {
-                    res.setImageUrl(primaryImg);
-                }
-            } catch (Exception e) {
-                System.out.println("=== LỖI QUERY ẢNH GIỎ HÀNG: " + e.getMessage());
-            }
         }
 
         if (variant.getCapacity() != null && variant.getCapacity().getValue() != null) {
@@ -284,7 +267,12 @@ public class CartService {
             res.setBottleType(variant.getBottleType().getName());
         }
 
-        String unavailableReason = getUnavailableReason(variant, item.getQuantity());
+        String unavailableReason = getUnavailableReason(
+                variant,
+                item.getQuantity(),
+                sellableQuantity,
+                expired
+        );
 
         boolean sellable = unavailableReason == null;
 
@@ -297,30 +285,31 @@ public class CartService {
 
 
     /**
-     * Lấy ảnh hiển thị cho item trong giỏ hàng.
+     * Lấy ảnh hiện tại của Product để Cart đồng bộ khi Admin đổi ảnh.
      *
      * Thứ tự ưu tiên:
-     * 1. thumbnailUrl đã lưu trong CartItem nếu FE cũ có truyền lên.
-     * 2. Ảnh đầu tiên của Product đang gắn với ProductVariant.
+     * 1. ProductImage hiện tại trong DB: ảnh primary trước, nếu không có primary
+     *    thì lấy ảnh đầu tiên.
+     * 2. thumbnailUrl đã lưu trong CartItem chỉ là fallback compatibility cho
+     *    dữ liệu cũ khi Product chưa có ProductImage.
      *
-     * Không cập nhật CartItem trong DB ở đây để tránh ảnh hưởng logic thêm/sửa/xóa giỏ hàng.
+     * Không cập nhật CartItem trong DB ở GET để không thay đổi nghiệp vụ giỏ hàng.
      */
     private String resolveCartImageUrl(CartItem item, ProductVariant variant) {
-        String savedThumbnailUrl = normalizeImageValue(
+        if (variant != null && variant.getId() != null) {
+            String currentProductImage = cartItemRepo
+                    .findFirstProductImageUrlByVariantId(variant.getId())
+                    .map(this::normalizeImageValue)
+                    .orElse(null);
+
+            if (currentProductImage != null) {
+                return currentProductImage;
+            }
+        }
+
+        return normalizeImageValue(
                 item == null ? null : item.getThumbnailUrl()
         );
-
-        if (savedThumbnailUrl != null) {
-            return savedThumbnailUrl;
-        }
-
-        if (variant == null || variant.getId() == null) {
-            return null;
-        }
-
-        return cartItemRepo.findFirstProductImageUrlByVariantId(variant.getId())
-                .map(this::normalizeImageValue)
-                .orElse(null);
     }
 
     private String normalizeImageValue(String value) {
@@ -398,10 +387,9 @@ public class CartService {
         }
 
         List<PromotionVariant> activePromotions =
-                promotionVariantRepository.findActivePromotionByProductVariantId(
+                promotionVariantRepository.findActivePromotionByProductVariantIdByPromotionTime(
                         variant.getId(),
-                        LocalDateTime.now(),
-                        LocalDate.now()
+                        LocalDateTime.now()
                 );
 
         if (activePromotions == null || activePromotions.isEmpty()) {
@@ -433,7 +421,12 @@ public class CartService {
         return originalPrice.subtract(discountAmount).max(BigDecimal.ZERO);
     }
 
-    private String getUnavailableReason(ProductVariant variant, Integer quantity) {
+    private String getUnavailableReason(
+            ProductVariant variant,
+            Integer quantity,
+            int sellableQuantity,
+            boolean expired
+    ) {
         if (variant == null) {
             return "Sản phẩm không tồn tại";
         }
@@ -473,11 +466,12 @@ public class CartService {
         /*
          * Tồn bán được thật nằm ở InventoryLot:
          * QuantityOnHand > 0 và ExpirationDate >= hôm nay.
+         *
+         * sellableQuantity/expired được lấy cùng một snapshot ở caller để response
+         * không tự mâu thuẫn khi tồn kho thay đổi đồng thời.
          */
-        int sellableQuantity = getSellableQuantity(variant);
-
         if (sellableQuantity <= 0) {
-            if (isVariantExpired(variant)) {
+            if (expired) {
                 return "Sản phẩm [" + sku + "] không còn lô còn hạn để bán";
             }
 
@@ -496,7 +490,15 @@ public class CartService {
     }
 
     private void validateVariantCanAddToCart(ProductVariant variant, Integer quantity) {
-        String reason = getUnavailableReason(variant, quantity);
+        int sellableQuantity = getSellableQuantity(variant);
+        boolean expired = isVariantExpired(variant, sellableQuantity);
+
+        String reason = getUnavailableReason(
+                variant,
+                quantity,
+                sellableQuantity,
+                expired
+        );
 
         if (reason != null) {
             throw new ResponseStatusException(
@@ -541,12 +543,15 @@ public class CartService {
      * Giữ field expired cho FE cũ:
      * true khi SKU không còn lot bán được nhưng vẫn còn tồn trong lot đã hết hạn.
      */
-    private boolean isVariantExpired(ProductVariant variant) {
+    private boolean isVariantExpired(
+            ProductVariant variant,
+            int sellableQuantity
+    ) {
         if (variant == null || variant.getId() == null) {
             return false;
         }
 
-        if (getSellableQuantity(variant) > 0) {
+        if (sellableQuantity > 0) {
             return false;
         }
 
