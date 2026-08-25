@@ -92,6 +92,8 @@ public interface InventoryQueryRepository
                     FROM dbo.vw_ProductVariantInventory v
                     LEFT JOIN dbo.ProductVariant pv
                         ON pv.Id = v.ProductVariantId
+                    LEFT JOIN dbo.Product p
+                        ON p.Id = pv.ProductId
                     LEFT JOIN dbo.Capacity c
                         ON c.Id = pv.CapacityId
                     LEFT JOIN dbo.BottleType bt
@@ -160,6 +162,19 @@ public interface InventoryQueryRepository
                             )
                         )
 
+                        AND
+                        (
+                            :selectableOnlyFlag = 0
+
+                            OR (
+                                :selectableOnlyFlag = 1
+                                AND pv.Id IS NOT NULL
+                                AND p.Id IS NOT NULL
+                                AND ISNULL(pv.IsDeleted, 0) = 0
+                                AND ISNULL(p.IsDeleted, 0) = 0
+                            )
+                        )
+
                     ORDER BY
                         v.ProductName ASC,
                         v.Sku ASC
@@ -168,14 +183,18 @@ public interface InventoryQueryRepository
             countQuery = """
                     SELECT COUNT(*)
 
-                    FROM dbo.vw_ProductVariantInventory
+                    FROM dbo.vw_ProductVariantInventory v
+                    LEFT JOIN dbo.ProductVariant pv
+                        ON pv.Id = v.ProductVariantId
+                    LEFT JOIN dbo.Product p
+                        ON p.Id = pv.ProductId
 
                     WHERE
                         (
                             :keyword IS NULL
                             OR :keyword = ''
-                            OR Sku LIKE CONCAT('%', :keyword, '%')
-                            OR ProductName LIKE CONCAT('%', :keyword, '%')
+                            OR v.Sku LIKE CONCAT('%', :keyword, '%')
+                            OR v.ProductName LIKE CONCAT('%', :keyword, '%')
                         )
 
                         AND
@@ -184,12 +203,12 @@ public interface InventoryQueryRepository
 
                             OR (
                                 :nearExpiryFlag = 1
-                                AND NearExpiryQuantity > 0
+                                AND v.NearExpiryQuantity > 0
                             )
 
                             OR (
                                 :nearExpiryFlag = 0
-                                AND NearExpiryQuantity = 0
+                                AND v.NearExpiryQuantity = 0
                             )
                         )
 
@@ -199,12 +218,12 @@ public interface InventoryQueryRepository
 
                             OR (
                                 :expiredFlag = 1
-                                AND ExpiredQuantity > 0
+                                AND v.ExpiredQuantity > 0
                             )
 
                             OR (
                                 :expiredFlag = 0
-                                AND ExpiredQuantity = 0
+                                AND v.ExpiredQuantity = 0
                             )
                         )
 
@@ -215,12 +234,25 @@ public interface InventoryQueryRepository
 
                             OR (
                                 :stockStatus = 'IN_STOCK'
-                                AND TotalQuantity > 0
+                                AND v.TotalQuantity > 0
                             )
 
                             OR (
                                 :stockStatus = 'OUT_OF_STOCK'
-                                AND TotalQuantity = 0
+                                AND v.TotalQuantity = 0
+                            )
+                        )
+
+                        AND
+                        (
+                            :selectableOnlyFlag = 0
+
+                            OR (
+                                :selectableOnlyFlag = 1
+                                AND pv.Id IS NOT NULL
+                                AND p.Id IS NOT NULL
+                                AND ISNULL(pv.IsDeleted, 0) = 0
+                                AND ISNULL(p.IsDeleted, 0) = 0
                             )
                         )
                     """,
@@ -237,6 +269,9 @@ public interface InventoryQueryRepository
 
             @Param("expiredFlag")
             Integer expiredFlag,
+
+            @Param("selectableOnlyFlag")
+            Integer selectableOnlyFlag,
 
             @Param("stockStatus")
             String stockStatus,

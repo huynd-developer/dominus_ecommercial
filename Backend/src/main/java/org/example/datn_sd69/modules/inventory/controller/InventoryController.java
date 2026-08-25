@@ -65,6 +65,16 @@ public class InventoryController {
             @RequestParam(required = false)
             Boolean expired,
 
+            /*
+             * false (mặc định): giữ nguyên nghiệp vụ Tổng quan kho,
+             * vẫn thấy tồn vật lý của SKU/Product đã archive.
+             *
+             * true: chỉ trả SKU còn được phép chọn cho giao dịch mới,
+             * hiện dùng cho picker của Phiếu nhập kho.
+             */
+            @RequestParam(defaultValue = "false")
+            Boolean selectableOnly,
+
             @RequestParam(defaultValue = "ALL")
             InventoryStockStatus stockStatus,
 
@@ -94,6 +104,7 @@ public class InventoryController {
                         keyword,
                         nearExpiry,
                         expired,
+                        selectableOnly,
                         stockStatus,
                         pageable
                 )
