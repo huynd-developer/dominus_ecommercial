@@ -1,7 +1,7 @@
 <template>
   <div class="detail-view-container">
     <nav class="breadcrumb">
-      <span class="back-link" @click="emit('back')" title="Quay lại">
+      <span class="back-link" @click="navigateToShop('home')" title="Trang chủ">
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -21,7 +21,7 @@
         <span class="divider">/</span>
         <span
           class="breadcrumb-item clickable"
-          @click="navigateToShop('gender', product?.gender)"
+          @click="navigateToShop('gender', genderText)"
           >{{ genderText }}</span
         >
       </template>
@@ -29,7 +29,7 @@
         <span class="divider">/</span>
         <span
           class="breadcrumb-item clickable"
-          @click="navigateToShop('brand', product?.brand)"
+          @click="navigateToShop('brand', product)"
           >{{ brandText }}</span
         >
       </template>
@@ -925,9 +925,50 @@ const handleImageError = (event: Event) => {
 };
 
 const navigateToShop = (type: string, value: any = null) => {
-  emit("back"); 
-  emit("filter-category", { type, value }); 
-  emit("navigate-shop", { type, value });
+  if (type === "home") {
+    router.push("/");
+    return;
+  }
+
+  if (type === "all") {
+    router.push({
+      name: "ProductList",
+    });
+    return;
+  }
+
+  if (type === "gender") {
+    const gender = String(value || "").trim();
+
+    router.push({
+      name: "ProductList",
+      query: gender ? { gender } : undefined,
+    });
+    return;
+  }
+
+  if (type === "brand") {
+    const brandId = Number(
+      value?.brandId ??
+        value?.BrandId ??
+        value?.brand?.id ??
+        value?.brand?.Id ??
+        0
+    );
+
+    router.push({
+      name: "ProductList",
+      query:
+        Number.isFinite(brandId) && brandId > 0
+          ? { brandId: String(brandId) }
+          : undefined,
+    });
+    return;
+  }
+
+  router.push({
+    name: "ProductList",
+  });
 };
 
 const brandText = computed(() => {
