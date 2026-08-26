@@ -5,6 +5,8 @@ import org.example.datn_sd69.entity.FragranceFamily;
 import org.example.datn_sd69.modules.fragranceFamily.dto.request.FragranceFamilyRequest;
 import org.example.datn_sd69.modules.fragranceFamily.service.FragranceFamilyService;
 import org.example.datn_sd69.repository.FragranceFamilyRepository;
+// ĐÃ THÊM: Import ProductRepository để kiểm tra ràng buộc
+import org.example.datn_sd69.repository.ProductRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -18,6 +20,8 @@ import java.util.Optional;
 public class FragranceFamilyServiceImpl implements FragranceFamilyService {
 
     private final FragranceFamilyRepository fragranceFamilyRepository;
+    // ĐÃ THÊM: Inject ProductRepository
+    private final ProductRepository productRepository;
 
     @Override
     public List<FragranceFamily> getAll() {
@@ -37,28 +41,22 @@ public class FragranceFamilyServiceImpl implements FragranceFamilyService {
 
     @Override
     public FragranceFamily create(FragranceFamilyRequest request) {
-        // Chuẩn hóa chuỗi: Cắt khoảng trắng 2 đầu và giữa các từ
         String name = request.getName().trim().replaceAll("\\s+", " ");
-
-        // Quét trong Database xem tên này đã tồn tại chưa
         Optional<FragranceFamily> existingOpt = fragranceFamilyRepository.findByName(name);
 
         if (existingOpt.isPresent()) {
             FragranceFamily existingFamily = existingOpt.get();
 
             if (Boolean.TRUE.equals(existingFamily.getIsDeleted())) {
-                // Đã tồn tại nhưng nằm trong thùng rác -> Khôi phục
                 existingFamily.setIsDeleted(false);
                 existingFamily.setStatus(request.getStatus() != null ? request.getStatus() : 1);
                 existingFamily.setName(name);
                 return fragranceFamilyRepository.save(existingFamily);
             } else {
-                // Đang hoạt động mà tạo trùng -> Bắn lỗi (Dùng IllegalArgumentException)
                 throw new IllegalArgumentException("Nhóm hương '" + name + "' đã tồn tại!");
             }
         }
 
-        // Tạo mới hoàn toàn
         FragranceFamily fragranceFamily = new FragranceFamily();
         fragranceFamily.setName(name);
         fragranceFamily.setStatus(request.getStatus() != null ? request.getStatus() : 1);
@@ -93,7 +91,15 @@ public class FragranceFamilyServiceImpl implements FragranceFamilyService {
     @Override
     public void delete(Integer id) {
         FragranceFamily fragranceFamily = getById(id);
+
+        // ĐÃ THÊM: Kiểm tra ràng buộc trước khi xóa
+        boolean isUsed = productRepository.existsByFragranceFamilies_IdAndIsDeletedFalse(id);
+        if (isUsed) {
+            throw new IllegalStateException("Không thể ném vào thùng rác! Đang có sản phẩm thuộc nhóm hương này.");
+        }
+
         fragranceFamily.setIsDeleted(true);
+        fragranceFamily.setStatus(0); // Ẩn luôn cho an toàn
         fragranceFamilyRepository.save(fragranceFamily);
     }
 

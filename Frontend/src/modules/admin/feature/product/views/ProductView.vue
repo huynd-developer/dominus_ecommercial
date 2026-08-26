@@ -30,14 +30,7 @@ const refreshProductsSilently = async () => {
 
   refreshingOnFocus.value = true
   try {
-<<<<<<< HEAD
     await Promise.all([store.fetchDropdowns(), store.fetchProducts()])
-=======
-    await Promise.all([
-      store.fetchDropdowns(),
-      store.fetchProducts(),
-    ])
->>>>>>> b66c817af414b58f2d88f9ef17526058186ae16c
   } finally {
     refreshingOnFocus.value = false
   }
@@ -178,16 +171,7 @@ const openAddModal = async () => {
 
 const openEditModal = async (item: Product) => {
   try {
-<<<<<<< HEAD
     const latest = await productService.getProductById(item.id)
-=======
-    // Lấy đồng thời master data và detail mới nhất để form không giữ ID đã bị xóa ở module khác.
-    const [, latest] = await Promise.all([
-      store.fetchDropdowns(),
-      productService.getProductById(item.id),
-    ])
-
->>>>>>> b66c817af414b58f2d88f9ef17526058186ae16c
     selectedProduct.value = latest
     isCloneMode.value = false
     showModal.value = true
@@ -201,31 +185,10 @@ const openEditModal = async (item: Product) => {
   }
 }
 
-<<<<<<< HEAD
 const openCloneModal = (item: Product) => {
   selectedProduct.value = item
   isCloneMode.value = true
   showModal.value = true
-=======
-const openCloneModal = async (item: Product) => {
-  try {
-    // Clone cũng lấy detail + master mới nhất, tránh nhân bản các ID master đã bị xóa.
-    const [, latest] = await Promise.all([
-      store.fetchDropdowns(),
-      productService.getProductById(item.id),
-    ])
-
-    selectedProduct.value = latest
-    isCloneMode.value = true
-    showModal.value = true
-  } catch (error: any) {
-    await Swal.fire({
-      icon: 'error',
-      title: 'Không thể nhân bản sản phẩm',
-      text: error?.response?.data?.message || 'Không thể tải dữ liệu sản phẩm mới nhất'
-    })
-  }
->>>>>>> b66c817af414b58f2d88f9ef17526058186ae16c
 }
 
 const closeModal = () => {

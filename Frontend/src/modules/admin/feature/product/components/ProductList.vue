@@ -65,7 +65,36 @@ const onImageError = (event: Event) => {
   img.src = FALLBACK_IMAGE;
 };
 
-const handleDelete = (product: Product) => {
+// Thêm 2 hàm này để chặn bấm Mở Bán khi hết hàng
+const handleStartSelling = (product: any) => {
+  if (product.stock <= 0) {
+    Swal.fire({ title: "Không thể mở bán", text: "Sản phẩm đã hết hàng trong kho. Vui lòng nhập thêm hàng để mở bán!", icon: "warning", confirmButtonColor: "#f59e0b" });
+    return;
+  }
+  emit('start-selling', product.id);
+};
+
+const handleToggleVariantStatus = (product: any, variant: any) => {
+  const vStock = Number(variant.totalQuantity ?? 0);
+  if (variant.status === 0 && vStock <= 0) {
+    Swal.fire({ title: "Không thể mở bán", text: "Biến thể này đã hết hàng trong kho. Vui lòng nhập thêm hàng để mở bán!", icon: "warning", confirmButtonColor: "#f59e0b" });
+    return;
+  }
+  emit('toggle-variant-status', product, variant);
+};
+
+// Sửa lại hàm Xóa để chặn nếu còn hàng
+const handleDelete = (product: Product | any) => {
+  if (product.stock > 0) {
+    Swal.fire({
+      title: "Không thể xóa!",
+      text: "Sản phẩm vẫn còn hàng trong kho. Vui lòng bán hết hoặc xuất hủy trước khi xóa!",
+      icon: "warning",
+      confirmButtonColor: "#dc2626"
+    });
+    return;
+  }
+
   Swal.fire({
     title: "Xác nhận xóa?",
     text: `Bạn có chắc chắn muốn xóa sản phẩm "${product.name}" không? Thao tác này không thể hoàn tác!`,
@@ -82,13 +111,27 @@ const handleDelete = (product: Product) => {
   });
 };
 
+// Ép trạng thái thành Ngừng Bán nếu số lượng = 0
 const rows = computed(() =>
   props.paginatedData.map((product) => {
     const stock = calculateTotalStock(product.variants);
     const sellableStock = calculateTotalSellableStock(product.variants);
 
+    // 💥 Tự động ép thành Ngừng bán nếu hết hàng
+    const displayStatus = stock <= 0 ? 0 : product.status;
+    
+    const processedVariants = product.variants?.map(v => {
+       const vStock = Number(v.totalQuantity ?? 0);
+       return {
+          ...v,
+          status: vStock <= 0 ? 0 : v.status
+       }
+    });
+
     return {
       ...product,
+      status: displayStatus,
+      variants: processedVariants,
       stock,
       sellableStock,
       stockClass: getStockClass(stock),
@@ -222,7 +265,7 @@ const rows = computed(() =>
                   v-else
                   class="icon-btn toggle-status-on"
                   title="Mở bán"
-                  @click="emit('start-selling', product.id)"
+                  @click="handleStartSelling(product)"
                 >
                   <i class="bi bi-eye"></i>
                 </button>
@@ -298,7 +341,7 @@ const rows = computed(() =>
                             'clickable-status'
                           ]"
                           title="Bấm để chuyển đổi nhanh trạng thái biến thể"
-                          @click="emit('toggle-variant-status', product, v)"
+                          @click="handleToggleVariantStatus(product, v)"
                         >
                           {{ v.status === 1 ? "Đang bán" : "Ngừng bán" }}
                           <i class="bi bi-arrow-repeat ms-1 fs-7"></i>

@@ -39,4 +39,8 @@ public interface ProductRepository
     Optional<Product> findByIdForUpdate(
             @Param("id") Integer id
     );
+
+    // Kiểm tra xem có sản phẩm nào đang sử dụng nhóm hương này không (bỏ qua sản phẩm đã xóa)
+    boolean existsByFragranceFamilies_IdAndIsDeletedFalse(Integer fragranceFamilyId);
+
 }

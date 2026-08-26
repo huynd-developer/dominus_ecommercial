@@ -279,6 +279,7 @@ public class OwnerReportServiceImpl implements OwnerReportService {
                         item.getProductId(),
                         safeText(item.getProductName(), "Sản phẩm"),
                         safeText(item.getBrandName(), "Không rõ thương hiệu"),
+                        safeText(item.getCapacityName(), ""), // <-- Bổ sung thêm trường này vào đây
                         longOrZero(item.getTotalSold()),
                         moneyOrZero(item.getRevenue()),
                         item.getImageUrl()
@@ -655,5 +656,16 @@ public class OwnerReportServiceImpl implements OwnerReportService {
         long totalOrders() {
             return totalOrders;
         }
+    }
+
+    private String formatCapacity(Double value, String snapshotName) {
+        if (value != null && value > 0) {
+            String formatted = value % 1 == 0 ? String.valueOf(value.intValue()) : String.valueOf(value);
+            return formatted + " ml";
+        }
+        if (StringUtils.hasText(snapshotName)) {
+            return snapshotName.trim();
+        }
+        return "";
     }
 }

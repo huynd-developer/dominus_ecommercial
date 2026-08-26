@@ -85,6 +85,8 @@ export interface BestSellingProductResponse {
   productName: string;
   brandName: string;
 
+  capacityName?: string;
+
   /**
    * Gross sold quantity trong kỳ bán.
    */

@@ -5,6 +5,8 @@ import org.example.datn_sd69.entity.BottleType;
 import org.example.datn_sd69.modules.bottleType.dto.request.BottleTypeRequest;
 import org.example.datn_sd69.modules.bottleType.service.BottleTypeService;
 import org.example.datn_sd69.repository.BottleTypeRepository;
+// ĐÃ THÊM IMPORT: Để kiểm tra biến thể
+import org.example.datn_sd69.repository.ProductVariantRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -19,6 +21,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class BottleTypeServiceImpl implements BottleTypeService {
     private final BottleTypeRepository bottleTypeRepository;
+    // ĐÃ THÊM: Inject Repository để quét sản phẩm
+    private final ProductVariantRepository productVariantRepository;
 
     @Override
     public List<BottleType> getAll() {
@@ -40,7 +44,6 @@ public class BottleTypeServiceImpl implements BottleTypeService {
 
         if (existingOpt.isPresent()) {
             BottleType existingType = existingOpt.get();
-            // ĐÃ SỬA: Phải check cả isDeleted và status để khôi phục toàn diện
             if (existingType.getStatus() == 0 || Boolean.TRUE.equals(existingType.getIsDeleted())) {
                 existingType.setIsDeleted(false); // Đánh dấu không còn bị xóa
                 existingType.setStatus(request.getStatus() != null ? request.getStatus() : 1);
@@ -88,6 +91,13 @@ public class BottleTypeServiceImpl implements BottleTypeService {
     @Override
     public void delete(Integer id) {
         BottleType bottleType = getById(id);
+
+        // ĐÃ SỬA: Kiểm tra nếu đang có sản phẩm dùng loại chai này thì chặn không cho xóa
+        boolean isUsed = productVariantRepository.existsByBottleType_IdAndIsDeletedFalse(id);
+        if (isUsed) {
+            throw new IllegalStateException("Không thể ném vào thùng rác! Đang có sản phẩm thuộc loại chai này.");
+        }
+
         bottleType.setIsDeleted(true); // Xóa mềm
         bottleType.setStatus(0); // Ẩn luôn khỏi giao diện bán hàng
         bottleTypeRepository.save(bottleType);

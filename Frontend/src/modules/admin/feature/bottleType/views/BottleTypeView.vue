@@ -289,7 +289,7 @@ const handleDelete = (id: number) => {
 
         Swal.fire('Đã xóa!', 'Loại chai đã bị xóa.', 'success');
       } catch (error: any) {
-        Swal.fire('Lỗi!', error.message || 'Không thể xóa loại chai này.', 'error');
+        Swal.fire('Lỗi!', error.message || 'Không thể xóa loại chai này. Đang có sản phẩm sử dụng loại chai này!', 'error');
       }
     }
   });

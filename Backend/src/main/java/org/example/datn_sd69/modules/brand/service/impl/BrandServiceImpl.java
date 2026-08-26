@@ -76,11 +76,13 @@ public class BrandServiceImpl implements BrandService {
         Brand brand = brandRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy thương hiệu!"));
 
+        // ĐÃ SỬA: Dùng IllegalStateException (500) để quăng lỗi báo có sản phẩm đang sử dụng
         if (productRepository.existsByBrandIdAndIsDeletedFalse(id)) {
-            throw new IllegalArgumentException("Không thể đưa vào thùng rác! Đang có sản phẩm thuộc thương hiệu này.");
+            throw new IllegalStateException("Không thể ném vào thùng rác! Đang có sản phẩm thuộc thương hiệu này.");
         }
 
         brand.setIsDeleted(true);
+        brand.setStatus(0); // Ẩn luôn cho chắc
         brandRepository.save(brand);
     }
 

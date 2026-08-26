@@ -13,8 +13,6 @@ public interface ConcentrationService {
     Concentration create(ConcentrationRequest request);
     Concentration update(Integer id, ConcentrationRequest request);
     void delete(Integer id);
-
     Page<Concentration> getAll(String keyword, Pageable pageable);
-
     Page<Concentration> getActiveConcentrations(int page, int size);
 }
