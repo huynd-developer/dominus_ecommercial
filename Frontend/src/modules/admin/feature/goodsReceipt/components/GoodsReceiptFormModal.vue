@@ -17,7 +17,7 @@ interface EditableItem {
   imageUrl: string | null;
   capacityValue: number | null;
   bottleTypeName: string | null;
-  quantity: number | null;
+  quantity: string;
   unitCost: number | null;
   manufacturedDate: string;
   expirationDate: string;
@@ -37,6 +37,11 @@ const emit = defineEmits<{
 
 const note = ref("");
 const items = ref<EditableItem[]>([]);
+
+const MAX_QUANTITY_PER_LINE = 1_000_000;
+const MAX_UNIT_COST = 1_000_000_000;
+const MAX_RECEIPT_NOTE_LENGTH = 1000;
+const MAX_ITEM_NOTE_LENGTH = 500;
 
 let rowSequence = 0;
 
@@ -129,7 +134,7 @@ const resetForm = () => {
       imageUrl: item.imageUrl ?? null,
       capacityValue: item.capacityValue ?? null,
       bottleTypeName: item.bottleTypeName ?? null,
-      quantity: item.quantity,
+      quantity: item.quantity == null ? "" : String(item.quantity),
       unitCost: item.unitCost,
       manufacturedDate: item.manufacturedDate ?? "",
       expirationDate: item.expirationDate,
@@ -226,7 +231,7 @@ const addSkuLot = (option: InventorySkuOption) => {
     imageUrl: option.imageUrl ?? null,
     capacityValue: option.capacityValue ?? null,
     bottleTypeName: option.bottleTypeName ?? null,
-    quantity: null,
+    quantity: "",
     unitCost: null,
     manufacturedDate: effectiveReceivedDate.value,
     expirationDate: addYearsToDate(effectiveReceivedDate.value, 2),
@@ -239,6 +244,16 @@ const removeItem = (rowKey: string) => {
 };
 
 const validate = async () => {
+  if (note.value.length > MAX_RECEIPT_NOTE_LENGTH) {
+    await Swal.fire(
+      "Dữ liệu không hợp lệ",
+      `Ghi chú phiếu không được vượt quá ${MAX_RECEIPT_NOTE_LENGTH} ký tự.`,
+      "warning"
+    );
+
+    return false;
+  }
+
   if (items.value.length === 0) {
     await Swal.fire(
       "Dữ liệu không hợp lệ",
@@ -271,7 +286,11 @@ const validate = async () => {
     const row = items.value[index];
     const line = index + 1;
 
-    if (!row || !row.productVariantId || row.productVariantId <= 0) {
+    if (
+      !row ||
+      !Number.isInteger(Number(row.productVariantId)) ||
+      Number(row.productVariantId) <= 0
+    ) {
       await Swal.fire(
         "Dữ liệu không hợp lệ",
         `Dòng ${line}: SKU không hợp lệ.`,
@@ -280,11 +299,7 @@ const validate = async () => {
       return false;
     }
 
-    if (
-      row.quantity == null ||
-      !Number.isInteger(Number(row.quantity)) ||
-      Number(row.quantity) <= 0
-    ) {
+    if (!/^\d+$/.test(row.quantity)) {
       await Swal.fire(
         "Dữ liệu không hợp lệ",
         `Dòng ${line}: số lượng phải là số nguyên lớn hơn 0.`,
@@ -293,10 +308,46 @@ const validate = async () => {
       return false;
     }
 
-    if (row.unitCost != null && Number(row.unitCost) < 0) {
+    const quantity = Number(row.quantity);
+
+    if (
+      !Number.isSafeInteger(quantity) ||
+      quantity <= 0 ||
+      quantity > MAX_QUANTITY_PER_LINE
+    ) {
       await Swal.fire(
         "Dữ liệu không hợp lệ",
-        `Dòng ${line}: đơn giá nhập phải lớn hơn hoặc bằng 0.`,
+        `Dòng ${line}: số lượng phải từ 1 đến ${formatMoney(
+          MAX_QUANTITY_PER_LINE
+        )}.`,
+        "warning"
+      );
+      return false;
+    }
+
+    if (row.unitCost != null) {
+      const unitCost = Number(row.unitCost);
+
+      if (
+        !Number.isSafeInteger(unitCost) ||
+        unitCost < 0 ||
+        unitCost > MAX_UNIT_COST
+      ) {
+        await Swal.fire(
+          "Dữ liệu không hợp lệ",
+          `Dòng ${line}: đơn giá nhập phải từ 0 đến ${formatMoney(
+            MAX_UNIT_COST
+          )} đ.`,
+          "warning"
+        );
+        return false;
+      }
+    }
+
+    if (row.note.length > MAX_ITEM_NOTE_LENGTH) {
+      await Swal.fire(
+        "Dữ liệu không hợp lệ",
+        `Dòng ${line}: ghi chú dòng không được vượt quá ${MAX_ITEM_NOTE_LENGTH} ký tự.`,
         "warning"
       );
       return false;
@@ -406,12 +457,40 @@ const close = () => {
 const formatMoney = (value: number | null | undefined) =>
   new Intl.NumberFormat("vi-VN").format(Number(value ?? 0));
 
-const onUnitCostInput = (index: number, event: Event) => {
+const onQuantityInput = (index: number, event: Event) => {
   const input = event.target as HTMLInputElement;
-  const raw = input.value.replace(/\D/g, "");
   const row = items.value[index];
 
   if (!row) return;
+
+  /*
+   * Không dùng v-model.number + type="number" ở đây:
+   * browser cho phép nhập "e" và Number sẽ biến chuỗi rất dài thành số khoa học.
+   * Giữ raw digits giúp chặn ngay từ FE trước khi JSON được gửi xuống BE.
+   */
+  const raw = input.value
+    .replace(/\D/g, "")
+    .replace(/^0+(?=\d)/, "")
+    .slice(0, String(MAX_QUANTITY_PER_LINE).length);
+
+  row.quantity = raw;
+  input.value = raw;
+};
+
+const onUnitCostInput = (index: number, event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const row = items.value[index];
+
+  if (!row) return;
+
+  /*
+   * Màn phiếu nhập thường đang nhập VND nguyên.
+   * Chỉ giữ chữ số và giới hạn 10 chữ số để không tạo Number mất chính xác.
+   */
+  const raw = input.value
+    .replace(/\D/g, "")
+    .replace(/^0+(?=\d)/, "")
+    .slice(0, String(MAX_UNIT_COST).length);
 
   row.unitCost = raw ? Number(raw) : null;
   input.value = raw ? formatMoney(Number(raw)) : "";
@@ -611,13 +690,15 @@ const onImageError = (event: Event) => {
 
                     <td>
                       <input
-                        v-model.number="row.quantity"
+                        :value="row.quantity"
                         class="table-input"
-                        type="number"
-                        min="1"
-                        step="1"
+                        type="text"
                         inputmode="numeric"
+                        maxlength="7"
+                        autocomplete="off"
                         placeholder="0"
+                        :title="`Tối đa ${formatMoney(MAX_QUANTITY_PER_LINE)}`"
+                        @input="onQuantityInput(index, $event)"
                       />
                     </td>
 
@@ -628,7 +709,9 @@ const onImageError = (event: Event) => {
                         "
                         class="table-input"
                         inputmode="numeric"
+                        autocomplete="off"
                         placeholder="0"
+                        :title="`Tối đa ${formatMoney(MAX_UNIT_COST)} đ`"
                         @input="onUnitCostInput(index, $event)"
                       />
                     </td>

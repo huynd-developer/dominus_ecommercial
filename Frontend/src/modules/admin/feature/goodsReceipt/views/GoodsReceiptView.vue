@@ -36,6 +36,8 @@ const editingDetail = ref<GoodsReceiptDetailResponse | null>(null);
  */
 const refreshingOnFocus = ref(false);
 
+const MAX_CANCEL_REASON_LENGTH = 500;
+
 const statusOptions: Array<{ value: GoodsReceiptStatus | ""; label: string }> =
   [
     { value: "", label: "Tất cả trạng thái" },
@@ -107,8 +109,7 @@ const getErrorMessage = (error: any) =>
   store.error ||
   "Đã xảy ra lỗi.";
 
-const isConflict = (error: any) =>
-  error?.response?.status === 409;
+const isConflict = (error: any) => error?.response?.status === 409;
 
 /*
  * Refresh state sau workflow conflict.
@@ -121,19 +122,13 @@ const refreshAfterWorkflowConflict = async (id: number) => {
   ];
 
   if (detailVisible.value && store.detail?.id === id) {
-    requests.push(
-      store.fetchDetail(id),
-      store.fetchHistory(id)
-    );
+    requests.push(store.fetchDetail(id), store.fetchHistory(id));
   }
 
   await Promise.all(requests);
 };
 
-const showWorkflowConflict = async (
-  error: any,
-  id: number
-) => {
+const showWorkflowConflict = async (error: any, id: number) => {
   if (!isConflict(error)) {
     return false;
   }
@@ -275,10 +270,7 @@ const saveForm = async (payload: GoodsReceiptSaveRequest) => {
         const latestDetail = await store.fetchDetail(id);
         editingDetail.value = latestDetail;
 
-        await Promise.all([
-          store.fetchList(),
-          store.fetchPendingCount(),
-        ]);
+        await Promise.all([store.fetchList(), store.fetchPendingCount()]);
       } catch {
         /*
          * Giữ conflict gốc để user vẫn biết phiếu đã thay đổi.
@@ -540,22 +532,22 @@ const cancelReceipt = async (item: GoodsReceiptListResponse) => {
         <textarea
           id="cancel-reason-note"
           class="swal2-textarea"
-          maxlength="450"
           placeholder="Nhập thêm chi tiết nếu cần..."
           style="width:100%; margin:0; box-sizing:border-box;"
         ></textarea>
 
-        <div
-          style="margin-top:8px; color:#6b7280; font-size:12px;"
-        >
-          Nếu chọn "Khác", bắt buộc nhập nội dung cụ thể.
-        </div>
+       <div
+  style="margin-top:8px; color:#6b7280; font-size:12px;"
+>
+  Nếu chọn "Khác", bắt buộc nhập nội dung cụ thể.
+</div>
       </div>
     `,
     showCancelButton: true,
     confirmButtonText: "Hủy phiếu",
     cancelButtonText: "Đóng",
     focusConfirm: false,
+
     preConfirm: () => {
       const reasonSelect = document.getElementById(
         "cancel-reason-select"
@@ -566,7 +558,6 @@ const cancelReceipt = async (item: GoodsReceiptListResponse) => {
       ) as HTMLTextAreaElement | null;
 
       const selectedReason = String(reasonSelect?.value || "").trim();
-
       const note = String(noteInput?.value || "").trim();
 
       if (!selectedReason) {
@@ -583,8 +574,14 @@ const cancelReceipt = async (item: GoodsReceiptListResponse) => {
 
       const reason = note ? `${selectedReason} - ${note}` : selectedReason;
 
-      if (reason.length > 500) {
-        Swal.showValidationMessage("Lý do hủy không được vượt quá 500 ký tự.");
+      /*
+       * Guard cuối cùng trước khi gọi API.
+       * maxlength chỉ là UX; validate này mới đảm bảo payload không vượt 500.
+       */
+      if (reason.length > MAX_CANCEL_REASON_LENGTH) {
+        Swal.showValidationMessage(
+          `Lý do hủy không được vượt quá ${MAX_CANCEL_REASON_LENGTH} ký tự.`
+        );
         return false;
       }
 
@@ -595,9 +592,22 @@ const cancelReceipt = async (item: GoodsReceiptListResponse) => {
   if (!result.isConfirmed) return;
 
   try {
-    await store.cancel(item.id, {
-      reason: String(result.value || "").trim(),
-    });
+    const reason = String(result.value || "").trim();
+
+    /*
+     * Không gửi request hủy nếu SweetAlert trả về dữ liệu rỗng bất thường.
+     * Bình thường preConfirm đã chặn trường hợp này.
+     */
+    if (!reason) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Dữ liệu không hợp lệ",
+        text: "Bắt buộc nhập lý do hủy.",
+      });
+      return;
+    }
+
+    await store.cancel(item.id, { reason });
 
     await Swal.fire({
       icon: "success",
@@ -626,22 +636,14 @@ const cancelReceipt = async (item: GoodsReceiptListResponse) => {
  *   Nếu dữ liệu đã đổi ở nơi khác, BE sẽ chặn bằng 409 khi save.
  */
 const handleWindowFocus = async () => {
-  if (
-    refreshingOnFocus.value ||
-    store.saving ||
-    store.processing
-  ) {
+  if (refreshingOnFocus.value || store.saving || store.processing) {
     return;
   }
 
   /*
    * Không tự gọi list API khi user đang gõ một khoảng ngày chưa hợp lệ.
    */
-  if (
-    store.fromDate &&
-    store.toDate &&
-    store.fromDate > store.toDate
-  ) {
+  if (store.fromDate && store.toDate && store.fromDate > store.toDate) {
     return;
   }
 
@@ -674,10 +676,7 @@ const handleWindowFocus = async () => {
 onMounted(async () => {
   window.addEventListener("focus", handleWindowFocus);
 
-  await Promise.all([
-    loadList(),
-    store.fetchPendingCount(),
-  ]);
+  await Promise.all([loadList(), store.fetchPendingCount()]);
 });
 
 onBeforeUnmount(() => {

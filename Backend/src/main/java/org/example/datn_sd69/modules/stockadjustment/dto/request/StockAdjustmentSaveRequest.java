@@ -2,6 +2,8 @@ package org.example.datn_sd69.modules.stockadjustment.dto.request;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -18,23 +20,32 @@ public class StockAdjustmentSaveRequest {
     )
     private String note;
 
-    @Valid
     @NotEmpty(
             message = "Phiếu kiểm kê phải có ít nhất một lô hàng"
     )
-    private List<StockAdjustmentItemRequest> items;
+    private List<
+            @NotNull(message = "Dòng kiểm kê không được để trống")
+            @Valid
+                    StockAdjustmentItemRequest
+            > items;
 
     /*
      * Snapshot phiên bản phiếu mà FE đang nhìn thấy.
      *
-     * - CREATE: không cần gửi.
-     * - UPDATE DRAFT: FE gửi revision từ StockAdjustmentDetailResponse.
+     * - CREATE: null, không cần gửi.
+     * - UPDATE DRAFT: SHA-256 do BE sinh, đúng 64 ký tự hex.
      *
-     * Chỉ dùng để chống stale/lost-update, không phải dữ liệu nghiệp vụ.
+     * Null vẫn hợp lệ cho CREATE. UPDATE tiếp tục được service bắt buộc
+     * bằng validateExpectedRevision(), giữ nguyên flow stale/lost-update.
      */
     @Size(
+            min = 64,
             max = 64,
-            message = "Revision phiếu kiểm kê không hợp lệ"
+            message = "Revision phiếu kiểm kê phải có đúng 64 ký tự"
+    )
+    @Pattern(
+            regexp = "^[0-9a-fA-F]{64}$",
+            message = "Revision phiếu kiểm kê không đúng định dạng"
     )
     private String expectedRevision;
 }

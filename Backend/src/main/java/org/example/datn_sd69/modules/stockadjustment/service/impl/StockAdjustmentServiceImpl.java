@@ -54,6 +54,16 @@ public class StockAdjustmentServiceImpl
     private static final byte MOVEMENT_ADJUST_IN = 5;
     private static final byte MOVEMENT_ADJUST_OUT = 6;
 
+    /*
+     * Guard nghiệp vụ ở service để luồng nội bộ vẫn an toàn kể cả khi
+     * không đi qua Bean Validation của Controller.
+     */
+    private static final int MAX_ACTUAL_QUANTITY =
+            StockAdjustmentItemRequest.MAX_ACTUAL_QUANTITY;
+
+    private static final int MAX_REASON_LENGTH = 500;
+    private static final int MAX_NOTE_LENGTH = 1000;
+
     private final StockAdjustmentRepository stockAdjustmentRepository;
 
     private final EntityManager entityManager;
@@ -589,6 +599,16 @@ public class StockAdjustmentServiceImpl
                 );
             }
 
+            if (actualQuantity > MAX_ACTUAL_QUANTITY) {
+                throw badRequest(
+                        "Dòng "
+                                + line
+                                + ": số lượng thực tế của mỗi lô không được vượt quá "
+                                + formatInteger(MAX_ACTUAL_QUANTITY)
+                                + "."
+                );
+            }
+
             InventoryLot lot =
                     entityManager.find(
                             InventoryLot.class,
@@ -617,6 +637,18 @@ public class StockAdjustmentServiceImpl
                     normalizeOptional(
                             request.getReason()
                     );
+
+            if (reason != null
+                    && reason.length() > MAX_REASON_LENGTH) {
+
+                throw badRequest(
+                        "Dòng "
+                                + line
+                                + ": lý do không được vượt quá "
+                                + MAX_REASON_LENGTH
+                                + " ký tự."
+                );
+            }
 
             if (difference != 0
                     && reason == null) {
@@ -1621,6 +1653,16 @@ public class StockAdjustmentServiceImpl
             );
         }
 
+        if (request.getNote() != null
+                && request.getNote().length() > MAX_NOTE_LENGTH) {
+
+            throw badRequest(
+                    "Ghi chú không được vượt quá "
+                            + MAX_NOTE_LENGTH
+                            + " ký tự."
+            );
+        }
+
         if (request.getItems() == null
                 || request.getItems().isEmpty()) {
 
@@ -1727,6 +1769,15 @@ public class StockAdjustmentServiceImpl
         return value == null
                 ? 0
                 : value;
+    }
+
+    private String formatInteger(int value) {
+        return String.format(
+                        Locale.ROOT,
+                        "%,d",
+                        value
+                )
+                .replace(',', '.');
     }
 
     private Integer userId(User user) {
