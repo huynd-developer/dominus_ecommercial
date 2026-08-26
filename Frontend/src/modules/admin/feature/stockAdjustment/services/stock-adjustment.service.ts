@@ -46,7 +46,9 @@ const stockAdjustmentService = {
 
   async getPendingCount(): Promise<number> {
     const response = await api.get("/admin/stock-adjustments/pending-count");
+
     const value = Number(response.data);
+
     return Number.isFinite(value) ? value : 0;
   },
 
@@ -54,6 +56,7 @@ const stockAdjustmentService = {
     request: StockAdjustmentSaveRequest
   ): Promise<StockAdjustmentDetailResponse> {
     const response = await api.post("/admin/stock-adjustments", request);
+
     return response.data;
   },
 
@@ -62,11 +65,13 @@ const stockAdjustmentService = {
     request: StockAdjustmentSaveRequest
   ): Promise<StockAdjustmentDetailResponse> {
     const response = await api.put(`/admin/stock-adjustments/${id}`, request);
+
     return response.data;
   },
 
   async submit(id: number): Promise<StockAdjustmentDetailResponse> {
     const response = await api.post(`/admin/stock-adjustments/${id}/submit`);
+
     return response.data;
   },
 
@@ -83,6 +88,7 @@ const stockAdjustmentService = {
 
   async approve(id: number): Promise<StockAdjustmentDetailResponse> {
     const response = await api.post(`/admin/stock-adjustments/${id}/approve`);
+
     return response.data;
   },
 
@@ -98,12 +104,20 @@ const stockAdjustmentService = {
   },
 
   /**
-   * Kiểm kê thực tế chọn InventoryLot đã tồn tại.
-   * Không lọc hasStock để vẫn kiểm kê được lô hệ thống đang = 0 nhưng thực tế > 0.
-   * Picker hiển thị tối đa 100 lô cho mỗi lần tìm kiếm.
+   * Danh sách lô dùng riêng cho popup tạo/sửa phiếu kiểm kê.
+   *
+   * Không truyền hasStock để vẫn có thể kiểm kê:
+   * - lô đang còn tồn;
+   * - lô hệ thống = 0 nhưng Product/SKU vẫn còn quản lý,
+   *   nhằm phát hiện trường hợp thực tế có hàng thừa.
+   *
+   * BE sẽ tự xử lý:
+   * - Product/SKU chưa xóa -> hiển thị;
+   * - Product/SKU đã xóa nhưng QuantityOnHand > 0 -> vẫn hiển thị;
+   * - Product/SKU đã xóa và QuantityOnHand = 0 -> không hiển thị.
    */
   async searchLots(keyword: string): Promise<InventoryLotListResponse[]> {
-    const data = await inventoryLotService.getList({
+    const data = await inventoryLotService.getAuditCandidates({
       keyword: keyword.trim(),
       page: 0,
       size: 100,

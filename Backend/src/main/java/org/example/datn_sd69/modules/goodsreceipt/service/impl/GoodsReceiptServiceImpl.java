@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -42,6 +43,22 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
      */
     private static final Set<Integer> GOODS_RECEIPT_CONFLICT_SQL_CODES =
             Set.of(50011, 50022, 50031, 50033, 50041);
+
+    /*
+     * Guard nghiệp vụ ở service để service vẫn an toàn nếu sau này được gọi
+     * từ luồng nội bộ không đi qua @Valid của Controller.
+     *
+     * Các giới hạn này khớp với GoodsReceiptItemRequest và FE phiếu nhập thường.
+     */
+    private static final int MAX_QUANTITY_PER_LINE =
+            GoodsReceiptItemRequest.MAX_QUANTITY_PER_LINE;
+
+    private static final BigDecimal MAX_UNIT_COST =
+            new BigDecimal(GoodsReceiptItemRequest.MAX_UNIT_COST);
+
+    private static final int MAX_RECEIPT_NOTE_LENGTH = 1000;
+    private static final int MAX_ITEM_NOTE_LENGTH = 500;
+    private static final int MAX_LOT_CODE_LENGTH = 100;
 
     private final GoodsReceiptRepository goodsReceiptRepository;
     private final GoodsReceiptItemRepository goodsReceiptItemRepository;
@@ -173,6 +190,8 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
     @Override
     @Transactional
     public GoodsReceiptDetailResponse create(GoodsReceiptSaveRequest request) {
+        validateSaveRequestHeader(request);
+
         User actor = getCurrentUser();
 
         LocalDateTime createdAt = LocalDateTime.now();
@@ -200,6 +219,8 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
     @Override
     @Transactional
     public GoodsReceiptDetailResponse update(Integer id, GoodsReceiptSaveRequest request) {
+        validateSaveRequestHeader(request);
+
         /*
          * UPDATE là mutation duy nhất không đi qua stored procedure.
          * Khóa row trước khi kiểm tra state + revision để serialize:
@@ -332,22 +353,36 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                 "Chỉ phiếu lưu tạm mới được hủy.");
 
         User actor = getCurrentUser();
-        String reason = request == null ? null : normalizeOptional(request.getReason());
 
-        if (reason == null) {
-            executeProcedure(
-                    "EXEC dbo.usp_GoodsReceipt_Cancel ?, ?",
-                    id,
-                    actor.getId()
-            );
-        } else {
-            executeProcedure(
-                    "EXEC dbo.usp_GoodsReceipt_Cancel ?, ?, ?",
-                    id,
-                    actor.getId(),
-                    reason
+        /*
+         * UI coi lý do hủy là bắt buộc, vì vậy BE cũng phải enforce.
+         * Không để client bỏ qua FE rồi gửi body rỗng / reason chỉ có khoảng trắng.
+         */
+        String reason = normalizeRequired(
+                request == null ? null : request.getReason(),
+                "Bắt buộc nhập lý do hủy."
+        );
+
+        if (reason.length() > 500) {
+            throw badRequest("Lý do hủy không được vượt quá 500 ký tự.");
+        }
+
+        /*
+         * Với lựa chọn "Khác", FE bắt buộc có mô tả cụ thể.
+         * Guard này chặn cả trường hợp gọi API trực tiếp với đúng chuỗi "Khác".
+         */
+        if ("Khác".equalsIgnoreCase(reason)) {
+            throw badRequest(
+                    "Vui lòng nhập lý do cụ thể khi chọn \"Khác\"."
             );
         }
+
+        executeProcedure(
+                "EXEC dbo.usp_GoodsReceipt_Cancel ?, ?, ?",
+                id,
+                actor.getId(),
+                reason
+        );
 
         clearPersistenceContext();
 
@@ -385,6 +420,15 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
             throw badRequest("Phiếu nhập phải có ít nhất một sản phẩm.");
         }
 
+        /*
+         * Validate dữ liệu từng dòng TRƯỚC khi query repository.
+         * Tránh null item / null ProductVariantId làm lỗi query hoặc NPE khi
+         * service được gọi từ luồng không đi qua Controller @Valid.
+         */
+        for (int i = 0; i < items.size(); i++) {
+            validateItemRequest(items.get(i), receivedDate, i + 1);
+        }
+
         Set<Integer> variantIds = items.stream()
                 .map(GoodsReceiptItemRequest::getProductVariantId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
@@ -416,42 +460,145 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
             );
         }
 
-        for (int i = 0; i < items.size(); i++) {
-            GoodsReceiptItemRequest item = items.get(i);
+        return variantMap;
+    }
 
-            if (item.getProductVariantId() == null) {
-                throw badRequest("Dòng " + (i + 1) + ": ProductVariantId không được để trống.");
-            }
+    private void validateSaveRequestHeader(GoodsReceiptSaveRequest request) {
+        if (request == null) {
+            throw badRequest("Dữ liệu phiếu nhập không được để trống.");
+        }
 
-            if (item.getExpirationDate() == null) {
-                throw badRequest("Dòng " + (i + 1) + ": hạn sử dụng không được để trống.");
-            }
+        if (request.getReceiptType() == null) {
+            throw badRequest("Loại phiếu nhập không được để trống.");
+        }
 
-            if (item.getExpirationDate().isBefore(receivedDate)) {
+        if (request.getNote() != null
+                && request.getNote().length() > MAX_RECEIPT_NOTE_LENGTH) {
+            throw badRequest(
+                    "Ghi chú phiếu không được vượt quá "
+                            + MAX_RECEIPT_NOTE_LENGTH
+                            + " ký tự."
+            );
+        }
+
+        if (request.getItems() == null || request.getItems().isEmpty()) {
+            throw badRequest("Phiếu nhập phải có ít nhất một sản phẩm.");
+        }
+    }
+
+    private void validateItemRequest(
+            GoodsReceiptItemRequest item,
+            LocalDate receivedDate,
+            int line
+    ) {
+        if (item == null) {
+            throw badRequest("Dòng " + line + ": dữ liệu sản phẩm không được để trống.");
+        }
+
+        Integer productVariantId = item.getProductVariantId();
+
+        if (productVariantId == null || productVariantId <= 0) {
+            throw badRequest("Dòng " + line + ": ProductVariantId phải lớn hơn 0.");
+        }
+
+        Integer quantity = item.getQuantity();
+
+        if (quantity == null) {
+            throw badRequest("Dòng " + line + ": số lượng không được để trống.");
+        }
+
+        if (quantity <= 0) {
+            throw badRequest("Dòng " + line + ": số lượng phải lớn hơn 0.");
+        }
+
+        if (quantity > MAX_QUANTITY_PER_LINE) {
+            throw badRequest(
+                    "Dòng " + line
+                            + ": số lượng mỗi SKU không được vượt quá "
+                            + String.format(Locale.ROOT, "%,d", MAX_QUANTITY_PER_LINE)
+                            .replace(',', '.')
+                            + "."
+            );
+        }
+
+        BigDecimal unitCost = item.getUnitCost();
+
+        if (unitCost != null) {
+            if (unitCost.signum() < 0) {
                 throw badRequest(
-                        "Dòng " + (i + 1) +
-                                ": hạn sử dụng phải lớn hơn hoặc bằng ngày nhận hàng."
+                        "Dòng " + line
+                                + ": đơn giá nhập phải lớn hơn hoặc bằng 0."
                 );
             }
 
-            if (item.getManufacturedDate() != null
-                    && item.getManufacturedDate().isAfter(receivedDate)) {
+            if (unitCost.compareTo(MAX_UNIT_COST) > 0) {
                 throw badRequest(
-                        "Dòng " + (i + 1) +
-                                ": ngày sản xuất phải nhỏ hơn hoặc bằng ngày nhận hàng."
+                        "Dòng " + line
+                                + ": đơn giá nhập không được vượt quá 1.000.000.000."
                 );
             }
 
-            if (item.getManufacturedDate() != null
-                    && item.getManufacturedDate().isAfter(item.getExpirationDate())) {
+            if (unitCost.scale() > 2) {
                 throw badRequest(
-                        "Dòng " + (i + 1) +
-                                ": ngày sản xuất phải nhỏ hơn hoặc bằng hạn sử dụng."
+                        "Dòng " + line
+                                + ": đơn giá nhập chỉ được tối đa 2 chữ số thập phân."
                 );
             }
         }
 
-        return variantMap;
+        if (item.getLotCode() != null
+                && item.getLotCode().length() > MAX_LOT_CODE_LENGTH) {
+            throw badRequest(
+                    "Dòng " + line
+                            + ": mã lô không được vượt quá "
+                            + MAX_LOT_CODE_LENGTH
+                            + " ký tự."
+            );
+        }
+
+        if (item.getNote() != null
+                && item.getNote().length() > MAX_ITEM_NOTE_LENGTH) {
+            throw badRequest(
+                    "Dòng " + line
+                            + ": ghi chú dòng không được vượt quá "
+                            + MAX_ITEM_NOTE_LENGTH
+                            + " ký tự."
+            );
+        }
+
+        if (item.getExpirationDate() == null) {
+            throw badRequest("Dòng " + line + ": hạn sử dụng không được để trống.");
+        }
+
+        if (receivedDate == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Không xác định được ngày nhận hàng."
+            );
+        }
+
+        if (item.getExpirationDate().isBefore(receivedDate)) {
+            throw badRequest(
+                    "Dòng " + line
+                            + ": hạn sử dụng phải lớn hơn hoặc bằng ngày nhận hàng."
+            );
+        }
+
+        if (item.getManufacturedDate() != null
+                && item.getManufacturedDate().isAfter(receivedDate)) {
+            throw badRequest(
+                    "Dòng " + line
+                            + ": ngày sản xuất phải nhỏ hơn hoặc bằng ngày nhận hàng."
+            );
+        }
+
+        if (item.getManufacturedDate() != null
+                && item.getManufacturedDate().isAfter(item.getExpirationDate())) {
+            throw badRequest(
+                    "Dòng " + line
+                            + ": ngày sản xuất phải nhỏ hơn hoặc bằng hạn sử dụng."
+            );
+        }
     }
 
     private void saveItems(

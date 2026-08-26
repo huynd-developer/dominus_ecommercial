@@ -3,6 +3,8 @@ package org.example.datn_sd69.modules.goodsreceipt.controller;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.enums.GoodsReceiptStatus;
 import org.example.datn_sd69.enums.GoodsReceiptType;
@@ -34,6 +36,7 @@ public class GoodsReceiptController {
     @PreAuthorize("hasAnyAuthority('OWNER', 'MANAGER', 'CASHIER')")
     public ResponseEntity<Page<GoodsReceiptListResponse>> getList(
             @RequestParam(name = "keyword", required = false)
+            @Size(max = 100, message = "Từ khóa tìm kiếm không được vượt quá 100 ký tự")
             String keyword,
 
             @RequestParam(name = "status", required = false)
@@ -46,6 +49,7 @@ public class GoodsReceiptController {
             GoodsReceiptType receiptType,
 
             @RequestParam(name = "createdBy", required = false)
+            @Positive(message = "Người tạo không hợp lệ")
             Integer createdBy,
 
             @RequestParam(name = "fromDate", required = false)
@@ -83,7 +87,9 @@ public class GoodsReceiptController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('OWNER', 'MANAGER', 'CASHIER')")
     public ResponseEntity<GoodsReceiptDetailResponse> getDetail(
-            @PathVariable Integer id
+            @PathVariable
+            @Positive(message = "Id phiếu nhập phải lớn hơn 0")
+            Integer id
     ) {
         return ResponseEntity.ok(
                 goodsReceiptService.getDetail(id)
@@ -103,7 +109,9 @@ public class GoodsReceiptController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('OWNER', 'MANAGER', 'CASHIER')")
     public ResponseEntity<GoodsReceiptDetailResponse> update(
-            @PathVariable Integer id,
+            @PathVariable
+            @Positive(message = "Id phiếu nhập phải lớn hơn 0")
+            Integer id,
             @Valid @RequestBody GoodsReceiptSaveRequest request
     ) {
         return ResponseEntity.ok(
@@ -114,7 +122,9 @@ public class GoodsReceiptController {
     @PostMapping("/{id}/submit")
     @PreAuthorize("hasAnyAuthority('OWNER', 'MANAGER', 'CASHIER')")
     public ResponseEntity<GoodsReceiptDetailResponse> submit(
-            @PathVariable Integer id
+            @PathVariable
+            @Positive(message = "Id phiếu nhập phải lớn hơn 0")
+            Integer id
     ) {
         return ResponseEntity.ok(
                 goodsReceiptService.submit(id)
@@ -124,7 +134,9 @@ public class GoodsReceiptController {
     @PostMapping("/{id}/approve")
     @PreAuthorize("hasAnyAuthority('OWNER', 'MANAGER')")
     public ResponseEntity<GoodsReceiptDetailResponse> approve(
-            @PathVariable Integer id
+            @PathVariable
+            @Positive(message = "Id phiếu nhập phải lớn hơn 0")
+            Integer id
     ) {
         return ResponseEntity.ok(
                 goodsReceiptService.approve(id)
@@ -134,7 +146,9 @@ public class GoodsReceiptController {
     @PostMapping("/{id}/reject")
     @PreAuthorize("hasAnyAuthority('OWNER', 'MANAGER')")
     public ResponseEntity<GoodsReceiptDetailResponse> reject(
-            @PathVariable Integer id,
+            @PathVariable
+            @Positive(message = "Id phiếu nhập phải lớn hơn 0")
+            Integer id,
             @Valid @RequestBody GoodsReceiptRejectRequest request
     ) {
         return ResponseEntity.ok(
@@ -145,13 +159,11 @@ public class GoodsReceiptController {
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAnyAuthority('OWNER', 'MANAGER', 'CASHIER')")
     public ResponseEntity<GoodsReceiptDetailResponse> cancel(
-            @PathVariable Integer id,
-            @Valid @RequestBody(required = false) GoodsReceiptCancelRequest request
+            @PathVariable
+            @Positive(message = "Id phiếu nhập phải lớn hơn 0")
+            Integer id,
+            @Valid @RequestBody GoodsReceiptCancelRequest request
     ) {
-        if (request == null) {
-            request = new GoodsReceiptCancelRequest();
-        }
-
         return ResponseEntity.ok(
                 goodsReceiptService.cancel(id, request)
         );
@@ -160,7 +172,9 @@ public class GoodsReceiptController {
     @GetMapping("/{id}/approval-history")
     @PreAuthorize("hasAnyAuthority('OWNER', 'MANAGER', 'CASHIER')")
     public ResponseEntity<List<GoodsReceiptApprovalHistoryResponse>> getApprovalHistory(
-            @PathVariable Integer id
+            @PathVariable
+            @Positive(message = "Id phiếu nhập phải lớn hơn 0")
+            Integer id
     ) {
         return ResponseEntity.ok(
                 goodsReceiptService.getApprovalHistory(id)
