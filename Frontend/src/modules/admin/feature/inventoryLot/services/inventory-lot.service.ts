@@ -16,6 +16,12 @@ const cleanParams = (params: Record<string, unknown>) =>
   );
 
 const inventoryLotService = {
+  /**
+   * Danh sách lô dùng chung cho màn Quản lý lô hàng.
+   *
+   * GIỮ NGUYÊN endpoint cũ để không ảnh hưởng các màn/module
+   * đang sử dụng danh sách InventoryLot hiện tại.
+   */
   async getList(
     params: InventoryLotListParams
   ): Promise<PageResponse<InventoryLotListResponse>> {
@@ -32,6 +38,37 @@ const inventoryLotService = {
         size: params.size ?? 20,
       }),
     });
+
+    return response.data;
+  },
+
+  /**
+   * Danh sách lô dùng RIÊNG cho popup chọn lô khi tạo phiếu kiểm kê.
+   *
+   * Khớp với BE:
+   * GET /api/admin/inventory-lots/audit-candidates
+   *
+   * Không thay thế getList() để tránh ảnh hưởng màn Quản lý lô hàng.
+   */
+  async getAuditCandidates(
+    params: InventoryLotListParams
+  ): Promise<PageResponse<InventoryLotListResponse>> {
+    const response = await api.get(
+      "/admin/inventory-lots/audit-candidates",
+      {
+        params: cleanParams({
+          keyword: params.keyword?.trim() || undefined,
+          productVariantId: params.productVariantId ?? undefined,
+          isExpired: params.isExpired,
+          isNearExpiry: params.isNearExpiry,
+          hasStock: params.hasStock,
+          expirationFrom: params.expirationFrom || undefined,
+          expirationTo: params.expirationTo || undefined,
+          page: params.page ?? 0,
+          size: params.size ?? 20,
+        }),
+      }
+    );
 
     return response.data;
   },

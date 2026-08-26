@@ -97,6 +97,15 @@ public interface InventoryLotRepository
     );
 
 
+    // ================= GENERIC INVENTORY LOT SEARCH =================
+
+    /**
+     * Danh sách lô dùng chung cho module quản lý lô.
+     *
+     * GIỮ NGUYÊN logic hiện tại.
+     * Không lọc Product/ProductVariant đã xóa tại đây vì dữ liệu
+     * lô lịch sử vẫn phải có thể được tra cứu.
+     */
     @Query(
             value = """
                     SELECT
@@ -144,10 +153,6 @@ public interface InventoryLotRepository
                     LEFT JOIN dbo.GoodsReceipt GR
                         ON GR.Id = GRI.GoodsReceiptId
 
-                    /*
-                     * Chỉ bổ sung để xác định ProductId của SKU.
-                     * Không ảnh hưởng dữ liệu tồn kho / lô.
-                     */
                     LEFT JOIN dbo.ProductVariant PV
                         ON PV.Id = LS.ProductVariantId
 
@@ -157,14 +162,6 @@ public interface InventoryLotRepository
                     LEFT JOIN dbo.BottleType BT
                         ON BT.Id = PV.BottleTypeId
 
-                    /*
-                     * Lấy duy nhất 1 ảnh cho sản phẩm:
-                     * 1. Ưu tiên IsPrimary = 1
-                     * 2. Nếu không có ảnh primary thì lấy ảnh đầu tiên
-                     *
-                     * OUTER APPLY giúp SKU không có ảnh vẫn được trả về.
-                     * TOP 1 tránh nhân bản dòng lô khi sản phẩm có nhiều ảnh.
-                     */
                     OUTER APPLY (
                         SELECT TOP 1
                             PI.ImageUrl
@@ -238,12 +235,6 @@ public interface InventoryLotRepository
                         LS.InventoryLotId ASC
                     """,
 
-            /*
-             * GIỮ NGUYÊN countQuery.
-             *
-             * Không cần JOIN ảnh ở đây vì countQuery chỉ dùng
-             * để tính tổng số bản ghi cho pagination.
-             */
             countQuery = """
                     SELECT COUNT(*)
 
@@ -337,6 +328,269 @@ public interface InventoryLotRepository
     );
 
 
+    // ================= STOCK ADJUSTMENT CANDIDATES =================
+
+    /**
+     * Danh sách lô dùng RIÊNG khi tạo phiếu kiểm kê.
+     *
+     * Quy tắc:
+     * - Product và ProductVariant chưa xóa -> được chọn bình thường.
+     * - Nếu Product hoặc ProductVariant đã xóa nhưng lô vẫn còn tồn vật lý
+     *   (QuantityOnHand > 0) -> vẫn phải hiển thị để có thể kiểm kê/xử lý tồn.
+     * - Product/SKU đã xóa và tồn = 0 -> không đưa vào phiếu kiểm kê mới.
+     *
+     * Không dùng SellableQuantity vì kiểm kê phải bao gồm cả hàng hết hạn.
+     * Không thay đổi dữ liệu InventoryLot.
+     */
+    @Query(
+            value = """
+                    SELECT
+                        LS.InventoryLotId AS id,
+                        LS.ProductVariantId AS productVariantId,
+                        LS.Sku AS sku,
+                        LS.ProductName AS productName,
+
+                        ImageData.ImageUrl AS imageUrl,
+
+                        C.Value AS capacityValue,
+                        BT.Name AS bottleTypeName,
+
+                        LS.LotCode AS lotCode,
+                        LS.ManufacturedDate AS manufacturedDate,
+                        LS.ReceivedDate AS receivedDate,
+                        LS.ExpirationDate AS expirationDate,
+                        LS.DaysToExpiry AS daysToExpiry,
+                        LS.InitialQuantity AS initialQuantity,
+                        LS.QuantityOnHand AS quantityOnHand,
+                        LS.SellableQuantity AS sellableQuantity,
+                        LS.IsNearExpiry AS isNearExpiry,
+                        LS.IsExpired AS isExpired,
+                        L.CreatedBy AS createdById,
+                        CU.Name AS createdByName,
+                        L.CreatedAt AS createdAt,
+                        L.GoodsReceiptItemId AS goodsReceiptItemId,
+                        GRI.UnitCost AS unitCost,
+                        GR.Id AS goodsReceiptId,
+                        GR.ReceiptNo AS receiptNo,
+                        GR.ReceiptType AS receiptType,
+                        GR.Status AS receiptStatus
+
+                    FROM dbo.vw_InventoryLotStatus LS
+
+                    INNER JOIN dbo.InventoryLot L
+                        ON L.Id = LS.InventoryLotId
+
+                    INNER JOIN dbo.Users CU
+                        ON CU.Id = L.CreatedBy
+
+                    INNER JOIN dbo.ProductVariant PV
+                        ON PV.Id = LS.ProductVariantId
+
+                    INNER JOIN dbo.Product P
+                        ON P.Id = PV.ProductId
+
+                    LEFT JOIN dbo.GoodsReceiptItem GRI
+                        ON GRI.Id = L.GoodsReceiptItemId
+
+                    LEFT JOIN dbo.GoodsReceipt GR
+                        ON GR.Id = GRI.GoodsReceiptId
+
+                    LEFT JOIN dbo.Capacity C
+                        ON C.Id = PV.CapacityId
+
+                    LEFT JOIN dbo.BottleType BT
+                        ON BT.Id = PV.BottleTypeId
+
+                    OUTER APPLY (
+                        SELECT TOP 1
+                            PI.ImageUrl
+                        FROM dbo.ProductImage PI
+                        WHERE PI.ProductId = P.Id
+                        ORDER BY
+                            CASE
+                                WHEN PI.IsPrimary = 1 THEN 0
+                                ELSE 1
+                            END,
+                            PI.Id ASC
+                    ) ImageData
+
+                    WHERE
+                        (
+                            (
+                                ISNULL(P.IsDeleted, 0) = 0
+                                AND ISNULL(PV.IsDeleted, 0) = 0
+                            )
+                            OR LS.QuantityOnHand > 0
+                        )
+
+                        AND (
+                            :keyword IS NULL
+                            OR LOWER(LS.LotCode)
+                                LIKE LOWER(CONCAT('%', :keyword, '%'))
+                            OR LOWER(LS.Sku)
+                                LIKE LOWER(CONCAT('%', :keyword, '%'))
+                            OR LOWER(LS.ProductName)
+                                LIKE LOWER(CONCAT('%', :keyword, '%'))
+                            OR LOWER(COALESCE(GR.ReceiptNo, ''))
+                                LIKE LOWER(CONCAT('%', :keyword, '%'))
+                        )
+
+                        AND (
+                            :productVariantId IS NULL
+                            OR LS.ProductVariantId = :productVariantId
+                        )
+
+                        AND (
+                            :isExpired IS NULL
+                            OR LS.IsExpired = :isExpired
+                        )
+
+                        AND (
+                            :isNearExpiry IS NULL
+                            OR LS.IsNearExpiry = :isNearExpiry
+                        )
+
+                        AND (
+                            :hasStock IS NULL
+                            OR (
+                                :hasStock = 1
+                                AND LS.QuantityOnHand > 0
+                            )
+                            OR (
+                                :hasStock = 0
+                                AND LS.QuantityOnHand = 0
+                            )
+                        )
+
+                        AND (
+                            :expirationFrom IS NULL
+                            OR LS.ExpirationDate >= :expirationFrom
+                        )
+
+                        AND (
+                            :expirationTo IS NULL
+                            OR LS.ExpirationDate <= :expirationTo
+                        )
+
+                    ORDER BY
+                        CASE
+                            WHEN LS.IsExpired = 1 THEN 1
+                            ELSE 0
+                        END ASC,
+                        LS.ExpirationDate ASC,
+                        LS.ReceivedDate ASC,
+                        LS.InventoryLotId ASC
+                    """,
+
+            countQuery = """
+                    SELECT COUNT(*)
+
+                    FROM dbo.vw_InventoryLotStatus LS
+
+                    INNER JOIN dbo.InventoryLot L
+                        ON L.Id = LS.InventoryLotId
+
+                    INNER JOIN dbo.ProductVariant PV
+                        ON PV.Id = LS.ProductVariantId
+
+                    INNER JOIN dbo.Product P
+                        ON P.Id = PV.ProductId
+
+                    LEFT JOIN dbo.GoodsReceiptItem GRI
+                        ON GRI.Id = L.GoodsReceiptItemId
+
+                    LEFT JOIN dbo.GoodsReceipt GR
+                        ON GR.Id = GRI.GoodsReceiptId
+
+                    WHERE
+                        (
+                            (
+                                ISNULL(P.IsDeleted, 0) = 0
+                                AND ISNULL(PV.IsDeleted, 0) = 0
+                            )
+                            OR LS.QuantityOnHand > 0
+                        )
+
+                        AND (
+                            :keyword IS NULL
+                            OR LOWER(LS.LotCode)
+                                LIKE LOWER(CONCAT('%', :keyword, '%'))
+                            OR LOWER(LS.Sku)
+                                LIKE LOWER(CONCAT('%', :keyword, '%'))
+                            OR LOWER(LS.ProductName)
+                                LIKE LOWER(CONCAT('%', :keyword, '%'))
+                            OR LOWER(COALESCE(GR.ReceiptNo, ''))
+                                LIKE LOWER(CONCAT('%', :keyword, '%'))
+                        )
+
+                        AND (
+                            :productVariantId IS NULL
+                            OR LS.ProductVariantId = :productVariantId
+                        )
+
+                        AND (
+                            :isExpired IS NULL
+                            OR LS.IsExpired = :isExpired
+                        )
+
+                        AND (
+                            :isNearExpiry IS NULL
+                            OR LS.IsNearExpiry = :isNearExpiry
+                        )
+
+                        AND (
+                            :hasStock IS NULL
+                            OR (
+                                :hasStock = 1
+                                AND LS.QuantityOnHand > 0
+                            )
+                            OR (
+                                :hasStock = 0
+                                AND LS.QuantityOnHand = 0
+                            )
+                        )
+
+                        AND (
+                            :expirationFrom IS NULL
+                            OR LS.ExpirationDate >= :expirationFrom
+                        )
+
+                        AND (
+                            :expirationTo IS NULL
+                            OR LS.ExpirationDate <= :expirationTo
+                        )
+                    """,
+
+            nativeQuery = true
+    )
+    Page<InventoryLotViewProjection> searchAuditCandidates(
+            @Param("keyword")
+            String keyword,
+
+            @Param("productVariantId")
+            Integer productVariantId,
+
+            @Param("isExpired")
+            Boolean isExpired,
+
+            @Param("isNearExpiry")
+            Boolean isNearExpiry,
+
+            @Param("hasStock")
+            Boolean hasStock,
+
+            @Param("expirationFrom")
+            LocalDate expirationFrom,
+
+            @Param("expirationTo")
+            LocalDate expirationTo,
+
+            Pageable pageable
+    );
+
+
+    // ================= DETAIL =================
+
     @Query(
             value = """
                     SELECT
@@ -384,9 +638,6 @@ public interface InventoryLotRepository
                     LEFT JOIN dbo.GoodsReceipt GR
                         ON GR.Id = GRI.GoodsReceiptId
 
-                    /*
-                     * Chỉ bổ sung để lấy ProductId từ SKU.
-                     */
                     LEFT JOIN dbo.ProductVariant PV
                         ON PV.Id = LS.ProductVariantId
 
@@ -396,10 +647,6 @@ public interface InventoryLotRepository
                     LEFT JOIN dbo.BottleType BT
                         ON BT.Id = PV.BottleTypeId
 
-                    /*
-                     * Ảnh primary trước.
-                     * Không có primary thì lấy ảnh đầu tiên.
-                     */
                     OUTER APPLY (
                         SELECT TOP 1
                             PI.ImageUrl

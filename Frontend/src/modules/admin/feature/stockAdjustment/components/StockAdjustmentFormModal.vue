@@ -19,7 +19,7 @@ interface EditableItem {
   bottleTypeName: string | null;
   lotCode: string;
   systemQuantity: number;
-  actualQuantity: number | null;
+  actualQuantity: string;
   reasonPreset: string;
   customReason: string;
 }
@@ -41,6 +41,10 @@ const emit = defineEmits<{
  */
 const note = ref("");
 const items = ref<EditableItem[]>([]);
+
+const MAX_ACTUAL_QUANTITY = 1_000_000;
+const MAX_REASON_LENGTH = 500;
+const MAX_NOTE_LENGTH = 1000;
 
 const lotKeyword = ref("");
 const lotOptions = ref<InventoryLotListResponse[]>([]);
@@ -165,8 +169,8 @@ const resetForm = () => {
   if (props.detail?.items?.length) {
     items.value = props.detail.items.map((item) => {
       const systemQuantity = Number(item.systemQuantity ?? 0);
-      const actualQuantity = Number(item.actualQuantity ?? 0);
-      const difference = actualQuantity - systemQuantity;
+      const actualQuantity = String(item.actualQuantity ?? 0);
+      const difference = Number(actualQuantity) - systemQuantity;
       const reasonState = buildReasonState(item.reason, difference);
 
       return {
@@ -252,7 +256,7 @@ const selectLot = (lot: InventoryLotListResponse) => {
     bottleTypeName: lot.bottleTypeName ?? null,
     lotCode: lot.lotCode,
     systemQuantity: Number(lot.quantityOnHand ?? 0),
-    actualQuantity: null,
+    actualQuantity: "",
     reasonPreset: "",
     customReason: "",
   });
@@ -264,16 +268,45 @@ const removeItem = (inventoryLotId: number) => {
   );
 };
 
-const differenceOf = (row: EditableItem): number | null => {
-  if (
-    row.actualQuantity === null ||
-    row.actualQuantity === undefined ||
-    !Number.isFinite(Number(row.actualQuantity))
-  ) {
+const actualQuantityValue = (row: EditableItem): number | null => {
+  const raw = String(row.actualQuantity ?? "").trim();
+
+  if (!/^\d+$/.test(raw)) {
     return null;
   }
 
-  return Number(row.actualQuantity) - Number(row.systemQuantity ?? 0);
+  const value = Number(raw);
+
+  return Number.isSafeInteger(value) ? value : null;
+};
+
+const differenceOf = (row: EditableItem): number | null => {
+  const actualQuantity = actualQuantityValue(row);
+
+  if (actualQuantity === null) {
+    return null;
+  }
+
+  return actualQuantity - Number(row.systemQuantity ?? 0);
+};
+
+const onActualQuantityInput = (row: EditableItem, event: Event) => {
+  const input = event.target as HTMLInputElement;
+
+  /*
+   * Không dùng type="number" + v-model.number:
+   * browser cho phép ký tự e/E và JS có thể biến chuỗi rất dài thành số khoa học.
+   * Giữ raw digits giúp ô này chỉ nhận số nguyên không âm.
+   */
+  const raw = input.value
+    .replace(/\D/g, "")
+    .replace(/^0+(?=\d)/, "")
+    .slice(0, String(MAX_ACTUAL_QUANTITY).length);
+
+  row.actualQuantity = raw;
+  input.value = raw;
+
+  actualQuantityChanged(row);
 };
 
 const reasonOptionsOf = (row: EditableItem): readonly string[] =>
@@ -350,10 +383,10 @@ const variantLabel = (item: {
 };
 
 const validate = async () => {
-  if (String(note.value ?? "").trim().length > 1000) {
+  if (String(note.value ?? "").trim().length > MAX_NOTE_LENGTH) {
     await Swal.fire(
       "Dữ liệu không hợp lệ",
-      "Ghi chú phiếu không được vượt quá 1000 ký tự.",
+      `Ghi chú phiếu không được vượt quá ${MAX_NOTE_LENGTH} ký tự.`,
       "warning"
     );
     return false;
@@ -394,11 +427,9 @@ const validate = async () => {
 
     lotIds.add(row.inventoryLotId);
 
-    if (
-      row.actualQuantity === null ||
-      !Number.isInteger(Number(row.actualQuantity)) ||
-      Number(row.actualQuantity) < 0
-    ) {
+    const actualQuantityRaw = String(row.actualQuantity ?? "").trim();
+
+    if (!/^\d+$/.test(actualQuantityRaw)) {
       await Swal.fire(
         "Dữ liệu không hợp lệ",
         `Dòng ${line}: số lượng thực tế phải là số nguyên lớn hơn hoặc bằng 0.`,
@@ -407,12 +438,29 @@ const validate = async () => {
       return false;
     }
 
-    const reason = resolveReason(row);
+    const actualQuantity = Number(actualQuantityRaw);
 
-    if (reason.length > 500) {
+    if (
+      !Number.isSafeInteger(actualQuantity) ||
+      actualQuantity < 0 ||
+      actualQuantity > MAX_ACTUAL_QUANTITY
+    ) {
       await Swal.fire(
         "Dữ liệu không hợp lệ",
-        `Dòng ${line}: lý do không được vượt quá 500 ký tự.`,
+        `Dòng ${line}: số lượng thực tế phải từ 0 đến ${formatNumber(
+          MAX_ACTUAL_QUANTITY
+        )}.`,
+        "warning"
+      );
+      return false;
+    }
+
+    const reason = resolveReason(row);
+
+    if (reason.length > MAX_REASON_LENGTH) {
+      await Swal.fire(
+        "Dữ liệu không hợp lệ",
+        `Dòng ${line}: lý do không được vượt quá ${MAX_REASON_LENGTH} ký tự.`,
         "warning"
       );
       return false;
@@ -714,14 +762,15 @@ const close = () => {
 
                     <td>
                       <input
-                        v-model.number="row.actualQuantity"
+                        :value="row.actualQuantity"
                         class="table-input"
-                        type="number"
-                        min="0"
-                        step="1"
+                        type="text"
                         inputmode="numeric"
+                        autocomplete="off"
+                        maxlength="7"
                         placeholder="0"
-                        @input="actualQuantityChanged(row)"
+                        :title="`Tối đa ${formatNumber(MAX_ACTUAL_QUANTITY)}`"
+                        @input="onActualQuantityInput(row, $event)"
                       />
                     </td>
 
@@ -784,7 +833,6 @@ const close = () => {
                           v-if="row.reasonPreset === OTHER_REASON"
                           v-model="row.customReason"
                           class="reason-textarea"
-                          maxlength="500"
                           rows="2"
                           placeholder="Nhập lý do cụ thể..."
                         ></textarea>
