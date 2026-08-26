@@ -5,6 +5,8 @@ import org.example.datn_sd69.entity.Concentration;
 import org.example.datn_sd69.modules.concentration.dto.request.ConcentrationRequest;
 import org.example.datn_sd69.modules.concentration.service.ConcentrationService;
 import org.example.datn_sd69.repository.ConcentrationRepository;
+// ĐÃ THÊM: Import ProductRepository
+import org.example.datn_sd69.repository.ProductRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -18,6 +20,8 @@ import java.util.Optional;
 public class ConcentrationServiceImpl implements ConcentrationService {
 
     private final ConcentrationRepository concentrationRepository;
+    // ĐÃ THÊM: Inject ProductRepository vào
+    private final ProductRepository productRepository;
 
     @Override
     public List<Concentration> getAll() {
@@ -38,7 +42,6 @@ public class ConcentrationServiceImpl implements ConcentrationService {
     @Override
     public Concentration create(ConcentrationRequest request) {
         String name = request.getName().trim().replaceAll("\\s+", " ");
-
         Optional<Concentration> existingOpt = concentrationRepository.findByNameIgnoreCase(name);
 
         if (existingOpt.isPresent()) {
@@ -48,7 +51,6 @@ public class ConcentrationServiceImpl implements ConcentrationService {
                 existingConcentration.setIsDeleted(false);
                 existingConcentration.setStatus(request.getStatus() != null ? request.getStatus() : 1);
                 existingConcentration.setName(name);
-
                 return concentrationRepository.save(existingConcentration);
             } else {
                 throw new IllegalArgumentException("Nồng độ '" + name + "' đã tồn tại!");
@@ -89,14 +91,21 @@ public class ConcentrationServiceImpl implements ConcentrationService {
     @Override
     public void delete(Integer id) {
         Concentration concentration = getById(id);
+
+        // ĐÃ THÊM: Kiểm tra ràng buộc
+        boolean isUsed = productRepository.existsByConcentrationIdAndIsDeletedFalse(id);
+        if (isUsed) {
+            throw new IllegalStateException("Không thể ném vào thùng rác! Đang có sản phẩm thuộc nồng độ này.");
+        }
+
         concentration.setIsDeleted(true);
+        concentration.setStatus(0); // Ẩn luôn
         concentrationRepository.save(concentration);
     }
 
     @Override
     public Page<Concentration> getAll(String keyword, Pageable pageable) {
         if (keyword != null && !keyword.trim().isEmpty()) {
-            // Đã bổ sung chuẩn hóa khoảng trắng cho từ khóa tìm kiếm
             return concentrationRepository.searchByName(keyword.trim().replaceAll("\\s+", " "), pageable);
         }
         return concentrationRepository.findByIsDeletedFalse(pageable);

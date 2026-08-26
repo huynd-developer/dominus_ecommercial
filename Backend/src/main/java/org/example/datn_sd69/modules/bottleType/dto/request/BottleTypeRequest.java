@@ -9,8 +9,9 @@ import lombok.Setter;
 public class BottleTypeRequest {
 
     @NotBlank(message = "Tên loại chai không được để trống")
-    @Size(max = 255, message = "Tên loại chai không được vượt quá 255 ký tự")
-    @Pattern(regexp = "^[\\p{L}\\d\\s\\-\\(\\)]+$", message = "Tên loại chai chỉ được chứa chữ cái, số, khoảng trắng và các ký tự: -, ()")
+    @Size(max = 50, message = "Tên loại chai không được vượt quá 50 ký tự")
+    // ĐÃ SỬA: Đẩy dấu \- xuống cuối cùng và đổi \d thành 0-9 để Java không bị lỗi biên dịch
+    @Pattern(regexp = "^[\\p{L}\\p{M}0-9\\s()._\\-]+$", message = "Tên loại chai chỉ được chứa chữ cái, số, khoảng trắng và các ký tự: -, _, (), .")
     private String name;
 
     @NotNull(message = "Trạng thái không được để trống")

@@ -30,10 +30,7 @@ const refreshProductsSilently = async () => {
 
   refreshingOnFocus.value = true
   try {
-    await Promise.all([
-      store.fetchDropdowns(),
-      store.fetchProducts(),
-    ])
+    await Promise.all([store.fetchDropdowns(), store.fetchProducts()])
   } finally {
     refreshingOnFocus.value = false
   }
@@ -75,10 +72,47 @@ onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
+// ĐÃ SỬA: Hàm kiểm tra xem một thuộc tính (Danh mục, Thương hiệu...) có đang bị Ẩn/Xóa hay không
+const isItemActive = (item: any) => {
+  if (!item) return false;
+  if (item.isDeleted === true || item.deleted === true || item.is_deleted === true) return false;
+  if (item.status === 0 || item.status === '0' || item.status === false) return false;
+  if (item.isActive === false || item.is_active === false) return false;
+  return true;
+};
+
+// ĐÃ SỬA: Tạo ra các danh sách "sạch", chỉ chứa những thuộc tính đang hoạt động
+const activeBrands = computed(() => store.brandList.filter(isItemActive));
+const activeCategories = computed(() => store.categoryList.filter(isItemActive));
+const activeConcentrations = computed(() => store.concentrationList.filter(isItemActive));
+const activeCapacities = computed(() => store.capacityList.filter(isItemActive));
+const activeBottleTypes = computed(() => store.bottleTypeList.filter(isItemActive));
+const activeFragranceFamilies = computed(() => store.fragranceFamilyList.filter(isItemActive));
+
 const filteredData = computed(() => {
   const keyword = searchQuery.value.trim().toLowerCase()
-  if (!keyword) return store.products
-  return store.products.filter((item) => {
+  
+  // ĐÃ SỬA: Lọc bỏ những sản phẩm mồ côi (chứa thuộc tính bị Ẩn/Xóa)
+  const validProducts = store.products.filter((item: any) => {
+     // Ẩn sản phẩm đã bị xóa
+     if (item.isDeleted === true || item.deleted === true) return false;
+
+     if (!item.brandId || !item.categoryId || !item.concentrationId) return false;
+     
+     const brandExists = activeBrands.value.some(b => b.id === item.brandId);
+     const categoryExists = activeCategories.value.some(c => c.id === item.categoryId);
+     const concentrationExists = activeConcentrations.value.some(c => c.id === item.concentrationId);
+     
+     if (!brandExists || !categoryExists || !concentrationExists) {
+        return false;
+     }
+
+     return true;
+  });
+
+  if (!keyword) return validProducts;
+
+  return validProducts.filter((item) => {
     const text = [item.name, item.brandName, item.categoryName, item.concentrationName]
       .filter(Boolean)
       .join(' ')
@@ -137,12 +171,7 @@ const openAddModal = async () => {
 
 const openEditModal = async (item: Product) => {
   try {
-    // Lấy đồng thời master data và detail mới nhất để form không giữ ID đã bị xóa ở module khác.
-    const [, latest] = await Promise.all([
-      store.fetchDropdowns(),
-      productService.getProductById(item.id),
-    ])
-
+    const latest = await productService.getProductById(item.id)
     selectedProduct.value = latest
     isCloneMode.value = false
     showModal.value = true
@@ -156,24 +185,10 @@ const openEditModal = async (item: Product) => {
   }
 }
 
-const openCloneModal = async (item: Product) => {
-  try {
-    // Clone cũng lấy detail + master mới nhất, tránh nhân bản các ID master đã bị xóa.
-    const [, latest] = await Promise.all([
-      store.fetchDropdowns(),
-      productService.getProductById(item.id),
-    ])
-
-    selectedProduct.value = latest
-    isCloneMode.value = true
-    showModal.value = true
-  } catch (error: any) {
-    await Swal.fire({
-      icon: 'error',
-      title: 'Không thể nhân bản sản phẩm',
-      text: error?.response?.data?.message || 'Không thể tải dữ liệu sản phẩm mới nhất'
-    })
-  }
+const openCloneModal = (item: Product) => {
+  selectedProduct.value = item
+  isCloneMode.value = true
+  showModal.value = true
 }
 
 const closeModal = () => {
@@ -199,7 +214,6 @@ const handleProductConflict = async (error: any) => {
   return true
 }
 
-// 1. Hàm chuyển trạng thái nhanh cho sản phẩm (Ẩn/Hiện toàn bộ sản phẩm)
 const toggleProductStatus = async (product: Product, newStatus: number) => {
   const actionName = newStatus === 1 ? 'Mở bán' : 'Ngừng bán'
   const confirmColor = newStatus === 1 ? '#10b981' : '#f59e0b'
@@ -222,7 +236,6 @@ const toggleProductStatus = async (product: Product, newStatus: number) => {
     const payload = {
       name: product.name,
       description: product.description,
-      // Lấy đúng ID từ object lồng nhau nếu có
       brandId: product.brandId || (product as any).brand?.id,
       categoryId: product.categoryId || (product as any).category?.id,
       concentrationId: product.concentrationId || (product as any).concentration?.id,
@@ -233,7 +246,6 @@ const toggleProductStatus = async (product: Product, newStatus: number) => {
       fragranceFamilyIds: product.fragranceFamilies?.map((f: any) => f.id) || [],
       variants: product.variants?.map((v: any) => ({
         id: v.id,
-        // Ép lấy đúng ID dung tích và vỏ chai
         capacityId: v.capacityId || v.capacity?.id || 0,
         bottleTypeId: v.bottleTypeId || v.bottleType?.id || 0,
         price: v.price,
@@ -251,7 +263,6 @@ const toggleProductStatus = async (product: Product, newStatus: number) => {
   }
 }
 
-// 2. Hàm chuyển trạng thái nhanh cho RIÊNG TỪNG BIẾN THỂ
 const handleToggleVariantStatus = async (product: Product, variant: ProductVariant) => {
   const newStatus = variant.status === 1 ? 0 : 1
   const actionName = newStatus === 1 ? 'Mở bán' : 'Ngừng bán'
@@ -285,11 +296,9 @@ const handleToggleVariantStatus = async (product: Product, variant: ProductVaria
       fragranceFamilyIds: product.fragranceFamilies?.map((f: any) => f.id) || [],
       variants: product.variants?.map((v: any) => ({
         id: v.id,
-        // Ép lấy đúng ID dung tích và vỏ chai
         capacityId: v.capacityId || v.capacity?.id || 0,
         bottleTypeId: v.bottleTypeId || v.bottleType?.id || 0,
         price: v.price,
-        // Đổi trạng thái của biến thể đang click
         status: v.id === variant.id ? newStatus : v.status,
         sku: v.sku ? String(v.sku).trim() : undefined
       })) || []
@@ -325,6 +334,48 @@ const handleDelete = async (id: number) => {
     Swal.fire({ icon: 'error', title: 'Lỗi', text: error?.response?.data?.message || 'Không thể xóa sản phẩm' })
   }
 }
+
+const calculateTotalStock = (variants?: ProductVariant[]) =>
+  variants?.reduce((sum, item) => sum + Number(item.totalQuantity ?? 0), 0) ?? 0;
+
+const calculateTotalSellableStock = (variants?: ProductVariant[]) =>
+  variants?.reduce((sum, item) => sum + Number(item.sellableQuantity ?? 0), 0) ?? 0;
+
+const getStockClass = (stock: number) => {
+  if (stock === 0) return "danger";
+  if (stock < 10) return "warning";
+  return "success";
+};
+
+// ĐÃ SỬA: Ẩn luôn các biến thể chứa dung tích / loại chai đã bị xóa ở ngoài
+const rows = computed(() => {
+  return paginatedData.value.map(product => {
+    const validVariants = (product.variants || []).filter((v: any) => {
+      // Loại bỏ biến thể nếu chính nó bị xóa
+      if (v.isDeleted === true || v.deleted === true) return false;
+
+      const capId = v.capacityId || v.capacity?.id;
+      const botId = v.bottleTypeId || v.bottleType?.id;
+      
+      const capExists = activeCapacities.value.some(c => c.id === capId);
+      const botExists = activeBottleTypes.value.some(b => b.id === botId);
+      
+      return capExists && botExists;
+    });
+
+    const stock = calculateTotalStock(validVariants);
+    const sellableStock = calculateTotalSellableStock(validVariants);
+
+    return {
+      ...product,
+      variants: validVariants, 
+      stock,
+      sellableStock,
+      stockClass: getStockClass(stock),
+      sellableStockClass: getStockClass(sellableStock),
+    };
+  });
+});
 </script>
 
 <template>
@@ -362,7 +413,7 @@ const handleDelete = async (id: number) => {
 
     <div v-else class="table-wrapper">
       <ProductList
-        :paginated-data="paginatedData"
+        :paginated-data="rows"
         @edit="openEditModal"
         @clone="openCloneModal"
         @stop-selling="handleStopSelling"
@@ -384,16 +435,17 @@ const handleDelete = async (id: number) => {
     </div>
 
     <Teleport to="body">
+      <!-- ĐÃ SỬA: Truyền các danh sách sạch (đã lọc rác) vào Modal để nó không hiện các mục bị xóa nữa -->
       <ProductModal
         v-if="showModal"
         :product-selected="selectedProduct"
         :is-clone="isCloneMode"
-        :brand-list="store.brandList"
-        :category-list="store.categoryList"
-        :concentration-list="store.concentrationList"
-        :fragrance-family-list="store.fragranceFamilyList"
-        :capacity-list="store.capacityList"
-        :bottle-type-list="store.bottleTypeList"
+        :brand-list="activeBrands"
+        :category-list="activeCategories"
+        :concentration-list="activeConcentrations"
+        :fragrance-family-list="activeFragranceFamilies"
+        :capacity-list="activeCapacities"
+        :bottle-type-list="activeBottleTypes"
         @close="closeModal"
         @refresh="store.fetchProducts"
       />

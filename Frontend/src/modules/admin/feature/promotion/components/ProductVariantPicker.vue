@@ -25,7 +25,7 @@
           type="text"
           class="form-control form-control-lg bg-white"
           placeholder="Tìm theo tên sản phẩm / SKU..."
-          :disabled="store.optionLoading"
+          :disabled="store.optionLoading || isVerifying"
           @keyup.enter="handleSearch(0)"
         />
       </div>
@@ -34,7 +34,7 @@
         <button
           type="button"
           class="btn btn-outline-dark btn-lg"
-          :disabled="store.optionLoading"
+          :disabled="store.optionLoading || isVerifying"
           @click="handleSearch(0)"
         >
           <span
@@ -69,10 +69,10 @@
           </thead>
 
           <tbody>
-            <tr v-if="store.optionLoading">
+            <tr v-if="store.optionLoading || isVerifying">
               <td colspan="7" class="text-center py-5">
                 <span class="spinner-border spinner-border-sm me-2 text-dark"></span>
-                Đang tải biến thể...
+                Đang tải và kiểm tra biến thể...
               </td>
             </tr>
 
@@ -84,7 +84,7 @@
 
             <tr v-else-if="displayOptions.length === 0">
               <td colspan="7" class="text-center text-muted py-5">
-                Các biến thể tìm được đều ở trạng thái Ngừng bán.
+                Các biến thể tìm được đều ở trạng thái Ngừng bán hoặc Đã bị xóa.
               </td>
             </tr>
 
@@ -250,6 +250,7 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import Swal from "sweetalert2";
+import api from "@/common/api";
 import { usePromotionStore } from "../stores/promotion.store";
 import type {
   PromotionProductVariantOptionResponse,
@@ -275,12 +276,12 @@ const emit = defineEmits<{
 
 const store = usePromotionStore();
 const keyword = ref("");
+const localVariantOptions = ref<any[]>([]);
+const isVerifying = ref(false);
 
-// Lọc ẩn các biến thể đang ngừng bán
 const displayOptions = computed(() => {
-  return store.variantOptions.filter(item => {
+  return localVariantOptions.value.filter(item => {
     const isDiscontinued = item.unavailableReason && item.unavailableReason.toLowerCase().includes('ngừng bán');
-    // Chỉ hiển thị nếu KHÔNG PHẢI ngừng bán, HOẶC biến thể đó đang được chọn (trường hợp lỡ tick chọn trước đó)
     return !isDiscontinued || isSelected(item.productVariantId);
   });
 });
@@ -306,6 +307,36 @@ const handleSearch = async (page = 0) => {
     page,
     size: store.optionPageSize,
   });
+
+  isVerifying.value = true;
+  const validOptions = [];
+  
+  for (const item of store.variantOptions) {
+    try {
+      const res = await api.get(`/v1/products`, { params: { keyword: item.sku || item.productName || "", size: 50, t: Date.now() } });
+      const list = res.data?.data?.content || res.data?.data || res.data?.content || res.data || [];
+      
+      const exists = list.some((p: any) => {
+        if (p.isDeleted || p.deleted || Number(p.status) === 0) return false;
+        if (p.variants) {
+          return p.variants.some((pv: any) => {
+            const vId = Number(pv.productVariantId || pv.variantId || pv.id);
+            // ĐÃ SỬA LỖI TẠI ĐÂY BẰNG CÁCH ÉP KIỂU
+            const targetId = Number((item as any).productVariantId || (item as any).variantId || (item as any).id);
+            return vId === targetId && !pv.isDeleted && !pv.deleted && Number(pv.status) !== 0;
+          });
+        }
+        return false;
+      });
+      
+      if (exists) validOptions.push(item);
+    } catch {
+      validOptions.push(item); // Fallback
+    }
+  }
+  
+  localVariantOptions.value = validOptions;
+  isVerifying.value = false;
 };
 
 const isSelected = (productVariantId: number) => {

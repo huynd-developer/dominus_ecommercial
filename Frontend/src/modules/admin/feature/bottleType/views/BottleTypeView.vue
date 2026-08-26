@@ -84,15 +84,14 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label">Tên loại chai <span class="text-danger">*</span></label>
-            <!-- ĐÃ THÊM maxlength="50" Ở ĐÂY -->
             <input 
               v-model="formData.name" 
               type="text" 
               class="form-control" 
               :class="{ 'is-invalid': errors.name }"
-              placeholder="VD: Chai gốc Fullbox, Ống chiết..."
+              placeholder="VD: Chai gốc Fullbox, Ống chiết (10ml)"
               maxlength="50"
-              @input="validateForm"
+              @input="handleNameInput"
               @keyup.enter="handleSubmit"
               autofocus
             >
@@ -143,29 +142,35 @@ onMounted(() => {
 const handleSearch = () => { bottleTypeStore.fetchBottleTypes(searchKeyword.value, 0); };
 const changePage = (page: number) => { if (page >= 0 && page < bottleTypeStore.totalPages) bottleTypeStore.fetchBottleTypes(searchKeyword.value, page); };
 
+const handleNameInput = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const sanitized = input.value.replace(/[^\p{L}\p{M}0-9\s\-.()_]/gu, "");
+  input.value = sanitized;
+  formData.value.name = sanitized;
+  validateForm();
+};
+
 const validateForm = () => {
   errors.value.name = ''; 
-  // Chuẩn hóa khoảng trắng
   const nameValue = formData.value.name.trim().replace(/\s+/g, ' ');
   
-  // Đã cập nhật Regex đồng bộ với Backend (Cho phép chữ, số, khoảng trắng, dấu trừ, dấu ngoặc)
-  const nameRegex = /^[\p{L}\d\s\-()]+$/u; 
+  const nameRegex = /^[\p{L}\p{M}0-9\s\-.()_]+$/u; 
 
   if (!nameValue) {
     errors.value.name = 'Tên loại chai không được để trống';
     return false;
   }
-  // ĐÃ SỬA CHỖ NÀY THÀNH 50
+  
   if (nameValue.length > 50) {
     errors.value.name = 'Tên loại chai không được vượt quá 50 ký tự';
     return false;
   }
+  
   if (!nameRegex.test(nameValue)) {
-    errors.value.name = 'Tên loại chai chỉ được chứa chữ cái, số, khoảng trắng và các ký tự: -, ()';
+    errors.value.name = 'Tên loại chai chỉ được chứa chữ cái, số, khoảng trắng và các ký tự: -, _, (), .';
     return false;
   }
 
-  // Kiểm tra trùng lặp trên Local Frontend
   const isDuplicate = bottleTypeStore.bottleTypes.some((item) => {
     if (isEdit.value && item.id === currentId.value) return false;
     return item.name.trim().replace(/\s+/g, ' ').toLowerCase() === nameValue.toLowerCase();
@@ -200,7 +205,6 @@ const handleSubmit = async () => {
   try {
     isSaving.value = true;
 
-    // Ép chuẩn hóa dữ liệu gửi lên Backend tránh lỗi khoảng trắng
     const payload = {
         ...formData.value,
         name: formData.value.name.trim().replace(/\s+/g, ' ')
@@ -217,38 +221,32 @@ const handleSubmit = async () => {
       Toast.fire({ icon: 'success', title: 'Thêm mới thành công!' });
     }
     showModal.value = false; 
-  } catch (error: any) {
-    console.error("Chi tiết lỗi Axios:", error);
-    
-    let errorMsg = '';
-    
-    // Nâng cấp bộ bắt lỗi đồng bộ
+} catch (error: any) {
+    console.error("Lỗi Axios:", error);
+    let errorMsg = "Thao tác thất bại, vui lòng thử lại!";
+
+    // Bóc tách siêu bạo lực mọi loại data trả về từ BE
     if (error.response && error.response.data) {
-      const responseData = error.response.data;
-
-      if (responseData.errors && responseData.errors.name) {
-        errors.value.name = responseData.errors.name;
-        return; 
-      }
-
-      if (typeof responseData === 'string') {
-        errorMsg = responseData;
-      } else if (responseData.message) {
-        errorMsg = responseData.message;
-      } else if (responseData.error) {
-        errorMsg = responseData.error;
+      const data = error.response.data;
+      if (typeof data === 'string' && data.length > 0) {
+        errorMsg = data;
+      } else if (data.message) {
+        errorMsg = data.message;
+      } else if (Array.isArray(data.errors) && data.errors.length > 0) {
+        errorMsg = data.errors[0].defaultMessage || data.errors[0].message;
+      } else if (typeof data === 'object') {
+        errorMsg = data.name || data.error || Object.values(data)[0] || errorMsg;
       }
     }
 
-    if (errorMsg) {
-      const lowerMsg = errorMsg.toLowerCase();
-      if (lowerMsg.includes('tồn tại') || lowerMsg.includes('exists') || lowerMsg.includes('duplicate') || lowerMsg.includes('sử dụng')) {
-        errors.value.name = 'Loại chai này đã tồn tại trong hệ thống!';
-      } else {
-        Toast.fire({ icon: 'error', title: errorMsg });
-      }
+    // Ép buộc 100% hiển thị lỗi màu đỏ dưới ô input nếu dính từ khóa
+    const lowerMsg = String(errorMsg).toLowerCase();
+    if (lowerMsg.includes('sử dụng') || lowerMsg.includes('tồn tại') || lowerMsg.includes('duplicate')) {
+      errors.value.name = errorMsg; 
+    } else if (lowerMsg.includes('ký tự') || lowerMsg.includes('hợp lệ')) {
+      errors.value.name = 'Tên loại chai chứa ký tự không hợp lệ!';
     } else {
-      Toast.fire({ icon: 'error', title: 'Máy chủ không phản hồi!' });
+      Toast.fire({ icon: 'error', title: errorMsg });
     }
   } finally {
     isSaving.value = false;
@@ -291,7 +289,7 @@ const handleDelete = (id: number) => {
 
         Swal.fire('Đã xóa!', 'Loại chai đã bị xóa.', 'success');
       } catch (error: any) {
-        Swal.fire('Lỗi!', error.message || 'Không thể xóa loại chai này.', 'error');
+        Swal.fire('Lỗi!', error.message || 'Không thể xóa loại chai này. Đang có sản phẩm sử dụng loại chai này!', 'error');
       }
     }
   });

@@ -132,8 +132,43 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
     @Query(value = """
         SELECT
             p.Id AS productId,
-            COALESCE(p.Name, oi.ProductName, N'Sản phẩm đã xóa') AS productName,
+            p.Name AS productName,
             COALESCE(b.Name, N'Không rõ thương hiệu') AS brandName,
+            CASE 
+                WHEN c.Value IS NOT NULL THEN 
+                    (
+                        CASE 
+                            WHEN c.Value = ROUND(c.Value, 0) THEN CAST(CAST(c.Value AS INT) AS VARCHAR(50)) + ' ml'
+                            ELSE CAST(c.Value AS VARCHAR(50)) + ' ml'
+                        END
+                        + COALESCE(
+                            CASE 
+                                WHEN bt.Name IS NOT NULL AND LTRIM(RTRIM(bt.Name)) <> '' THEN ' - ' + bt.Name
+                                WHEN oi.BottleTypeName IS NOT NULL AND LTRIM(RTRIM(oi.BottleTypeName)) <> '' THEN ' - ' + oi.BottleTypeName
+                                ELSE NULL
+                            END,
+                            CASE 
+                                WHEN pv.Sku IS NOT NULL AND LTRIM(RTRIM(pv.Sku)) <> '' THEN ' (' + pv.Sku + ')'
+                                ELSE ''
+                            END
+                        )
+                    )
+                WHEN oi.CapacityName IS NOT NULL AND LTRIM(RTRIM(oi.CapacityName)) <> '' THEN 
+                    (
+                        CASE 
+                            WHEN oi.CapacityName NOT LIKE '%ml%' THEN oi.CapacityName + ' ml'
+                            ELSE oi.CapacityName
+                        END
+                        + COALESCE(
+                            CASE 
+                                WHEN oi.BottleTypeName IS NOT NULL AND LTRIM(RTRIM(oi.BottleTypeName)) <> '' THEN ' - ' + oi.BottleTypeName
+                                ELSE NULL
+                            END,
+                            ''
+                        )
+                    )
+                ELSE COALESCE(oi.BottleTypeName, pv.Sku, N'')
+            END AS capacityName,
             COALESCE(SUM(oi.Quantity), 0) AS totalSold,
             COALESCE(SUM(
                 CASE
@@ -150,9 +185,11 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
             MAX(oi.Image) AS imageUrl
         FROM [OrderItem] oi
         INNER JOIN [Orders] o ON o.Id = oi.OrderId
-        LEFT JOIN [ProductVariant] pv ON pv.Id = oi.ProductVariantId
-        LEFT JOIN [Product] p ON p.Id = pv.ProductId
+        INNER JOIN [ProductVariant] pv ON pv.Id = oi.ProductVariantId
+        INNER JOIN [Product] p ON p.Id = pv.ProductId AND p.IsDeleted = 0
         LEFT JOIN [Brand] b ON b.Id = p.BrandId
+        LEFT JOIN [Capacity] c ON c.Id = pv.CapacityId
+        LEFT JOIN [BottleType] bt ON bt.Id = pv.BottleTypeId
         WHERE o.CompletedAt IS NOT NULL
           AND o.CompletedAt >= :fromDate
           AND o.CompletedAt < :toDate
@@ -160,16 +197,19 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
               IN ('ONLINE', 'IN_STORE', 'POS')
         GROUP BY
             p.Id,
-            COALESCE(p.Name, oi.ProductName, N'Sản phẩm đã xóa'),
-            b.Name
+            p.Name,
+            b.Name,
+            c.Value,
+            oi.CapacityName,
+            bt.Name,
+            oi.BottleTypeName,
+            pv.Sku
         ORDER BY totalSold DESC, revenue DESC
     """, nativeQuery = true)
     List<BestSellingProductProjection> findBestSellingProductsForOwnerReport(
             @Param("fromDate") LocalDateTime fromDate,
             @Param("toDate") LocalDateTime toDate
     );
-
-    List<OrderItem> findAllByOrder_Id(Integer orderId);
 
     /**
      * Dùng cho lịch sử đơn hàng / chi tiết đơn hàng phía khách.

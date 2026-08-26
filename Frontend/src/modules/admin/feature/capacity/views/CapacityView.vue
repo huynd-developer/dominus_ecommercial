@@ -130,11 +130,7 @@ const isEdit = ref(false);
 const isSaving = ref(false);
 const editId = ref<number | null>(null);
 
-const formData = ref<CapacityRequest>({
-  value: 0,
-  status: 1
-});
-
+const formData = ref<CapacityRequest>({ value: 0, status: 1 });
 const errors = ref({ value: '' });
 
 const Toast = Swal.mixin({
@@ -160,64 +156,41 @@ const changePage = (pageIndex: number) => {
 };
 
 const normalizeCapacityValue = (value: unknown): number | null => {
-  if (value === null || value === undefined || String(value).trim() === '') {
-    return null;
-  }
-
+  if (value === null || value === undefined || String(value).trim() === '') return null;
   const numberValue = Number(value);
-
-  if (!Number.isFinite(numberValue)) {
-    return null;
-  }
-
+  if (!Number.isFinite(numberValue)) return null;
   return Number(numberValue.toFixed(2));
 };
 
 const formatCapacity = (value: unknown): string => {
   const numberValue = normalizeCapacityValue(value);
-
-  if (numberValue === null) {
-    return '';
-  }
-
-  return Number.isInteger(numberValue)
-    ? String(numberValue)
-    : String(numberValue);
+  if (numberValue === null) return '';
+  return String(numberValue);
 };
 
 const isDuplicateCapacity = (value: unknown, currentId: number | null = null): boolean => {
   const numberValue = normalizeCapacityValue(value);
-
-  if (numberValue === null) {
-    return false;
-  }
-
+  if (numberValue === null) return false;
+  
   return capacityStore.capacities.some((capacity: Capacity) => {
     const capacityValue = normalizeCapacityValue(capacity.value);
-
-    if (capacityValue === null) {
-      return false;
-    }
-
+    if (capacityValue === null) return false;
     return capacityValue === numberValue && capacity.id !== currentId;
   });
 };
 
 const validateForm = () => {
   errors.value.value = '';
-
   const numberValue = normalizeCapacityValue(formData.value.value);
 
   if (numberValue === null) {
     errors.value.value = 'Vui lòng nhập dung tích';
     return false;
   }
-
   if (numberValue <= 0) {
     errors.value.value = 'Dung tích phải lớn hơn 0';
     return false;
   }
-
   if (numberValue > 5000) {
     errors.value.value = 'Dung tích không hợp lệ, không được vượt quá 5000 ml';
     return false;
@@ -251,14 +224,12 @@ const handleSubmit = async () => {
   if (!validateForm()) return;
 
   const normalizedValue = normalizeCapacityValue(formData.value.value);
-
   if (normalizedValue === null) {
     errors.value.value = 'Vui lòng nhập dung tích';
     return;
   }
 
   const currentId = isEdit.value ? editId.value : null;
-
   if (isDuplicateCapacity(normalizedValue, currentId)) {
     errors.value.value = `Dung tích '${formatCapacity(normalizedValue)} ml' đã tồn tại và đang hoạt động!`;
     return;
@@ -275,14 +246,12 @@ const handleSubmit = async () => {
       await capacityStore.createCapacity(formData.value);
       Toast.fire({ icon: 'success', title: 'Thêm dung tích thành công!' });
     }
-
     closeModal();
   } catch (error: any) {
     console.error('Chi tiết lỗi Axios:', error);
 
     if (error.response && error.response.data) {
       const responseData = error.response.data;
-
       if (responseData.errors && responseData.errors.value) {
         errors.value.value = responseData.errors.value;
         return;
@@ -290,17 +259,14 @@ const handleSubmit = async () => {
 
       if (responseData.message) {
         const lowerMsg = responseData.message.toLowerCase();
-
         if (lowerMsg.includes('tồn tại') || lowerMsg.includes('exists') || lowerMsg.includes('duplicate')) {
           errors.value.value = responseData.message;
         } else {
           Toast.fire({ icon: 'error', title: responseData.message });
         }
-
         return;
       }
     }
-
     Toast.fire({ icon: 'error', title: 'Máy chủ không phản hồi!' });
   } finally {
     isSaving.value = false;
@@ -323,7 +289,25 @@ const handleDelete = (id: number) => {
         await capacityStore.deleteCapacity(id);
         Swal.fire('Đã xóa!', 'Dung tích đã được đưa vào thùng rác.', 'success');
       } catch (error: any) {
-        Swal.fire('Lỗi!', error.message || 'Không thể xóa dung tích này.', 'error');
+        // ĐÃ SỬA: Hiển thị bảng thông báo lỗi "Không thể xóa!" giống ảnh của bạn
+        let errMessage = error.message || 'Không thể xóa dung tích này. Đang có sản phẩm thuộc dung tích này!';
+        if (error.response && error.response.data) {
+           const data = error.response.data;
+           if (typeof data === 'string') errMessage = data;
+           else if (data.message) errMessage = data.message;
+        }
+
+        if (errMessage.toLowerCase().includes('không thể') || errMessage.toLowerCase().includes('đang có') || errMessage.toLowerCase().includes('thuộc')) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Không thể xóa!',
+                text: errMessage,
+                confirmButtonText: 'OK',
+                confirmButtonColor: '#6366f1' // Nút OK màu tím giống trong hình
+            });
+        } else {
+            Swal.fire('Lỗi!', errMessage, 'error');
+        }
       }
     }
   });
@@ -331,7 +315,6 @@ const handleDelete = (id: number) => {
 
 const handleToggleStatus = async (capacity: Capacity) => {
   const newStatus = capacity.status === 1 ? 0 : 1;
-
   try {
     await capacityStore.updateCapacity(capacity.id, {
       value: capacity.value,
@@ -346,232 +329,37 @@ const handleToggleStatus = async (capacity: Capacity) => {
 </script>
 
 <style scoped>
-/* Layout Component */
-.capacity-page {
-  display: flex;
-  flex-direction: column;
-  background: white;
-  border-radius: 20px;
-  box-shadow: 0 10px 30px rgba(0,0,0,.05);
-  overflow: hidden;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 24px 30px;
-  border-bottom: 1px solid #eef2f7;
-}
-
-.page-title {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 18px 30px;
-  background: #fafafa;
-}
-
-.search-box {
-  width: 350px;
-  position: relative;
-}
-
-.search-box i {
-  position: absolute;
-  top: 50%;
-  left: 16px;
-  transform: translateY(-50%);
-  color: #94a3b8;
-}
-
-.search-box input {
-  width: 100%;
-  padding: 12px 18px 12px 45px;
-  border-radius: 999px;
-  border: 1px solid #e2e8f0;
-  transition: 0.25s;
-  font-size: 14px;
-}
-
-.search-box input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 4px rgba(59,130,246,.15);
-}
-
-.table-wrapper {
-  padding: 20px 24px;
-}
-
-.loading-state {
-  padding: 80px;
-  text-align: center;
-  color: #64748b;
-  font-size: 15px;
-}
-
-/* Footer & Pagination */
-.footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 18px 28px;
-  border-top: 1px solid #eee;
-  background: #fafafa;
-}
-
-.pagination {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Buttons */
-.btn {
-  border-radius: 12px;
-  font-weight: 600;
-  transition: 0.25s;
-}
-
-.btn-primary {
-  background: #2563eb;
-  border: none;
-  color: white;
-}
-
-.btn-primary:hover {
-  background: #1d4ed8;
-  transform: translateY(-1px);
-}
-
-.btn-light {
-  background: #fff;
-  border: 1px solid #dbe4ee;
-  color: #475569;
-}
-
-.btn-light:hover:not(:disabled) {
-  background: #f8fafc;
-  border-color: #94a3b8;
-}
-
-/* Modal Custom */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15,23,42,.45);
-  backdrop-filter: blur(3px);
-  z-index: 1050;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: fadeIn 0.2s ease;
-}
-
-.custom-modal {
-  background: #fff;
-  width: 100%;
-  max-width: 500px;
-  border-radius: 20px;
-  box-shadow: 0 20px 40px rgba(0,0,0,.1);
-  overflow: hidden;
-  animation: slideUp 0.3s ease;
-}
-
-.custom-modal.modal-sm {
-  max-width: 400px;
-}
-
-.modal-header {
-  padding: 20px 24px;
-  border-bottom: 1px solid #eef2f7;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.btn-close-modal {
-  width: 36px;
-  height: 36px;
-  border: none;
-  border-radius: 10px;
-  background: #f1f5f9;
-  color: #64748b;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: 0.2s;
-}
-
-.btn-close-modal:hover {
-  background: #ef4444;
-  color: white;
-}
-
-.modal-body {
-  padding: 24px;
-}
-
-.form-label {
-  font-weight: 600;
-  color: #334155;
-  margin-bottom: 8px;
-  display: block;
-}
-
-.form-control {
-  min-height: 48px;
-  border-radius: 12px;
-  border: 1px solid #cbd5e1;
-  padding: 10px 16px;
-  font-size: 14px;
-  transition: 0.2s;
-}
-
-.form-control:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 4px rgba(59,130,246,.15);
-}
-
-.form-control.is-invalid {
-  border-color: #ef4444;
-}
-
-.form-control.is-invalid:focus {
-  box-shadow: 0 0 0 4px rgba(239,68,68,.15);
-}
-
-.modal-footer {
-  padding: 16px 24px;
-  background: #f8fafc;
-  border-top: 1px solid #eef2f7;
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
+.capacity-page { display: flex; flex-direction: column; background: white; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,.05); overflow: hidden; }
+.page-header { display: flex; justify-content: space-between; align-items: center; padding: 24px 30px; border-bottom: 1px solid #eef2f7; }
+.page-title { margin: 0; font-size: 24px; font-weight: 700; color: #0f172a; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; padding: 18px 30px; background: #fafafa; }
+.search-box { width: 350px; position: relative; }
+.search-box i { position: absolute; top: 50%; left: 16px; transform: translateY(-50%); color: #94a3b8; }
+.search-box input { width: 100%; padding: 12px 18px 12px 45px; border-radius: 999px; border: 1px solid #e2e8f0; transition: 0.25s; font-size: 14px; }
+.search-box input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59,130,246,.15); }
+.table-wrapper { padding: 20px 24px; }
+.loading-state { padding: 80px; text-align: center; color: #64748b; font-size: 15px; }
+.footer { display: flex; justify-content: space-between; align-items: center; padding: 18px 28px; border-top: 1px solid #eee; background: #fafafa; }
+.pagination { display: flex; align-items: center; gap: 8px; }
+.btn { border-radius: 12px; font-weight: 600; transition: 0.25s; }
+.btn-primary { background: #2563eb; border: none; color: white; }
+.btn-primary:hover { background: #1d4ed8; transform: translateY(-1px); }
+.btn-light { background: #fff; border: 1px solid #dbe4ee; color: #475569; }
+.btn-light:hover:not(:disabled) { background: #f8fafc; border-color: #94a3b8; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); backdrop-filter: blur(3px); z-index: 1050; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.2s ease; }
+.custom-modal { background: #fff; width: 100%; max-width: 500px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,.1); overflow: hidden; animation: slideUp 0.3s ease; }
+.custom-modal.modal-sm { max-width: 400px; }
+.modal-header { padding: 20px 24px; border-bottom: 1px solid #eef2f7; display: flex; justify-content: space-between; align-items: center; }
+.modal-title { margin: 0; font-size: 18px; font-weight: 700; color: #0f172a; }
+.btn-close-modal { width: 36px; height: 36px; border: none; border-radius: 10px; background: #f1f5f9; color: #64748b; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+.btn-close-modal:hover { background: #ef4444; color: white; }
+.modal-body { padding: 24px; }
+.form-label { font-weight: 600; color: #334155; margin-bottom: 8px; display: block; }
+.form-control { min-height: 48px; border-radius: 12px; border: 1px solid #cbd5e1; padding: 10px 16px; font-size: 14px; transition: 0.2s; }
+.form-control:focus { border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59,130,246,.15); }
+.form-control.is-invalid { border-color: #ef4444; }
+.form-control.is-invalid:focus { box-shadow: 0 0 0 4px rgba(239,68,68,.15); }
+.modal-footer { padding: 16px 24px; background: #f8fafc; border-top: 1px solid #eef2f7; display: flex; justify-content: flex-end; gap: 12px; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 </style>

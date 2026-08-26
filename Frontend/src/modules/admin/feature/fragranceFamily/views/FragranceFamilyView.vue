@@ -85,7 +85,6 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label">Tên nhóm hương <span class="text-danger">*</span></label>
-            <!-- ĐÃ THÊM maxlength="50" Ở ĐÂY -->
             <input 
               v-model="formData.name" 
               type="text" 
@@ -111,7 +110,6 @@
         </div>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -145,12 +143,18 @@ onMounted(() => {
   store.fetchFragranceFamilies('', 0);
 });
 
-const handleSearch = () => { store.fetchFragranceFamilies(searchKeyword.value, 0); };
-const changePage = (page: number) => { if (page >= 0 && page < store.totalPages) store.fetchFragranceFamilies(searchKeyword.value, page); };
+const handleSearch = () => { 
+  store.fetchFragranceFamilies(searchKeyword.value, 0); 
+};
+
+const changePage = (page: number) => { 
+  if (page >= 0 && page < store.totalPages) {
+    store.fetchFragranceFamilies(searchKeyword.value, page); 
+  }
+};
 
 const validateForm = () => {
   errors.value.name = ''; 
-  // Bổ sung chuẩn hóa khoảng trắng để test
   const nameValue = formData.value.name.trim().replace(/\s+/g, ' ');
   const nameRegex = /^[\p{L}\s\(\)]+$/u;
 
@@ -158,17 +162,17 @@ const validateForm = () => {
     errors.value.name = 'Tên nhóm hương không được để trống';
     return false;
   }
-  // ĐÃ SỬA CHỖ NÀY THÀNH 50
+
   if (nameValue.length > 50) {
     errors.value.name = 'Tên nhóm hương không được vượt quá 50 ký tự';
     return false;
   }
+
   if (!nameRegex.test(nameValue)) {
     errors.value.name = 'Chỉ được chứa chữ cái, khoảng trắng và dấu ngoặc đơn';
     return false;
   }
 
-  // BỔ SUNG: Kiểm tra trùng lặp trên Local Frontend
   const isDuplicate = store.fragranceFamilies.some((item) => {
     if (isEdit.value && item.id === currentId.value) return false;
     return item.name.trim().replace(/\s+/g, ' ').toLowerCase() === nameValue.toLowerCase();
@@ -203,7 +207,6 @@ const handleSubmit = async () => {
   try {
     isSaving.value = true;
     
-    // Ép chuẩn hóa dữ liệu gửi lên Backend tránh qua mặt bằng 2 dấu cách
     const payload = {
         ...formData.value,
         name: formData.value.name.trim().replace(/\s+/g, ' ')
@@ -217,14 +220,13 @@ const handleSubmit = async () => {
       Toast.fire({ icon: 'success', title: 'Thêm mới thành công!' });
     }
     showModal.value = false; 
-    store.fetchFragranceFamilies(searchKeyword.value, store.currentPage); // Load lại data cho chắc
+    store.fetchFragranceFamilies(searchKeyword.value, store.currentPage); 
 
   } catch (error: any) {
     console.error("Chi tiết lỗi API:", error);
 
     let errorMsg = '';
     
-    // Nâng cấp bộ bắt lỗi đồng bộ với các module khác
     if (error.response && error.response.data) {
       const responseData = error.response.data;
       if (responseData.errors && responseData.errors.name) {
@@ -285,8 +287,26 @@ const handleDelete = (id: number) => {
       try {
         await store.deleteFragranceFamily(id);
         Swal.fire('Đã xóa!', 'Nhóm hương đã bị xóa.', 'success');
-      } catch (error) {
-        Swal.fire('Lỗi!', 'Không thể xóa nhóm hương này.', 'error');
+      } catch (error: any) {
+        // ĐÃ SỬA: Hiển thị bảng thông báo lỗi "Không thể xóa!" giống ảnh
+        let errMessage = error.message || 'Không thể xóa nhóm hương này. Đang có sản phẩm sử dụng nhóm hương này!';
+        if (error.response && error.response.data) {
+           const data = error.response.data;
+           if (typeof data === 'string') errMessage = data;
+           else if (data.message) errMessage = data.message;
+        }
+
+        if (errMessage.toLowerCase().includes('không thể') || errMessage.toLowerCase().includes('đang có') || errMessage.toLowerCase().includes('thuộc')) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Không thể xóa!',
+                text: errMessage,
+                confirmButtonText: 'OK',
+                confirmButtonColor: '#6366f1' // Nút OK màu tím giống trong hình
+            });
+        } else {
+            Swal.fire('Lỗi!', errMessage, 'error');
+        }
       }
     }
   });

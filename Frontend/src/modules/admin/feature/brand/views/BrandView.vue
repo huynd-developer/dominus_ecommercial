@@ -120,7 +120,6 @@
           
           <div class="mb-3">
             <label class="form-label">Mô tả chi tiết</label>
-            <!-- ĐÃ SỬA CHỖ NÀY THÊM MAXLENGTH 200 -->
             <textarea 
               v-model="formData.description" 
               class="form-control" 
@@ -222,7 +221,6 @@ const validateForm = () => {
   errors.value = { name: '', description: '' };
   let isValid = true;
   
-  // Chuẩn hóa khoảng trắng 
   const nameValue = formData.value.name.trim().replace(/\s+/g, ' ');
   const descValue = formData.value.description?.trim() || '';
   
@@ -239,7 +237,6 @@ const validateForm = () => {
     isValid = false;
   }
 
-  // Thêm kiểm tra trùng lặp trên Frontend (Local validation)
   if (isValid) {
     const isDuplicate = brandStore.brands.some((brand) => {
       if (isEdit.value && brand.id === currentId.value) return false;
@@ -252,7 +249,6 @@ const validateForm = () => {
     }
   }
 
-  // ĐÃ SỬA CHỖ NÀY THÀNH 200
   if (descValue.length > 200) {
     errors.value.description = 'Mô tả không được vượt quá 200 ký tự!';
     isValid = false;
@@ -292,7 +288,6 @@ const handleSubmit = async () => {
       formData.value.logoUrl = uploadRes.data.url; 
     }
 
-    // Ép chuẩn hóa dữ liệu gửi lên Backend
     const payload = {
         ...formData.value,
         name: formData.value.name.trim().replace(/\s+/g, ' ')
@@ -312,7 +307,6 @@ const handleSubmit = async () => {
   } catch (error: any) {
     console.error("Lỗi từ backend:", error);
     
-    // Tối ưu bộ bắt lỗi tương tự Category
     let errorMsg = '';
     
     if (error.response && error.response.data) {
@@ -386,7 +380,25 @@ const handleDelete = (id: number) => {
 
         Swal.fire('Đã xóa!', 'Thương hiệu đã bị xóa.', 'success');
       } catch (error: any) {
-        Swal.fire('Lỗi!', error.message || 'Không thể xóa thương hiệu này.', 'error');
+        // ĐÃ SỬA: Hiển thị bảng thông báo lỗi "Không thể xóa!" như m yêu cầu
+        let errMessage = error.message || 'Không thể xóa thương hiệu này. Đang có sản phẩm thuộc thương hiệu này!';
+        if (error.response && error.response.data) {
+           const data = error.response.data;
+           if (typeof data === 'string') errMessage = data;
+           else if (data.message) errMessage = data.message;
+        }
+
+        if (errMessage.toLowerCase().includes('không thể') || errMessage.toLowerCase().includes('đang có') || errMessage.toLowerCase().includes('thuộc')) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Không thể xóa!',
+                text: errMessage,
+                confirmButtonText: 'OK',
+                confirmButtonColor: '#6366f1' // Nút OK màu tím
+            });
+        } else {
+            Swal.fire('Lỗi!', errMessage, 'error');
+        }
       }
     }
   });

@@ -269,4 +269,10 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
             @Param("productId") Integer productId,
             @Param("status") Integer status
     );
+
+    // Kiểm tra xem có biến thể nào đang sử dụng loại chai này không (bỏ qua các biến thể đã xóa)
+    boolean existsByBottleType_IdAndIsDeletedFalse(Integer bottleTypeId);
+
+    // Kiểm tra xem có biến thể nào đang sử dụng dung tích này không (bỏ qua các biến thể đã xóa)
+    boolean existsByCapacity_IdAndIsDeletedFalse(Integer capacityId);
 }

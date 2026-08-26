@@ -85,7 +85,6 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label">Tên nồng độ <span class="text-danger">*</span></label>
-            <!-- ĐÃ THÊM maxlength="50" Ở ĐÂY -->
             <input 
               v-model="formData.name" 
               type="text" 
@@ -161,7 +160,6 @@ const changePage = (pageIndex: number) => {
 
 const validateForm = () => {
   errors.value.name = ''; 
-  // Chuẩn hóa khoảng trắng để test local
   const nameValue = formData.value.name.trim().replace(/\s+/g, ' ');
   const nameRegex = /^[\p{L}\s()]+$/u; 
 
@@ -169,17 +167,17 @@ const validateForm = () => {
     errors.value.name = 'Tên nồng độ không được để trống';
     return false;
   }
-  // ĐÃ SỬA CHỖ NÀY THÀNH 50
+
   if (nameValue.length > 50) {
     errors.value.name = 'Tên nồng độ không được vượt quá 50 ký tự';
     return false;
   }
+
   if (!nameRegex.test(nameValue)) {
     errors.value.name = 'Chỉ được chứa chữ cái, khoảng trắng và dấu ngoặc đơn';
     return false;
   }
 
-  // BỔ SUNG: Kiểm tra trùng lặp trên Local Frontend
   const isDuplicate = store.concentrations.some((item) => {
     if (isEdit.value && item.id === editId.value) return false;
     return item.name.trim().replace(/\s+/g, ' ').toLowerCase() === nameValue.toLowerCase();
@@ -214,7 +212,6 @@ const handleSubmit = async () => {
 
   isSaving.value = true;
   try {
-    // Ép chuẩn hóa dữ liệu gửi lên Backend tránh lỗi khoảng trắng
     const payload = {
         ...formData.value,
         name: formData.value.name.trim().replace(/\s+/g, ' ')
@@ -227,14 +224,14 @@ const handleSubmit = async () => {
       await store.createConcentration(payload);
       Toast.fire({ icon: 'success', title: 'Thêm nồng độ thành công!' });
     }
+    
     showModal.value = false;
-    store.fetchConcentrations(searchKeyword.value, store.currentPage); // Tải lại trang sau khi lưu thành công
+    store.fetchConcentrations(searchKeyword.value, store.currentPage); 
   } catch (error: any) {
     console.error("Chi tiết lỗi Axios:", error);
 
     let errorMsg = '';
     
-    // Nâng cấp bộ bắt lỗi đồng bộ với các module khác
     if (error.response && error.response.data) {
       const responseData = error.response.data;
       if (responseData.errors && responseData.errors.name) {
@@ -282,7 +279,25 @@ const handleDelete = (id: number) => {
         await store.deleteConcentration(id);
         Swal.fire('Đã xóa!', 'Nồng độ đã được đưa vào thùng rác.', 'success');
       } catch (error: any) {
-        Swal.fire('Lỗi!', error.message || 'Không thể xóa nồng độ này.', 'error');
+        // ĐÃ SỬA: Hiển thị bảng thông báo lỗi màu đỏ như ảnh
+        let errMessage = error.message || 'Không thể xóa nồng độ này. Đang có sản phẩm sử dụng nồng độ này!';
+        if (error.response && error.response.data) {
+           const data = error.response.data;
+           if (typeof data === 'string') errMessage = data;
+           else if (data.message) errMessage = data.message;
+        }
+
+        if (errMessage.toLowerCase().includes('không thể') || errMessage.toLowerCase().includes('đang có') || errMessage.toLowerCase().includes('thuộc')) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Không thể xóa!',
+                text: errMessage,
+                confirmButtonText: 'OK',
+                confirmButtonColor: '#6366f1'
+            });
+        } else {
+            Swal.fire('Lỗi!', errMessage, 'error');
+        }
       }
     }
   });
@@ -304,228 +319,37 @@ const handleToggleStatus = async (item: Concentration) => {
 </script>
 
 <style scoped>
-/* Layout Component */
-.concentration-page {
-  display: flex;
-  flex-direction: column;
-  background: white;
-  border-radius: 20px;
-  box-shadow: 0 10px 30px rgba(0,0,0,.05);
-  overflow: hidden;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 24px 30px;
-  border-bottom: 1px solid #eef2f7;
-}
-
-.page-title {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 18px 30px;
-  background: #fafafa;
-}
-
-.search-box {
-  width: 350px;
-  position: relative;
-}
-
-.search-box i {
-  position: absolute;
-  top: 50%;
-  left: 16px;
-  transform: translateY(-50%);
-  color: #94a3b8;
-}
-
-.search-box input {
-  width: 100%;
-  padding: 12px 18px 12px 45px;
-  border-radius: 999px;
-  border: 1px solid #e2e8f0;
-  transition: 0.25s;
-  font-size: 14px;
-}
-
-.search-box input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 4px rgba(59,130,246,.15);
-}
-
-.table-wrapper {
-  padding: 20px 24px;
-}
-
-.loading-state {
-  padding: 80px;
-  text-align: center;
-  color: #64748b;
-  font-size: 15px;
-}
-
-/* Footer & Pagination */
-.footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 18px 28px;
-  border-top: 1px solid #eee;
-  background: #fafafa;
-}
-
-.pagination {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Buttons */
-.btn {
-  border-radius: 12px;
-  font-weight: 600;
-  transition: 0.25s;
-}
-
-.btn-primary {
-  background: #2563eb;
-  border: none;
-  color: white;
-}
-
-.btn-primary:hover {
-  background: #1d4ed8;
-  transform: translateY(-1px);
-}
-
-.btn-light {
-  background: #fff;
-  border: 1px solid #dbe4ee;
-  color: #475569;
-}
-
-.btn-light:hover:not(:disabled) {
-  background: #f8fafc;
-  border-color: #94a3b8;
-}
-
-/* Modal Custom */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15,23,42,.45);
-  backdrop-filter: blur(3px);
-  z-index: 1050;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: fadeIn 0.2s ease;
-}
-
-.custom-modal {
-  background: #fff;
-  width: 100%;
-  max-width: 500px;
-  border-radius: 20px;
-  box-shadow: 0 20px 40px rgba(0,0,0,.1);
-  overflow: hidden;
-  animation: slideUp 0.3s ease;
-}
-
-.modal-header {
-  padding: 20px 24px;
-  border-bottom: 1px solid #eef2f7;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.btn-close-modal {
-  width: 36px;
-  height: 36px;
-  border: none;
-  border-radius: 10px;
-  background: #f1f5f9;
-  color: #64748b;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: 0.2s;
-}
-
-.btn-close-modal:hover {
-  background: #ef4444;
-  color: white;
-}
-
-.modal-body {
-  padding: 24px;
-}
-
-.form-label {
-  font-weight: 600;
-  color: #334155;
-  margin-bottom: 8px;
-  display: block;
-}
-
-.form-control {
-  min-height: 48px;
-  border-radius: 12px;
-  border: 1px solid #cbd5e1;
-  padding: 10px 16px;
-  font-size: 14px;
-  transition: 0.2s;
-}
-
-.form-control:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 4px rgba(59,130,246,.15);
-}
-
-.form-control.is-invalid {
-  border-color: #ef4444;
-}
-
-.form-control.is-invalid:focus {
-  box-shadow: 0 0 0 4px rgba(239,68,68,.15);
-}
-
-.modal-footer {
-  padding: 16px 24px;
-  background: #f8fafc;
-  border-top: 1px solid #eef2f7;
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
+/* Mình giữ nguyên toàn bộ CSS của bạn, chỉ thu gọn lại ở khối <style> này */
+.concentration-page { display: flex; flex-direction: column; background: white; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,.05); overflow: hidden; }
+.page-header { display: flex; justify-content: space-between; align-items: center; padding: 24px 30px; border-bottom: 1px solid #eef2f7; }
+.page-title { margin: 0; font-size: 24px; font-weight: 700; color: #0f172a; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; padding: 18px 30px; background: #fafafa; }
+.search-box { width: 350px; position: relative; }
+.search-box i { position: absolute; top: 50%; left: 16px; transform: translateY(-50%); color: #94a3b8; }
+.search-box input { width: 100%; padding: 12px 18px 12px 45px; border-radius: 999px; border: 1px solid #e2e8f0; transition: 0.25s; font-size: 14px; }
+.search-box input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59,130,246,.15); }
+.table-wrapper { padding: 20px 24px; }
+.loading-state { padding: 80px; text-align: center; color: #64748b; font-size: 15px; }
+.footer { display: flex; justify-content: space-between; align-items: center; padding: 18px 28px; border-top: 1px solid #eee; background: #fafafa; }
+.pagination { display: flex; align-items: center; gap: 8px; }
+.btn { border-radius: 12px; font-weight: 600; transition: 0.25s; }
+.btn-primary { background: #2563eb; border: none; color: white; }
+.btn-primary:hover { background: #1d4ed8; transform: translateY(-1px); }
+.btn-light { background: #fff; border: 1px solid #dbe4ee; color: #475569; }
+.btn-light:hover:not(:disabled) { background: #f8fafc; border-color: #94a3b8; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); backdrop-filter: blur(3px); z-index: 1050; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.2s ease; }
+.custom-modal { background: #fff; width: 100%; max-width: 500px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,.1); overflow: hidden; animation: slideUp 0.3s ease; }
+.modal-header { padding: 20px 24px; border-bottom: 1px solid #eef2f7; display: flex; justify-content: space-between; align-items: center; }
+.modal-title { margin: 0; font-size: 18px; font-weight: 700; color: #0f172a; }
+.btn-close-modal { width: 36px; height: 36px; border: none; border-radius: 10px; background: #f1f5f9; color: #64748b; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+.btn-close-modal:hover { background: #ef4444; color: white; }
+.modal-body { padding: 24px; }
+.form-label { font-weight: 600; color: #334155; margin-bottom: 8px; display: block; }
+.form-control { min-height: 48px; border-radius: 12px; border: 1px solid #cbd5e1; padding: 10px 16px; font-size: 14px; transition: 0.2s; }
+.form-control:focus { border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59,130,246,.15); }
+.form-control.is-invalid { border-color: #ef4444; }
+.form-control.is-invalid:focus { box-shadow: 0 0 0 4px rgba(239,68,68,.15); }
+.modal-footer { padding: 16px 24px; background: #f8fafc; border-top: 1px solid #eef2f7; display: flex; justify-content: flex-end; gap: 12px; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 </style>

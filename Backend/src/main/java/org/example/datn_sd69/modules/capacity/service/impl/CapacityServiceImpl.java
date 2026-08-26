@@ -5,12 +5,18 @@ import org.example.datn_sd69.entity.Capacity;
 import org.example.datn_sd69.modules.capacity.dto.request.CapacityRequest;
 import org.example.datn_sd69.modules.capacity.service.CapacityService;
 import org.example.datn_sd69.repository.CapacityRepository;
-import org.springframework.data.domain.*;
+// ĐÃ THÊM IMPORT: Để kiểm tra biến thể
+import org.example.datn_sd69.repository.ProductVariantRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.text.DecimalFormat;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,8 +25,8 @@ import java.util.Optional;
 public class CapacityServiceImpl implements CapacityService {
 
     private final CapacityRepository capacityRepository;
-
-    private static final DecimalFormat CAPACITY_FORMAT = new DecimalFormat("#.##");
+    // ĐÃ THÊM: Inject Repository để quét sản phẩm
+    private final ProductVariantRepository productVariantRepository;
 
     @Override
     public List<Capacity> getAll() {
@@ -42,7 +48,6 @@ public class CapacityServiceImpl implements CapacityService {
     @Override
     public Capacity create(CapacityRequest request) {
         Double value = normalizeValue(request.getValue());
-
         Optional<Capacity> existingOpt = capacityRepository.findByValue(value);
 
         if (existingOpt.isPresent()) {
@@ -91,8 +96,16 @@ public class CapacityServiceImpl implements CapacityService {
     @Override
     public void delete(Integer id) {
         Capacity capacity = getById(id);
+
+        // ĐÃ THÊM: Kiểm tra xem dung tích này có đang được sử dụng ở biến thể sản phẩm nào không
+        // Nếu có thì chặn ngay lập tức, quăng Exception ra cho Frontend bắt
+        boolean isUsed = productVariantRepository.existsByCapacity_IdAndIsDeletedFalse(id);
+        if (isUsed) {
+            throw new IllegalStateException("Không thể ném vào thùng rác! Đang có sản phẩm thuộc dung tích này.");
+        }
+
         capacity.setIsDeleted(true);
-        capacity.setStatus(0);
+        capacity.setStatus(0); // Ẩn luôn cho an toàn
         capacityRepository.save(capacity);
     }
 
@@ -112,7 +125,7 @@ public class CapacityServiceImpl implements CapacityService {
             Double searchVal = Double.parseDouble(keyword.trim());
             return capacityRepository.findByValueAndIsDeletedFalse(searchVal, pageable);
         } catch (NumberFormatException e) {
-            return new PageImpl<>(java.util.Collections.emptyList(), pageable, 0);
+            return new PageImpl<>(Collections.emptyList(), pageable, 0);
         }
     }
 
@@ -120,16 +133,14 @@ public class CapacityServiceImpl implements CapacityService {
         if (value == null) {
             throw badRequest("Dung tích không được để trống");
         }
-
         if (value.isNaN() || value.isInfinite()) {
             throw badRequest("Dung tích không hợp lệ");
         }
-
         return value;
     }
 
     private String formatMl(Double value) {
-        return CAPACITY_FORMAT.format(value);
+        return new DecimalFormat("#.##").format(value);
     }
 
     private ResponseStatusException badRequest(String message) {

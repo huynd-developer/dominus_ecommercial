@@ -6,6 +6,7 @@ public record BestSellingProductResponse(
         Integer productId,
         String productName,
         String brandName,
+        String capacityName, // <-- Đảm bảo đã có trường này
         Long totalSold,
         BigDecimal revenue,
         String imageUrl
