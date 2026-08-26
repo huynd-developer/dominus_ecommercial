@@ -101,9 +101,8 @@
                     </span>
                   </td>
 
-                  <!-- Hiển thị số lượng sản phẩm gốc sau khi đã gom nhóm các biến thể trùng -->
                   <td class="text-center">
-                    <span class="badge bg-light text-dark border">{{ promotion.variants?.length || 0 }}</span>
+                    <span class="badge bg-light text-dark border">{{ promotion.validVariantCount || 0 }}</span>
                   </td>
 
                   <td class="text-end pe-3">
@@ -187,6 +186,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import Swal from "sweetalert2";
+import api from "@/common/api";
 import PromotionFormModal from "../components/PromotionFormModal.vue";
 import { usePromotionStore } from "../stores/promotion.store";
 import type {
@@ -209,44 +209,85 @@ const editingPromotion = ref<PromotionResponse | null>(null);
 
 const isConflictError = (error: any) => Number(error?.response?.status) === 409;
 
-const fetchPromotions = async (page = 0) => {
-  await store.fetchPromotions({
-    keyword: filters.keyword,
-    status: filters.status,
-    page,
-    size: store.pageSize,
-  });
+// Khai báo một Set chứa ID các sản phẩm hợp lệ đang bán
+const globalValidVariants = ref<Set<number>>(new Set());
+
+const loadGlobalValidVariants = async () => {
+  try {
+    const res = await api.get("/v1/products", { params: { size: 5000, page: 0, t: Date.now() } });
+    let list = [];
+    if (res.data?.data?.content) list = res.data.data.content;
+    else if (Array.isArray(res.data?.data)) list = res.data.data;
+    else if (res.data?.content) list = res.data.content;
+    else if (Array.isArray(res.data)) list = res.data;
+
+    const ids = new Set<number>();
+    list.forEach((p: any) => {
+      // Bỏ qua sản phẩm đã xóa/ngừng bán
+      if (p.isDeleted === true || p.deleted === true || Number(p.status) === 0) return;
+      if (p.variants && Array.isArray(p.variants)) {
+        p.variants.forEach((v: any) => {
+          if (v.isDeleted === true || v.deleted === true || Number(v.status) === 0) return;
+          ids.add(Number(v.productVariantId || v.variantId || v.id));
+        });
+      }
+    });
+    globalValidVariants.value = ids;
+  } catch (e) {
+    console.error("Lỗi lấy danh sách kiểm tra chéo:", e);
+  }
 };
 
-// Computed xử lý gom nhóm các biến thể cùng 1 sản phẩm lại thành 1 dòng duy nhất nếu backend trả về phân tách
+const fetchPromotions = async (page = 0) => {
+  // Lấy danh sách sản phẩm sống cùng lúc để có cái đối chiếu
+  await Promise.all([
+     loadGlobalValidVariants(),
+     store.fetchPromotions({
+      keyword: filters.keyword,
+      status: filters.status,
+      page,
+      size: store.pageSize,
+    })
+  ]);
+};
+
+// ĐÃ SỬA: Sàng lọc sản phẩm chết ngay từ bảng bên ngoài và đếm chính xác số lượng tồn tại
 const groupedPromotions = computed(() => {
   if (!store.promotions || store.promotions.length === 0) return [];
 
   const map = new Map<number, any>();
 
   store.promotions.forEach((item: any) => {
-    // Dùng ID của chiến dịch hoặc ID sản phẩm để làm chuẩn gộp nhóm
     const key = item.id;
 
     if (!map.has(key)) {
       map.set(key, {
         ...item,
-        variants: item.variants ? [...item.variants] : [],
+        validVariantCount: 0, // Bộ đếm mới tự chế
+        variants: [], // Reset variants để chỉ thêm những cái còn SỐNG
       });
-    } else {
-      const existing = map.get(key);
-      if (item.variants && Array.isArray(item.variants)) {
-        // Gộp các biến thể tránh trùng lặp dựa vào id biến thể
-        item.variants.forEach((v: any) => {
-          const vId = v.productVariantId || v.id;
-          const exists = existing.variants.some(
-            (ev: any) => (ev.productVariantId || ev.id) === vId
-          );
-          if (!exists) {
-            existing.variants.push(v);
-          }
-        });
-      }
+    }
+
+    const existing = map.get(key);
+
+    if (item.variants && Array.isArray(item.variants)) {
+      item.variants.forEach((v: any) => {
+        // 1. Kiểm tra trực tiếp trên object
+        if (v.isDeleted === true || v.deleted === true || Number(v.status) === 0) return;
+        if (v.product && (v.product.isDeleted === true || v.product.deleted === true || Number(v.product.status) === 0)) return;
+
+        // 2. Kẻ hủy diệt: Kiểm tra chéo với danh sách DB xem còn sống không
+        const vId = v.productVariantId || v.id;
+        if (globalValidVariants.value.size > 0 && !globalValidVariants.value.has(vId)) return;
+
+        const exists = existing.variants.some(
+          (ev: any) => (ev.productVariantId || ev.id) === vId
+        );
+        if (!exists) {
+          existing.variants.push(v);
+          existing.validVariantCount += 1;
+        }
+      });
     }
   });
 
@@ -260,7 +301,6 @@ const openCreateModal = () => {
 
 const openEditModal = async (id: number) => {
   try {
-    /* Luôn GET detail mới nhất trước khi edit để lấy đúng revision. */
     const detail = await store.fetchDetail(id);
     editingPromotion.value = detail;
     showModal.value = true;
@@ -294,10 +334,6 @@ const getMutationSnapshot = async (
     return promotion;
   }
 
-  /*
-   * BE giữ expectedRevision nullable để compatibility caller cũ,
-   * nhưng Admin FE mới không được mutation thiếu revision.
-   */
   return store.fetchDetail(id);
 };
 
@@ -416,11 +452,6 @@ const isExpiredStatus = (endDate: string) => {
   return new Date(endDate).getTime() < new Date().getTime();
 };
 
-/*
- * Không-F5: khi quay lại tab/window chỉ refresh LIST.
- * Không tự reload detail đang edit để tránh ghi đè draft của người dùng;
- * nếu detail đã stale thì PUT sẽ bị BE trả 409 và modal tự tải snapshot mới nhất.
- */
 let lastAutoRefreshAt = 0;
 const handleWindowFocus = () => {
   const now = Date.now();

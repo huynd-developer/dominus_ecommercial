@@ -73,7 +73,12 @@
             </div>
           </div>
 
+          <div v-if="isVerifying" class="text-center py-4 text-muted">
+            <span class="spinner-border spinner-border-sm me-2"></span> Đang tải và xác minh dữ liệu sản phẩm...
+          </div>
+          
           <ProductVariantPicker
+            v-else
             v-model="selectedVariants"
             :start-date="form.startDate"
             :end-date="form.endDate"
@@ -91,7 +96,7 @@
             v-if="!isReadonly"
             type="button"
             class="btn btn-dark btn-lg px-5"
-            :disabled="store.saving"
+            :disabled="store.saving || isVerifying"
             @click="submit"
           >
             <span v-if="store.saving" class="spinner-border spinner-border-sm me-2"></span>
@@ -106,6 +111,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import Swal from "sweetalert2";
+import api from "@/common/api";
 import ProductVariantPicker from "./ProductVariantPicker.vue";
 import { usePromotionStore } from "../stores/promotion.store";
 import type {
@@ -133,11 +139,8 @@ const form = reactive({
 });
 
 const selectedVariants = ref<PromotionVariantFormItem[]>([]);
+const isVerifying = ref(false);
 
-/*
- * Khi PUT bị 409, giữ modal mở nhưng chuyển sang snapshot mới nhất.
- * Không mutate prop của parent và không auto retry request cũ.
- */
 const latestPromotion = ref<PromotionResponse | null>(null);
 const effectivePromotion = computed(
   () => latestPromotion.value ?? props.promotion
@@ -154,43 +157,80 @@ const toDateTimeLocal = (value?: string | null) => {
   return value.substring(0, 16);
 };
 
-const resetForm = (source: PromotionResponse | null = effectivePromotion.value) => {
+const mapSourceVariants = (source: PromotionResponse | null) => {
   form.name = source?.name || "";
   form.startDate = toDateTimeLocal(source?.startDate);
   form.endDate = toDateTimeLocal(source?.endDate);
 
-  selectedVariants.value =
-    source?.variants?.map((item) => ({
-      productVariantId: item.productVariantId,
-      discountPercent: item.discountPercent,
-      sku: item.sku,
-      productName: item.productName,
-      capacity: item.capacity,
-      bottleType: item.bottleType,
-      originalPrice: item.originalPrice,
-      price: item.originalPrice,
-      salePrice: item.salePrice,
-      stockQuantity: item.stockQuantity,
-    })) || [];
+  return source?.variants?.map((item) => ({
+    productVariantId: item.productVariantId,
+    discountPercent: item.discountPercent,
+    sku: item.sku,
+    productName: item.productName,
+    capacity: item.capacity,
+    bottleType: item.bottleType,
+    originalPrice: item.originalPrice,
+    price: item.originalPrice,
+    salePrice: item.salePrice,
+    stockQuantity: item.stockQuantity,
+  })) || [];
+};
+
+const verifySelectedVariants = async (variants: any[]) => {
+  if (!variants || variants.length === 0) {
+    selectedVariants.value = [];
+    return;
+  }
+  isVerifying.value = true;
+  const valid = [];
+  
+  for (const item of variants) {
+    try {
+      const res = await api.get(`/v1/products`, { params: { keyword: item.sku || item.productName || "", size: 50, t: Date.now() } });
+      const list = res.data?.data?.content || res.data?.data || res.data?.content || res.data || [];
+      
+      const exists = list.some((p: any) => {
+        if (p.isDeleted || p.deleted || Number(p.status) === 0) return false;
+        if (p.variants) {
+          return p.variants.some((pv: any) => {
+            const vId = Number(pv.productVariantId || pv.variantId || pv.id);
+            const targetId = Number((item as any).productVariantId || (item as any).variantId || (item as any).id);
+            return vId === targetId && !pv.isDeleted && !pv.deleted && Number(pv.status) !== 0;
+          });
+        }
+        return false;
+      });
+      
+      if (exists) valid.push(item);
+    } catch {
+      valid.push(item); // Fallback an toàn nếu lỗi mạng
+    }
+  }
+  
+  selectedVariants.value = valid;
+  isVerifying.value = false;
 };
 
 watch(
   () => props.show,
-  (value) => {
-    if (value) {
+  async (show) => {
+    if (show) {
       latestPromotion.value = null;
-      resetForm(props.promotion);
+      const mapped = mapSourceVariants(props.promotion);
+      await verifySelectedVariants(mapped);
+    } else {
+      selectedVariants.value = [];
     }
-  },
-  { immediate: true }
+  }
 );
 
 watch(
   () => props.promotion,
-  () => {
+  async (promo) => {
     if (props.show) {
       latestPromotion.value = null;
-      resetForm(props.promotion);
+      const mapped = mapSourceVariants(promo);
+      await verifySelectedVariants(mapped);
     }
   }
 );
@@ -356,7 +396,8 @@ const reloadLatestAfterConflict = async (promotionId: number) => {
   try {
     const latest = await store.fetchDetail(promotionId);
     latestPromotion.value = latest;
-    resetForm(latest);
+    const mapped = mapSourceVariants(latest);
+    await verifySelectedVariants(mapped);
 
     await Swal.fire({
       icon: "warning",

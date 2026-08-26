@@ -8,7 +8,9 @@ import org.example.datn_sd69.repository.BottleTypeRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
@@ -26,7 +28,7 @@ public class BottleTypeServiceImpl implements BottleTypeService {
     @Override
     public BottleType getById(Integer id) {
         return bottleTypeRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy loại chai có ID: " + id));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy loại chai có ID: " + id));
     }
 
     @Override
@@ -38,19 +40,22 @@ public class BottleTypeServiceImpl implements BottleTypeService {
 
         if (existingOpt.isPresent()) {
             BottleType existingType = existingOpt.get();
-            if (existingType.getStatus() == 0) {
-                // Khôi phục nếu đã xóa mềm hoặc đang ẩn
+            // ĐÃ SỬA: Phải check cả isDeleted và status để khôi phục toàn diện
+            if (existingType.getStatus() == 0 || Boolean.TRUE.equals(existingType.getIsDeleted())) {
+                existingType.setIsDeleted(false); // Đánh dấu không còn bị xóa
                 existingType.setStatus(request.getStatus() != null ? request.getStatus() : 1);
                 existingType.setName(name);
                 return bottleTypeRepository.save(existingType);
             } else {
-                throw new IllegalArgumentException("Loại chai '" + name + "' đã tồn tại!");
+                // Trả về chuẩn 400 Bad Request
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Loại chai '" + name + "' đã tồn tại trong hệ thống!");
             }
         }
 
         BottleType bottleType = new BottleType();
         bottleType.setName(name);
         bottleType.setStatus(request.getStatus() != null ? request.getStatus() : 1);
+        bottleType.setIsDeleted(false);
         return bottleTypeRepository.save(bottleType);
     }
 
@@ -60,10 +65,16 @@ public class BottleTypeServiceImpl implements BottleTypeService {
         // Chuẩn hóa khoảng trắng
         String newName = request.getName().trim().replaceAll("\\s+", " ");
 
-        Optional<BottleType> checkDuplicateOpt = bottleTypeRepository.findByNameIgnoreCase(newName);
+        // Lấy tất cả lên để quét, loại trừ chính nó và loại trừ những thằng đã bị xóa mềm
+        List<BottleType> allTypes = bottleTypeRepository.findAll();
+        for (BottleType type : allTypes) {
+            if (!type.getId().equals(id)
+                    && type.getName().equalsIgnoreCase(newName)
+                    && !Boolean.TRUE.equals(type.getIsDeleted())) {
 
-        if (checkDuplicateOpt.isPresent() && !checkDuplicateOpt.get().getId().equals(id)) {
-            throw new IllegalArgumentException("Loại chai '" + newName + "' đã được sử dụng ở một bản ghi khác!");
+                // Ném lỗi với message chuẩn
+                throw new IllegalArgumentException("Loại chai '" + newName + "' đã được sử dụng ở một bản ghi khác!");
+            }
         }
 
         existingType.setName(newName);
@@ -78,6 +89,7 @@ public class BottleTypeServiceImpl implements BottleTypeService {
     public void delete(Integer id) {
         BottleType bottleType = getById(id);
         bottleType.setIsDeleted(true); // Xóa mềm
+        bottleType.setStatus(0); // Ẩn luôn khỏi giao diện bán hàng
         bottleTypeRepository.save(bottleType);
     }
 
