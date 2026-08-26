@@ -5289,6 +5289,29 @@ const requestReturn = (order: CustomerOrderResponse) => {
 };
 
 const submitReturnRequest = async (payload: ReturnRequestSubmitPayload) => {
+  const confirmResult = await Swal.fire({
+    icon: "question",
+    title: "Xác nhận gửi yêu cầu hoàn hàng?",
+    text: "Vui lòng kiểm tra kỹ sản phẩm, số lượng, lý do và thông tin hoàn tiền trước khi gửi.",
+    showCancelButton: true,
+    confirmButtonText: "Xác nhận gửi",
+    cancelButtonText: "Quay lại",
+    reverseButtons: true,
+    focusCancel: true,
+    customClass: {
+      popup: "swal-custom-popup",
+      title: "swal-custom-title",
+      cancelButton: "swal-custom-cancel",
+      confirmButton: "swal-gold-confirm",
+    },
+  });
+
+  // Bấm "Quay lại" chỉ đóng hộp xác nhận.
+  // ReturnRequestModal vẫn mở và dữ liệu người dùng đã nhập được giữ nguyên.
+  if (!confirmResult.isConfirmed) {
+    return;
+  }
+
   try {
     submittingReturn.value = true;
     store.orderLoading = true;
