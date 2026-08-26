@@ -11,6 +11,9 @@ const buildParams = (params: ReportFilterParams) => {
     filterType: params.filterType || "MONTH",
   };
 
+  /*
+   * BE chỉ nhận fromDate / toDate khi filterType = CUSTOM.
+   */
   if (params.filterType === "CUSTOM") {
     query.fromDate = params.fromDate || "";
     query.toDate = params.toDate || "";

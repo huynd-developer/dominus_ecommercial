@@ -48,9 +48,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
     List<OrderItem> findDetailByOrderId(@Param("orderId") Integer orderId);
 
     /**
-     * Tổng số lượng sản phẩm đã bán.
-     *
-     * Chỉ tính đơn hoàn thành. (ĐÃ SỬA THÀNH CompletedAt)
+     * Query cũ giữ nguyên để không ảnh hưởng caller hiện tại ngoài Report.
      */
     @Query(value = """
         SELECT COALESCE(SUM(oi.Quantity), 0)
@@ -67,8 +65,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
     );
 
     /**
-     * Top sản phẩm bán chạy.
-     * (ĐÃ SỬA THÀNH CompletedAt)
+     * Query cũ giữ nguyên để không đổi contract/caller hiện có.
      */
     @Query(value = """
         SELECT
@@ -92,6 +89,82 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
     """, nativeQuery = true)
     List<BestSellingProductProjection> findBestSellingProducts(
             @Param("status") Integer status,
+            @Param("fromDate") LocalDateTime fromDate,
+            @Param("toDate") LocalDateTime toDate
+    );
+
+    /*
+     * =========================================================
+     * OWNER REPORT - QUERY RIÊNG
+     * =========================================================
+     *
+     * CompletedAt là mốc giao dịch bán đã hoàn tất.
+     * Không lọc Status hiện tại vì đơn có thể đã chuyển sang trạng thái return.
+     */
+    @Query(value = """
+        SELECT COALESCE(SUM(oi.Quantity), 0)
+        FROM [OrderItem] oi
+        INNER JOIN [Orders] o ON o.Id = oi.OrderId
+        WHERE o.CompletedAt IS NOT NULL
+          AND o.CompletedAt >= :fromDate
+          AND o.CompletedAt < :toDate
+          AND UPPER(LTRIM(RTRIM(COALESCE(o.OrderType, ''))))
+              IN ('ONLINE', 'IN_STORE', 'POS')
+    """, nativeQuery = true)
+    Long sumSoldQuantityForOwnerReport(
+            @Param("fromDate") LocalDateTime fromDate,
+            @Param("toDate") LocalDateTime toDate
+    );
+
+    /**
+     * Top sản phẩm bán chạy theo lượng bán GROSS trong kỳ bán.
+     *
+     * Revenue của từng dòng được trừ phần Voucher toàn đơn phân bổ theo tỷ lệ:
+     *   line = FinalPrice * Quantity
+     *   allocatedVoucher = Order.DiscountAmount * line / Order.TotalAmount
+     *   lineRevenue = line - allocatedVoucher
+     *
+     * FinalPrice đã chứa giảm Flash Sale nhưng không chứa Voucher toàn đơn.
+     *
+     * LEFT JOIN ProductVariant/Product để OrderItem lịch sử vẫn còn được thống kê
+     * khi ProductVariantId đã bị ON DELETE SET NULL. Khi đó dùng ProductName snapshot.
+     */
+    @Query(value = """
+        SELECT
+            p.Id AS productId,
+            COALESCE(p.Name, oi.ProductName, N'Sản phẩm đã xóa') AS productName,
+            COALESCE(b.Name, N'Không rõ thương hiệu') AS brandName,
+            COALESCE(SUM(oi.Quantity), 0) AS totalSold,
+            COALESCE(SUM(
+                CASE
+                    WHEN ISNULL(o.TotalAmount, 0) > 0 THEN
+                        (oi.FinalPrice * oi.Quantity)
+                        - (
+                            ISNULL(o.DiscountAmount, 0)
+                            * (oi.FinalPrice * oi.Quantity)
+                            / NULLIF(o.TotalAmount, 0)
+                        )
+                    ELSE (oi.FinalPrice * oi.Quantity)
+                END
+            ), 0) AS revenue,
+            MAX(oi.Image) AS imageUrl
+        FROM [OrderItem] oi
+        INNER JOIN [Orders] o ON o.Id = oi.OrderId
+        LEFT JOIN [ProductVariant] pv ON pv.Id = oi.ProductVariantId
+        LEFT JOIN [Product] p ON p.Id = pv.ProductId
+        LEFT JOIN [Brand] b ON b.Id = p.BrandId
+        WHERE o.CompletedAt IS NOT NULL
+          AND o.CompletedAt >= :fromDate
+          AND o.CompletedAt < :toDate
+          AND UPPER(LTRIM(RTRIM(COALESCE(o.OrderType, ''))))
+              IN ('ONLINE', 'IN_STORE', 'POS')
+        GROUP BY
+            p.Id,
+            COALESCE(p.Name, oi.ProductName, N'Sản phẩm đã xóa'),
+            b.Name
+        ORDER BY totalSold DESC, revenue DESC
+    """, nativeQuery = true)
+    List<BestSellingProductProjection> findBestSellingProductsForOwnerReport(
             @Param("fromDate") LocalDateTime fromDate,
             @Param("toDate") LocalDateTime toDate
     );

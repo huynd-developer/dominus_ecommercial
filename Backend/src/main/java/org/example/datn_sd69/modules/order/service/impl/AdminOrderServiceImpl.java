@@ -39,6 +39,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.PreparedStatementCallback;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -619,7 +620,17 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             restoreStockWhenReturnRefunded(returnItems);
         }
 
-        returnItems.forEach(item -> item.setStatus(RETURN_ITEM_STATUS_COMPLETED));
+        /*
+         * Ghi đúng thời điểm tiền hoàn thực sự hoàn tất để Owner Report có thể
+         * ghi nhận refund theo kỳ phát sinh, không sửa ngược kỳ bán gốc.
+         */
+        LocalDateTime refundedAt = LocalDateTime.now();
+
+        returnItems.forEach(item -> {
+            item.setStatus(RETURN_ITEM_STATUS_COMPLETED);
+            item.setRefundedAt(refundedAt);
+        });
+
         returnRequestItemRepository.saveAll(returnItems);
 
         order.setStatus(STATUS_RETURN_COMPLETED);
@@ -1234,12 +1245,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         return returned;
     }
 
-    /**
-     * Dùng stored procedure chuẩn của module kho:
-     * - cập nhật InventoryLot.QuantityOnHand
-     * - ghi StockMovement
-     * trong cùng transaction hiện tại.
-     */
     private void postStockMovement(
             Integer inventoryLotId,
             byte movementType,
@@ -1250,26 +1255,46 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             Long referenceLineId,
             String reason
     ) {
-        jdbcTemplate.update(
+        jdbcTemplate.execute(
                 """
-                        EXEC dbo.usp_PostStockMovement
-                            @InventoryLotId = ?,
-                            @MovementType = ?,
-                            @QuantityChange = ?,
-                            @CreatedBy = ?,
-                            @ReferenceType = ?,
-                            @ReferenceId = ?,
-                            @ReferenceLineId = ?,
-                            @Reason = ?
-                        """,
-                inventoryLotId,
-                movementType,
-                quantityChange,
-                createdBy,
-                referenceType,
-                referenceId,
-                referenceLineId,
-                reason
+                EXEC dbo.usp_PostStockMovement
+                    @InventoryLotId = ?,
+                    @MovementType = ?,
+                    @QuantityChange = ?,
+                    @CreatedBy = ?,
+                    @ReferenceType = ?,
+                    @ReferenceId = ?,
+                    @ReferenceLineId = ?,
+                    @Reason = ?
+                """,
+                (PreparedStatementCallback<Void>) statement -> {
+                    statement.setObject(1, inventoryLotId);
+                    statement.setByte(2, movementType);
+                    statement.setInt(3, quantityChange);
+                    statement.setObject(4, createdBy);
+                    statement.setString(5, referenceType);
+                    statement.setObject(6, referenceId);
+                    statement.setObject(7, referenceLineId);
+                    statement.setString(8, reason);
+
+                    boolean hasResultSet = statement.execute();
+
+                    while (true) {
+                        if (hasResultSet) {
+                            try (var resultSet = statement.getResultSet()) {
+                                while (resultSet != null && resultSet.next()) {
+                                    // Không cần dữ liệu trả về.
+                                }
+                            }
+                        } else if (statement.getUpdateCount() == -1) {
+                            break;
+                        }
+
+                        hasResultSet = statement.getMoreResults();
+                    }
+
+                    return null;
+                }
         );
     }
 
