@@ -194,6 +194,7 @@ const currentPaymentMethod = ref("");
 const qrCodeUrl = ref("");
 const vnpayUrl = ref("");
 const createdOrderId = ref<number | null>(null);
+const isConfirmingQrPayment = ref(false);
 
 const shippingFee = ref(30000);
 const isCalculatingShip = ref(false);
@@ -1050,21 +1051,21 @@ const cancelAndRestoreCart = async () => {
 };
 
 const handleCancelPayment = async () => {
-  if (!showPaymentModal.value) return;
+  if (!showPaymentModal.value || isConfirmingQrPayment.value) return;
   showPaymentModal.value = false;
   window.removeEventListener("popstate", handleBrowserBackDuringPayment);
   await cancelAndRestoreCart();
 };
 
 const handleTimeoutPayment = async () => {
-  if (!showPaymentModal.value) return;
+  if (!showPaymentModal.value || isConfirmingQrPayment.value) return;
   showPaymentModal.value = false;
   window.removeEventListener("popstate", handleBrowserBackDuringPayment);
   await cancelAndRestoreCart();
 };
 
 const handleBrowserBackDuringPayment = async () => {
-  if (showPaymentModal.value) {
+  if (showPaymentModal.value && !isConfirmingQrPayment.value) {
     showPaymentModal.value = false;
     window.removeEventListener("popstate", handleBrowserBackDuringPayment);
     await cancelAndRestoreCart();
@@ -1086,30 +1087,62 @@ const goToVnpayGateway = () => {
 };
 
 const confirmQrPayment = async () => {
-  stopPaymentTimer();
-  showPaymentModal.value = false;
-  window.removeEventListener("popstate", handleBrowserBackDuringPayment);
+  if (!createdOrderId.value || isConfirmingQrPayment.value) {
+    if (!createdOrderId.value) {
+      await showError(
+        "Không thể xác nhận thanh toán",
+        "Không xác định được đơn hàng VietQR cần xác nhận."
+      );
+    }
+    return;
+  }
 
-  discountAmount.value = 0;
-  appliedVoucherCode.value = "";
-  localStorage.removeItem("applied_voucher");
-  sessionStorage.removeItem("dominus_checkout_draft");
+  isConfirmingQrPayment.value = true;
 
-  if (createdOrderId.value) {
+  try {
+    // BE là source of truth: chỉ báo thành công sau khi report-payment đã ghi nhận xong.
+    await api.post(`/v1/orders/${createdOrderId.value}/report-payment`);
+
+    stopPaymentTimer();
+    showPaymentModal.value = false;
+    window.removeEventListener("popstate", handleBrowserBackDuringPayment);
+
+    discountAmount.value = 0;
+    appliedVoucherCode.value = "";
+    localStorage.removeItem("applied_voucher");
+    sessionStorage.removeItem("dominus_checkout_draft");
+
     try {
       const saved = localStorage.getItem("dominus_paid_orders");
       const map = saved ? JSON.parse(saved) : {};
       map[String(createdOrderId.value)] = true;
       localStorage.setItem("dominus_paid_orders", JSON.stringify(map));
-      api
-        .post(`/v1/orders/${createdOrderId.value}/report-payment`)
-        .catch(() => {});
     } catch (e) {}
-  }
 
-  setTimeout(() => {
-    showSuccessModal.value = true;
-  }, 200);
+    setTimeout(() => {
+      showSuccessModal.value = true;
+    }, 200);
+  } catch (error: any) {
+    // Nếu timer đã hết đúng lúc đang chờ BE, xử lý timeout sau khi request thất bại
+    // để không cho report-payment và cancel chạy song song trên cùng Order.
+    if (paymentCountdown.value <= 0) {
+      isConfirmingQrPayment.value = false;
+      showPaymentModal.value = false;
+      window.removeEventListener("popstate", handleBrowserBackDuringPayment);
+      await cancelAndRestoreCart();
+      return;
+    }
+
+    await showError(
+      "Không thể xác nhận thanh toán",
+      getErrorMessage(
+        error,
+        "Hệ thống chưa ghi nhận được thanh toán VietQR. Đơn hàng chưa được đánh dấu đã thanh toán, vui lòng thử lại."
+      )
+    );
+  } finally {
+    isConfirmingQrPayment.value = false;
+  }
 };
 
 const goToCart = () => router.push("/cart");

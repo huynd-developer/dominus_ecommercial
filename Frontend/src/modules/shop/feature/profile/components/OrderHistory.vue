@@ -1306,8 +1306,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
-import { useRouter } from "vue-router";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import ReviewModal from "./ReviewModal.vue";
 import ReturnRequestModal from "./ReturnRequestModal.vue";
@@ -1322,6 +1322,7 @@ import type {
 } from "../types/profile.type";
 
 const store = useCustomerProfileStore();
+const route = useRoute();
 const router = useRouter();
 
 const currentTab = ref<number | "ALL" | "RETURN">("ALL");
@@ -2014,6 +2015,27 @@ onMounted(() => {
   initPaidOrders();
   fetchOrdersAndReviews();
 });
+
+watch(
+  () => route.query.tab,
+  (currentTabQuery, previousTabQuery) => {
+    const currentProfileTab = Array.isArray(currentTabQuery)
+      ? currentTabQuery[0]
+      : currentTabQuery;
+    const previousProfileTab = Array.isArray(previousTabQuery)
+      ? previousTabQuery[0]
+      : previousTabQuery;
+
+    if (
+      currentProfileTab === "orders" &&
+      previousProfileTab !== "orders" &&
+      !store.orderLoading &&
+      !submittingReturn.value
+    ) {
+      void fetchOrdersAndReviews(false);
+    }
+  }
+);
 
 onBeforeUnmount(() => {
   window.removeEventListener("focus", handleWindowFocus);
