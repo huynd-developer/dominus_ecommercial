@@ -191,6 +191,7 @@ const formatDate = (value?: string | null) => {
 
 .text-primary-gradient {
   background: linear-gradient(90deg, #111827, #374151);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
