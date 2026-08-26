@@ -30,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import api from "@/common/api";
@@ -576,8 +576,17 @@ const loadProductDetail = async () => {
   }
 };
 
+const handleWindowFocus = () => {
+  void loadProductDetail();
+};
+
 onMounted(() => {
+  window.addEventListener("focus", handleWindowFocus);
   loadProductDetail();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("focus", handleWindowFocus);
 });
 
 watch(
