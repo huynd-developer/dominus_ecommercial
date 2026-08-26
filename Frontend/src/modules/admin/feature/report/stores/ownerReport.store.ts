@@ -170,6 +170,17 @@ function normalizeBestSellingProducts(data: any): BestSellingProductResponse[] {
     productId: toNumber(item?.productId),
     productName: String(item?.productName || "Sản phẩm"),
     brandName: String(item?.brandName || "Không rõ thương hiệu"),
+
+    capacityName:
+      item?.capacityName == null
+        ? ""
+        : String(item.capacityName).trim(),
+
+    bottleTypeName:
+      item?.bottleTypeName == null
+        ? ""
+        : String(item.bottleTypeName).trim(),
+
     totalSold: toNumber(item?.totalSold),
     revenue: toNumber(item?.revenue),
     imageUrl: item?.imageUrl || null,

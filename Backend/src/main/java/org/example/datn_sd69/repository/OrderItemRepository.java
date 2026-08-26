@@ -126,49 +126,35 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
      *
      * FinalPrice đã chứa giảm Flash Sale nhưng không chứa Voucher toàn đơn.
      *
-     * LEFT JOIN ProductVariant/Product để OrderItem lịch sử vẫn còn được thống kê
-     * khi ProductVariantId đã bị ON DELETE SET NULL. Khi đó dùng ProductName snapshot.
+     * capacityName và bottleTypeName được trả riêng để FE hiển thị đúng thuộc tính SKU.
+     * Nếu dữ liệu master hiện tại không còn thì ưu tiên snapshot trên OrderItem.
      */
     @Query(value = """
         SELECT
             p.Id AS productId,
             p.Name AS productName,
             COALESCE(b.Name, N'Không rõ thương hiệu') AS brandName,
-            CASE 
-                WHEN c.Value IS NOT NULL THEN 
-                    (
-                        CASE 
-                            WHEN c.Value = ROUND(c.Value, 0) THEN CAST(CAST(c.Value AS INT) AS VARCHAR(50)) + ' ml'
-                            ELSE CAST(c.Value AS VARCHAR(50)) + ' ml'
-                        END
-                        + COALESCE(
-                            CASE 
-                                WHEN bt.Name IS NOT NULL AND LTRIM(RTRIM(bt.Name)) <> '' THEN ' - ' + bt.Name
-                                WHEN oi.BottleTypeName IS NOT NULL AND LTRIM(RTRIM(oi.BottleTypeName)) <> '' THEN ' - ' + oi.BottleTypeName
-                                ELSE NULL
-                            END,
-                            CASE 
-                                WHEN pv.Sku IS NOT NULL AND LTRIM(RTRIM(pv.Sku)) <> '' THEN ' (' + pv.Sku + ')'
-                                ELSE ''
-                            END
-                        )
-                    )
-                WHEN oi.CapacityName IS NOT NULL AND LTRIM(RTRIM(oi.CapacityName)) <> '' THEN 
-                    (
-                        CASE 
-                            WHEN oi.CapacityName NOT LIKE '%ml%' THEN oi.CapacityName + ' ml'
-                            ELSE oi.CapacityName
-                        END
-                        + COALESCE(
-                            CASE 
-                                WHEN oi.BottleTypeName IS NOT NULL AND LTRIM(RTRIM(oi.BottleTypeName)) <> '' THEN ' - ' + oi.BottleTypeName
-                                ELSE NULL
-                            END,
-                            ''
-                        )
-                    )
-                ELSE COALESCE(oi.BottleTypeName, pv.Sku, N'')
+            CASE
+                WHEN c.Value IS NOT NULL THEN
+                    CASE
+                        WHEN c.Value = ROUND(c.Value, 0)
+                            THEN CAST(CAST(c.Value AS INT) AS VARCHAR(50)) + ' ml'
+                        ELSE CAST(c.Value AS VARCHAR(50)) + ' ml'
+                    END
+                WHEN oi.CapacityName IS NOT NULL
+                     AND LTRIM(RTRIM(oi.CapacityName)) <> '' THEN
+                    CASE
+                        WHEN LOWER(oi.CapacityName) NOT LIKE '%ml%'
+                            THEN oi.CapacityName + ' ml'
+                        ELSE oi.CapacityName
+                    END
+                ELSE N''
             END AS capacityName,
+            COALESCE(
+                NULLIF(LTRIM(RTRIM(bt.Name)), ''),
+                NULLIF(LTRIM(RTRIM(oi.BottleTypeName)), ''),
+                N''
+            ) AS bottleTypeName,
             COALESCE(SUM(oi.Quantity), 0) AS totalSold,
             COALESCE(SUM(
                 CASE

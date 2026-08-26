@@ -76,26 +76,15 @@ export interface RevenueChartResponse {
 }
 
 export interface BestSellingProductResponse {
-  /**
-   * Giữ nguyên contract FE hiện tại để không lan TypeScript sang caller khác.
-   * Component đã tự fallback an toàn nếu runtime nhận null từ dữ liệu legacy.
-   */
   productId: number;
 
   productName: string;
   brandName: string;
 
   capacityName?: string;
+  bottleTypeName?: string; // THÊM
 
-  /**
-   * Gross sold quantity trong kỳ bán.
-   */
   totalSold: number;
-
-  /**
-   * Doanh thu bán của sản phẩm sau giảm giá trên dòng và phần voucher
-   * toàn đơn được phân bổ theo tỷ lệ. Không trừ refund phát sinh sau bán.
-   */
   revenue: number;
 
   imageUrl?: string | null;

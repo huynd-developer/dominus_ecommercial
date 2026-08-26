@@ -279,7 +279,8 @@ public class OwnerReportServiceImpl implements OwnerReportService {
                         item.getProductId(),
                         safeText(item.getProductName(), "Sản phẩm"),
                         safeText(item.getBrandName(), "Không rõ thương hiệu"),
-                        safeText(item.getCapacityName(), ""), // <-- Bổ sung thêm trường này vào đây
+                        safeText(item.getCapacityName(), ""),
+                        safeText(item.getBottleTypeName(), ""),
                         longOrZero(item.getTotalSold()),
                         moneyOrZero(item.getRevenue()),
                         item.getImageUrl()

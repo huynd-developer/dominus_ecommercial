@@ -65,7 +65,7 @@
               :class="isFavorited ? 'bi-heart-fill' : 'bi-heart'"
             ></i>
           </button>
-          
+
           <!-- NÚT SO SÁNH -->
           <button
             v-if="product"
@@ -75,7 +75,14 @@
             @click="toggleCompare(product)"
             :title="isInCompare(product) ? 'Bỏ so sánh' : 'Thêm vào so sánh'"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <path d="M16 3l4 4-4 4" />
               <path d="M20 7H4" />
               <path d="M8 21l-4-4 4-4" />
@@ -458,33 +465,59 @@
         <div class="cb-left">
           <div class="cb-title">So sánh ({{ compareList.length }}/3)</div>
           <div class="cb-slots">
-            <div class="cb-slot filled" v-for="p in compareList" :key="p.id || p.productId">
+            <div
+              class="cb-slot filled"
+              v-for="p in compareList"
+              :key="p.id || p.productId"
+            >
               <img :src="getProductImageCompare(p)" :alt="p.name" />
               <div class="cb-slot-info">
                 <p>{{ p.name }}</p>
                 <span>{{ formatCurrency(getComparePrice(p)) }}</span>
               </div>
-              <button class="btn-remove-cb" @click="removeFromCompare(p)">✕</button>
+              <button class="btn-remove-cb" @click="removeFromCompare(p)">
+                ✕
+              </button>
             </div>
-            <div class="cb-slot empty-slot cursor-pointer" v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty' + i" @click="openPickerModal" title="Chọn thêm sản phẩm so sánh">
+            <div
+              class="cb-slot empty-slot cursor-pointer"
+              v-for="i in Math.max(0, 3 - compareList.length)"
+              :key="'empty' + i"
+              @click="openPickerModal"
+              title="Chọn thêm sản phẩm so sánh"
+            >
               <i class="bi bi-plus-circle me-2"></i> Thêm sản phẩm
             </div>
           </div>
         </div>
         <div class="cb-right">
-          <button class="cb-btn-clear" @click="clearCompareList">Xóa hết</button>
-          <button class="cb-btn-compare" :disabled="compareList.length < 2" @click="showCompareModal = true">So sánh ngay</button>
+          <button class="cb-btn-clear" @click="clearCompareList">
+            Xóa hết
+          </button>
+          <button
+            class="cb-btn-compare"
+            :disabled="compareList.length < 2"
+            @click="showCompareModal = true"
+          >
+            So sánh ngay
+          </button>
         </div>
       </div>
     </div>
 
     <!-- BẢNG POPUP SO SÁNH CHUYÊN NGHIỆP CÓ AI -->
     <Teleport to="body">
-      <div class="compare-modal-overlay" v-if="showCompareModal" @click.self="showCompareModal = false">
+      <div
+        class="compare-modal-overlay"
+        v-if="showCompareModal"
+        @click.self="showCompareModal = false"
+      >
         <div class="compare-modal-box">
           <div class="cm-header">
             <h3>So sánh thông số</h3>
-            <button class="cm-close" @click="showCompareModal = false">✕</button>
+            <button class="cm-close" @click="showCompareModal = false">
+              ✕
+            </button>
           </div>
           <div class="cm-body">
             <!-- BẮT ĐẦU: KHỐI TÍNH NĂNG AI -->
@@ -495,7 +528,8 @@
                   So sánh bằng AI
                 </div>
                 <div class="ai-compare-subtitle">
-                  AI sẽ phân tích thêm độ lưu hương, phong cách, hoàn cảnh sử dụng và gợi ý lựa chọn dựa trên dữ liệu sản phẩm.
+                  AI sẽ phân tích thêm độ lưu hương, phong cách, hoàn cảnh sử
+                  dụng và gợi ý lựa chọn dựa trên dữ liệu sản phẩm.
                 </div>
               </div>
 
@@ -531,7 +565,10 @@
                 <p>{{ compareAnalysis }}</p>
               </div>
 
-              <div v-if="compareRecommendation" class="ai-result-block ai-result-recommendation">
+              <div
+                v-if="compareRecommendation"
+                class="ai-result-block ai-result-recommendation"
+              >
                 <div class="ai-result-label">
                   <i class="bi bi-check2-circle me-2"></i>
                   Gợi ý lựa chọn
@@ -545,130 +582,321 @@
               <thead class="sticky-header">
                 <tr>
                   <th class="spec-label-col">Sản phẩm</th>
-                  <td v-for="p in compareList" :key="'img' + (p.id || p.productId)" class="spec-value-col">
-                    <button class="btn-remove-from-table" @click="removeFromCompare(p)" title="Xóa khỏi so sánh"><i class="bi bi-x"></i></button>
-                    <div class="cm-img-wrapper clickable-item" @click="goToDetailFromCompare(p)" title="Xem chi tiết">
+                  <td
+                    v-for="p in compareList"
+                    :key="'img' + (p.id || p.productId)"
+                    class="spec-value-col"
+                  >
+                    <button
+                      class="btn-remove-from-table"
+                      @click="removeFromCompare(p)"
+                      title="Xóa khỏi so sánh"
+                    >
+                      <i class="bi bi-x"></i>
+                    </button>
+                    <div
+                      class="cm-img-wrapper clickable-item"
+                      @click="goToDetailFromCompare(p)"
+                      title="Xem chi tiết"
+                    >
                       <img :src="getProductImageCompare(p)" class="cm-img" />
                     </div>
-                    <h4 class="cm-name clickable-item" @click="goToDetailFromCompare(p)" title="Xem chi tiết">{{ p.name }}</h4>
+                    <h4
+                      class="cm-name clickable-item"
+                      @click="goToDetailFromCompare(p)"
+                      title="Xem chi tiết"
+                    >
+                      {{ p.name }}
+                    </h4>
                     <div class="cm-header-price">
                       {{ formatCurrency(getComparePrice(p)) }}
-                      <span v-if="getCompareDiscount(p) > 0" class="flash-sale-badge ms-2">-{{ getCompareDiscount(p) }}%</span>
+                      <span
+                        v-if="getCompareDiscount(p) > 0"
+                        class="flash-sale-badge ms-2"
+                        >-{{ getCompareDiscount(p) }}%</span
+                      >
                     </div>
                   </td>
-                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-th-' + i" class="spec-value-col empty-col">
-                    <div class="empty-product-slot" @click="openPickerModal" title="Chọn thêm sản phẩm so sánh">
-                      <i class="bi bi-plus-circle-dotted"></i><span>Thêm sản phẩm</span>
+                  <td
+                    v-for="i in Math.max(0, 3 - compareList.length)"
+                    :key="'empty-th-' + i"
+                    class="spec-value-col empty-col"
+                  >
+                    <div
+                      class="empty-product-slot"
+                      @click="openPickerModal"
+                      title="Chọn thêm sản phẩm so sánh"
+                    >
+                      <i class="bi bi-plus-circle-dotted"></i
+                      ><span>Thêm sản phẩm</span>
                     </div>
                   </td>
                 </tr>
               </thead>
               <tbody>
-                <tr><td colspan="4" class="group-header">Thông tin cơ bản</td></tr>
+                <tr>
+                  <td colspan="4" class="group-header">Thông tin cơ bản</td>
+                </tr>
                 <tr>
                   <th class="spec-label-col">Thương hiệu</th>
-                  <td v-for="p in compareList" :key="'brand' + (p.id || p.productId)" class="fw-bold text-dark">{{ getCompareValue(p, "brand") }}</td>
-                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-brand-' + i"></td>
+                  <td
+                    v-for="p in compareList"
+                    :key="'brand' + (p.id || p.productId)"
+                    class="fw-bold text-dark"
+                  >
+                    {{ getCompareValue(p, "brand") }}
+                  </td>
+                  <td
+                    v-for="i in Math.max(0, 3 - compareList.length)"
+                    :key="'empty-brand-' + i"
+                  ></td>
                 </tr>
                 <tr>
                   <th class="spec-label-col">Phân loại dung tích</th>
-                  <td v-for="p in compareList" :key="'var' + (p.id || p.productId)">
-                    <select v-if="p.variants && p.variants.length > 0" class="compare-select" v-model="compareVariantIds[p.id || p.productId]">
-                      <option v-for="v in getSortedVariantsCompare(p)" :key="v.productVariantId || v.variantId || v.id" :value="v.productVariantId || v.variantId || v.id">
+                  <td
+                    v-for="p in compareList"
+                    :key="'var' + (p.id || p.productId)"
+                  >
+                    <select
+                      v-if="p.variants && p.variants.length > 0"
+                      class="compare-select"
+                      v-model="compareVariantIds[p.id || p.productId]"
+                    >
+                      <option
+                        v-for="v in getSortedVariantsCompare(p)"
+                        :key="v.productVariantId || v.variantId || v.id"
+                        :value="v.productVariantId || v.variantId || v.id"
+                      >
                         {{ formatVariantNameCompare(v) }}
                       </option>
                     </select>
                     <span v-else class="text-muted">Mặc định</span>
                   </td>
-                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-var-' + i"></td>
+                  <td
+                    v-for="i in Math.max(0, 3 - compareList.length)"
+                    :key="'empty-var-' + i"
+                  ></td>
                 </tr>
                 <tr>
                   <th class="spec-label-col">Loại chai</th>
-                  <td v-for="p in compareList" :key="'bottle' + (p.id || p.productId)">{{ getCompareBottleType(p) }}</td>
-                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-bottle-' + i"></td>
+                  <td
+                    v-for="p in compareList"
+                    :key="'bottle' + (p.id || p.productId)"
+                  >
+                    {{ getCompareBottleType(p) }}
+                  </td>
+                  <td
+                    v-for="i in Math.max(0, 3 - compareList.length)"
+                    :key="'empty-bottle-' + i"
+                  ></td>
                 </tr>
                 <tr>
                   <th class="spec-label-col">Giá ưu đãi</th>
-                  <td v-for="p in compareList" :key="'price' + (p.id || p.productId)">
+                  <td
+                    v-for="p in compareList"
+                    :key="'price' + (p.id || p.productId)"
+                  >
                     <div class="cm-price-val">
                       {{ formatCurrency(getComparePrice(p)) }}
-                      <span v-if="getCompareDiscount(p) > 0" class="flash-sale-badge ms-2">-{{ getCompareDiscount(p) }}%</span>
+                      <span
+                        v-if="getCompareDiscount(p) > 0"
+                        class="flash-sale-badge ms-2"
+                        >-{{ getCompareDiscount(p) }}%</span
+                      >
                     </div>
-                    <div v-if="getCompareOriginalPrice(p) > getComparePrice(p)" class="text-decoration-line-through text-muted small mt-1">
+                    <div
+                      v-if="getCompareOriginalPrice(p) > getComparePrice(p)"
+                      class="text-decoration-line-through text-muted small mt-1"
+                    >
                       {{ formatCurrency(getCompareOriginalPrice(p)) }}
                     </div>
                   </td>
-                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-price-' + i"></td>
+                  <td
+                    v-for="i in Math.max(0, 3 - compareList.length)"
+                    :key="'empty-price-' + i"
+                  ></td>
                 </tr>
                 <tr>
                   <th class="spec-label-col">Đơn giá / 1ml</th>
-                  <td v-for="p in compareList" :key="'priceml' + (p.id || p.productId)">
-                    <div class="fw-bold" style="color: #b78d52;">{{ formatPricePerMl(p) }}</div>
-                    <span v-if="isBestValue(p)" class="badge bg-warning bg-opacity-10 text-warning border border-warning mt-2 d-inline-block px-2 py-1">Tiết kiệm nhất</span>
+                  <td
+                    v-for="p in compareList"
+                    :key="'priceml' + (p.id || p.productId)"
+                  >
+                    <div class="fw-bold" style="color: #b78d52">
+                      {{ formatPricePerMl(p) }}
+                    </div>
+                    <span
+                      v-if="isBestValue(p)"
+                      class="badge bg-warning bg-opacity-10 text-warning border border-warning mt-2 d-inline-block px-2 py-1"
+                      >Tiết kiệm nhất</span
+                    >
                   </td>
-                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-priceml-' + i"></td>
+                  <td
+                    v-for="i in Math.max(0, 3 - compareList.length)"
+                    :key="'empty-priceml-' + i"
+                  ></td>
                 </tr>
                 <tr>
                   <th class="spec-label-col">Tình trạng kho</th>
-                  <td v-for="p in compareList" :key="'stock' + (p.id || p.productId)">
-                    <span :class="getCompareStock(p) > 0 ? 'text-success fw-bold' : 'text-danger fw-bold'">
+                  <td
+                    v-for="p in compareList"
+                    :key="'stock' + (p.id || p.productId)"
+                  >
+                    <span
+                      :class="
+                        getCompareStock(p) > 0
+                          ? 'text-success fw-bold'
+                          : 'text-danger fw-bold'
+                      "
+                    >
                       {{ getCompareStock(p) > 0 ? "Còn hàng" : "Hết hàng" }}
                     </span>
                   </td>
-                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-stock-' + i"></td>
+                  <td
+                    v-for="i in Math.max(0, 3 - compareList.length)"
+                    :key="'empty-stock-' + i"
+                  ></td>
                 </tr>
                 <tr>
                   <th class="spec-label-col">Đánh giá</th>
-                  <td v-for="p in compareList" :key="'rating' + (p.id || p.productId)" class="cm-rating">
-                    <div class="d-flex align-items-center gap-1" style="justify-content: center;">
-                      <span class="score">{{ getRatingScoreCompare(p) }} ★</span>
-                      <span class="count">({{ getReviewCountCompare(p) }})</span>
+                  <td
+                    v-for="p in compareList"
+                    :key="'rating' + (p.id || p.productId)"
+                    class="cm-rating"
+                  >
+                    <div
+                      class="d-flex align-items-center gap-1"
+                      style="justify-content: center"
+                    >
+                      <span class="score"
+                        >{{ getRatingScoreCompare(p) }} ★</span
+                      >
+                      <span class="count"
+                        >({{ getReviewCountCompare(p) }})</span
+                      >
                     </div>
                   </td>
-                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-rating-' + i"></td>
+                  <td
+                    v-for="i in Math.max(0, 3 - compareList.length)"
+                    :key="'empty-rating-' + i"
+                  ></td>
                 </tr>
 
-                <tr><td colspan="4" class="group-header">Đặc tính sản phẩm</td></tr>
+                <tr>
+                  <td colspan="4" class="group-header">Đặc tính sản phẩm</td>
+                </tr>
                 <tr>
                   <th class="spec-label-col">Nhóm hương chính</th>
-                  <td v-for="p in compareList" :key="'scent' + (p.id || p.productId)">{{ getCompareValue(p, "scent") }}</td>
-                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-scent-' + i"></td>
+                  <td
+                    v-for="p in compareList"
+                    :key="'scent' + (p.id || p.productId)"
+                  >
+                    {{ getCompareValue(p, "scent") }}
+                  </td>
+                  <td
+                    v-for="i in Math.max(0, 3 - compareList.length)"
+                    :key="'empty-scent-' + i"
+                  ></td>
                 </tr>
                 <tr>
                   <th class="spec-label-col">Nồng độ</th>
-                  <td v-for="p in compareList" :key="'con' + (p.id || p.productId)" class="fw-bold">{{ getCompareValue(p, "concentration") }}</td>
-                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-con-' + i"></td>
+                  <td
+                    v-for="p in compareList"
+                    :key="'con' + (p.id || p.productId)"
+                    class="fw-bold"
+                  >
+                    {{ getCompareValue(p, "concentration") }}
+                  </td>
+                  <td
+                    v-for="i in Math.max(0, 3 - compareList.length)"
+                    :key="'empty-con-' + i"
+                  ></td>
                 </tr>
                 <tr>
                   <th class="spec-label-col">Độ lưu hương</th>
-                  <td v-for="p in compareList" :key="'long' + (p.id || p.productId)" style="color: #b78d52; font-weight: 600;">{{ getLongevityDisplay(p) }}</td>
-                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-long-' + i"></td>
+                  <td
+                    v-for="p in compareList"
+                    :key="'long' + (p.id || p.productId)"
+                    style="color: #b78d52; font-weight: 600"
+                  >
+                    {{ getLongevityDisplay(p) }}
+                  </td>
+                  <td
+                    v-for="i in Math.max(0, 3 - compareList.length)"
+                    :key="'empty-long-' + i"
+                  ></td>
                 </tr>
                 <tr>
                   <th class="spec-label-col">Đối tượng (Giới tính)</th>
-                  <td v-for="p in compareList" :key="'gen' + (p.id || p.productId)">{{ getCompareValue(p, "gender") }}</td>
-                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-gen-' + i"></td>
+                  <td
+                    v-for="p in compareList"
+                    :key="'gen' + (p.id || p.productId)"
+                  >
+                    {{ getCompareValue(p, "gender") }}
+                  </td>
+                  <td
+                    v-for="i in Math.max(0, 3 - compareList.length)"
+                    :key="'empty-gen-' + i"
+                  ></td>
                 </tr>
                 <tr>
                   <th class="spec-label-col">Phong cách</th>
-                  <td v-for="p in compareList" :key="'style' + (p.id || p.productId)">{{ getCompareValue(p, "style") }}</td>
-                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-style-' + i"></td>
+                  <td
+                    v-for="p in compareList"
+                    :key="'style' + (p.id || p.productId)"
+                  >
+                    {{ getCompareValue(p, "style") }}
+                  </td>
+                  <td
+                    v-for="i in Math.max(0, 3 - compareList.length)"
+                    :key="'empty-style-' + i"
+                  ></td>
                 </tr>
                 <tr>
                   <th class="spec-label-col">Hoàn cảnh khuyên dùng</th>
-                  <td v-for="p in compareList" :key="'occ' + (p.id || p.productId)">{{ getCompareValue(p, "occasion") }}</td>
-                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-occ-' + i"></td>
+                  <td
+                    v-for="p in compareList"
+                    :key="'occ' + (p.id || p.productId)"
+                  >
+                    {{ getCompareValue(p, "occasion") }}
+                  </td>
+                  <td
+                    v-for="i in Math.max(0, 3 - compareList.length)"
+                    :key="'empty-occ-' + i"
+                  ></td>
                 </tr>
 
-                <tr><td colspan="4" class="group-header bg-white border-bottom-0 pt-4"></td></tr>
+                <tr>
+                  <td
+                    colspan="4"
+                    class="group-header bg-white border-bottom-0 pt-4"
+                  ></td>
+                </tr>
                 <tr>
                   <th class="spec-label-col border-bottom-0"></th>
-                  <td v-for="p in compareList" :key="'act' + (p.id || p.productId)" class="border-bottom-0 pb-4">
-                    <button class="cm-btn-buy" :disabled="isCompareBuyDisabled(p)" @click="buyFromCompare(p)">
-                      <i class="bi bi-cart-plus me-1"></i> {{ isCompareBuyDisabled(p) ? "Tạm hết hàng" : "Xem sản phẩm" }}
+                  <td
+                    v-for="p in compareList"
+                    :key="'act' + (p.id || p.productId)"
+                    class="border-bottom-0 pb-4"
+                  >
+                    <button
+                      class="cm-btn-buy"
+                      :disabled="isCompareBuyDisabled(p)"
+                      @click="buyFromCompare(p)"
+                    >
+                      <i class="bi bi-cart-plus me-1"></i>
+                      {{
+                        isCompareBuyDisabled(p)
+                          ? "Tạm hết hàng"
+                          : "Xem sản phẩm"
+                      }}
                     </button>
                   </td>
-                  <td v-for="i in Math.max(0, 3 - compareList.length)" :key="'empty-act-' + i" class="border-bottom-0"></td>
+                  <td
+                    v-for="i in Math.max(0, 3 - compareList.length)"
+                    :key="'empty-act-' + i"
+                    class="border-bottom-0"
+                  ></td>
                 </tr>
               </tbody>
             </table>
@@ -679,38 +907,69 @@
 
     <!-- MODAL CHỌN NHANH SẢN PHẨM SO SÁNH -->
     <Teleport to="body">
-      <div class="compare-modal-overlay" v-if="showPickerModal" @click.self="showPickerModal = false">
+      <div
+        class="compare-modal-overlay"
+        v-if="showPickerModal"
+        @click.self="showPickerModal = false"
+      >
         <div class="product-picker-box">
           <div class="cm-header">
             <h3>Chọn sản phẩm so sánh</h3>
             <button class="cm-close" @click="showPickerModal = false">✕</button>
           </div>
           <div class="picker-search-bar">
-            <input type="text" v-model="pickerSearchKeyword" placeholder="Tìm kiếm theo tên sản phẩm hoặc thương hiệu..." class="picker-input" />
+            <input
+              type="text"
+              v-model="pickerSearchKeyword"
+              placeholder="Tìm kiếm theo tên sản phẩm hoặc thương hiệu..."
+              class="picker-input"
+            />
           </div>
           <div class="picker-body">
             <div v-if="pickerLoading" class="text-center py-5">
               <span class="spinner-border text-warning"></span>
             </div>
-            <div v-else-if="filteredPickerProducts.length === 0" class="text-center py-5 text-muted">
+            <div
+              v-else-if="filteredPickerProducts.length === 0"
+              class="text-center py-5 text-muted"
+            >
               Không tìm thấy sản phẩm phù hợp.
             </div>
             <div v-else class="picker-grid">
-              <div v-for="item in filteredPickerProducts" :key="item.id || item.productId" class="picker-item" :class="{ selected: isInCompare(item) }" @click="toggleItemInPicker(item)">
+              <div
+                v-for="item in filteredPickerProducts"
+                :key="item.id || item.productId"
+                class="picker-item"
+                :class="{ selected: isInCompare(item) }"
+                @click="toggleItemInPicker(item)"
+              >
                 <img :src="getProductImageCompare(item)" :alt="item.name" />
                 <div class="picker-info">
                   <span class="brand">{{ getBrandName(item) }}</span>
                   <h5 class="name" :title="item.name">{{ item.name }}</h5>
-                  <div class="picker-price">{{ formatCurrency(getComparePrice(item)) }}</div>
+                  <div class="picker-price">
+                    {{ formatCurrency(getComparePrice(item)) }}
+                  </div>
                 </div>
                 <div class="picker-check">
-                  <i :class="isInCompare(item) ? 'bi bi-check-circle-fill text-success' : 'bi bi-circle text-muted'"></i>
+                  <i
+                    :class="
+                      isInCompare(item)
+                        ? 'bi bi-check-circle-fill text-success'
+                        : 'bi bi-circle text-muted'
+                    "
+                  ></i>
                 </div>
               </div>
             </div>
           </div>
           <div class="picker-footer">
-            <button class="btn btn-secondary btn-sm px-4" @click="showPickerModal = false">Đóng</button>
+            <button
+              class="btn btn-secondary btn-sm px-4"
+              @click="showPickerModal = false"
+            >
+              Đóng
+            </button>
           </div>
         </div>
       </div>
@@ -1356,10 +1615,28 @@ const validateQuantity = () => {
     quantity.value = 1;
   } else if (val > 10) {
     quantity.value = 10;
-    Swal.fire({ icon: 'warning', title: 'Vượt quá giới hạn', text: 'Bạn chỉ có thể mua tối đa 10 sản phẩm cho mỗi phân loại.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    Swal.fire({
+      icon: "warning",
+      title: "Vượt quá giới hạn",
+      text: "Bạn chỉ có thể mua tối đa 10 sản phẩm cho mỗi phân loại.",
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
   } else if (val > stock) {
     quantity.value = stock;
-    Swal.fire({ icon: 'warning', title: 'Vượt quá tồn kho', text: `Sản phẩm chỉ còn ${stock} trong kho.`, confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    Swal.fire({
+      icon: "warning",
+      title: "Vượt quá tồn kho",
+      text: `Sản phẩm chỉ còn ${stock} trong kho.`,
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
   } else {
     quantity.value = Math.floor(val);
   }
@@ -1377,11 +1654,29 @@ const increaseQty = () => {
   }
   const stock = normalizeStock(selectedVariant.value);
   if (quantity.value >= 10) {
-    Swal.fire({ icon: 'warning', title: 'Vượt quá giới hạn', text: 'Bạn chỉ có thể mua tối đa 10 sản phẩm cho mỗi phân loại.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    Swal.fire({
+      icon: "warning",
+      title: "Vượt quá giới hạn",
+      text: "Bạn chỉ có thể mua tối đa 10 sản phẩm cho mỗi phân loại.",
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
     return;
   }
   if (quantity.value >= stock) {
-    Swal.fire({ icon: 'warning', title: 'Vượt quá tồn kho', text: `Sản phẩm chỉ còn ${stock} trong kho.`, confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    Swal.fire({
+      icon: "warning",
+      title: "Vượt quá tồn kho",
+      text: `Sản phẩm chỉ còn ${stock} trong kho.`,
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
     return;
   }
   quantity.value++;
@@ -1401,8 +1696,9 @@ const askLogin = async (
     cancelButtonColor: "#6b7280",
     didOpen: () => {
       const container = Swal.getContainer();
-      if (container) container.style.setProperty('z-index', '9999999', 'important');
-    }
+      if (container)
+        container.style.setProperty("z-index", "9999999", "important");
+    },
   });
   if (result.isConfirmed) {
     router.push({
@@ -1436,15 +1732,35 @@ const loadFavoriteStatus = async () => {
 const toggleFavorite = async () => {
   const variantId = getVariantId();
   if (!variantId || Number.isNaN(variantId)) {
-    await Swal.fire({ icon: 'warning', title: 'Chưa chọn dung tích', text: 'Vui lòng chọn dung tích trước khi thêm yêu thích.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    await Swal.fire({
+      icon: "warning",
+      title: "Chưa chọn dung tích",
+      text: "Vui lòng chọn dung tích trước khi thêm yêu thích.",
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
     return;
   }
   if (!hasToken()) {
-    await askLogin("Vui lòng đăng nhập để thêm sản phẩm vào danh sách yêu thích.");
+    await askLogin(
+      "Vui lòng đăng nhập để thêm sản phẩm vào danh sách yêu thích."
+    );
     return;
   }
   if (!isCustomerLoggedIn()) {
-    await Swal.fire({ icon: 'warning', title: 'Không thể sử dụng chức năng này', text: 'Chỉ tài khoản khách hàng mới được thêm sản phẩm yêu thích.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    await Swal.fire({
+      icon: "warning",
+      title: "Không thể sử dụng chức năng này",
+      text: "Chỉ tài khoản khách hàng mới được thêm sản phẩm yêu thích.",
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
     return;
   }
   try {
@@ -1471,12 +1787,22 @@ const toggleFavorite = async () => {
       timerProgressBar: true,
       didOpen: () => {
         const container = Swal.getContainer();
-        if (container) container.style.setProperty('z-index', '9999999', 'important');
-      }
+        if (container)
+          container.style.setProperty("z-index", "9999999", "important");
+      },
     });
   } catch (error: any) {
     console.error("Lỗi yêu thích sản phẩm:", error);
-    await Swal.fire({ icon: 'error', title: 'Không thể xử lý yêu thích', text: getErrorMessage(error), confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể xử lý yêu thích",
+      text: getErrorMessage(error),
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
   } finally {
     isFavoriteLoading.value = false;
   }
@@ -1498,20 +1824,56 @@ const getCurrentCartQuantity = async (productVariantId: number) => {
 
 const validateBeforeCartAction = async () => {
   if (!selectedVariant.value) {
-    await Swal.fire({ icon: 'warning', title: 'Chưa chọn dung tích', text: 'Vui lòng chọn dung tích trước khi mua hàng.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    await Swal.fire({
+      icon: "warning",
+      title: "Chưa chọn dung tích",
+      text: "Vui lòng chọn dung tích trước khi mua hàng.",
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
     return false;
   }
   const variantId = getVariantId();
   if (!variantId || Number.isNaN(variantId)) {
-    await Swal.fire({ icon: 'error', title: 'Biến thể không hợp lệ', text: 'Không xác định được biến thể sản phẩm. Vui lòng tải lại trang.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    await Swal.fire({
+      icon: "error",
+      title: "Biến thể không hợp lệ",
+      text: "Không xác định được biến thể sản phẩm. Vui lòng tải lại trang.",
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
     return false;
   }
   if (isVariantInvalidPrice.value) {
-    await Swal.fire({ icon: 'warning', title: 'Sản phẩm chưa có giá', text: 'Sản phẩm chưa có giá bán. Vui lòng liên hệ cửa hàng.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    await Swal.fire({
+      icon: "warning",
+      title: "Sản phẩm chưa có giá",
+      text: "Sản phẩm chưa có giá bán. Vui lòng liên hệ cửa hàng.",
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
     return false;
   }
   if (isVariantOutOfStock.value) {
-    await Swal.fire({ icon: 'warning', title: 'Tạm hết hàng', text: 'Sản phẩm này hiện đã hết hàng.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    await Swal.fire({
+      icon: "warning",
+      title: "Tạm hết hàng",
+      text: "Sản phẩm này hiện đã hết hàng.",
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
     return false;
   }
   if (!hasToken()) {
@@ -1519,27 +1881,75 @@ const validateBeforeCartAction = async () => {
     return false;
   }
   if (!isCustomerLoggedIn()) {
-    await Swal.fire({ icon: 'warning', title: 'Không thể mua hàng', text: 'Chỉ tài khoản khách hàng mới được thêm sản phẩm vào giỏ hàng.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    await Swal.fire({
+      icon: "warning",
+      title: "Không thể mua hàng",
+      text: "Chỉ tài khoản khách hàng mới được thêm sản phẩm vào giỏ hàng.",
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
     return false;
   }
   const stockQuantity = normalizeStock(selectedVariant.value);
   const quantityToAdd = Number(quantity.value || 1);
   if (quantityToAdd <= 0) {
-    await Swal.fire({ icon: 'warning', title: 'Số lượng không hợp lệ', text: 'Số lượng phải lớn hơn 0.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    await Swal.fire({
+      icon: "warning",
+      title: "Số lượng không hợp lệ",
+      text: "Số lượng phải lớn hơn 0.",
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
     return false;
   }
   if (quantityToAdd > stockQuantity) {
-    await Swal.fire({ icon: 'warning', title: 'Vượt quá tồn kho', text: `Sản phẩm chỉ còn ${stockQuantity} trong kho.`, confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    await Swal.fire({
+      icon: "warning",
+      title: "Vượt quá tồn kho",
+      text: `Sản phẩm chỉ còn ${stockQuantity} trong kho.`,
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
     return false;
   }
   const currentCartQuantity = await getCurrentCartQuantity(variantId);
   const totalAfterAdd = currentCartQuantity + quantityToAdd;
   if (totalAfterAdd > 10) {
-    await Swal.fire({ icon: 'warning', title: 'Vượt quá giới hạn', html: `Bạn chỉ có thể mua tối đa <b>10</b> sản phẩm cho mỗi phân loại.<br/>Trong giỏ hàng của bạn hiện đã có <b>${currentCartQuantity}</b> sản phẩm.`, confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    await Swal.fire({
+      icon: "warning",
+      title: "Vượt quá giới hạn",
+      html: `Bạn chỉ có thể mua tối đa <b>10</b> sản phẩm cho mỗi phân loại.<br/>Trong giỏ hàng của bạn hiện đã có <b>${currentCartQuantity}</b> sản phẩm.`,
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
     return false;
   }
   if (totalAfterAdd > stockQuantity) {
-    await Swal.fire({ icon: 'warning', title: 'Vượt quá tồn kho', html: `Sản phẩm này chỉ còn <b>${stockQuantity}</b> trong kho.<br/>Trong giỏ hàng của bạn hiện đã có <b>${currentCartQuantity}</b> sản phẩm.<br/>Bạn chỉ có thể thêm tối đa <b>${Math.max(stockQuantity - currentCartQuantity, 0)}</b> sản phẩm nữa.`, confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    await Swal.fire({
+      icon: "warning",
+      title: "Vượt quá tồn kho",
+      html: `Sản phẩm này chỉ còn <b>${stockQuantity}</b> trong kho.<br/>Trong giỏ hàng của bạn hiện đã có <b>${currentCartQuantity}</b> sản phẩm.<br/>Bạn chỉ có thể thêm tối đa <b>${Math.max(
+        stockQuantity - currentCartQuantity,
+        0
+      )}</b> sản phẩm nữa.`,
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
     return false;
   }
   return true;
@@ -1566,7 +1976,16 @@ const addToCart = async () => {
     }, 3000);
   } catch (error: any) {
     console.error("Lỗi khi thêm vào giỏ hàng:", error);
-    await Swal.fire({ icon: 'error', title: 'Không thể thêm vào giỏ', text: getErrorMessage(error), confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể thêm vào giỏ",
+      text: getErrorMessage(error),
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
   } finally {
     isAdding.value = false;
   }
@@ -1590,7 +2009,16 @@ const buyNow = async () => {
     emit("buy-now");
   } catch (error: any) {
     console.error("Lỗi khi xử lý Mua ngay:", error);
-    await Swal.fire({ icon: 'error', title: 'Không thể mua ngay', text: getErrorMessage(error), confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    await Swal.fire({
+      icon: "error",
+      title: "Không thể mua ngay",
+      text: getErrorMessage(error),
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
   } finally {
     isAdding.value = false;
   }
@@ -1632,7 +2060,10 @@ const resetCompareAiResult = () => {
   compareAiError.value = "";
 };
 
-const isInCompare = (item: any) => { const id = item?.id || item?.productId; return compareList.value.some((p: any) => (p.id || p.productId) === id); };
+const isInCompare = (item: any) => {
+  const id = item?.id || item?.productId;
+  return compareList.value.some((p: any) => (p.id || p.productId) === id);
+};
 
 const clearCompareList = () => {
   compareList.value = [];
@@ -1641,24 +2072,39 @@ const clearCompareList = () => {
 };
 
 const toggleCompare = (item: any) => {
-  if(!item) return;
+  if (!item) return;
   const id = item.id || item.productId;
-  if (isInCompare(item)) { 
-    compareList.value = compareList.value.filter((p: any) => (p.id || p.productId) !== id); 
-    delete compareVariantIds.value[id]; 
+  if (isInCompare(item)) {
+    compareList.value = compareList.value.filter(
+      (p: any) => (p.id || p.productId) !== id
+    );
+    delete compareVariantIds.value[id];
     resetCompareAiResult();
-  }
-  else {
-    if (compareList.value.length >= MAX_COMPARE) { Swal.fire({ icon: 'warning', title: 'Giới hạn', text: `Chỉ được so sánh tối đa ${MAX_COMPARE} sản phẩm!`, confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } }); return; }
+  } else {
+    if (compareList.value.length >= MAX_COMPARE) {
+      Swal.fire({
+        icon: "warning",
+        title: "Giới hạn",
+        text: `Chỉ được so sánh tối đa ${MAX_COMPARE} sản phẩm!`,
+        confirmButtonColor: "#bd9a5f",
+        didOpen: () => {
+          const c = Swal.getContainer();
+          if (c) c.style.setProperty("z-index", "9999999", "important");
+        },
+      });
+      return;
+    }
     compareList.value.push(item);
     resetCompareAiResult();
   }
 };
 
-const removeFromCompare = (item: any) => { 
-  const id = item?.id || item?.productId; 
-  compareList.value = compareList.value.filter((p: any) => (p.id || p.productId) !== id); 
-  delete compareVariantIds.value[id]; 
+const removeFromCompare = (item: any) => {
+  const id = item?.id || item?.productId;
+  compareList.value = compareList.value.filter(
+    (p: any) => (p.id || p.productId) !== id
+  );
+  delete compareVariantIds.value[id];
   resetCompareAiResult();
 };
 
@@ -1667,7 +2113,9 @@ const openPickerModal = async () => {
   if (allProductsStore.value.length === 0) {
     pickerLoading.value = true;
     try {
-      const res = await api.get("/v1/products", { params: { size: 100, page: 0 } });
+      const res = await api.get("/v1/products", {
+        params: { size: 100, page: 0 },
+      });
       let list = [];
       if (res.data?.data?.content) list = res.data.data.content;
       else if (Array.isArray(res.data?.data)) list = res.data.data;
@@ -1707,16 +2155,21 @@ const toggleItemInPicker = (item: any) => {
 const goToDetailFromCompare = (p: any) => {
   showCompareModal.value = false;
   const id = p.id || p.productId;
-  if(id) {
-      router.push({ name: "SingleProduct", params: { id: id } });
+  if (id) {
+    router.push({ name: "SingleProduct", params: { id: id } });
   }
 };
 
 const getPrimaryVariantObject = (item: any) => {
   if (!item) return null;
   if (Array.isArray(item?.variants) && item.variants.length > 0) {
-    const activeVariants = item.variants.filter((variant: any) => Number(variant?.status ?? variant?.variantStatus ?? 1) === 1);
-    const sellableVariant = activeVariants.find((variant: any) => isVariantSellable(variant));
+    const activeVariants = item.variants.filter(
+      (variant: any) =>
+        Number(variant?.status ?? variant?.variantStatus ?? 1) === 1
+    );
+    const sellableVariant = activeVariants.find((variant: any) =>
+      isVariantSellable(variant)
+    );
     if (sellableVariant) return sellableVariant;
     return activeVariants[0] || item.variants[0];
   }
@@ -1724,10 +2177,10 @@ const getPrimaryVariantObject = (item: any) => {
 };
 
 const getSafeNumber = (val: any) => {
-  if (val === null || val === undefined || val === '') return 0;
-  if (typeof val === 'number') return isNaN(val) ? 0 : val;
-  if (typeof val === 'string') {
-    const cleanStr = val.replace(/[^\d]/g, '');
+  if (val === null || val === undefined || val === "") return 0;
+  if (typeof val === "number") return isNaN(val) ? 0 : val;
+  if (typeof val === "string") {
+    const cleanStr = val.replace(/[^\d]/g, "");
     return parseInt(cleanStr, 10) || 0;
   }
   return 0;
@@ -1735,18 +2188,34 @@ const getSafeNumber = (val: any) => {
 
 const getProductPrices = (item: any) => {
   if (!item) return { sale: 0, orig: 0 };
-  
+
   const basePrice = getSafeNumber(item.price ?? item.Price ?? item.basePrice);
-  const flashSale = getSafeNumber(item.flashSalePrice ?? item.salePrice ?? item.promotionPrice ?? item.discountPrice ?? item.specialPrice ?? item.currentPrice);
-  const explicitOrig = getSafeNumber(item.originalPrice ?? item.oldPrice ?? item.listPrice ?? item.regularPrice);
-  const percent = getSafeNumber(item.discountPercent ?? item.discount ?? item.salePercent);
+  const flashSale = getSafeNumber(
+    item.flashSalePrice ??
+      item.salePrice ??
+      item.promotionPrice ??
+      item.discountPrice ??
+      item.specialPrice ??
+      item.currentPrice
+  );
+  const explicitOrig = getSafeNumber(
+    item.originalPrice ?? item.oldPrice ?? item.listPrice ?? item.regularPrice
+  );
+  const percent = getSafeNumber(
+    item.discountPercent ?? item.discount ?? item.salePercent
+  );
 
   let sale = 0;
   let orig = 0;
 
   if (flashSale > 0) {
     sale = flashSale;
-    orig = explicitOrig > flashSale ? explicitOrig : (basePrice > flashSale ? basePrice : 0);
+    orig =
+      explicitOrig > flashSale
+        ? explicitOrig
+        : basePrice > flashSale
+        ? basePrice
+        : 0;
   } else if (basePrice > 0) {
     sale = basePrice;
     orig = explicitOrig > basePrice ? explicitOrig : 0;
@@ -1769,7 +2238,9 @@ const getCompareVariant = (p: any) => {
   const pId = p.id || p.productId;
   const vId = compareVariantIds.value[pId];
   if (vId && p.variants && Array.isArray(p.variants)) {
-    const found = p.variants.find((v: any) => (v.productVariantId || v.variantId || v.id) === vId);
+    const found = p.variants.find(
+      (v: any) => (v.productVariantId || v.variantId || v.id) === vId
+    );
     if (found) return found;
   }
   return getPrimaryVariantObject(p);
@@ -1778,7 +2249,11 @@ const getCompareVariant = (p: any) => {
 const getCompareBottleType = (p: any) => {
   const v = getCompareVariant(p);
   if (v) {
-    const bottleCandidates = [ v.bottleTypeName, v.bottleType?.name, typeof v.bottleType === "string" ? v.bottleType : null ];
+    const bottleCandidates = [
+      v.bottleTypeName,
+      v.bottleType?.name,
+      typeof v.bottleType === "string" ? v.bottleType : null,
+    ];
     let bottleString = bottleCandidates.find((b) => b != null && b !== "");
     return bottleString || "Đang cập nhật";
   }
@@ -1787,33 +2262,66 @@ const getCompareBottleType = (p: any) => {
 
 const getComparePrice = (p: any) => {
   const v = getCompareVariant(p);
-  let vSale = Number(v?.salePrice ?? v?.promotionPrice ?? v?.flashSalePrice ?? v?.currentPrice ?? v?.price ?? v?.Price ?? 0);
+  let vSale = Number(
+    v?.salePrice ??
+      v?.promotionPrice ??
+      v?.flashSalePrice ??
+      v?.currentPrice ??
+      v?.price ??
+      v?.Price ??
+      0
+  );
   if (vSale > 0) return vSale;
-  return Number(p?.salePrice ?? p?.promotionPrice ?? p?.flashSalePrice ?? p?.currentPrice ?? p?.price ?? p?.Price ?? p?.minPrice ?? p?.maxPrice ?? p?.basePrice ?? 0);
+  return Number(
+    p?.salePrice ??
+      p?.promotionPrice ??
+      p?.flashSalePrice ??
+      p?.currentPrice ??
+      p?.price ??
+      p?.Price ??
+      p?.minPrice ??
+      p?.maxPrice ??
+      p?.basePrice ??
+      0
+  );
 };
 
 const getCompareOriginalPrice = (p: any) => {
   const v = getCompareVariant(p);
   const sale = getComparePrice(p);
-  let vOrig = Number(v?.originalPrice ?? v?.oldPrice ?? v?.listPrice ?? v?.price ?? v?.Price ?? 0);
+  let vOrig = Number(
+    v?.originalPrice ?? v?.oldPrice ?? v?.listPrice ?? v?.price ?? v?.Price ?? 0
+  );
   if (vOrig > sale) return vOrig;
-  let pOrig = Number(p?.originalPrice ?? p?.oldPrice ?? p?.listPrice ?? p?.price ?? p?.Price ?? p?.maxPrice ?? p?.minPrice ?? 0);
+  let pOrig = Number(
+    p?.originalPrice ??
+      p?.oldPrice ??
+      p?.listPrice ??
+      p?.price ??
+      p?.Price ??
+      p?.maxPrice ??
+      p?.minPrice ??
+      0
+  );
   return pOrig > sale ? pOrig : sale;
 };
 
 const getCompareStock = (p: any) => normalizeStock(getCompareVariant(p));
 
 const getCompareDiscount = (p: any) => {
-  const sale = getComparePrice(p); const orig = getCompareOriginalPrice(p);
-  if (orig > sale && sale > 0) return Math.round(((orig - sale) / orig) * 100); return 0;
+  const sale = getComparePrice(p);
+  const orig = getCompareOriginalPrice(p);
+  if (orig > sale && sale > 0) return Math.round(((orig - sale) / orig) * 100);
+  return 0;
 };
-const isCompareBuyDisabled = (p: any) => getCompareStock(p) <= 0 || getComparePrice(p) <= 0;
+const isCompareBuyDisabled = (p: any) =>
+  getCompareStock(p) <= 0 || getComparePrice(p) <= 0;
 
 const buyFromCompare = (p: any) => {
   const id = p.id || p.productId;
   showCompareModal.value = false;
-  if(id) {
-      router.push({ name: "SingleProduct", params: { id: id } });
+  if (id) {
+    router.push({ name: "SingleProduct", params: { id: id } });
   }
 };
 
@@ -1821,10 +2329,15 @@ const buyFromCompare = (p: any) => {
 const toCompareText = (value: any): string => {
   if (value === null || value === undefined || value === "") return "";
   if (Array.isArray(value)) {
-    return value.map((item: any) => toCompareText(item)).filter(Boolean).join(", ");
+    return value
+      .map((item: any) => toCompareText(item))
+      .filter(Boolean)
+      .join(", ");
   }
   if (typeof value === "object") {
-    return String(value?.name ?? value?.value ?? value?.label ?? value?.displayName ?? "").trim();
+    return String(
+      value?.name ?? value?.value ?? value?.label ?? value?.displayName ?? ""
+    ).trim();
   }
   return String(value).trim();
 };
@@ -1835,7 +2348,13 @@ const getGenderTextCompare = (item: any) => {
   const normalized = g.toLowerCase();
 
   if (g === "1" || normalized === "nam" || normalized === "male") return "Nam";
-  if (g === "2" || normalized === "nữ" || normalized === "nu" || normalized === "female") return "Nữ";
+  if (
+    g === "2" ||
+    normalized === "nữ" ||
+    normalized === "nu" ||
+    normalized === "female"
+  )
+    return "Nữ";
   if (g === "0" || normalized === "unisex") return "Unisex";
 
   return g || "Đang cập nhật";
@@ -1854,8 +2373,16 @@ const getAttributeTextCompare = (item: any, field: string) => {
 const getFragranceFamilyCompare = (item: any) => {
   if (!item) return "Đang cập nhật";
   const candidates = [
-    item?.scents, item?.fragranceFamilies, item?.scentGroups, item?.scentGroup,
-    item?.fragranceFamily, item?.fragranceFamilyName, item?.scent, item?.scentName, item?.mainScent, item?.mainScentName,
+    item?.scents,
+    item?.fragranceFamilies,
+    item?.scentGroups,
+    item?.scentGroup,
+    item?.fragranceFamily,
+    item?.fragranceFamilyName,
+    item?.scent,
+    item?.scentName,
+    item?.mainScent,
+    item?.mainScentName,
   ];
   for (const candidate of candidates) {
     const text = toCompareText(candidate);
@@ -1871,7 +2398,11 @@ const getCompareInsight = (item: any): CompareInsight | null => {
 };
 
 const getOccasionTextCompare = (item: any) => {
-  const directCandidates = [item?.occasions, item?.occasionName, item?.occasion];
+  const directCandidates = [
+    item?.occasions,
+    item?.occasionName,
+    item?.occasion,
+  ];
   for (const candidate of directCandidates) {
     const text = toCompareText(candidate);
     if (text) return text;
@@ -1889,34 +2420,48 @@ const getStyleTextCompare = (item: any) => {
 };
 
 const getRatingScoreCompare = (item: any) => {
-  const raw = Number(item?.averageRating || item?.avgRating || item?.rating || 0);
+  const raw = Number(
+    item?.averageRating || item?.avgRating || item?.rating || 0
+  );
   if (raw > 0) return Math.min(5, Math.max(0, raw)).toFixed(1);
   return (5.0).toFixed(1);
 };
 
-const getReviewCountCompare = (item: any) => Number(item?.reviewCount || item?.reviews || item?.totalReviews || 0);
+const getReviewCountCompare = (item: any) =>
+  Number(item?.reviewCount || item?.reviews || item?.totalReviews || 0);
 
 const getCompareValue = (p: any, type: string) => {
   const v = getCompareVariant(p);
-  if (type === 'brand') return getBrandName(p); 
-  if (type === 'scent') return getFragranceFamilyCompare(p);
-  if (type === 'concentration') {
-    const productValue = getAttributeTextCompare(p, 'concentration');
-    return productValue !== "Đang cập nhật" ? productValue : getAttributeTextCompare(v, 'concentration');
+  if (type === "brand") return getBrandName(p);
+  if (type === "scent") return getFragranceFamilyCompare(p);
+  if (type === "concentration") {
+    const productValue = getAttributeTextCompare(p, "concentration");
+    return productValue !== "Đang cập nhật"
+      ? productValue
+      : getAttributeTextCompare(v, "concentration");
   }
-  if (type === 'gender') {
+  if (type === "gender") {
     const productValue = getGenderTextCompare(p);
-    return productValue !== "Đang cập nhật" ? productValue : getGenderTextCompare(v);
+    return productValue !== "Đang cập nhật"
+      ? productValue
+      : getGenderTextCompare(v);
   }
-  if (type === 'occasion') return getOccasionTextCompare(p);
-  if (type === 'style') return getStyleTextCompare(p);
-  return '';
+  if (type === "occasion") return getOccasionTextCompare(p);
+  if (type === "style") return getStyleTextCompare(p);
+  return "";
 };
 
 const getPricePerMl = (p: any) => {
   const v = getCompareVariant(p);
   const price = getComparePrice(p);
-  let cap = v?.capacityName || v?.capacityValue || v?.volume || v?.capacity?.value || v?.capacity?.name || p?.capacity || "";
+  let cap =
+    v?.capacityName ||
+    v?.capacityValue ||
+    v?.volume ||
+    v?.capacity?.value ||
+    v?.capacity?.name ||
+    p?.capacity ||
+    "";
   const numericCap = parseFloat(String(cap).replace(/[^0-9.]/g, ""));
   if (numericCap > 0 && price > 0) {
     return price / numericCap;
@@ -1933,7 +2478,9 @@ const formatPricePerMl = (p: any) => {
 };
 
 const isBestValue = (p: any) => {
-  const validValues = compareList.value.map(item => getPricePerMl(item)).filter(v => v > 0);
+  const validValues = compareList.value
+    .map((item) => getPricePerMl(item))
+    .filter((v) => v > 0);
   if (validValues.length === 0) return false;
   const minValue = Math.min(...validValues);
   return getPricePerMl(p) === minValue && minValue > 0;
@@ -1942,8 +2489,14 @@ const isBestValue = (p: any) => {
 const getLongevityDisplay = (p: any) => {
   const v = getCompareVariant(p);
   const actualLongevity = [
-    p?.longevityName, p?.longevity, p?.lastingTime, p?.lastingDuration,
-    v?.longevityName, v?.longevity, v?.lastingTime, v?.lastingDuration,
+    p?.longevityName,
+    p?.longevity,
+    p?.lastingTime,
+    p?.lastingDuration,
+    v?.longevityName,
+    v?.longevity,
+    v?.lastingTime,
+    v?.lastingDuration,
   ]
     .map((value) => toCompareText(value))
     .find(Boolean);
@@ -1953,12 +2506,12 @@ const getLongevityDisplay = (p: any) => {
 };
 
 const getProductImageCompare = (item: any) => {
-  if(item?.primaryImageUrl) return getImageUrlFromObject(item.primaryImageUrl);
-  if(item?.mainImage) return getImageUrlFromObject(item.mainImage);
-  if(item?.imageUrl) return getImageUrlFromObject(item.imageUrl);
-  if(Array.isArray(item?.images) && item.images.length > 0) {
-    const prim = item.images.find((i:any) => i?.isPrimary);
-    if(prim) return getImageUrlFromObject(prim.imageUrl || prim);
+  if (item?.primaryImageUrl) return getImageUrlFromObject(item.primaryImageUrl);
+  if (item?.mainImage) return getImageUrlFromObject(item.mainImage);
+  if (item?.imageUrl) return getImageUrlFromObject(item.imageUrl);
+  if (Array.isArray(item?.images) && item.images.length > 0) {
+    const prim = item.images.find((i: any) => i?.isPrimary);
+    if (prim) return getImageUrlFromObject(prim.imageUrl || prim);
     return getImageUrlFromObject(item.images[0].imageUrl || item.images[0]);
   }
   return getPlaceholderImage();
@@ -1966,7 +2519,16 @@ const getProductImageCompare = (item: any) => {
 
 const formatVariantNameCompare = (v: any) => {
   if (!v) return "Loại";
-  const capCandidates = [ v.capacityName, v.capacityValue, v.volume, v.capacity?.value, v.capacity?.name, typeof v.capacity === "string" || typeof v.capacity === "number" ? v.capacity : null ];
+  const capCandidates = [
+    v.capacityName,
+    v.capacityValue,
+    v.volume,
+    v.capacity?.value,
+    v.capacity?.name,
+    typeof v.capacity === "string" || typeof v.capacity === "number"
+      ? v.capacity
+      : null,
+  ];
   let cap = capCandidates.find((c) => c != null && c !== "");
   let capString = "";
   if (cap != null) {
@@ -1975,7 +2537,11 @@ const formatVariantNameCompare = (v: any) => {
     if (!Number.isNaN(numeric) && numeric > 0) capString = `${numeric}ml`;
     else capString = text.toLowerCase().includes("ml") ? text : `${text}ml`;
   }
-  const bottleCandidates = [ v.bottleTypeName, v.bottleType?.name, typeof v.bottleType === "string" ? v.bottleType : null ];
+  const bottleCandidates = [
+    v.bottleTypeName,
+    v.bottleType?.name,
+    typeof v.bottleType === "string" ? v.bottleType : null,
+  ];
   let bottleString = bottleCandidates.find((b) => b != null && b !== "");
   if (capString && bottleString) return `${capString} - ${bottleString}`;
   if (capString) return capString;
@@ -1987,8 +2553,16 @@ const getSortedVariantsCompare = (p: any) => {
   if (!p || !p.variants || !Array.isArray(p.variants)) return [];
   return [...p.variants].sort((a: any, b: any) => {
     const getCap = (v: any) => {
-      let cap = v.capacityName || v.capacityValue || v.volume || v.capacity?.value || v.capacity?.name || v.capacity;
-      const text = String(cap || "").toLowerCase().replace(/\s+/g, "");
+      let cap =
+        v.capacityName ||
+        v.capacityValue ||
+        v.volume ||
+        v.capacity?.value ||
+        v.capacity?.name ||
+        v.capacity;
+      const text = String(cap || "")
+        .toLowerCase()
+        .replace(/\s+/g, "");
       const numeric = parseFloat(text.replace("ml", ""));
       return Number.isNaN(numeric) ? 0 : numeric;
     };
@@ -2037,7 +2611,10 @@ const loadStructuredCompareInsights = async (): Promise<boolean> => {
     compareAiError.value = "";
     return true;
   } catch (error: any) {
-    const message = error?.response?.data?.message || error?.message || "Không thể phân tích sản phẩm bằng AI lúc này.";
+    const message =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Không thể phân tích sản phẩm bằng AI lúc này.";
     console.warn("Không lấy được kết quả so sánh AI:", message);
     compareInsights.value = {};
     compareAnalysis.value = "";
@@ -2056,7 +2633,16 @@ const handleAiCompare = async () => {
 
   const productIds = getCompareProductIds();
   if (productIds.length < 2 || productIds.length > 3) {
-    await Swal.fire({ icon: 'warning', title: 'Chưa đủ sản phẩm', text: 'Vui lòng chọn từ 2 đến 3 sản phẩm để so sánh bằng AI.', confirmButtonColor: '#bd9a5f', didOpen: () => { const c = Swal.getContainer(); if(c) c.style.setProperty('z-index', '9999999', 'important'); } });
+    await Swal.fire({
+      icon: "warning",
+      title: "Chưa đủ sản phẩm",
+      text: "Vui lòng chọn từ 2 đến 3 sản phẩm để so sánh bằng AI.",
+      confirmButtonColor: "#bd9a5f",
+      didOpen: () => {
+        const c = Swal.getContainer();
+        if (c) c.style.setProperty("z-index", "9999999", "important");
+      },
+    });
     return;
   }
 
@@ -2071,13 +2657,17 @@ const handleAiCompare = async () => {
 };
 
 watch(showCompareModal, async (val) => {
-  if(!val) { resetCompareAiResult(); } 
+  if (!val) {
+    resetCompareAiResult();
+  }
   if (val) {
     compareList.value.forEach((p) => {
       const id = getProductIdNum(p);
       if (!compareVariantIds.value[id]) {
         const primaryV = getPrimaryVariantObject(p);
-        compareVariantIds.value[id] = Number(primaryV?.productVariantId ?? primaryV?.variantId ?? primaryV?.id ?? 0);
+        compareVariantIds.value[id] = Number(
+          primaryV?.productVariantId ?? primaryV?.variantId ?? primaryV?.id ?? 0
+        );
       }
     });
     const updatedList = [...compareList.value];
@@ -2102,19 +2692,26 @@ watch(showCompareModal, async (val) => {
         const res = await api.get(`/v1/products/${id}`);
         const fullData = res.data?.data || res.data;
         if (fullData) {
-          let rawVariants = fullData.variants || fullData.productVariants || fullData.productVariantList;
+          let rawVariants =
+            fullData.variants ||
+            fullData.productVariants ||
+            fullData.productVariantList;
           if (rawVariants && Array.isArray(rawVariants)) {
             fullData.variants = rawVariants.map((v: any) => {
               const vId = Number(v.productVariantId || v.variantId || v.id);
               const prices = getProductPrices(v);
-              return { 
-                ...v, 
-                salePrice: variantSaleMap.get(vId) ?? (prices.sale > 0 ? prices.sale : v.salePrice), 
-                originalPrice: variantOrigMap.get(vId) ?? (prices.orig > 0 ? prices.orig : v.originalPrice) 
+              return {
+                ...v,
+                salePrice:
+                  variantSaleMap.get(vId) ??
+                  (prices.sale > 0 ? prices.sale : v.salePrice),
+                originalPrice:
+                  variantOrigMap.get(vId) ??
+                  (prices.orig > 0 ? prices.orig : v.originalPrice),
               };
             });
           }
-          updatedList[i] = { 
+          updatedList[i] = {
             ...fullData,
             ...p,
             flashSalePrice: p.flashSalePrice ?? fullData.flashSalePrice,
@@ -2122,7 +2719,7 @@ watch(showCompareModal, async (val) => {
             discountPercent: p.discountPercent ?? fullData.discountPercent,
             originalPrice: p.originalPrice ?? fullData.originalPrice,
             oldPrice: p.oldPrice ?? fullData.oldPrice,
-            variants: fullData.variants || p.variants
+            variants: fullData.variants || p.variants,
           };
         }
       } catch (e) {}
@@ -3173,46 +3770,217 @@ watch(
 }
 
 /* === CSS CHO SO SÁNH SẢN PHẨM === */
-.compare-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: #ffffff; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1040; padding: 15px 0; border-top: 2px solid #bd9a5f; }
-.compare-bar.show { transform: translateY(0); }
-.cb-container { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; }
-.cb-left { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
-.cb-title { font-weight: 800; font-size: 15px; color: #0a142f; text-transform: uppercase; letter-spacing: 0.5px; }
-.cb-slots { display: flex; gap: 15px; }
-.cb-slot { width: 230px; height: 60px; border: 1px dashed #cbd5e0; border-radius: 8px; display: flex; align-items: center; padding: 5px; gap: 10px; background: #f8fafc; position: relative; }
-.cb-slot.filled { border-style: solid; border-color: #eaeaea; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
-.cb-slot img { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; }
-.cb-slot-info { flex: 1; overflow: hidden; }
-.cb-slot-info p { margin: 0; font-size: 13px; font-weight: 700; color: #0a142f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cb-slot-info span { font-size: 12px; color: #bd9a5f; font-weight: 600; }
-.btn-remove-cb { position: absolute; top: -8px; right: -8px; background: #e53e3e; color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 5px rgba(229,62,62,0.3); }
-.btn-remove-cb:hover { transform: scale(1.1); }
-.cb-slot.empty-slot { justify-content: center; color: #a0aec0; font-size: 13px; cursor: pointer; transition: 0.2s; }
-.cb-slot.empty-slot:hover { color: #bd9a5f; border-color: #bd9a5f; background: #fdfaf6; }
-.cb-right { display: flex; gap: 15px; align-items: center; }
-.cb-btn-clear { background: transparent; border: none; color: #718096; font-weight: 600; cursor: pointer; font-size: 14px; transition: 0.2s; }
-.cb-btn-clear:hover { color: #e53e3e; text-decoration: underline; }
-.cb-btn-compare { background: #0a142f; color: white; border: none; padding: 12px 28px; border-radius: 8px; font-weight: 700; text-transform: uppercase; cursor: pointer; transition: 0.2s; letter-spacing: 0.5px; }
-.cb-btn-compare:disabled { opacity: 0.5; cursor: not-allowed; }
-.cb-btn-compare:hover:not(:disabled) { background: #bd9a5f; box-shadow: 0 4px 12px rgba(189,154,95,0.3); }
+.compare-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: #ffffff;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1040;
+  padding: 15px 0;
+  border-top: 2px solid #bd9a5f;
+}
+.compare-bar.show {
+  transform: translateY(0);
+}
+.cb-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+}
+.cb-left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.cb-title {
+  font-weight: 800;
+  font-size: 15px;
+  color: #0a142f;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.cb-slots {
+  display: flex;
+  gap: 15px;
+}
+.cb-slot {
+  width: 230px;
+  height: 60px;
+  border: 1px dashed #cbd5e0;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  padding: 5px;
+  gap: 10px;
+  background: #f8fafc;
+  position: relative;
+}
+.cb-slot.filled {
+  border-style: solid;
+  border-color: #eaeaea;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+.cb-slot img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.cb-slot-info {
+  flex: 1;
+  overflow: hidden;
+}
+.cb-slot-info p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0a142f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cb-slot-info span {
+  font-size: 12px;
+  color: #bd9a5f;
+  font-weight: 600;
+}
+.btn-remove-cb {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #e53e3e;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: 0.2s;
+  box-shadow: 0 2px 5px rgba(229, 62, 62, 0.3);
+}
+.btn-remove-cb:hover {
+  transform: scale(1.1);
+}
+.cb-slot.empty-slot {
+  justify-content: center;
+  color: #a0aec0;
+  font-size: 13px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.cb-slot.empty-slot:hover {
+  color: #bd9a5f;
+  border-color: #bd9a5f;
+  background: #fdfaf6;
+}
+.cb-right {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+.cb-btn-clear {
+  background: transparent;
+  border: none;
+  color: #718096;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+  transition: 0.2s;
+}
+.cb-btn-clear:hover {
+  color: #e53e3e;
+  text-decoration: underline;
+}
+.cb-btn-compare {
+  background: #0a142f;
+  color: white;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: 0.2s;
+  letter-spacing: 0.5px;
+}
+.cb-btn-compare:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.cb-btn-compare:hover:not(:disabled) {
+  background: #bd9a5f;
+  box-shadow: 0 4px 12px rgba(189, 154, 95, 0.3);
+}
 
 /* COMPARE MODAL */
-.compare-modal-overlay { 
-  position: fixed; 
-  inset: 0; 
-  background: rgba(0,0,0,0.7); 
-  z-index: 1050; 
-  display: flex; 
-  align-items: center; 
-  justify-content: center; 
-  backdrop-filter: blur(6px); 
+.compare-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(6px);
 }
-.compare-modal-box { background: white; width: 95%; max-width: 1100px; max-height: 90vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; animation: modalFadeIn 0.3s ease; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
-.cm-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid #eaeaea; background: #fdfaf6; }
-.cm-header h3 { margin: 0; font-family: "Playfair Display", serif; font-size: 22px; font-weight: 800; color: #0a142f; }
-.cm-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #a0aec0; transition: 0.2s; padding: 0; line-height: 1; }
-.cm-close:hover { color: #e53e3e; transform: rotate(90deg); }
-.cm-body { padding: 0; overflow-y: auto; }
+.compare-modal-box {
+  background: white;
+  width: 95%;
+  max-width: 1100px;
+  max-height: 90vh;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalFadeIn 0.3s ease;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+.cm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #eaeaea;
+  background: #fdfaf6;
+}
+.cm-header h3 {
+  margin: 0;
+  font-family: "Playfair Display", serif;
+  font-size: 22px;
+  font-weight: 800;
+  color: #0a142f;
+}
+.cm-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #a0aec0;
+  transition: 0.2s;
+  padding: 0;
+  line-height: 1;
+}
+.cm-close:hover {
+  color: #e53e3e;
+  transform: rotate(90deg);
+}
+.cm-body {
+  padding: 0;
+  overflow-y: auto;
+}
 
 .ai-compare-toolbar {
   display: flex;
@@ -3223,10 +3991,26 @@ watch(
   background: #fffdf8;
   border-bottom: 1px solid #eee3d3;
 }
-.ai-compare-toolbar-text { min-width: 0; }
-.ai-compare-title { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; color: #0a142f; font-size: 16px; font-weight: 800; }
-.ai-compare-title i { color: #b78d52; }
-.ai-compare-subtitle { color: #718096; font-size: 13px; line-height: 1.5; }
+.ai-compare-toolbar-text {
+  min-width: 0;
+}
+.ai-compare-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  color: #0a142f;
+  font-size: 16px;
+  font-weight: 800;
+}
+.ai-compare-title i {
+  color: #b78d52;
+}
+.ai-compare-subtitle {
+  color: #718096;
+  font-size: 13px;
+  line-height: 1.5;
+}
 
 .cm-btn-ai {
   flex-shrink: 0;
@@ -3241,8 +4025,14 @@ watch(
   cursor: pointer;
   transition: 0.2s;
 }
-.cm-btn-ai:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(183, 141, 82, 0.24); }
-.cm-btn-ai:disabled { opacity: 0.6; cursor: not-allowed; }
+.cm-btn-ai:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(183, 141, 82, 0.24);
+}
+.cm-btn-ai:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
 .ai-compare-error {
   margin: 16px 24px 0;
@@ -3262,46 +4052,208 @@ watch(
   background: #fffdf8;
   overflow: hidden;
 }
-.ai-result-block { padding: 15px 16px; }
-.ai-result-block + .ai-result-block { border-top: 1px solid #eadfcf; }
-.ai-result-label { margin-bottom: 6px; color: #0a142f; font-size: 14px; font-weight: 800; }
-.ai-result-label i { color: #b78d52; }
-.ai-result-block p { margin: 0; color: #4a5568; font-size: 14px; line-height: 1.65; }
-.ai-result-recommendation { background: #fffcf7; }
-
-@media (max-width: 768px) {
-  .ai-compare-toolbar { align-items: stretch; flex-direction: column; }
-  .cm-btn-ai { width: 100%; }
+.ai-result-block {
+  padding: 15px 16px;
+}
+.ai-result-block + .ai-result-block {
+  border-top: 1px solid #eadfcf;
+}
+.ai-result-label {
+  margin-bottom: 6px;
+  color: #0a142f;
+  font-size: 14px;
+  font-weight: 800;
+}
+.ai-result-label i {
+  color: #b78d52;
+}
+.ai-result-block p {
+  margin: 0;
+  color: #4a5568;
+  font-size: 14px;
+  line-height: 1.65;
+}
+.ai-result-recommendation {
+  background: #fffcf7;
 }
 
-.table-compare { width: 100%; border-collapse: collapse; text-align: left; }
-.sticky-header th, .sticky-header td { position: sticky; top: 0; background: white; z-index: 10; border-bottom: 2px solid #eaeaea; padding-top: 25px; padding-bottom: 20px; }
-.table-compare th, .table-compare td { padding: 18px 24px; border-bottom: 1px solid #eaeaea; vertical-align: middle; }
+@media (max-width: 768px) {
+  .ai-compare-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .cm-btn-ai {
+    width: 100%;
+  }
+}
 
-.spec-label-col { width: 18%; background: #f8fafc; font-weight: 700; color: #4a5568; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; border-right: 1px solid #eaeaea; }
-.spec-value-col { width: 27.33%; font-size: 15px; color: #0a142f; text-align: center; position: relative; }
-.spec-value-col:not(:last-child) { border-right: 1px solid #eaeaea; }
+.table-compare {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.sticky-header th,
+.sticky-header td {
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 10;
+  border-bottom: 2px solid #eaeaea;
+  padding-top: 25px;
+  padding-bottom: 20px;
+}
+.table-compare th,
+.table-compare td {
+  padding: 18px 24px;
+  border-bottom: 1px solid #eaeaea;
+  vertical-align: middle;
+}
 
-.cm-img-wrapper { text-align: center; margin-bottom: 15px; cursor: pointer; display: flex; justify-content: center; }
-.cm-img-wrapper img { width: 140px; height: 140px; object-fit: cover; border-radius: 12px; border: 1px solid #eaeaea; box-shadow: 0 4px 15px rgba(0,0,0,0.04); transition: transform 0.2s; }
-.cm-img-wrapper:hover img { transform: scale(1.05); }
+.spec-label-col {
+  width: 18%;
+  background: #f8fafc;
+  font-weight: 700;
+  color: #4a5568;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-right: 1px solid #eaeaea;
+}
+.spec-value-col {
+  width: 27.33%;
+  font-size: 15px;
+  color: #0a142f;
+  text-align: center;
+  position: relative;
+}
+.spec-value-col:not(:last-child) {
+  border-right: 1px solid #eaeaea;
+}
 
-.cm-name { font-family: "Playfair Display", serif; font-size: 18px; font-weight: 800; color: #0a142f; margin: 0 0 5px; text-align: center; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; transition: color 0.2s; }
-.cm-name:hover { color: #bd9a5f; }
+.cm-img-wrapper {
+  text-align: center;
+  margin-bottom: 15px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+}
+.cm-img-wrapper img {
+  width: 140px;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid #eaeaea;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+  transition: transform 0.2s;
+}
+.cm-img-wrapper:hover img {
+  transform: scale(1.05);
+}
 
-.btn-remove-from-table { position: absolute; top: 10px; right: 10px; background: #e53e3e; color: white; border: none; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: 0.2s; z-index: 15; }
-.spec-value-col:hover .btn-remove-from-table { opacity: 1; }
+.cm-name {
+  font-family: "Playfair Display", serif;
+  font-size: 18px;
+  font-weight: 800;
+  color: #0a142f;
+  margin: 0 0 5px;
+  text-align: center;
+  line-height: 1.3;
 
-.cm-header-price { text-align: center; font-size: 16px; font-weight: 800; color: #e53e3e; }
-.group-header { background: #f8fafc; font-weight: 800; color: #0a142f; font-size: 16px; padding: 12px 24px; border-top: 2px solid #eaeaea; border-bottom: 1px solid #eaeaea; }
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 
-.empty-product-slot { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 180px; border: 2px dashed #cbd5e0; border-radius: 12px; color: #a0aec0; cursor: pointer; transition: 0.2s; background: #f8fafc; }
-.empty-product-slot i { font-size: 32px; margin-bottom: 10px; }
-.empty-product-slot span { font-weight: 600; font-size: 14px; }
-.empty-product-slot:hover { border-color: #bd9a5f; color: #bd9a5f; background: #fffcf7; }
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.cm-name:hover {
+  color: #bd9a5f;
+}
 
-.compare-select { width: 80%; padding: 8px 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 13px; font-weight: 600; color: #0a142f; outline: none; cursor: pointer; margin: 0 auto; display: block; }
-.compare-select:focus { border-color: #bd9a5f; }
+.btn-remove-from-table {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: #e53e3e;
+  color: white;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: 0.2s;
+  z-index: 15;
+}
+.spec-value-col:hover .btn-remove-from-table {
+  opacity: 1;
+}
+
+.cm-header-price {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 800;
+  color: #e53e3e;
+}
+.group-header {
+  background: #f8fafc;
+  font-weight: 800;
+  color: #0a142f;
+  font-size: 16px;
+  padding: 12px 24px;
+  border-top: 2px solid #eaeaea;
+  border-bottom: 1px solid #eaeaea;
+}
+
+.empty-product-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 180px;
+  border: 2px dashed #cbd5e0;
+  border-radius: 12px;
+  color: #a0aec0;
+  cursor: pointer;
+  transition: 0.2s;
+  background: #f8fafc;
+}
+.empty-product-slot i {
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+.empty-product-slot span {
+  font-weight: 600;
+  font-size: 14px;
+}
+.empty-product-slot:hover {
+  border-color: #bd9a5f;
+  color: #bd9a5f;
+  background: #fffcf7;
+}
+
+.compare-select {
+  width: 80%;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0a142f;
+  outline: none;
+  cursor: pointer;
+  margin: 0 auto;
+  display: block;
+}
+.compare-select:focus {
+  border-color: #bd9a5f;
+}
 
 .cm-price-val {
   font-size: 16px;
@@ -3323,28 +4275,157 @@ watch(
   justify-content: flex-start !important;
 }
 
-.cm-btn-buy { width: 80%; margin: 0 auto; display: flex; justify-content: center; align-items: center; padding: 12px; background: #0a142f; color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.2s; text-transform: uppercase; letter-spacing: 0.5px; font-size: 13px; }
-.cm-btn-buy:hover:not(:disabled) { background: #bd9a5f; box-shadow: 0 4px 15px rgba(189,154,95,0.3); }
-.cm-btn-buy:disabled { opacity: 0.6; cursor: not-allowed; background: #718096; }
+.cm-btn-buy {
+  width: 80%;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 12px;
+  background: #0a142f;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 13px;
+}
+.cm-btn-buy:hover:not(:disabled) {
+  background: #bd9a5f;
+  box-shadow: 0 4px 15px rgba(189, 154, 95, 0.3);
+}
+.cm-btn-buy:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #718096;
+}
 
 /* PICKER MODAL */
-.product-picker-box { background: white; width: 95%; max-width: 700px; max-height: 80vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; animation: modalFadeIn 0.3s ease; }
-.picker-search-bar { padding: 15px 24px; border-bottom: 1px solid #eaeaea; background: #f8fafc; }
-.picker-input { width: 100%; padding: 12px 15px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 14px; outline: none; transition: 0.2s; }
-.picker-input:focus { border-color: #bd9a5f; box-shadow: 0 0 0 3px rgba(189,154,95,0.1); }
-.picker-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
-.picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; }
+.product-picker-box {
+  background: white;
+  width: 95%;
+  max-width: 700px;
+  max-height: 80vh;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalFadeIn 0.3s ease;
+}
+.picker-search-bar {
+  padding: 15px 24px;
+  border-bottom: 1px solid #eaeaea;
+  background: #f8fafc;
+}
+.picker-input {
+  width: 100%;
+  padding: 12px 15px;
+  border: 1px solid #cbd5e0;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: 0.2s;
+}
+.picker-input:focus {
+  border-color: #bd9a5f;
+  box-shadow: 0 0 0 3px rgba(189, 154, 95, 0.1);
+}
+.picker-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 15px;
+}
 
-.picker-item { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 15px; border: 1px solid #eaeaea; border-radius: 12px; cursor: pointer; transition: 0.2s; position: relative; justify-content: space-between; height: 100%; }
-.picker-item:hover { border-color: #bd9a5f; transform: translateY(-3px); box-shadow: 0 6px 15px rgba(0,0,0,0.05); }
-.picker-item.selected { border-color: #bd9a5f; background: #fdfaf6; }
-.picker-item img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; margin-bottom: 12px; flex-shrink: 0; }
-.picker-info { display: flex; flex-direction: column; align-items: center; width: 100%; flex: 1; justify-content: space-between; }
-.picker-info .brand { font-size: 11px; color: #bd9a5f; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
-.picker-info .name { font-size: 13px; font-weight: 700; color: #0a142f; margin: 0 0 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
-.picker-price { font-size: 15px; font-weight: 800; color: #e53e3e; margin-top: auto; }
+.picker-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 15px;
+  border: 1px solid #eaeaea;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: 0.2s;
+  position: relative;
+  justify-content: space-between;
+  height: 100%;
+}
+.picker-item:hover {
+  border-color: #bd9a5f;
+  transform: translateY(-3px);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.05);
+}
+.picker-item.selected {
+  border-color: #bd9a5f;
+  background: #fdfaf6;
+}
+.picker-item img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+.picker-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  flex: 1;
+  justify-content: space-between;
+}
+.picker-info .brand {
+  font-size: 11px;
+  color: #bd9a5f;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.picker-info .name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0a142f;
+  margin: 0 0 8px;
 
-.picker-check { position: absolute; top: 10px; right: 10px; font-size: 18px; }
-.picker-footer { padding: 15px 24px; border-top: 1px solid #eaeaea; display: flex; justify-content: flex-end; background: #f8fafc; }
-@keyframes modalFadeIn { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+
+  line-height: 1.3;
+}
+
+.picker-check {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 18px;
+}
+.picker-footer {
+  padding: 15px 24px;
+  border-top: 1px solid #eaeaea;
+  display: flex;
+  justify-content: flex-end;
+  background: #f8fafc;
+}
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
 </style>

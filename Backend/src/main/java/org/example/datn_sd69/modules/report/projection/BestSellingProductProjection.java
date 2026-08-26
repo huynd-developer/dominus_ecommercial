@@ -10,7 +10,9 @@ public interface BestSellingProductProjection {
 
     String getBrandName();
 
-    String getCapacityName(); // <-- Bổ sung dòng này để JPA Projection nhận diện được cột capacityName từ SQL
+    String getCapacityName();
+
+    String getBottleTypeName();
 
     Long getTotalSold();
 
