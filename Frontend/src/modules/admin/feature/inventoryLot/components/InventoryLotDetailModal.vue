@@ -38,6 +38,28 @@ const formatMoney = (value?: number | null) => {
   return `${new Intl.NumberFormat("vi-VN").format(Number(value))} đ`;
 };
 
+const formatCapacity = (value?: number | null) => {
+  if (value == null || !Number.isFinite(Number(value))) {
+    return "";
+  }
+
+  return `${new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 2,
+  }).format(Number(value))} ml`;
+};
+
+const variantLabel = (detail: {
+  capacityValue?: number | null;
+  bottleTypeName?: string | null;
+}) => {
+  const parts = [
+    formatCapacity(detail.capacityValue),
+    detail.bottleTypeName?.trim() || "",
+  ].filter(Boolean);
+
+  return parts.join(" · ");
+};
+
 const inventoryValue = (detail: InventoryLotDetailResponse) => {
   if (
     detail.unitCost == null ||
@@ -147,7 +169,12 @@ const onPreviewImageError = () => {
                   {{ expiryText(detail) }}
                 </span>
               </div>
-              <p v-if="detail">{{ detail.sku }} · {{ detail.productName }}</p>
+              <p v-if="detail">
+                {{ detail.sku }} · {{ detail.productName }}
+                <span v-if="variantLabel(detail)">
+                  · {{ variantLabel(detail) }}
+                </span>
+              </p>
             </div>
           </div>
 
@@ -173,6 +200,14 @@ const onPreviewImageError = () => {
               <div>
                 <span>Sản phẩm</span>
                 <strong>{{ detail.productName }}</strong>
+              </div>
+              <div>
+                <span>Dung tích</span>
+                <strong>{{ formatCapacity(detail.capacityValue) || "—" }}</strong>
+              </div>
+              <div>
+                <span>Loại chai</span>
+                <strong>{{ detail.bottleTypeName || "—" }}</strong>
               </div>
               <div>
                 <span>Ngày sản xuất</span>

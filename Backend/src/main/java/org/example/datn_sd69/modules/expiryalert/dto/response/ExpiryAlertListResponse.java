@@ -19,6 +19,10 @@ public class ExpiryAlertListResponse {
 
     private String imageUrl;
 
+    private Double capacityValue;
+
+    private String bottleTypeName;
+
     private String lotCode;
 
     private Integer quantityOnHand;

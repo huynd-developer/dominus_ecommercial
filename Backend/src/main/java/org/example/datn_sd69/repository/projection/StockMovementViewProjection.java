@@ -16,6 +16,10 @@ public interface StockMovementViewProjection {
 
     String getImageUrl();
 
+    Double getCapacityValue();
+
+    String getBottleTypeName();
+
     String getLotCode();
 
     Byte getMovementType();

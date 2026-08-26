@@ -1,68 +1,86 @@
 <template>
   <div class="row g-3 mb-4">
-    <!-- Card Tổng Doanh Thu -->
     <div class="col-12 col-md-4">
       <div class="report-card card-revenue">
-        <div class="report-card-label">Tổng doanh thu</div>
+        <div class="report-card-label">Doanh thu thuần</div>
+
         <div class="report-card-value text-primary-gradient">
           {{ formatMoney(summary?.totalRevenue || 0) }}
         </div>
 
+        <div class="report-card-desc revenue-desc">
+          Doanh thu bán sau khi trừ các khoản hoàn tiền sản phẩm đã hoàn tất trong kỳ.
+        </div>
+
         <div class="split-stats">
           <div class="stat-row">
-            <span class="stat-label">🌐 Đơn Online:</span>
-            <span class="stat-number">{{ formatMoney(summary?.onlineRevenue || 0) }}</span>
+            <span class="stat-label">🌐 Online:</span>
+            <span class="stat-number">
+              {{ formatMoney(summary?.onlineRevenue || 0) }}
+            </span>
           </div>
+
           <div class="stat-row">
             <span class="stat-label">🏪 Tại quầy (POS):</span>
-            <span class="stat-number">{{ formatMoney(summary?.offlineRevenue || 0) }}</span>
+            <span class="stat-number">
+              {{ formatMoney(summary?.offlineRevenue || 0) }}
+            </span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Card Số Đơn Hoàn Thành -->
     <div class="col-12 col-md-4">
       <div class="report-card card-orders">
         <div class="report-card-label">Số đơn hoàn thành</div>
+
         <div class="report-card-value">
-          {{ formatNumber(summary?.totalOrders || 0) }} <span style="font-size: 16px; color: #6b7280; font-weight: 500;">đơn</span>
+          {{ formatNumber(summary?.totalOrders || 0) }}
+          <span class="value-unit">đơn</span>
         </div>
 
         <div class="split-stats">
           <div class="stat-row">
             <span class="stat-label">🌐 Đơn Online:</span>
-            <span class="stat-number">{{ formatNumber(summary?.onlineOrders || 0) }}</span>
+            <span class="stat-number">
+              {{ formatNumber(summary?.onlineOrders || 0) }}
+            </span>
           </div>
+
           <div class="stat-row">
             <span class="stat-label">🏪 Tại quầy (POS):</span>
-            <span class="stat-number">{{ formatNumber(summary?.offlineOrders || 0) }}</span>
+            <span class="stat-number">
+              {{ formatNumber(summary?.offlineOrders || 0) }}
+            </span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Card Sản Phẩm Đã Bán -->
     <div class="col-12 col-md-4">
       <div class="report-card card-products">
         <div class="report-card-label">Sản phẩm đã bán</div>
+
         <div class="report-card-value">
-          {{ formatNumber(summary?.totalProductsSold || 0) }} <span style="font-size: 16px; color: #6b7280; font-weight: 500;">sản phẩm</span>
+          {{ formatNumber(summary?.totalProductsSold || 0) }}
+          <span class="value-unit">sản phẩm</span>
         </div>
-        <div class="report-card-desc mt-3" style="font-size: 13.5px; color: #6b7280;">
-           Tổng số lượng các sản phẩm nằm trong những đơn hàng đã hoàn thành thành công.
+
+        <div class="report-card-desc mt-3">
+          Tổng số lượng sản phẩm thuộc các giao dịch bán đã hoàn thành trong kỳ;
+          hàng trả sau đó không làm giảm chỉ số này.
         </div>
       </div>
     </div>
 
-    <!-- Khoảng thời gian báo cáo -->
     <div v-if="summary" class="col-12">
       <div class="range-box d-flex align-items-center">
-        <span class="range-icon me-2" style="font-size: 18px;">📅</span>
-        <span style="font-size: 14.5px; color: #64748b;">
-          Dữ liệu báo cáo được tính từ 
+        <span class="range-icon me-2">📅</span>
+
+        <span class="range-text">
+          Dữ liệu báo cáo được tính từ
           <strong class="text-dark">{{ formatDate(summary.fromDate) }}</strong>
-          đến 
+          đến
           <strong class="text-dark">{{ formatDate(summary.toDate) }}</strong>
         </span>
       </div>
@@ -96,10 +114,13 @@ const formatNumber = (value: unknown) => {
 
 const formatDate = (value?: string | null) => {
   if (!value) return "-";
+
   const parts = value.split("-");
+
   if (parts.length !== 3) {
     return value;
   }
+
   const [year, month, day] = parts;
   return `${day}/${month}/${year}`;
 };
@@ -125,7 +146,6 @@ const formatDate = (value?: string | null) => {
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.06);
 }
 
-/* Các dải màu viền trên của thẻ */
 .report-card::before {
   content: "";
   position: absolute;
@@ -163,17 +183,29 @@ const formatDate = (value?: string | null) => {
   margin-bottom: 8px;
 }
 
+.value-unit {
+  font-size: 16px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
 .text-primary-gradient {
   background: linear-gradient(90deg, #111827, #374151);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .report-card-desc {
-  margin-top: auto;
+  color: #6b7280;
+  font-size: 13.5px;
 }
 
-/* Phân chia thông tin Online / Offline */
+.revenue-desc {
+  margin-top: 2px;
+  margin-bottom: 4px;
+}
+
 .split-stats {
   margin-top: auto;
   padding-top: 16px;
@@ -208,5 +240,14 @@ const formatDate = (value?: string | null) => {
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 14px 20px;
+}
+
+.range-icon {
+  font-size: 18px;
+}
+
+.range-text {
+  font-size: 14.5px;
+  color: #64748b;
 }
 </style>

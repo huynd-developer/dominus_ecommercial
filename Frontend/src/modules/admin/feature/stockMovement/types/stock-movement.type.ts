@@ -20,6 +20,9 @@ export interface StockMovementListResponse {
   // Ảnh đại diện của sản phẩm.
   imageUrl: string | null;
 
+  capacityValue: number | null;
+  bottleTypeName: string | null;
+
   lotCode: string;
 
   movementType: StockMovementType | null;

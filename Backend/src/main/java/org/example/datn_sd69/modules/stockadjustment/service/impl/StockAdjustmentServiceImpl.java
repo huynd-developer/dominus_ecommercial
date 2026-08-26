@@ -1199,6 +1199,14 @@ public class StockAdjustmentServiceImpl
                 response.setImageUrl(
                         display.imageUrl
                 );
+
+                response.setCapacityValue(
+                        display.capacityValue
+                );
+
+                response.setBottleTypeName(
+                        display.bottleTypeName
+                );
             }
         }
 
@@ -1224,12 +1232,18 @@ public class StockAdjustmentServiceImpl
                                     IL.ProductVariantId,
                                     PV.Sku,
                                     P.Name AS ProductName,
-                                    ImageData.ImageUrl AS ImageUrl
+                                    ImageData.ImageUrl AS ImageUrl,
+                                    C.Value AS CapacityValue,
+                                    BT.Name AS BottleTypeName
                                 FROM dbo.InventoryLot IL
                                 INNER JOIN dbo.ProductVariant PV
                                     ON PV.Id = IL.ProductVariantId
                                 INNER JOIN dbo.Product P
                                     ON P.Id = PV.ProductId
+                                LEFT JOIN dbo.Capacity C
+                                    ON C.Id = PV.CapacityId
+                                LEFT JOIN dbo.BottleType BT
+                                    ON BT.Id = PV.BottleTypeId
                                 OUTER APPLY (
                                     SELECT TOP 1
                                         PI.ImageUrl
@@ -1268,6 +1282,12 @@ public class StockAdjustmentServiceImpl
         Object imageUrl =
                 row.get("ImageUrl");
 
+        Number capacityValue =
+                (Number) row.get("CapacityValue");
+
+        Object bottleTypeName =
+                row.get("BottleTypeName");
+
         return new LotDisplay(
                 productVariantId != null
                         ? productVariantId.intValue()
@@ -1280,6 +1300,12 @@ public class StockAdjustmentServiceImpl
                         : null,
                 imageUrl != null
                         ? imageUrl.toString()
+                        : null,
+                capacityValue != null
+                        ? capacityValue.doubleValue()
+                        : null,
+                bottleTypeName != null
+                        ? bottleTypeName.toString()
                         : null
         );
     }
@@ -1288,7 +1314,9 @@ public class StockAdjustmentServiceImpl
             Integer productVariantId,
             String sku,
             String productName,
-            String imageUrl
+            String imageUrl,
+            Double capacityValue,
+            String bottleTypeName
     ) {
     }
 

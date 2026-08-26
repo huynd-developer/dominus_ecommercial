@@ -117,6 +117,28 @@ const formatDate = (value?: string | null) =>
 const formatNumber = (value?: number | null) =>
   new Intl.NumberFormat("vi-VN").format(Number(value ?? 0));
 
+const formatCapacity = (value?: number | null) => {
+  if (value == null || !Number.isFinite(Number(value))) {
+    return "";
+  }
+
+  return `${new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 2,
+  }).format(Number(value))} ml`;
+};
+
+const variantLabel = (item: {
+  capacityValue?: number | null;
+  bottleTypeName?: string | null;
+}) => {
+  const parts = [
+    formatCapacity(item.capacityValue),
+    item.bottleTypeName?.trim() || "",
+  ].filter(Boolean);
+
+  return parts.join(" · ");
+};
+
 const getErrorMessage = (error: any) =>
   error?.response?.data?.message ||
   error?.response?.data?.detail ||
@@ -364,7 +386,14 @@ onMounted(loadList);
                   <strong>{{ item.sku }}</strong>
                 </td>
 
-                <td>{{ item.productName }}</td>
+                <td>
+                  <div class="product-cell">
+                    <strong>{{ item.productName }}</strong>
+                    <span v-if="variantLabel(item)" class="variant-info">
+                      {{ variantLabel(item) }}
+                    </span>
+                  </div>
+                </td>
 
                 <td>{{ formatDate(item.receivedDate) }}</td>
 
@@ -690,6 +719,25 @@ th {
 .lot-link:hover {
   text-decoration: underline;
 }
+
+.product-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 150px;
+}
+
+.product-cell > strong {
+  color: #111827;
+}
+
+.variant-info {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
 .status-badge {
   display: inline-flex;
   white-space: nowrap;

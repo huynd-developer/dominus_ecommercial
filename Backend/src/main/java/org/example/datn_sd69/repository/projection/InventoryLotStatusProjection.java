@@ -33,4 +33,8 @@ public interface InventoryLotStatusProjection {
     Boolean getNearExpiry();
 
     Integer getSellableQuantity();
+
+    Double getCapacityValue();
+
+    String getBottleTypeName();
 }

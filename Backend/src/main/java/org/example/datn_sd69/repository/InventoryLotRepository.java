@@ -107,6 +107,9 @@ public interface InventoryLotRepository
 
                         ImageData.ImageUrl AS imageUrl,
 
+                        C.Value AS capacityValue,
+                        BT.Name AS bottleTypeName,
+
                         LS.LotCode AS lotCode,
                         LS.ManufacturedDate AS manufacturedDate,
                         LS.ReceivedDate AS receivedDate,
@@ -147,6 +150,12 @@ public interface InventoryLotRepository
                      */
                     LEFT JOIN dbo.ProductVariant PV
                         ON PV.Id = LS.ProductVariantId
+
+                    LEFT JOIN dbo.Capacity C
+                        ON C.Id = PV.CapacityId
+
+                    LEFT JOIN dbo.BottleType BT
+                        ON BT.Id = PV.BottleTypeId
 
                     /*
                      * Lấy duy nhất 1 ảnh cho sản phẩm:
@@ -338,6 +347,9 @@ public interface InventoryLotRepository
 
                         ImageData.ImageUrl AS imageUrl,
 
+                        C.Value AS capacityValue,
+                        BT.Name AS bottleTypeName,
+
                         LS.LotCode AS lotCode,
                         LS.ManufacturedDate AS manufacturedDate,
                         LS.ReceivedDate AS receivedDate,
@@ -377,6 +389,12 @@ public interface InventoryLotRepository
                      */
                     LEFT JOIN dbo.ProductVariant PV
                         ON PV.Id = LS.ProductVariantId
+
+                    LEFT JOIN dbo.Capacity C
+                        ON C.Id = PV.CapacityId
+
+                    LEFT JOIN dbo.BottleType BT
+                        ON BT.Id = PV.BottleTypeId
 
                     /*
                      * Ảnh primary trước.

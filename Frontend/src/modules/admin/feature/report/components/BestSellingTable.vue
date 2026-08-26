@@ -5,18 +5,18 @@
         <div>
           <h5 class="mb-1 fw-bold">Sản phẩm bán chạy nhất</h5>
           <div class="text-muted small">
-            Chỉ tính các đơn đã hoàn thành trong khoảng thời gian đã chọn
+            Tính theo các giao dịch bán đã hoàn thành trong khoảng thời gian đã chọn
           </div>
         </div>
 
-        <span v-if="items.length > 0" class="badge bg-dark-subtle text-dark">
-          {{ items.length }} sản phẩm
+        <span v-if="safeItems.length > 0" class="badge bg-dark-subtle text-dark">
+          {{ safeItems.length }} sản phẩm
         </span>
       </div>
     </div>
 
     <div class="card-body p-0">
-      <div v-if="items.length === 0" class="empty-box">
+      <div v-if="safeItems.length === 0" class="empty-box">
         Chưa có sản phẩm bán chạy trong khoảng thời gian này
       </div>
 
@@ -29,18 +29,21 @@
               <th>Thương hiệu</th>
               <th class="text-end">Đã bán</th>
               <th class="text-end">
-                Doanh thu
-                <i 
-                  class="bi bi-info-circle ms-1 text-muted" 
-                  style="cursor: help; font-size: 14px;" 
-                  title="Doanh thu của từng sản phẩm, chưa bao gồm các khuyến mãi giảm giá trên toàn đơn hàng.">
-                </i>
+                Doanh thu sản phẩm
+                <i
+                  class="bi bi-info-circle ms-1 text-muted"
+                  style="cursor: help; font-size: 14px"
+                  title="Doanh thu bán của sản phẩm đã tính giảm giá trên sản phẩm và phần voucher toàn đơn được phân bổ theo tỷ lệ. Không trừ các khoản hoàn tiền phát sinh sau bán."
+                ></i>
               </th>
             </tr>
           </thead>
 
           <tbody>
-            <tr v-for="(item, index) in safeItems" :key="item.productId || index">
+            <tr
+              v-for="(item, index) in safeItems"
+              :key="item.productId ?? `deleted-${index}`"
+            >
               <td>
                 <span class="rank-badge" :class="getRankClass(index)">
                   #{{ index + 1 }}
@@ -50,7 +53,6 @@
               <td>
                 <div class="d-flex align-items-center gap-3">
                   <div class="image-box">
-                    <!-- ƯU TIÊN TUYỆT ĐỐI PRIMARY IMAGE ĐỂ ĐỒNG BỘ VỚI TRANG QUẢN LÝ -->
                     <img
                       v-if="getBestSellingImageUrl(item)"
                       :src="getBestSellingImageUrl(item)"
@@ -71,7 +73,7 @@
                       {{ item.productName || "Sản phẩm" }}
                     </div>
                     <div class="text-muted small">
-                      ID: {{ item.productId || "-" }}
+                      ID: {{ item.productId ?? "-" }}
                     </div>
                   </div>
                 </div>
@@ -110,62 +112,98 @@ const productDetailMap = ref<Record<number, any>>({});
 
 const getImageUrl = (url?: string) => {
   if (!url) return "";
-  if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("data:")) return url;
+
+  if (
+    url.startsWith("http") ||
+    url.startsWith("blob:") ||
+    url.startsWith("data:")
+  ) {
+    return url;
+  }
+
   return url.startsWith("/") ? `${API_URL}${url}` : `${API_URL}/${url}`;
 };
 
 const fetchMissingImages = async () => {
   if (!Array.isArray(props.items)) return;
+
   for (const item of props.items) {
-    const pId = Number(item.productId || 0);
-    if (pId > 0 && !productDetailMap.value[pId]) {
+    const productId = Number(item.productId || 0);
+
+    if (productId > 0 && !productDetailMap.value[productId]) {
       try {
-        const res = await api.get(`/v1/products/${pId}`);
-        const data = res.data?.data || res.data;
+        const response = await api.get(`/v1/products/${productId}`);
+        const data = response.data?.data || response.data;
+
         if (data) {
-          productDetailMap.value[pId] = data;
+          productDetailMap.value[productId] = data;
         }
-      } catch (e) {}
+      } catch {
+        // Ảnh trả về từ report vẫn được dùng làm fallback.
+      }
     }
   }
 };
 
-watch(() => props.items, () => {
-  fetchMissingImages();
-}, { immediate: true, deep: true });
+watch(
+  () => props.items,
+  () => {
+    fetchMissingImages();
+  },
+  {
+    immediate: true,
+    deep: true,
+  }
+);
 
-// HÀM ƯU TIÊN LẤY PRIMARY IMAGE ĐỂ KHỚP VỚI BÊN QUẢN LÝ SẢN PHẨM
-const getBestSellingImageUrl = (item: any) => {
+const getBestSellingImageUrl = (item: BestSellingProductResponse) => {
   if (!item) return "";
-  
-  const pId = Number(item.productId || 0);
-  const detail = pId > 0 ? productDetailMap.value[pId] : null;
 
-  // 1. Kiểm tra từ chi tiết sản phẩm trước (lấy chuẩn primaryImageUrl y hệt ProductList)
+  const productId = Number(item.productId || 0);
+  const detail =
+    productId > 0 ? productDetailMap.value[productId] : null;
+
   if (detail) {
-    const detailUrl = detail.primaryImageUrl || detail.PrimaryImageUrl || detail.imageUrl || detail.ImageUrl || detail.mainImage;
-    if (detailUrl) return getImageUrl(detailUrl);
-    
+    const detailUrl =
+      detail.primaryImageUrl ||
+      detail.PrimaryImageUrl ||
+      detail.imageUrl ||
+      detail.ImageUrl ||
+      detail.mainImage;
+
+    if (detailUrl) {
+      return getImageUrl(detailUrl);
+    }
+
     if (Array.isArray(detail.images) && detail.images.length > 0) {
-      const primaryObj = detail.images.find((img: any) => Boolean(img?.isPrimary || img?.is_primary));
-      const fallbackObj = primaryObj || detail.images[0];
-      const imgUrl = fallbackObj?.imageUrl || fallbackObj?.url || fallbackObj;
-      if (imgUrl) return getImageUrl(imgUrl);
+      const primaryImage = detail.images.find((image: any) =>
+        Boolean(image?.isPrimary || image?.is_primary)
+      );
+
+      const fallbackImage = primaryImage || detail.images[0];
+
+      const imageUrl =
+        fallbackImage?.imageUrl ||
+        fallbackImage?.url ||
+        fallbackImage;
+
+      if (imageUrl) {
+        return getImageUrl(imageUrl);
+      }
     }
   }
 
-  // 2. Fallback về item của bảng bán chạy nhưng đặt primaryImageUrl lên đầu tiên
   const rawUrl =
-    item.primaryImageUrl ||
-    item.PrimaryImageUrl ||
+    (item as any).primaryImageUrl ||
+    (item as any).PrimaryImageUrl ||
     item.imageUrl ||
-    item.ImageUrl ||
-    item.image ||
-    item.Image ||
-    item.thumbnailUrl ||
-    item.mainImage ||
+    (item as any).ImageUrl ||
+    (item as any).image ||
+    (item as any).Image ||
+    (item as any).thumbnailUrl ||
+    (item as any).mainImage ||
     "";
-  
+
   return getImageUrl(rawUrl);
 };
 
@@ -197,10 +235,12 @@ const getRankClass = (index: number) => {
   return "";
 };
 
-const FALLBACK_IMAGE = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23f1f5f9%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20fill%3D%22%2394a3b8%22%20font-family%3D%22Arial%22%20font-size%3D%2214%22%3EKh%C3%B4ng%20c%C3%B3%20%E1%BA%A3nh%3C%2Ftext%3E%3C%2Fsvg%3E";
+const FALLBACK_IMAGE =
+  "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23f1f5f9%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20fill%3D%22%2394a3b8%22%20font-family%3D%22Arial%22%20font-size%3D%2214%22%3EKh%C3%B4ng%20c%C3%B3%20%E1%BA%A3nh%3C%2Ftext%3E%3C%2Fsvg%3E";
 
 const handleImageError = (event: Event) => {
   const target = event.target as HTMLImageElement | null;
+
   if (target) {
     target.src = FALLBACK_IMAGE;
   }

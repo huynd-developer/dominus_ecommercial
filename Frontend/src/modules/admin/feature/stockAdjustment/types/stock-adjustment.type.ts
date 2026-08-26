@@ -87,6 +87,8 @@ export interface StockAdjustmentItemResponse {
   sku: string | null;
   productName: string | null;
   imageUrl: string | null;
+  capacityValue: number | null;
+  bottleTypeName: string | null;
   lotCode: string | null;
   systemQuantity: number;
   actualQuantity: number;
