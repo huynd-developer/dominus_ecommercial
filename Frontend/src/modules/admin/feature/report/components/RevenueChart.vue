@@ -3,9 +3,9 @@
     <div class="card-header bg-white border-0 py-3">
       <div class="d-flex align-items-center justify-content-between gap-3">
         <div>
-          <h5 class="mb-1 fw-bold">Biểu đồ doanh thu</h5>
+          <h5 class="mb-1 fw-bold">Biểu đồ doanh thu thuần</h5>
           <div class="text-muted small">
-            Doanh thu ghi nhận từ đơn đã hoàn thành
+            Doanh thu bán trừ các khoản hoàn tiền sản phẩm đã hoàn tất theo từng mốc thời gian
           </div>
         </div>
 
@@ -76,7 +76,7 @@ const renderChart = async () => {
       labels: props.items.map((item) => item.label),
       datasets: [
         {
-          label: "Doanh thu",
+          label: "Doanh thu thuần",
           data: props.items.map((item) => toNumber(item.revenue)),
           tension: 0.35,
           fill: false,
@@ -109,7 +109,7 @@ const renderChart = async () => {
                 return `Số đơn: ${formatNumber(context.raw)}`;
               }
 
-              return `Doanh thu: ${formatMoney(context.raw)}`;
+              return `Doanh thu thuần: ${formatMoney(context.raw)}`;
             },
           },
         },

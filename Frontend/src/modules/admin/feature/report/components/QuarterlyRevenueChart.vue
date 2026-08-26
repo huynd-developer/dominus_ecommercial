@@ -3,15 +3,15 @@
     <div class="card-body">
       <div class="chart-header">
         <div>
-          <h5 class="fw-bold mb-1">Biểu đồ doanh thu theo quý</h5>
+          <h5 class="fw-bold mb-1">Biểu đồ doanh thu thuần theo quý</h5>
           <p class="text-muted mb-0">
-            Thống kê doanh thu từng quý trong năm hiện tại
+            Doanh thu bán trừ các khoản hoàn tiền sản phẩm đã hoàn tất trong từng quý
           </p>
         </div>
 
         <div class="chart-summary">
           <div class="summary-item">
-            <span>Tổng doanh thu</span>
+            <span>Tổng doanh thu thuần</span>
             <strong>{{ formatCurrency(totalRevenue) }}</strong>
           </div>
 
@@ -28,10 +28,7 @@
 
       <div v-else class="chart-wrapper">
         <div class="y-axis">
-          <span
-            v-for="label in yAxisLabels"
-            :key="label"
-          >
+          <span v-for="label in yAxisLabels" :key="label">
             {{ label }}
           </span>
         </div>
@@ -80,7 +77,8 @@
       </div>
 
       <div v-if="chartItems.length > 0" class="chart-note">
-        Doanh thu chỉ tính từ các đơn đã hoàn thành.
+        Giao dịch bán được ghi nhận theo thời điểm hoàn thành đơn; khoản hoàn tiền
+        được ghi nhận theo thời điểm hoàn tiền hoàn tất.
       </div>
     </div>
   </div>
@@ -189,17 +187,19 @@ const formatCurrency = (value: number) => {
 
 const formatCompactCurrency = (value: number) => {
   const numberValue = Number(value || 0);
+  const sign = numberValue < 0 ? "-" : "";
+  const absoluteValue = Math.abs(numberValue);
 
-  if (numberValue >= 1_000_000_000) {
-    return `${Math.round(numberValue / 1_000_000_000)} tỷ`;
+  if (absoluteValue >= 1_000_000_000) {
+    return `${sign}${Math.round(absoluteValue / 1_000_000_000)} tỷ`;
   }
 
-  if (numberValue >= 1_000_000) {
-    return `${Math.round(numberValue / 1_000_000)} triệu`;
+  if (absoluteValue >= 1_000_000) {
+    return `${sign}${Math.round(absoluteValue / 1_000_000)} triệu`;
   }
 
-  if (numberValue >= 1_000) {
-    return `${Math.round(numberValue / 1_000)} nghìn`;
+  if (absoluteValue >= 1_000) {
+    return `${sign}${Math.round(absoluteValue / 1_000)} nghìn`;
   }
 
   return `${Math.round(numberValue)}đ`;

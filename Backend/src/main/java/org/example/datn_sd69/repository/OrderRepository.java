@@ -496,6 +496,98 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
             @Param("toDate") LocalDateTime toDate
     );
 
+    /*
+     * =========================================================
+     * OWNER REPORT - QUERY RIÊNG
+     * =========================================================
+     *
+     * Không sửa semantics các query cũ vì OrderRepository đang được dùng bởi
+     * Admin Order, Customer Order, POS và payment callback.
+     *
+     * Một giao dịch bán được ghi nhận khi CompletedAt != NULL.
+     * Sau đó Order có thể chuyển 3 -> 6 -> 7 do return, nhưng giao dịch bán
+     * lịch sử vẫn phải còn trong báo cáo.
+     *
+     * Doanh thu bán hàng:
+     * - ONLINE: FinalAmount đã gồm shipping -> loại Shippingfee.
+     * - POS/IN_STORE: FinalAmount không có shipping -> dùng nguyên FinalAmount.
+     *
+     * Chỉ nhận các OrderType nghiệp vụ hợp lệ của hệ thống để dữ liệu test/null
+     * không bị gộp nhầm vào POS.
+     */
+    @Query(value = """
+        SELECT COALESCE(SUM(
+            CASE
+                WHEN UPPER(LTRIM(RTRIM(COALESCE(o.OrderType, '')))) = 'ONLINE'
+                    THEN o.FinalAmount - ISNULL(o.Shippingfee, 0)
+                ELSE o.FinalAmount
+            END
+        ), 0)
+        FROM [Orders] o
+        WHERE o.CompletedAt IS NOT NULL
+          AND o.CompletedAt >= :fromDate
+          AND o.CompletedAt < :toDate
+          AND UPPER(LTRIM(RTRIM(COALESCE(o.OrderType, ''))))
+              IN ('ONLINE', 'IN_STORE', 'POS')
+    """, nativeQuery = true)
+    BigDecimal sumGrossSalesRevenueForOwnerReport(
+            @Param("fromDate") LocalDateTime fromDate,
+            @Param("toDate") LocalDateTime toDate
+    );
+
+    @Query(value = """
+        SELECT COUNT(o.Id)
+        FROM [Orders] o
+        WHERE o.CompletedAt IS NOT NULL
+          AND o.CompletedAt >= :fromDate
+          AND o.CompletedAt < :toDate
+          AND UPPER(LTRIM(RTRIM(COALESCE(o.OrderType, ''))))
+              IN ('ONLINE', 'IN_STORE', 'POS')
+    """, nativeQuery = true)
+    Long countCompletedSalesForOwnerReport(
+            @Param("fromDate") LocalDateTime fromDate,
+            @Param("toDate") LocalDateTime toDate
+    );
+
+    @Query(value = """
+        SELECT *
+        FROM [Orders] o
+        WHERE o.CompletedAt IS NOT NULL
+          AND o.CompletedAt >= :fromDate
+          AND o.CompletedAt < :toDate
+          AND UPPER(LTRIM(RTRIM(COALESCE(o.OrderType, ''))))
+              IN ('ONLINE', 'IN_STORE', 'POS')
+        ORDER BY o.CompletedAt ASC, o.Id ASC
+    """, nativeQuery = true)
+    List<Order> findSalesForOwnerReportChart(
+            @Param("fromDate") LocalDateTime fromDate,
+            @Param("toDate") LocalDateTime toDate
+    );
+
+    @Query(value = """
+        SELECT
+            UPPER(LTRIM(RTRIM(o.OrderType))) AS orderType,
+            COALESCE(SUM(
+                CASE
+                    WHEN UPPER(LTRIM(RTRIM(o.OrderType))) = 'ONLINE'
+                        THEN o.FinalAmount - ISNULL(o.Shippingfee, 0)
+                    ELSE o.FinalAmount
+                END
+            ), 0) AS revenue,
+            COUNT(o.Id) AS totalOrders
+        FROM [Orders] o
+        WHERE o.CompletedAt IS NOT NULL
+          AND o.CompletedAt >= :fromDate
+          AND o.CompletedAt < :toDate
+          AND UPPER(LTRIM(RTRIM(COALESCE(o.OrderType, ''))))
+              IN ('ONLINE', 'IN_STORE', 'POS')
+        GROUP BY UPPER(LTRIM(RTRIM(o.OrderType)))
+    """, nativeQuery = true)
+    List<Object[]> getOwnerReportSalesBreakdownByOrderType(
+            @Param("fromDate") LocalDateTime fromDate,
+            @Param("toDate") LocalDateTime toDate
+    );
+
     // --- JOB TỰ ĐỘNG HỦY ĐƠN ONLINE TRẢ TRƯỚC CHƯA THANH TOÁN ---
     @Query("""
         SELECT o FROM Order o

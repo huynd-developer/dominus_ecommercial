@@ -36,6 +36,7 @@ import org.example.datn_sd69.repository.StockMovementRepository;
 import org.example.datn_sd69.repository.RoleRepository;
 import org.example.datn_sd69.repository.UserRepository;
 import org.example.datn_sd69.repository.VoucherRepository;
+import org.springframework.jdbc.core.PreparedStatementCallback;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.HttpStatus;
@@ -276,6 +277,8 @@ public class PosServiceImpl implements PosService {
         order.setPaymentMethod(paymentSummary.orderPaymentMethod());
         order.setTotalAmount(totalAmount);
         order.setDiscountAmount(discountAmount);
+        /* POS/IN_STORE không phát sinh phí vận chuyển. */
+        order.setShippingFee(BigDecimal.ZERO);
         order.setFinalAmount(finalAmount);
         order.setStatus(completedImmediately ? ORDER_STATUS_COMPLETED : ORDER_STATUS_PENDING);
         order.setCreatedAt(LocalDateTime.now());
@@ -309,6 +312,7 @@ public class PosServiceImpl implements PosService {
             orderItem.setOriginalPrice(line.unitPrice());
             orderItem.setDiscountAmount(BigDecimal.ZERO);
             orderItem.setFinalPrice(line.unitPrice());
+            applyPosOrderItemSnapshot(orderItem, variant);
 
             orderItemRepository.save(orderItem);
 
@@ -979,6 +983,8 @@ public class PosServiceImpl implements PosService {
         order.setPaymentMethod(PAYMENT_HOLD);
         order.setTotalAmount(totalAmount);
         order.setDiscountAmount(discountAmount);
+        /* POS/IN_STORE không phát sinh phí vận chuyển. */
+        order.setShippingFee(BigDecimal.ZERO);
         order.setFinalAmount(finalAmount);
         order.setStatus(ORDER_STATUS_PENDING);
         order.setCreatedAt(LocalDateTime.now());
@@ -1084,6 +1090,7 @@ public class PosServiceImpl implements PosService {
             orderItem.setOriginalPrice(line.unitPrice());
             orderItem.setDiscountAmount(BigDecimal.ZERO);
             orderItem.setFinalPrice(line.unitPrice());
+            applyPosOrderItemSnapshot(orderItem, variant);
 
             savedItems.add(orderItemRepository.save(orderItem));
         }
@@ -1897,10 +1904,6 @@ public class PosServiceImpl implements PosService {
         return returned;
     }
 
-    /**
-     * Dùng procedure chuẩn của module kho để cập nhật lot + ghi movement
-     * trong cùng transaction hiện tại.
-     */
     private void postStockMovement(
             Integer inventoryLotId,
             byte movementType,
@@ -1911,7 +1914,7 @@ public class PosServiceImpl implements PosService {
             Long referenceLineId,
             String reason
     ) {
-        jdbcTemplate.update(
+        jdbcTemplate.execute(
                 """
                 EXEC dbo.usp_PostStockMovement
                     @InventoryLotId = ?,
@@ -1923,14 +1926,34 @@ public class PosServiceImpl implements PosService {
                     @ReferenceLineId = ?,
                     @Reason = ?
                 """,
-                inventoryLotId,
-                movementType,
-                quantityChange,
-                createdBy,
-                referenceType,
-                referenceId,
-                referenceLineId,
-                reason
+                (PreparedStatementCallback<Void>) statement -> {
+                    statement.setObject(1, inventoryLotId);
+                    statement.setByte(2, movementType);
+                    statement.setInt(3, quantityChange);
+                    statement.setObject(4, createdBy);
+                    statement.setString(5, referenceType);
+                    statement.setObject(6, referenceId);
+                    statement.setObject(7, referenceLineId);
+                    statement.setString(8, reason);
+
+                    boolean hasResultSet = statement.execute();
+
+                    while (true) {
+                        if (hasResultSet) {
+                            try (var resultSet = statement.getResultSet()) {
+                                while (resultSet != null && resultSet.next()) {
+                                    // Không cần dữ liệu trả về.
+                                }
+                            }
+                        } else if (statement.getUpdateCount() == -1) {
+                            break;
+                        }
+
+                        hasResultSet = statement.getMoreResults();
+                    }
+
+                    return null;
+                }
         );
     }
 
@@ -2148,6 +2171,28 @@ public class PosServiceImpl implements PosService {
             lockedVoucher.setUsedCount(usedCount - 1);
             voucherRepository.save(lockedVoucher);
         }
+    }
+
+    /**
+     * Lưu snapshot cho OrderItem POS giống ONLINE để đơn cũ vẫn có tên/SKU/thuộc tính
+     * nếu ProductVariant sau này bị xóa (ProductVariantId có thể ON DELETE SET NULL).
+     * Chỉ bổ sung dữ liệu snapshot, không tham gia tính giá/tồn kho/thanh toán.
+     */
+    private void applyPosOrderItemSnapshot(OrderItem orderItem, ProductVariant variant) {
+        if (orderItem == null || variant == null) {
+            return;
+        }
+
+        Product product = variant.getProduct();
+
+        orderItem.setProductName(product != null ? product.getName() : null);
+        orderItem.setSku(variant.getSku());
+        orderItem.setCapacityName(buildCapacityLabel(variant));
+        orderItem.setBottleTypeName(
+                variant.getBottleType() != null
+                        ? variant.getBottleType().getName()
+                        : null
+        );
     }
 
     private String buildCapacityLabel(ProductVariant variant) {

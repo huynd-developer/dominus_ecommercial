@@ -2,6 +2,7 @@ package org.example.datn_sd69.modules.report.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.example.datn_sd69.entity.Order;
+import org.example.datn_sd69.entity.ReturnRequestItem;
 import org.example.datn_sd69.modules.report.dto.BestSellingProductResponse;
 import org.example.datn_sd69.modules.report.dto.ReportSummaryResponse;
 import org.example.datn_sd69.modules.report.dto.RevenueChartResponse;
@@ -10,6 +11,7 @@ import org.example.datn_sd69.modules.report.projection.BestSellingProductProject
 import org.example.datn_sd69.modules.report.service.OwnerReportService;
 import org.example.datn_sd69.repository.OrderItemRepository;
 import org.example.datn_sd69.repository.OrderRepository;
+import org.example.datn_sd69.repository.ReturnRequestItemRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,19 +38,13 @@ import java.util.regex.Pattern;
 public class OwnerReportServiceImpl implements OwnerReportService {
 
     /**
-     * Chỉ tính doanh thu khi đơn đã HOÀN THÀNH.
+     * Giao dịch bán KHÔNG còn xác định bằng Order.Status = 3.
+     * Mốc bán thực tế là Order.CompletedAt != null, vì sau khi hoàn thành đơn
+     * có thể chuyển sang 6 (RETURN_REQUESTED) hoặc 7 (RETURN_COMPLETED).
      *
-     * 0 - Chờ xác nhận
-     * 1 - Đã xác nhận
-     * 2 - Đang giao hàng
-     * 3 - Hoàn thành
-     * 4 - Đã hủy
-     * 5 - Giao hàng thất bại
-     *
-     * Doanh thu thực tế không tính đơn đang chờ, đã xác nhận hoặc đang giao.
+     * ReturnRequestItemRepository chỉ lấy refund đã hoàn tất (Status = 3)
+     * và có RefundedAt nằm trong kỳ báo cáo.
      */
-    private static final Integer COMPLETED_STATUS = 3;
-
     private static final int DEFAULT_LIMIT = 10;
     private static final int MAX_LIMIT = 50;
     private static final int MAX_CUSTOM_DAYS = 366;
@@ -60,6 +56,7 @@ public class OwnerReportServiceImpl implements OwnerReportService {
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    private final ReturnRequestItemRepository returnRequestItemRepository;
 
     @Override
     public ReportSummaryResponse getSummary(
@@ -69,28 +66,51 @@ public class OwnerReportServiceImpl implements OwnerReportService {
     ) {
         DateRange range = resolveDateRange(filterType, fromDate, toDate);
 
-        // 1. Tính Tổng (Đã đổi tên hàm Repository sang CompletedAt)
-        BigDecimal totalRevenue = orderRepository.sumFinalAmountByStatusAndCompletedAtBetween(
-                COMPLETED_STATUS,
+        /*
+         * Doanh thu thuần trong kỳ = doanh thu bán phát sinh trong kỳ
+         *                              - tiền hoàn sản phẩm hoàn tất trong kỳ.
+         *
+         * Hai thời điểm là độc lập:
+         * - Sale: Order.CompletedAt
+         * - Refund: ReturnRequestItem.RefundedAt
+         */
+        BigDecimal grossSalesRevenue = moneyOrZero(
+                orderRepository.sumGrossSalesRevenueForOwnerReport(
+                        range.startDateTime(),
+                        range.endDateTimeExclusive()
+                )
+        );
+
+        BigDecimal completedProductRefund = moneyOrZero(
+                returnRequestItemRepository.sumCompletedProductRefundAmountForOwnerReport(
+                        range.startDateTime(),
+                        range.endDateTimeExclusive()
+                )
+        );
+
+        BigDecimal totalRevenue = grossSalesRevenue.subtract(completedProductRefund);
+
+        Long totalOrders = orderRepository.countCompletedSalesForOwnerReport(
                 range.startDateTime(),
                 range.endDateTimeExclusive()
         );
 
-        Long totalOrders = orderRepository.countOrdersByStatusAndCompletedAtBetween(
-                COMPLETED_STATUS,
+        /*
+         * "Sản phẩm đã bán" là gross sold quantity của các giao dịch bán hoàn tất
+         * trong kỳ. Hàng trả là một KPI/sự kiện khác, không làm thay đổi số lượng
+         * từng được bán ở kỳ gốc.
+         */
+        Long totalProductsSold = orderItemRepository.sumSoldQuantityForOwnerReport(
                 range.startDateTime(),
                 range.endDateTimeExclusive()
         );
 
-        Long totalProductsSold = orderItemRepository.sumSoldQuantityByCompletedOrders(
-                COMPLETED_STATUS,
+        List<Object[]> salesBreakdown = orderRepository.getOwnerReportSalesBreakdownByOrderType(
                 range.startDateTime(),
                 range.endDateTimeExclusive()
         );
 
-        // 2. Tính Tách biệt Online / Offline
-        List<Object[]> breakdown = orderRepository.getSummaryBreakdownByOrderType(
-                COMPLETED_STATUS,
+        List<Object[]> refundBreakdown = returnRequestItemRepository.getOwnerReportRefundBreakdownByOrderType(
                 range.startDateTime(),
                 range.endDateTimeExclusive()
         );
@@ -100,18 +120,38 @@ public class OwnerReportServiceImpl implements OwnerReportService {
         Long onlineOrders = 0L;
         Long offlineOrders = 0L;
 
-        for (Object[] row : breakdown) {
-            String type = (String) row[0];
-            BigDecimal rev = (row[1] != null) ? (BigDecimal) row[1] : BigDecimal.ZERO;
-            Long count = (row[2] != null) ? (Long) row[2] : 0L;
+        /* Bán hàng: cộng doanh thu và đếm số đơn phát sinh bán trong kỳ. */
+        for (Object[] row : salesBreakdown) {
+            if (row == null || row.length < 3) {
+                continue;
+            }
 
-            if (type != null && type.toUpperCase(Locale.ROOT).equals("ONLINE")) {
-                onlineRevenue = onlineRevenue.add(rev);
+            String type = normalizeOrderType(row[0]);
+            BigDecimal revenue = objectToMoney(row[1]);
+            long count = objectToLong(row[2]);
+
+            if (isOnlineOrderType(type)) {
+                onlineRevenue = onlineRevenue.add(revenue);
                 onlineOrders += count;
-            } else {
-                // Áp dụng cho IN_STORE hoặc POS
-                offlineRevenue = offlineRevenue.add(rev);
+            } else if (isCounterOrderType(type)) {
+                offlineRevenue = offlineRevenue.add(revenue);
                 offlineOrders += count;
+            }
+        }
+
+        /* Hoàn tiền: chỉ trừ revenue; tuyệt đối không trừ số đơn đã hoàn thành. */
+        for (Object[] row : refundBreakdown) {
+            if (row == null || row.length < 2) {
+                continue;
+            }
+
+            String type = normalizeOrderType(row[0]);
+            BigDecimal refund = objectToMoney(row[1]);
+
+            if (isOnlineOrderType(type)) {
+                onlineRevenue = onlineRevenue.subtract(refund);
+            } else if (isCounterOrderType(type)) {
+                offlineRevenue = offlineRevenue.subtract(refund);
             }
         }
 
@@ -122,37 +162,51 @@ public class OwnerReportServiceImpl implements OwnerReportService {
                 moneyOrZero(totalRevenue),
                 longOrZero(totalOrders),
                 longOrZero(totalProductsSold),
-                onlineRevenue,      // Truyền data mới vào
-                offlineRevenue,
+                moneyOrZero(onlineRevenue),
+                moneyOrZero(offlineRevenue),
                 onlineOrders,
                 offlineOrders
         );
     }
 
     private List<RevenueChartResponse> buildRevenueChart(DateRange range) {
-        List<Order> orders = orderRepository.findCompletedOrdersForChart(
-                COMPLETED_STATUS,
+        List<Order> sales = orderRepository.findSalesForOwnerReportChart(
                 range.startDateTime(),
                 range.endDateTimeExclusive()
         );
 
+        List<ReturnRequestItem> refunds =
+                returnRequestItemRepository.findCompletedProductRefundsForOwnerReportChart(
+                        range.startDateTime(),
+                        range.endDateTimeExclusive()
+                );
+
         LinkedHashMap<String, RevenueBucket> buckets = initChartBuckets(range);
 
-        for (Order order : orders) {
-            // Đổi điều kiện kiểm tra từ createdAt sang completedAt
+        /* Sale ghi nhận vào bucket theo CompletedAt và tăng số đơn. */
+        for (Order order : sales) {
             if (order == null || order.getCompletedAt() == null) {
                 continue;
             }
 
-            // Đổi từ getCreatedAt() sang getCompletedAt() để biểu đồ khớp đúng với Tổng doanh thu
             String label = buildChartLabel(order.getCompletedAt(), range.chartGroupType());
 
-            // Lưu ý: Biểu đồ hiện tại mình chỉ tính FinalAmount (chưa trừ Ship).
-            // Nếu bạn muốn biểu đồ cũng trừ Ship thì sửa order.getFinalAmount()
-            // thành order.getFinalAmount().subtract(moneyOrZero(order.getShippingFee())) nhé.
             buckets
                     .computeIfAbsent(label, key -> new RevenueBucket())
-                    .add(order.getFinalAmount().subtract(moneyOrZero(order.getShippingFee())));
+                    .addSale(calculateSalesRevenue(order));
+        }
+
+        /* Refund ghi nhận vào bucket theo RefundedAt; không làm giảm totalOrders. */
+        for (ReturnRequestItem refundItem : refunds) {
+            if (refundItem == null || refundItem.getRefundedAt() == null) {
+                continue;
+            }
+
+            String label = buildChartLabel(refundItem.getRefundedAt(), range.chartGroupType());
+
+            buckets
+                    .computeIfAbsent(label, key -> new RevenueBucket())
+                    .addRefund(moneyOrZero(refundItem.getRefundAmount()));
         }
 
         return buckets.entrySet()
@@ -212,11 +266,11 @@ public class OwnerReportServiceImpl implements OwnerReportService {
         DateRange range = resolveDateRange(filterType, fromDate, toDate);
         int safeLimit = parseLimit(limit);
 
-        List<BestSellingProductProjection> projections = orderItemRepository.findBestSellingProducts(
-                COMPLETED_STATUS,
-                range.startDateTime(),
-                range.endDateTimeExclusive()
-        );
+        List<BestSellingProductProjection> projections =
+                orderItemRepository.findBestSellingProductsForOwnerReport(
+                        range.startDateTime(),
+                        range.endDateTimeExclusive()
+                );
 
         return projections
                 .stream()
@@ -474,6 +528,70 @@ public class OwnerReportServiceImpl implements OwnerReportService {
         return "Q" + quarter + "/" + date.getYear();
     }
 
+    /**
+     * Doanh thu bán của một Order không tính shipping.
+     *
+     * ONLINE: FinalAmount = tiền hàng sau voucher + shipping.
+     * POS/IN_STORE: FinalAmount không chứa shipping, nên dùng nguyên FinalAmount.
+     *
+     * Tách theo OrderType còn giúp báo cáo lịch sử đúng với các POS row cũ có thể
+     * đã lưu Shippingfee mặc định 30.000 dù POS thực tế không thu shipping.
+     */
+    private BigDecimal calculateSalesRevenue(Order order) {
+        if (order == null) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal finalAmount = moneyOrZero(order.getFinalAmount());
+        String orderType = normalizeOrderType(order.getOrderType());
+
+        if (isOnlineOrderType(orderType)) {
+            return finalAmount.subtract(moneyOrZero(order.getShippingFee()));
+        }
+
+        return finalAmount;
+    }
+
+    private String normalizeOrderType(Object rawType) {
+        if (rawType == null) {
+            return "";
+        }
+
+        return rawType.toString().trim().toUpperCase(Locale.ROOT);
+    }
+
+    private boolean isOnlineOrderType(String orderType) {
+        return "ONLINE".equals(orderType);
+    }
+
+    private boolean isCounterOrderType(String orderType) {
+        return "IN_STORE".equals(orderType) || "POS".equals(orderType);
+    }
+
+    private BigDecimal objectToMoney(Object value) {
+        if (value == null) {
+            return BigDecimal.ZERO;
+        }
+
+        if (value instanceof BigDecimal bigDecimal) {
+            return bigDecimal;
+        }
+
+        if (value instanceof Number number) {
+            return new BigDecimal(number.toString());
+        }
+
+        return BigDecimal.ZERO;
+    }
+
+    private long objectToLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+
+        return 0L;
+    }
+
     private boolean containsWhitespace(String value) {
         return value != null && value.chars().anyMatch(Character::isWhitespace);
     }
@@ -521,9 +639,13 @@ public class OwnerReportServiceImpl implements OwnerReportService {
 
         private long totalOrders = 0L;
 
-        void add(BigDecimal amount) {
+        void addSale(BigDecimal amount) {
             this.revenue = this.revenue.add(amount == null ? BigDecimal.ZERO : amount);
             this.totalOrders++;
+        }
+
+        void addRefund(BigDecimal amount) {
+            this.revenue = this.revenue.subtract(amount == null ? BigDecimal.ZERO : amount);
         }
 
         BigDecimal revenue() {

@@ -2,7 +2,7 @@
   <div class="card border-0 shadow-sm mb-4">
     <div class="card-body">
       <div class="row g-3 align-items-end">
-        <div class="col-12 col-md-2">
+        <div class="col-12 col-md-3">
           <label class="form-label fw-semibold">Mốc thời gian</label>
           <select
             v-model="reportStore.filter.filterType"
@@ -16,19 +16,6 @@
             <option value="QUARTER">Quý này</option>
             <option value="YEAR">Năm nay</option>
             <option value="CUSTOM">Tùy chọn ngày</option>
-          </select>
-        </div>
-
-        <div class="col-12 col-md-2">
-          <label class="form-label fw-semibold">Loại đơn</label>
-          <select
-            v-model="reportStore.filter.orderType"
-            class="form-select"
-            :disabled="reportStore.loading"
-          >
-            <option value="">Tất cả</option>
-            <option value="ONLINE">Online</option>
-            <option value="IN_STORE">Tại quầy</option>
           </select>
         </div>
 
@@ -61,7 +48,7 @@
           />
         </div>
 
-        <div class="col-12 col-md-2">
+        <div class="col-12 col-md-3">
           <label class="form-label fw-semibold">Top sản phẩm</label>
           <input
             v-model="reportStore.filter.limit"
@@ -93,7 +80,8 @@
       </div>
 
       <div class="form-text mt-3">
-        Doanh thu chỉ ghi nhận từ các đơn đã hoàn thành.
+        Doanh thu thuần được tính từ giao dịch bán đã hoàn thành và trừ các khoản
+        hoàn tiền sản phẩm đã hoàn tất trong kỳ.
       </div>
 
       <div v-if="reportStore.error" class="alert alert-danger mt-3 mb-0">
