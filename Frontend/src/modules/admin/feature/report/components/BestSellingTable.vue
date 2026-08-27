@@ -84,9 +84,6 @@
                     <div class="fw-semibold product-name">
                       {{ getProductName(item) }}
                     </div>
-
-                    <!-- Hiển thị riêng dung tích và loại chai của đúng SKU -->
-
                     <div
                       v-if="getCapacityText(item) || getBottleTypeText(item)"
                       class="text-muted small mt-1"
@@ -190,39 +187,24 @@ watch(
 const safeItems = computed(() => {
   const items = Array.isArray(props.items) ? props.items : [];
 
-  // Gom nhóm để xử lý triệt để lỗi Backend trả về các dòng sản phẩm bị trùng lặp
+  /*
+   * Backend Owner Report đã chịu trách nhiệm GROUP BY Product.
+   *
+   * FE tuyệt đối không group lại theo dung tích / loại chai,
+   * vì màn hình này là "Sản phẩm bán chạy nhất", không phải
+   * "SKU/biến thể bán chạy nhất".
+   *
+   * Copy array để không mutate props.
+   */
+  return [...items].sort((a: any, b: any) => {
+    const soldDiff = Number(b?.totalSold || 0) - Number(a?.totalSold || 0);
 
-  const groupedMap = new Map();
-
-  items.forEach((item: any) => {
-    // 💥 ĐÃ SỬA: Dùng productId, dung tích VÀ cả loại chai làm key để phân biệt rõ ràng
-
-    const capacityStr =
-      item.capacityName || item.capacity || item.variantName || "";
-
-    const bottleStr = item.bottleTypeName || item.bottleType || "";
-
-    const key = `${item.productId}_${capacityStr}_${bottleStr}`;
-
-    if (groupedMap.has(key)) {
-      const existing = groupedMap.get(key);
-
-      existing.totalSold =
-        Number(existing.totalSold || 0) + Number(item.totalSold || 0);
-
-      existing.revenue =
-        Number(existing.revenue || 0) + Number(item.revenue || 0);
-    } else {
-      // Copy ra object mới để không mutate props gốc
-
-      groupedMap.set(key, { ...item });
+    if (soldDiff !== 0) {
+      return soldDiff;
     }
+
+    return Number(b?.revenue || 0) - Number(a?.revenue || 0);
   });
-
-  // Sắp xếp lại bảng từ cao xuống thấp theo doanh thu
-
-  return Array.from(groupedMap.values())
-  .sort((a, b) => Number(b.revenue || 0) - Number(a.revenue || 0));
 });
 
 // THUẬT TOÁN 1: Làm sạch tên sản phẩm, thay thế từ "đã xóa" thành "ngừng kinh doanh" cho lịch sự
