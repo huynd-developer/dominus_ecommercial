@@ -316,7 +316,10 @@
                 <!-- KẾT THÚC KHỐI THEO DÕI -->
 
                 <div
-                  v-if="isDeliveryRefundInfoVisible(order)"
+                  v-if="
+                    Number(order.status) === 5 &&
+                    isDeliveryRefundInfoVisible(order)
+                  "
                   class="order-delivery-refund-info mb-3"
                   :class="getDeliveryRefundBoxClass(order)"
                 >
@@ -1306,7 +1309,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 import { useRoute, useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import ReviewModal from "./ReviewModal.vue";
@@ -1978,6 +1988,13 @@ const filteredOrders = computed(() => {
     orders = (store.orders as CustomerOrderResponse[]).filter((order) =>
       isReturnTabOrder(order)
     );
+  } else if (currentTab.value === 4) {
+    // Trạng thái 4 và 8 đều là đơn đã hủy.
+    // Status 8 vẫn được giữ nguyên để tiếp tục xử lý hoàn tiền cho đơn trả trước.
+    orders = (store.orders as CustomerOrderResponse[]).filter((order) => {
+      const status = Number(order.status);
+      return status === 4 || status === 8;
+    });
   } else {
     orders = (store.orders as CustomerOrderResponse[]).filter(
       (order) => Number(order.status) === currentTab.value
@@ -2665,28 +2682,33 @@ const getOrderCancelReason = (order: any) => {
 
 const getTrackingHistory = (order: any) => {
   const history = [];
+  const status = Number(order?.status);
   const baseDate = new Date(order.createdAt).getTime();
+
   history.push({
     time: new Date(baseDate),
     title: "Đơn hàng đã đặt",
     desc: "Đơn hàng đang chờ shop xác nhận.",
-    active: order.status === 0,
+    active: status === 0,
   });
-  if (order.status >= 1 && order.status !== 4)
+
+  if (status >= 1 && status !== 4 && status !== 8)
     history.push({
       time: new Date(baseDate + 2 * 60 * 60 * 1000),
       title: "Đang chuẩn bị hàng",
       desc: "Người bán đang chuẩn bị kiện hàng của bạn.",
-      active: order.status === 1,
+      active: status === 1,
     });
-  if (order.status >= 2 && order.status !== 4)
+
+  if (status >= 2 && status !== 4 && status !== 8)
     history.push({
       time: new Date(baseDate + 14 * 60 * 60 * 1000),
       title: "Đã giao cho ĐVVC",
       desc: "Kiện hàng đã rời trung tâm phân loại và đang trên đường giao.",
-      active: order.status === 2,
+      active: status === 2,
     });
-  if (order.status === 3)
+
+  if (status === 3)
     history.push({
       time: order.completedAt
         ? new Date(order.completedAt)
@@ -2697,7 +2719,8 @@ const getTrackingHistory = (order: any) => {
       }`,
       active: true,
     });
-  if (order.status === 4)
+
+  if (status === 4)
     history.push({
       time: getOrderCancelledAt(order)
         ? new Date(getOrderCancelledAt(order))
@@ -2707,7 +2730,8 @@ const getTrackingHistory = (order: any) => {
       active: true,
       isCancel: true,
     });
-  if (order.status === 5)
+
+  if (status === 5)
     history.push({
       time: order.deliveryFailedAt
         ? new Date(order.deliveryFailedAt)
@@ -2717,16 +2741,18 @@ const getTrackingHistory = (order: any) => {
       active: true,
       isCancel: true,
     });
-  if (order.status === 8)
+
+  if (status === 8)
     history.push({
       time: getOrderCancelledAt(order)
         ? new Date(getOrderCancelledAt(order))
         : new Date(baseDate + 15 * 60 * 1000),
-      title: "Đã hủy / Chờ hoàn tiền",
-      desc: "Đơn hàng đã hủy, vui lòng cập nhật số tài khoản để nhận lại tiền.",
+      title: "Đã hủy",
+      desc: "Đơn hàng của bạn đã bị hủy.",
       active: true,
       isCancel: true,
     });
+
   return history.reverse();
 };
 
@@ -5069,7 +5095,7 @@ const getStatusText = (status: number) => {
     case 7:
       return "Hoàn hàng / đổi trả hoàn tất";
     case 8:
-      return "Đã hủy / Chờ hoàn tiền"; // THÊM DÒNG NÀY
+      return "Đã hủy";
     default:
       return "Không xác định";
   }
@@ -5094,7 +5120,7 @@ const getStatusClass = (status: number) => {
     case 7:
       return "bg-success";
     case 8:
-      return "bg-warning text-dark"; // THÊM DÒNG NÀY
+      return "bg-danger";
     default:
       return "bg-secondary";
   }
@@ -5110,6 +5136,12 @@ const shouldDisplayReturnStatusInHeader = (order: any) => {
 const getOrderHeaderStatusText = (order: any) => {
   if (shouldDisplayReturnStatusInHeader(order)) {
     return getReturnProcessText(order);
+  }
+
+  // Status 8 là đơn đã hủy nhưng còn luồng hoàn tiền riêng.
+  // Không để statusText từ API gộp "Chờ hoàn tiền" vào trạng thái đơn hàng.
+  if (Number(order?.status) === 8) {
+    return "Đã hủy";
   }
 
   return order?.statusText || getStatusText(Number(order?.status));
