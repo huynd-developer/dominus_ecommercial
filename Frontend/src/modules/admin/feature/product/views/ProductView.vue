@@ -91,32 +91,27 @@ const activeFragranceFamilies = computed(() => store.fragranceFamilyList.filter(
 
 const filteredData = computed(() => {
   const keyword = searchQuery.value.trim().toLowerCase()
-  
-  // ĐÃ SỬA: Lọc bỏ những sản phẩm mồ côi (chứa thuộc tính bị Ẩn/Xóa)
-  const validProducts = store.products.filter((item: any) => {
-     // Ẩn sản phẩm đã bị xóa
-     if (item.isDeleted === true || item.deleted === true) return false;
 
-     if (!item.brandId || !item.categoryId || !item.concentrationId) return false;
-     
-     const brandExists = activeBrands.value.some(b => b.id === item.brandId);
-     const categoryExists = activeCategories.value.some(c => c.id === item.categoryId);
-     const concentrationExists = activeConcentrations.value.some(c => c.id === item.concentrationId);
-     
-     if (!brandExists || !categoryExists || !concentrationExists) {
-        return false;
-     }
+  /**
+   * Màn quản trị Product phải hiển thị đúng danh sách Product mà BE trả về.
+   *
+   * Không dùng trạng thái của Brand/Category/Concentration để ẩn Product đã tồn tại.
+   * Master data đã ngừng hoạt động/xóa mềm chỉ bị loại khỏi lựa chọn khi thêm/sửa,
+   * không làm Product lịch sử biến mất khỏi danh sách quản trị.
+   */
+  if (!keyword) return store.products
 
-     return true;
-  });
-
-  if (!keyword) return validProducts;
-
-  return validProducts.filter((item) => {
-    const text = [item.name, item.brandName, item.categoryName, item.concentrationName]
+  return store.products.filter((item) => {
+    const text = [
+      item.name,
+      item.brandName,
+      item.categoryName,
+      item.concentrationName,
+    ]
       .filter(Boolean)
       .join(' ')
       .toLowerCase()
+
     return text.includes(keyword)
   })
 })
@@ -347,35 +342,32 @@ const getStockClass = (stock: number) => {
   return "success";
 };
 
-// ĐÃ SỬA: Ẩn luôn các biến thể chứa dung tích / loại chai đã bị xóa ở ngoài
 const rows = computed(() => {
-  return paginatedData.value.map(product => {
-    const validVariants = (product.variants || []).filter((v: any) => {
-      // Loại bỏ biến thể nếu chính nó bị xóa
-      if (v.isDeleted === true || v.deleted === true) return false;
+  return paginatedData.value.map((product) => {
+    /**
+     * Giữ nguyên toàn bộ Variant mà BE trả về.
+     *
+     * Không lọc Variant theo Capacity/BottleType đang active vì:
+     * - Variant đã tồn tại vẫn phải hiển thị trong màn quản trị.
+     * - Tồn thực tế/có thể bán phải tính trên toàn bộ Variant hiện hữu.
+     * - activeCapacities/activeBottleTypes chỉ dùng cho ProductModal để
+     *   không cho chọn master data đã ngừng hoạt động khi thêm/sửa.
+     */
+    const variants = product.variants || []
 
-      const capId = v.capacityId || v.capacity?.id;
-      const botId = v.bottleTypeId || v.bottleType?.id;
-      
-      const capExists = activeCapacities.value.some(c => c.id === capId);
-      const botExists = activeBottleTypes.value.some(b => b.id === botId);
-      
-      return capExists && botExists;
-    });
-
-    const stock = calculateTotalStock(validVariants);
-    const sellableStock = calculateTotalSellableStock(validVariants);
+    const stock = calculateTotalStock(variants)
+    const sellableStock = calculateTotalSellableStock(variants)
 
     return {
       ...product,
-      variants: validVariants, 
+      variants,
       stock,
       sellableStock,
       stockClass: getStockClass(stock),
       sellableStockClass: getStockClass(sellableStock),
-    };
-  });
-});
+    }
+  })
+})
 </script>
 
 <template>
@@ -435,7 +427,7 @@ const rows = computed(() => {
     </div>
 
     <Teleport to="body">
-      <!-- ĐÃ SỬA: Truyền các danh sách sạch (đã lọc rác) vào Modal để nó không hiện các mục bị xóa nữa -->
+      <!-- Chỉ truyền master data đang hoạt động vào Modal để không cho chọn dữ liệu đã ngừng hoạt động -->
       <ProductModal
         v-if="showModal"
         :product-selected="selectedProduct"

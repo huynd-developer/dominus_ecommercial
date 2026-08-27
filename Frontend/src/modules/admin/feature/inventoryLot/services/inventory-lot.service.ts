@@ -17,7 +17,7 @@ const cleanParams = (params: Record<string, unknown>) =>
 
 const inventoryLotService = {
   /**
-   * Danh sách lô dùng chung cho màn Quản lý lô hàng.
+   * Danh sách lô dùng chung cho màn Quản lý lô hàng và các luồng tra cứu.
    *
    * GIỮ NGUYÊN endpoint cũ để không ảnh hưởng các màn/module
    * đang sử dụng danh sách InventoryLot hiện tại.
@@ -43,12 +43,13 @@ const inventoryLotService = {
   },
 
   /**
-   * Danh sách lô dùng RIÊNG cho popup chọn lô khi tạo phiếu kiểm kê.
+   * Danh sách lô dùng RIÊNG cho popup chọn lô khi tạo/sửa phiếu kiểm kê.
    *
    * Khớp với BE:
    * GET /api/admin/inventory-lots/audit-candidates
    *
-   * Không thay thế getList() để tránh ảnh hưởng màn Quản lý lô hàng.
+   * Không thay thế getList() để tránh ảnh hưởng màn Quản lý lô hàng
+   * và các màn cần tra cứu dữ liệu lịch sử.
    */
   async getAuditCandidates(
     params: InventoryLotListParams

@@ -5,6 +5,65 @@ import type {
   ProductResponse
 } from '../types/product.type'
 
+/**
+ * Chuẩn hóa response nhưng KHÔNG thay đổi dữ liệu nghiệp vụ.
+ *
+ * Hỗ trợ:
+ *
+ * AxiosResponse:
+ * {
+ *   data: {
+ *     success,
+ *     message,
+ *     data: {
+ *       content: [...]
+ *     }
+ *   }
+ * }
+ *
+ * Hoặc interceptor đã unwrap:
+ * {
+ *   success,
+ *   message,
+ *   data: {
+ *     content: [...]
+ *   }
+ * }
+ *
+ * Hoặc page object trực tiếp:
+ * {
+ *   content: [...]
+ * }
+ */
+const unwrapResponse = (response: any) => {
+  if (response == null) {
+    return response
+  }
+
+  // AxiosResponse chuẩn
+  const body =
+    response?.data !== undefined
+      ? response.data
+      : response
+
+  // Response wrapper của BE:
+  // { success, message, data: {...} }
+  if (
+    body &&
+    typeof body === 'object' &&
+    !Array.isArray(body) &&
+    body.data !== undefined &&
+    (
+      body.success !== undefined ||
+      body.message !== undefined
+    )
+  ) {
+    return body.data
+  }
+
+  return body
+}
+
 export const productService = {
 
   // =====================================
@@ -19,7 +78,7 @@ export const productService = {
       `/api/v1/products/admin?page=${page}&size=${size}`
     )
 
-    return response.data ?? response
+    return unwrapResponse(response)
   },
 
   getProductById: async (
@@ -73,7 +132,6 @@ export const productService = {
     productId: number,
     file: File
   ) => {
-
     const formData = new FormData()
 
     formData.append('file', file)
@@ -94,7 +152,6 @@ export const productService = {
   getImagesByProduct: async (
     productId: number
   ) => {
-
     const response = await request.get(
       `/api/v1/products/${productId}/images`
     )
@@ -106,7 +163,6 @@ export const productService = {
     productId: number,
     imageId: number
   ) => {
-
     const response = await request.put(
       `/api/v1/products/admin/${productId}/images/${imageId}/primary`
     )
@@ -117,7 +173,6 @@ export const productService = {
   deleteImage: async (
     imageId: number
   ) => {
-
     const response = await request.delete(
       `/api/v1/products/admin/images/${imageId}`
     )
@@ -130,7 +185,6 @@ export const productService = {
   // =====================================
 
   getBrands: async () => {
-
     const response = await request.get(
       '/api/admin/brands?page=0&size=999'
     )
@@ -139,7 +193,6 @@ export const productService = {
   },
 
   getCategories: async () => {
-
     const response = await request.get(
       '/api/admin/categories?page=0&size=999'
     )
@@ -148,7 +201,6 @@ export const productService = {
   },
 
   getConcentrations: async () => {
-
     const response = await request.get(
       '/api/admin/concentrations?page=0&size=999'
     )
@@ -157,7 +209,6 @@ export const productService = {
   },
 
   getCapacities: async () => {
-
     const response = await request.get(
       '/api/admin/capacities?page=0&size=999'
     )
@@ -166,7 +217,6 @@ export const productService = {
   },
 
   getBottleTypes: async () => {
-
     const response = await request.get(
       '/api/admin/bottle-types?page=0&size=999'
     )
@@ -175,7 +225,6 @@ export const productService = {
   },
 
   getFragranceFamilies: async () => {
-
     const response = await request.get(
       '/api/admin/fragrance-families?page=0&size=999'
     )

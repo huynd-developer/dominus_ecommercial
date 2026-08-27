@@ -104,17 +104,17 @@ const stockAdjustmentService = {
   },
 
   /**
-   * Danh sách lô dùng riêng cho popup tạo/sửa phiếu kiểm kê.
+   * Danh sách lô dùng RIÊNG cho popup tạo/sửa phiếu kiểm kê.
    *
-   * Không truyền hasStock để vẫn có thể kiểm kê:
-   * - lô đang còn tồn;
-   * - lô hệ thống = 0 nhưng Product/SKU vẫn còn quản lý,
-   *   nhằm phát hiện trường hợp thực tế có hàng thừa.
+   * Không truyền hasStock vì kiểm kê thực tế phải vẫn cho phép chọn
+   * lô của Product/SKU còn quản lý nhưng QuantityOnHand = 0,
+   * để phát hiện trường hợp hệ thống = 0 nhưng thực tế đếm được > 0.
    *
-   * BE sẽ tự xử lý:
-   * - Product/SKU chưa xóa -> hiển thị;
-   * - Product/SKU đã xóa nhưng QuantityOnHand > 0 -> vẫn hiển thị;
-   * - Product/SKU đã xóa và QuantityOnHand = 0 -> không hiển thị.
+   * BE audit-candidates chịu trách nhiệm loại Product/ProductVariant
+   * đã soft-delete khỏi danh sách chọn phiếu kiểm kê mới.
+   *
+   * Dữ liệu lô/SKU đã xóa vẫn được giữ ở API generic/detail để
+   * phục vụ lịch sử; FE không tự lọc thêm để tránh lệch business rule BE.
    */
   async searchLots(keyword: string): Promise<InventoryLotListResponse[]> {
     const data = await inventoryLotService.getAuditCandidates({
