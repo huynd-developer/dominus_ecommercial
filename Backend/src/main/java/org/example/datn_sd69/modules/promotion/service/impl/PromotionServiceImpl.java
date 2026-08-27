@@ -188,6 +188,28 @@ public class PromotionServiceImpl implements PromotionService {
                 .map(this::toFlashSaleProductResponse);
     }
 
+    /**
+     * Chỉ trả mốc StartDate của Flash Sale tương lai gần nhất.
+     *
+     * Không thay đổi status Promotion.
+     * Không áp giá sale.
+     * Không tác động tồn kho.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public LocalDateTime getNextFlashSaleStartDate() {
+        List<LocalDateTime> startDates =
+                promotionVariantRepository.findUpcomingFlashSaleStartDates(
+                        LocalDateTime.now()
+                );
+
+        if (startDates == null || startDates.isEmpty()) {
+            return null;
+        }
+
+        return startDates.get(0);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public Page<PromotionProductVariantOptionResponse> searchProductVariantsForPromotion(

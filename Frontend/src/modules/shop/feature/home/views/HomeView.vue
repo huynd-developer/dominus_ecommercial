@@ -4,7 +4,9 @@
       <HomeBanner />
 
       <section class="product-section mt-5">
-        <div class="section-header d-flex align-items-center justify-content-between mb-4">
+        <div
+          class="section-header d-flex align-items-center justify-content-between mb-4"
+        >
           <div class="d-flex align-items-center gap-3 flex-wrap">
             <h2 class="section-title mb-0">FLASH SALE</h2>
 
@@ -16,7 +18,10 @@
           </div>
 
           <!-- ĐÃ SỬA: Thêm query param flashSale=true để dẫn đến danh sách sản phẩm Flash Sale -->
-          <RouterLink :to="{ path: '/products', query: { flashSale: 'true' } }" class="view-all-link">
+          <RouterLink
+            :to="{ path: '/products', query: { flashSale: 'true' } }"
+            class="view-all-link"
+          >
             Xem tất cả <i class="bi bi-chevron-right ms-1"></i>
           </RouterLink>
         </div>
@@ -42,7 +47,9 @@
       </section>
 
       <section class="product-section mt-5">
-        <div class="section-header d-flex align-items-center justify-content-between mb-4">
+        <div
+          class="section-header d-flex align-items-center justify-content-between mb-4"
+        >
           <h2 class="section-title mb-0">NƯỚC HOA MỚI NHẤT</h2>
 
           <RouterLink to="/products" class="view-all-link">
@@ -60,11 +67,7 @@
         </div>
 
         <div v-else class="row row-cols-2 row-cols-md-4 row-cols-lg-4 g-4">
-          <div
-            v-for="product in newestProducts"
-            :key="product.id"
-            class="col"
-          >
+          <div v-for="product in newestProducts" :key="product.id" class="col">
             <ProductCard :product="product" :preload-detail="false" />
           </div>
         </div>
@@ -112,7 +115,9 @@
       </section>
 
       <section class="product-section mt-5 mb-5">
-        <div class="section-header d-flex align-items-center justify-content-between mb-4">
+        <div
+          class="section-header d-flex align-items-center justify-content-between mb-4"
+        >
           <h2 class="section-title mb-0">SẢN PHẨM NỔI BẬT</h2>
 
           <RouterLink to="/products" class="view-all-link">
@@ -157,6 +162,7 @@ interface PageResponse<T> {
   totalPages?: number;
   number?: number;
   size?: number;
+  nextStartDate?: string | null;
   page?: {
     size: number;
     number: number;
@@ -250,7 +256,7 @@ const productLoading = ref(false);
 
 const BACKEND_URL = "http://localhost:8080";
 
-let flashSaleRefreshTimer: ReturnType<typeof window.setInterval> | null = null;
+let flashSaleStartTimer: ReturnType<typeof window.setTimeout> | null = null;
 
 const flashSaleEndDate = computed(() => {
   const validEndDates = flashSaleProducts.value
@@ -260,6 +266,52 @@ const flashSaleEndDate = computed(() => {
 
   return validEndDates[0] || null;
 });
+const clearFlashSaleStartTimer = () => {
+  if (flashSaleStartTimer !== null) {
+    window.clearTimeout(flashSaleStartTimer);
+    flashSaleStartTimer = null;
+  }
+};
+
+const scheduleNextFlashSaleStart = (nextStartDate?: string | null) => {
+  clearFlashSaleStartTimer();
+
+  if (!nextStartDate) {
+    return;
+  }
+
+  const startTime = new Date(nextStartDate).getTime();
+
+  if (!Number.isFinite(startTime)) {
+    return;
+  }
+
+  const now = Date.now();
+
+  /*
+   * Nếu StartDate đã trôi qua thì không schedule timer cũ nữa.
+   * Dữ liệu active của chính response hiện tại đã là nguồn đúng.
+   */
+  if (startTime <= now) {
+    return;
+  }
+
+  /*
+   * Chạy hơi sau boundary 200ms để request chắc chắn sang BE
+   * sau điều kiện startDate <= now.
+   */
+  const delay = Math.max(0, startTime - now + 200);
+
+  flashSaleStartTimer = window.setTimeout(async () => {
+    flashSaleStartTimer = null;
+
+    /*
+     * Không reload trang.
+     * Chỉ gọi API và cập nhật reactive state.
+     */
+    await fetchFlashSaleProducts(false);
+  }, delay);
+};
 
 const toNumber = (value: unknown, fallback = 0) => {
   const numberValue = Number(value);
@@ -271,7 +323,7 @@ const toNumber = (value: unknown, fallback = 0) => {
   return numberValue;
 };
 
-const resolvePageContent = <T,>(data: any): T[] => {
+const resolvePageContent = <T>(data: any): T[] => {
   if (Array.isArray(data)) {
     return data;
   }
@@ -416,7 +468,7 @@ const resolveProductImages = (raw: any) => {
   // 1. Ưu tiên tuyệt đối tìm ảnh có đánh dấu isPrimary đưa lên đầu tiên
   for (const arr of imageArrays) {
     if (Array.isArray(arr)) {
-      const primaryObj = arr.find((img: any) => 
+      const primaryObj = arr.find((img: any) =>
         Boolean(img?.isPrimary || img?.is_primary || img?.primary)
       );
       if (primaryObj) {
@@ -461,7 +513,8 @@ const resolveMinVariantPrice = (rawVariants: any[]): number => {
 };
 
 const mapNormalProduct = (p: any): ProductCardItem => {
-  const rawVariants = p?.variants || p?.productVariants || p?.productVariantList || [];
+  const rawVariants =
+    p?.variants || p?.productVariants || p?.productVariantList || [];
   const variantList = Array.isArray(rawVariants) ? rawVariants : [];
   const firstVariant = variantList.length > 0 ? variantList[0] : null;
   const representativeVariant =
@@ -527,7 +580,11 @@ const mapNormalProduct = (p: any): ProductCardItem => {
     image: productImage,
     mainImage: productImage,
     images: productImages,
-    productImages: productImages.map((imageUrl, index) => ({ id: index + 1, imageUrl, url: imageUrl })),
+    productImages: productImages.map((imageUrl, index) => ({
+      id: index + 1,
+      imageUrl,
+      url: imageUrl,
+    })),
     salePrice,
     originalPrice,
     discountPercent,
@@ -537,30 +594,43 @@ const mapNormalProduct = (p: any): ProductCardItem => {
 
     // Compatibility: không còn là nguồn tồn thật.
     stockQuantity: sellableQuantity,
-    variants: productVariantId ? [{
-      id: productVariantId,
-      productVariantId,
-      variantId: productVariantId,
-      price: originalPrice,
-      originalPrice,
-      salePrice,
-      promotionPrice: discountPercent > 0 ? salePrice : undefined,
-      flashSalePrice: undefined,
-      sellableQuantity: representativeSellableQuantity,
-      stockQuantity: representativeSellableQuantity,
-      status: toNumber(representativeVariant?.status, 1),
-      imageUrl: productImage,
-      image: productImage,
-      images: productImages,
-      productImages: productImages.map((imageUrl, index) => ({ id: index + 1, imageUrl, url: imageUrl })),
-    }] : undefined,
+    variants: productVariantId
+      ? [
+          {
+            id: productVariantId,
+            productVariantId,
+            variantId: productVariantId,
+            price: originalPrice,
+            originalPrice,
+            salePrice,
+            promotionPrice: discountPercent > 0 ? salePrice : undefined,
+            flashSalePrice: undefined,
+            sellableQuantity: representativeSellableQuantity,
+            stockQuantity: representativeSellableQuantity,
+            status: toNumber(representativeVariant?.status, 1),
+            imageUrl: productImage,
+            image: productImage,
+            images: productImages,
+            productImages: productImages.map((imageUrl, index) => ({
+              id: index + 1,
+              imageUrl,
+              url: imageUrl,
+            })),
+          },
+        ]
+      : undefined,
   };
 };
 
-const mapFlashSaleProduct = (item: FlashSaleProductResponse): ProductCardItem => {
+const mapFlashSaleProduct = (
+  item: FlashSaleProductResponse
+): ProductCardItem => {
   const productVariantId = toNumber(item.productVariantId, 0);
   const productId = toNumber(item.productId ?? item.productVariantId, 0);
-  const sellableQuantity = Math.max(0, toNumber(item.sellableQuantity ?? item.stockQuantity, 0));
+  const sellableQuantity = Math.max(
+    0,
+    toNumber(item.sellableQuantity ?? item.stockQuantity, 0)
+  );
   const salePrice = toNumber(item.salePrice, 0);
   const originalPrice = toNumber(item.originalPrice, 0);
 
@@ -654,7 +724,8 @@ const mergeFlashSaleIntoProduct = (
     return {
       ...product,
       isFlashSale: false,
-      salePrice: product.originalPrice > 0 ? product.salePrice : product.salePrice,
+      salePrice:
+        product.originalPrice > 0 ? product.salePrice : product.salePrice,
       discountPercent: 0, // Đảm bảo phần trăm giảm giá về 0
       variants: product.variants?.map((variant) => ({
         ...variant,
@@ -823,19 +894,28 @@ const fetchFlashSaleProducts = async (showLoading = true) => {
           params: {
             page: 0,
             size: 20,
-            t: Date.now() // Ép không lưu cache
+            includeTiming: true,
+            t: Date.now(),
           },
         }
       ),
-      api.get("/v1/products", { params: { size: 500, t: Date.now() } }).catch(() => null)
+      api
+        .get("/v1/products", { params: { size: 500, t: Date.now() } })
+        .catch(() => null),
     ]);
 
     const rows = resolvePageContent<FlashSaleProductResponse>(res.data);
+    scheduleNextFlashSaleStart(res.data?.nextStartDate ?? null);
 
     // 💥 TRÍCH XUẤT TẬP HỢP ID CỦA CÁC SẢN PHẨM HỢP LỆ (Đang mở bán, chưa bị xóa)
     const validProductIds = new Set<number>();
     if (validRes) {
-      const validData = validRes.data?.data?.content || validRes.data?.data || validRes.data?.content || validRes.data || [];
+      const validData =
+        validRes.data?.data?.content ||
+        validRes.data?.data ||
+        validRes.data?.content ||
+        validRes.data ||
+        [];
       if (Array.isArray(validData)) {
         validData.forEach((p: any) => {
           const id = Number(p.id || p.productId || 0);
@@ -858,23 +938,55 @@ const fetchFlashSaleProducts = async (showLoading = true) => {
     productMap.forEach((variants, productId) => {
       if (!variants || variants.length === 0) return;
       const firstItem = variants[0];
-      
+
       const productImages = resolveProductImages(firstItem);
       const productImage = productImages[0] || resolveProductImage(firstItem);
 
-      const salePrices = variants.map(v => toNumber(v.salePrice, 0)).filter(p => p > 0);
-      const minSalePrice = salePrices.length > 0 ? Math.min(...salePrices) : toNumber(firstItem?.salePrice, 0);
+      /*
+       * Chọn đúng biến thể có GIÁ FLASH SALE THẤP NHẤT.
+       *
+       * Giá sale / giá gốc / % giảm trên ProductCard bắt buộc phải
+       * thuộc cùng một SKU, không được lấy min/max độc lập.
+       */
+      const representativeFlashVariant =
+        variants
+          .filter((variant) => toNumber(variant.salePrice, 0) > 0)
+          .reduce<FlashSaleProductResponse | null>((lowest, current) => {
+            if (!lowest) {
+              return current;
+            }
 
-      const originalPrices = variants.map(v => toNumber(v.originalPrice, 0)).filter(p => p > 0);
-      const minOriginalPrice = originalPrices.length > 0 ? Math.min(...originalPrices) : toNumber(firstItem?.originalPrice, 0);
+            const currentSalePrice = toNumber(current.salePrice, 0);
+            const lowestSalePrice = toNumber(lowest.salePrice, 0);
 
-      const maxDiscount = Math.max(...variants.map(v => toNumber(v.discountPercent, 0)));
+            return currentSalePrice < lowestSalePrice ? current : lowest;
+          }, null) ?? firstItem;
 
-      const mappedVariants = variants.map(v => {
+      const minSalePrice = toNumber(representativeFlashVariant?.salePrice, 0);
+
+      const minOriginalPrice = toNumber(
+        representativeFlashVariant?.originalPrice,
+        minSalePrice
+      );
+
+      const maxDiscount = toNumber(
+        representativeFlashVariant?.discountPercent,
+        0
+      );
+
+      const representativeFlashVariantId = toNumber(
+        representativeFlashVariant?.productVariantId,
+        0
+      );
+
+      const mappedVariants = variants.map((v) => {
         const vId = toNumber(v.productVariantId, 0);
         const vSalePrice = toNumber(v.salePrice, 0);
         const vOriginalPrice = toNumber(v.originalPrice, 0);
-        const vStock = Math.max(0, toNumber(v.sellableQuantity ?? v.stockQuantity, 0));
+        const vStock = Math.max(
+          0,
+          toNumber(v.sellableQuantity ?? v.stockQuantity, 0)
+        );
 
         return {
           id: vId,
@@ -897,8 +1009,11 @@ const fetchFlashSaleProducts = async (showLoading = true) => {
       groupedProducts.push({
         id: productId,
         productId: productId,
-        productVariantId: mappedVariants[0]?.productVariantId,
-        variantId: mappedVariants[0]?.productVariantId,
+        productVariantId:
+          representativeFlashVariantId || mappedVariants[0]?.productVariantId,
+
+        variantId:
+          representativeFlashVariantId || mappedVariants[0]?.productVariantId,
 
         name: firstItem?.productName || "Sản phẩm Flash Sale",
         brand: firstItem?.promotionName || "Flash Sale",
@@ -938,11 +1053,13 @@ const fetchFlashSaleProducts = async (showLoading = true) => {
 
     // 💥 BỘ LỌC ĐỒNG BỘ: Chỉ giữ lại các sản phẩm Flash Sale nếu nó thực sự tồn tại trong danh sách Sản phẩm hợp lệ của hệ thống
     if (validProductIds.size > 0) {
-      flashSaleProducts.value = groupedProducts.filter(p => validProductIds.has(Number(p.productId)));
+      flashSaleProducts.value = groupedProducts.filter((p) =>
+        validProductIds.has(Number(p.productId))
+      );
     } else {
       flashSaleProducts.value = groupedProducts; // Fallback
     }
-    
+
     refreshHomeProductSections();
   } catch (error) {
     console.error("Lỗi tải Flash Sale:", error);
@@ -988,22 +1105,6 @@ const handleFlashSaleExpired = async () => {
   await fetchFlashSaleProducts();
 };
 
-const startFlashSaleRealtimeRefresh = () => {
-  stopFlashSaleRealtimeRefresh();
-
-  flashSaleRefreshTimer = window.setInterval(() => {
-    // Chỉ refresh dữ liệu nền, không bật lại spinner/loading của trang.
-    fetchFlashSaleProducts(false);
-  }, 60000);
-};
-
-const stopFlashSaleRealtimeRefresh = () => {
-  if (flashSaleRefreshTimer) {
-    window.clearInterval(flashSaleRefreshTimer);
-    flashSaleRefreshTimer = null;
-  }
-};
-
 // Khi quay lại cửa sổ chỉ đồng bộ Flash Sale ở nền.
 // Không tải lại danh sách sản phẩm thường chỉ vì browser vừa được focus.
 // Khi quay lại cửa sổ, ép tải lại cả Flash Sale và Sản phẩm thường
@@ -1014,12 +1115,12 @@ const handleFocus = async () => {
 
 onMounted(async () => {
   await Promise.all([fetchFlashSaleProducts(), fetchNormalProducts()]);
-  startFlashSaleRealtimeRefresh();
+
   window.addEventListener("focus", handleFocus);
 });
 
 onBeforeUnmount(() => {
-  stopFlashSaleRealtimeRefresh();
+  clearFlashSaleStartTimer();
   window.removeEventListener("focus", handleFocus);
 });
 </script>
