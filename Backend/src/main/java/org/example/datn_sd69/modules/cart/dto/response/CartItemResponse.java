@@ -55,6 +55,8 @@ public class CartItemResponse {
 
     private String promotionName;
 
+    private LocalDateTime promotionStartDate;
+
     private LocalDateTime promotionEndDate;
 
     /**
