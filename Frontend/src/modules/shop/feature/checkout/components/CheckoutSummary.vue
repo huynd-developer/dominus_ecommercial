@@ -7,11 +7,7 @@
     </div>
 
     <div v-else class="mini-cart-items">
-      <div
-        class="mini-item"
-        v-for="item in cartItems"
-        :key="getItemKey(item)"
-      >
+      <div class="mini-item" v-for="item in cartItems" :key="getItemKey(item)">
         <div class="mini-img-wrapper">
           <div class="mini-qty">{{ item.quantity }}</div>
 
@@ -30,6 +26,7 @@
 
           <p class="item-variant">
             Dung tích:
+
             <strong style="color: #b78d52">
               {{ formatCapacity(item) }}
             </strong>
@@ -37,6 +34,7 @@
 
           <p class="item-variant">
             Loại chai:
+
             <strong style="color: #b78d52">
               {{ item.bottleType || item.bottleTypeName || "-" }}
             </strong>
@@ -46,19 +44,13 @@
             <span>Đơn giá:</span>
 
             <div class="price-stack">
-              <span
-                v-if="hasPromotion(item)"
-                class="old-unit-price"
-              >
+              <span v-if="hasPromotion(item)" class="old-unit-price">
                 {{ formatCurrency(getOriginalPrice(item)) }}
               </span>
 
               <strong>{{ formatCurrency(getItemPrice(item)) }}</strong>
 
-              <span
-                v-if="hasPromotion(item)"
-                class="sale-chip"
-              >
+              <span v-if="hasPromotion(item)" class="sale-chip">
                 -{{ formatDiscount(item.discountPercent) }}%
               </span>
             </div>
@@ -66,6 +58,7 @@
 
           <div class="quantity-control">
             <!-- ĐÃ SỬA CHỖ NÀY: Xóa bỏ việc phụ thuộc vào canIncrease ở nút Trừ -->
+
             <button
               type="button"
               class="qty-btn"
@@ -79,11 +72,7 @@
               -
             </button>
 
-            <input
-              type="number"
-              :value="Number(item.quantity || 0)"
-              readonly
-            />
+            <input type="number" :value="Number(item.quantity || 0)" readonly />
 
             <button
               type="button"
@@ -99,10 +88,7 @@
             </span>
           </div>
 
-          <div
-            v-if="getStock(item) > 0"
-            class="stock-hint"
-          >
+          <div v-if="getStock(item) > 0" class="stock-hint">
             Còn {{ getStock(item) }} sản phẩm
           </div>
         </div>
@@ -117,6 +103,7 @@
       <div class="voucher-title-row">
         <div>
           <h4>Mã giảm giá</h4>
+
           <p>Nhập mã hoặc chọn voucher đang khả dụng</p>
         </div>
 
@@ -131,6 +118,7 @@
             v-if="voucherLoading"
             class="spinner-border spinner-border-sm"
           ></span>
+
           <span v-else>↻</span>
         </button>
       </div>
@@ -145,6 +133,7 @@
             stroke-width="2"
           >
             <rect x="2" y="7" width="20" height="10" rx="2" ry="2" />
+
             <path d="M2 12a2 2 0 010-4m20 4a2 2 0 000-4M10 7v10m4-10v10" />
           </svg>
 
@@ -213,6 +202,7 @@
             v-if="isApplyingVoucher"
             class="spinner-border spinner-border-sm"
           ></span>
+
           <span v-else>Áp dụng</span>
         </button>
       </div>
@@ -225,7 +215,10 @@
           Đang tải voucher...
         </div>
 
-        <div v-else-if="filteredVouchers.length === 0" class="voucher-dropdown-empty">
+        <div
+          v-else-if="filteredVouchers.length === 0"
+          class="voucher-dropdown-empty"
+        >
           Không có voucher phù hợp
         </div>
 
@@ -235,7 +228,10 @@
           :key="getVoucherCode(voucher)"
           type="button"
           class="voucher-option"
-          :class="{ disabled: !canUseVoucherLocally(voucher), 'voucher-best': index === 0 && canUseVoucherLocally(voucher) }"
+          :class="{
+            disabled: !canUseVoucherLocally(voucher),
+            'voucher-best': index === 0 && canUseVoucherLocally(voucher),
+          }"
           @mousedown.prevent="selectVoucher(voucher)"
         >
           <div class="voucher-option-left">
@@ -245,8 +241,16 @@
 
             <div class="voucher-desc">
               Giảm
+
               <strong>{{ formatVoucherDiscount(voucher) }}</strong>
-              <span v-if="(getVoucherDiscountType(voucher) === 'PERCENT' || getVoucherDiscountType(voucher) === 'PERCENTAGE') && getMaxDiscount(voucher) > 0">
+
+              <span
+                v-if="
+                  (getVoucherDiscountType(voucher) === 'PERCENT' ||
+                    getVoucherDiscountType(voucher) === 'PERCENTAGE') &&
+                  getMaxDiscount(voucher) > 0
+                "
+              >
                 · tối đa {{ formatCurrency(getMaxDiscount(voucher)) }}
               </span>
             </div>
@@ -261,43 +265,50 @@
               {{ index === 0 ? "Tốt nhất" : "Chọn" }}
             </span>
 
-            <span v-else class="voucher-disabled-text">
-              Chưa đủ
-            </span>
+            <span v-else class="voucher-disabled-text"> Chưa đủ </span>
           </div>
         </button>
       </div>
 
-      <p
-        class="voucher-message"
-        :class="voucherMessageClass"
-      >
+      <p class="voucher-message" :class="voucherMessageClass">
         {{ voucherMessage || "Chọn voucher để giảm giá cho đơn hàng." }}
       </p>
     </div>
 
     <!-- KHUNG TỔNG KẾT & HIỂN THỊ PHÍ VẬN CHUYỂN -->
+
     <div class="summary-preview">
       <div class="summary-line">
         <span>Tạm tính</span>
+
         <span>{{ formatCurrency(totalAmount) }}</span>
       </div>
 
       <div class="summary-line" v-if="discountAmount > 0">
         <span>Giảm giá</span>
-        <span class="discount-value">-{{ formatCurrency(discountAmount) }}</span>
+
+        <span class="discount-value"
+          >-{{ formatCurrency(discountAmount) }}</span
+        >
       </div>
 
       <div class="summary-line">
         <span>
           Phí vận chuyển
-          <span v-if="isCalculatingShip" class="spinner-border spinner-border-sm text-muted ms-1" style="width: 10px; height: 10px;"></span>
+
+          <span
+            v-if="isCalculatingShip"
+            class="spinner-border spinner-border-sm text-muted ms-1"
+            style="width: 10px; height: 10px"
+          ></span>
         </span>
+
         <span>{{ formatCurrency(shippingFee) }}</span>
       </div>
 
       <div class="summary-line total-line">
         <span>Tổng thanh toán</span>
+
         <span class="total-val">{{ formatCurrency(finalTotal) }}</span>
       </div>
     </div>
@@ -306,14 +317,16 @@
       class="btn-submit"
       type="button"
       @click="$emit('submit-order')"
-      :disabled="isSubmitting || cartItems.length === 0 || Boolean(updatingItemKey)"
+      :disabled="
+        isSubmitting || cartItems.length === 0 || Boolean(updatingItemKey)
+      "
     >
       {{
         isSubmitting
           ? "ĐANG XỬ LÝ..."
           : updatingItemKey
-            ? "ĐANG CẬP NHẬT GIỎ..."
-            : "XÁC NHẬN ĐẶT HÀNG"
+          ? "ĐANG CẬP NHẬT GIỎ..."
+          : "XÁC NHẬN ĐẶT HÀNG"
       }}
     </button>
 
@@ -325,109 +338,235 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+
 import api from "@/common/api";
 
 const props = withDefaults(
   defineProps<{
     cartItems: any[];
+
     totalItems: number;
+
     totalAmount: number;
+
     discountAmount: number;
+
     shippingFee?: number;
+
     isCalculatingShip?: boolean;
+
     finalTotal: number;
+
     isSubmitting: boolean;
+
     updatingItemKey?: string | number | null;
+
     selectedVoucherCode?: string | null;
+
+    promotionRefreshing?: boolean;
   }>(),
+
   {
     updatingItemKey: null,
+
     selectedVoucherCode: "",
+
+    promotionRefreshing: false,
+
     shippingFee: 30000,
+
     isCalculatingShip: false,
   }
 );
 
 const emit = defineEmits<{
   (e: "submit-order"): void;
+
   (e: "back"): void;
+
   (e: "update-quantity", item: any, quantity: number): void;
+
   (e: "apply-voucher", discountAmount: number, voucherCode: string): void;
+
   (e: "cancel-voucher"): void;
 }>();
 
 const FALLBACK_IMAGE =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(`
+
     <svg xmlns="http://www.w3.org/2000/svg" width="150" height="150">
+
       <rect width="100%" height="100%" fill="#f3f4f6"/>
+
       <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
+
         fill="#9ca3af" font-family="Arial" font-size="16">
+
         Không có ảnh
+
       </text>
+
     </svg>
+
   `);
 
 const availableVouchers = ref<any[]>([]);
+
 const voucherCode = ref("");
+
 const voucherMessage = ref("");
+
 const voucherMessageClass = ref("");
+
 const showVoucherDropdown = ref(false);
+
 const voucherLoading = ref(false);
+
 const isApplyingVoucher = ref(false);
+
 const isVoucherApplied = ref(false);
+
 const vouchersLoaded = ref(false);
 
 let closeDropdownTimer: ReturnType<typeof setTimeout> | null = null;
 
+let voucherExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+
+const MAX_VOUCHER_TIMER_DELAY = 2_147_000_000;
+
 const getActualDiscountAmount = (voucher: any) => {
   if (!canUseVoucherLocally(voucher)) return 0;
-  
+
   const type = getVoucherDiscountType(voucher);
+
   const value = getVoucherDiscountValue(voucher);
-  
+
   if (type === "PERCENT" || type === "PERCENTAGE") {
     const calculated = (props.totalAmount * value) / 100;
+
     const maxDiscount = getMaxDiscount(voucher);
+
     return maxDiscount > 0 ? Math.min(calculated, maxDiscount) : calculated;
   }
-  
+
   return value;
 };
 
 const isVoucherStatusActive = (voucher: any) => {
   const status = voucher?.status;
+
   if (status == null) return true;
+
   if (typeof status === "number") return status === 1;
-  return ["1", "ACTIVE", "ENABLE", "ENABLED", "VALID", "AVAILABLE"].includes(String(status).toUpperCase().trim());
+
+  return ["1", "ACTIVE", "ENABLE", "ENABLED", "VALID", "AVAILABLE"].includes(
+    String(status).toUpperCase().trim()
+  );
+};
+
+const getVoucherTime = (value: unknown): number | null => {
+  if (!value) return null;
+
+  const time = new Date(String(value)).getTime();
+
+  return Number.isFinite(time) ? time : null;
+};
+
+const isVoucherWithinValidityPeriod = (voucher: any) => {
+  const now = Date.now();
+
+  const startTime = getVoucherTime(voucher?.startDate);
+
+  const endTime = getVoucherTime(voucher?.endDate);
+
+  if (startTime !== null && now < startTime) return false;
+
+  if (endTime !== null && now >= endTime) return false;
+
+  return true;
+};
+
+const isVoucherCurrentlyAvailable = (voucher: any) => {
+  if (!voucher) return false;
+
+  if (voucher?.isDeleted === true || voucher?.deleted === true) return false;
+
+  if (!isVoucherStatusActive(voucher)) return false;
+
+  return isVoucherWithinValidityPeriod(voucher);
+};
+
+const clearVoucherExpiryTimer = () => {
+  if (voucherExpiryTimer) {
+    clearTimeout(voucherExpiryTimer);
+
+    voucherExpiryTimer = null;
+  }
+};
+
+const scheduleVoucherExpiryRefresh = () => {
+  clearVoucherExpiryTimer();
+
+  const now = Date.now();
+
+  const futureBoundaryTimes = availableVouchers.value
+
+    .flatMap((voucher) => [
+      getVoucherTime(voucher?.startDate),
+
+      getVoucherTime(voucher?.endDate),
+    ])
+
+    .filter((time): time is number => time !== null && time > now);
+
+  if (futureBoundaryTimes.length === 0) return;
+
+  const nextBoundaryTime = Math.min(...futureBoundaryTimes);
+
+  const delay = Math.min(
+    Math.max(0, nextBoundaryTime - now + 100),
+
+    MAX_VOUCHER_TIMER_DELAY
+  );
+
+  voucherExpiryTimer = setTimeout(() => {
+    void refreshVoucherState();
+  }, delay);
 };
 
 const filteredVouchers = computed(() => {
   const keyword = voucherCode.value.trim().toLowerCase();
 
-  const vouchers = availableVouchers.value
-    .filter((voucher) => {
-      // ĐÃ SỬA: Chặn mã bị xóa hoặc bị tắt giống như bên giỏ hàng
-      if (voucher?.isDeleted === true || voucher?.deleted === true) return false;
-      if (!isVoucherStatusActive(voucher)) return false;
+  const vouchers = availableVouchers.value.filter((voucher) => {
+    // Chặn voucher bị xóa/tắt/chưa tới thời gian hoặc đã hết hạn.
 
-      const code = getVoucherCode(voucher).toLowerCase();
-      if (!keyword) return true;
-      return code.includes(keyword);
-    });
+    if (!isVoucherCurrentlyAvailable(voucher)) return false;
 
-  return vouchers.sort((a, b) => {
-    const aUsable = canUseVoucherLocally(a);
-    const bUsable = canUseVoucherLocally(b);
-    
-    if (aUsable && !bUsable) return -1;
-    if (!aUsable && bUsable) return 1;
-    
-    const aDiscount = getActualDiscountAmount(a);
-    const bDiscount = getActualDiscountAmount(b);
-    
-    return bDiscount - aDiscount;
-  }).slice(0, 10);
+    const code = getVoucherCode(voucher).toLowerCase();
+
+    if (!keyword) return true;
+
+    return code.includes(keyword);
+  });
+
+  return vouchers
+    .sort((a, b) => {
+      const aUsable = canUseVoucherLocally(a);
+
+      const bUsable = canUseVoucherLocally(b);
+
+      if (aUsable && !bUsable) return -1;
+
+      if (!aUsable && bUsable) return 1;
+
+      const aDiscount = getActualDiscountAmount(a);
+
+      const bDiscount = getActualDiscountAmount(b);
+
+      return bDiscount - aDiscount;
+    })
+    .slice(0, 10);
 });
 
 const getItemKey = (item: any) => {
@@ -442,19 +581,27 @@ const getItemKey = (item: any) => {
 
 const getItemImage = (item: any) => {
   if (!item) return FALLBACK_IMAGE;
-  let url = item?.image || item?.imageUrl || item?.thumbnailUrl || item?.mainImage;
+
+  let url =
+    item?.image || item?.imageUrl || item?.thumbnailUrl || item?.mainImage;
 
   if (!url && item?.productVariant) {
     url = item.productVariant.imageUrl || item.productVariant.image;
+
     if (!url && item.productVariant.product) {
-      url = item.productVariant.product.mainImage || item.productVariant.product.imageUrl;
+      url =
+        item.productVariant.product.mainImage ||
+        item.productVariant.product.imageUrl;
+
       if (!url && item.productVariant.product.productImages?.length > 0) {
         url = item.productVariant.product.productImages[0].imageUrl;
       }
     }
   }
+
   if (!url && item?.product) {
     url = item.product.mainImage || item.product.imageUrl;
+
     if (!url && item.product.productImages?.length > 0) {
       url = item.product.productImages[0].imageUrl;
     }
@@ -465,11 +612,18 @@ const getItemImage = (item: any) => {
 
 const handleImageError = (event: Event) => {
   const target = event.target as HTMLImageElement;
+
   target.src = FALLBACK_IMAGE;
 };
 
 const getItemPrice = (item: any) => {
-  return Number(item?.price ?? item?.salePrice ?? item?.finalPrice ?? item?.originalPrice ?? 0);
+  return Number(
+    item?.price ??
+      item?.salePrice ??
+      item?.finalPrice ??
+      item?.originalPrice ??
+      0
+  );
 };
 
 const getOriginalPrice = (item: any) => {
@@ -478,19 +632,21 @@ const getOriginalPrice = (item: any) => {
 
 const hasPromotion = (item: any) => {
   const originalPrice = getOriginalPrice(item);
+
   const salePrice = getItemPrice(item);
+
   const discountPercent = Number(item?.discountPercent || 0);
 
-  return Boolean(item?.hasPromotion || item?.isFlashSale) &&
+  return (
+    Boolean(item?.hasPromotion || item?.isFlashSale) &&
     discountPercent > 0 &&
-    originalPrice > salePrice;
+    originalPrice > salePrice
+  );
 };
 
 const getStock = (item: any) => {
   const quantity = Number(
-    item?.sellableQuantity ??
-      item?.productVariant?.sellableQuantity ??
-      0
+    item?.sellableQuantity ?? item?.productVariant?.sellableQuantity ?? 0
   );
 
   if (!Number.isFinite(quantity) || quantity <= 0) {
@@ -514,18 +670,14 @@ const formatCapacity = (item: any) => {
 
 const canIncrease = (item: any) => {
   const stock = getStock(item);
+
   const quantity = Number(item?.quantity || 0);
+
   const variantStatus = Number(
-    item?.variantStatus ??
-      item?.productVariant?.status ??
-      1
+    item?.variantStatus ?? item?.productVariant?.status ?? 1
   );
 
-  if (
-    variantStatus !== 1 ||
-    item?.sellable === false ||
-    stock <= 0
-  ) {
+  if (variantStatus !== 1 || item?.sellable === false || stock <= 0) {
     return false;
   }
 
@@ -540,12 +692,14 @@ const emitUpdateQuantity = (item: any, quantity: number) => {
   if (quantity < 1) {
     return;
   }
+
   emit("update-quantity", item, quantity);
 };
 
 const fetchAvailableVouchers = async () => {
   try {
     voucherLoading.value = true;
+
     const res = await api.get(`/v1/customer/vouchers?t=${Date.now()}`);
 
     if (Array.isArray(res.data)) {
@@ -561,10 +715,14 @@ const fetchAvailableVouchers = async () => {
     vouchersLoaded.value = true;
   } catch (error) {
     console.error("Không tải được voucher:", error);
+
     availableVouchers.value = [];
+
     vouchersLoaded.value = true;
   } finally {
     voucherLoading.value = false;
+
+    scheduleVoucherExpiryRefresh();
   }
 };
 
@@ -575,6 +733,7 @@ const openVoucherDropdown = async () => {
 
   if (closeDropdownTimer) {
     clearTimeout(closeDropdownTimer);
+
     closeDropdownTimer = null;
   }
 
@@ -605,17 +764,23 @@ const scheduleCloseDropdown = () => {
 
 const selectVoucher = async (voucher: any) => {
   const code = getVoucherCode(voucher);
+
   if (!code) {
     return;
   }
 
   if (!canUseVoucherLocally(voucher)) {
-    voucherMessage.value = `Đơn hàng cần tối thiểu ${formatCurrency(getMinOrderValue(voucher))} để dùng voucher này.`;
+    voucherMessage.value = `Đơn hàng cần tối thiểu ${formatCurrency(
+      getMinOrderValue(voucher)
+    )} để dùng voucher này.`;
+
     voucherMessageClass.value = "text-danger";
-    return; 
+
+    return;
   }
 
   voucherCode.value = code;
+
   showVoucherDropdown.value = false;
 
   await handleApplyVoucher();
@@ -626,42 +791,55 @@ const handleApplyVoucher = async () => {
 
   if (!cleanCode) {
     voucherMessage.value = "Vui lòng nhập hoặc chọn mã giảm giá.";
+
     voucherMessageClass.value = "text-danger";
+
     return;
   }
 
   if (props.cartItems.length === 0 || props.totalAmount <= 0) {
     voucherMessage.value = "Giỏ hàng chưa có sản phẩm để áp dụng voucher.";
+
     voucherMessageClass.value = "text-danger";
+
     return;
   }
 
   try {
     isApplyingVoucher.value = true;
+
     voucherMessage.value = "";
+
     voucherMessageClass.value = "";
+
     showVoucherDropdown.value = false;
 
     const res = await api.get("/v1/customer/vouchers/apply", {
       params: {
         code: cleanCode,
+
         orderTotal: props.totalAmount,
       },
     });
 
     // BÓC TÁCH DỮ LIỆU ĐA TẦNG ĐỂ KHÔNG BỊ MISS GIẢM GIÁ
+
     const respData = res.data?.data ?? res.data?.result ?? res.data;
+
     const discount = Number(
       respData?.discountAmount ??
-      respData?.discountValue ??
-      respData?.discount ??
-      respData?.amount ??
-      0
+        respData?.discountValue ??
+        respData?.discount ??
+        respData?.amount ??
+        0
     );
 
     voucherCode.value = cleanCode;
+
     isVoucherApplied.value = true;
+
     voucherMessage.value = respData?.message || "Áp dụng voucher thành công.";
+
     voucherMessageClass.value = "text-success";
 
     localStorage.setItem("applied_voucher", cleanCode);
@@ -671,10 +849,13 @@ const handleApplyVoucher = async () => {
     console.error("Không áp dụng được voucher:", error);
 
     isVoucherApplied.value = false;
+
     voucherMessage.value = getErrorMessage(
       error,
+
       "Không thể áp dụng mã giảm giá này."
     );
+
     voucherMessageClass.value = "text-danger";
 
     emit("apply-voucher", 0, "");
@@ -687,18 +868,24 @@ const handleCancelVoucher = () => {
   if (props.isSubmitting) return;
 
   isVoucherApplied.value = false;
+
   voucherCode.value = "";
+
   voucherMessage.value = "Đã hủy mã giảm giá.";
+
   voucherMessageClass.value = "text-muted";
 
   localStorage.removeItem("applied_voucher");
 
   emit("cancel-voucher");
+
   emit("apply-voucher", 0, "");
 };
 
 const getVoucherCode = (voucher: any) => {
-  return String(voucher?.code ?? voucher?.voucherCode ?? voucher?.name ?? "").trim();
+  return String(
+    voucher?.code ?? voucher?.voucherCode ?? voucher?.name ?? ""
+  ).trim();
 };
 
 const getVoucherDiscountType = (voucher: any) => {
@@ -706,22 +893,29 @@ const getVoucherDiscountType = (voucher: any) => {
 };
 
 const getVoucherDiscountValue = (voucher: any) => {
-  return Number(voucher?.discountValue ?? voucher?.value ?? voucher?.discount ?? 0);
+  return Number(
+    voucher?.discountValue ?? voucher?.value ?? voucher?.discount ?? 0
+  );
 };
 
 const getMinOrderValue = (voucher: any) => {
-  return Number(voucher?.minOrderValue ?? voucher?.minimumOrderValue ?? voucher?.minOrderAmount ?? 0);
+  return Number(
+    voucher?.minOrderValue ??
+      voucher?.minimumOrderValue ??
+      voucher?.minOrderAmount ??
+      0
+  );
 };
 
 const getMaxDiscount = (voucher: any) => {
   return Number(
-    voucher?.maxDiscount ?? 
-    voucher?.maxDiscountAmount ?? 
-    voucher?.maximumDiscountAmount ?? 
-    voucher?.maxAmount ?? 
-    voucher?.maxDiscountValue ??
-    voucher?.maximumDiscount ??
-    0
+    voucher?.maxDiscount ??
+      voucher?.maxDiscountAmount ??
+      voucher?.maximumDiscountAmount ??
+      voucher?.maxAmount ??
+      voucher?.maxDiscountValue ??
+      voucher?.maximumDiscount ??
+      0
   );
 };
 
@@ -731,6 +925,7 @@ const canUseVoucherLocally = (voucher: any) => {
 
 const formatVoucherDiscount = (voucher: any) => {
   const type = getVoucherDiscountType(voucher);
+
   const value = getVoucherDiscountValue(voucher);
 
   if (type === "PERCENT" || type === "PERCENTAGE") {
@@ -743,6 +938,7 @@ const formatVoucherDiscount = (voucher: any) => {
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
+
     currency: "VND",
   }).format(Number(value || 0));
 };
@@ -754,7 +950,7 @@ const formatDiscount = (value?: number | null) => {
     return String(numberValue);
   }
 
-  return numberValue.toFixed(2).replace(/\.?0+$/, "");
+  return numberValue.toFixed(2).replace(/.?0+$/, "");
 };
 
 const getErrorMessage = (error: any, fallback: string) => {
@@ -781,17 +977,21 @@ const getErrorMessage = (error: any, fallback: string) => {
 
 watch(
   () => props.totalAmount,
+
   (newValue, oldValue) => {
     if (
       !props.isSubmitting &&
+      !props.promotionRefreshing &&
       Number(newValue || 0) > 0 &&
       oldValue !== undefined &&
       Number(newValue || 0) !== Number(oldValue || 0) &&
       isVoucherApplied.value
     ) {
       handleCancelVoucher();
+
       voucherMessage.value =
         "Đã hủy voucher vì giỏ hàng thay đổi. Vui lòng áp dụng lại.";
+
       voucherMessageClass.value = "text-danger";
     }
   }
@@ -799,10 +999,17 @@ watch(
 
 watch(
   () => props.discountAmount,
+
   (value) => {
-    if (Number(value || 0) <= 0 && isVoucherApplied.value && !isApplyingVoucher.value) {
+    if (
+      Number(value || 0) <= 0 &&
+      isVoucherApplied.value &&
+      !isApplyingVoucher.value
+    ) {
       isVoucherApplied.value = false;
+
       voucherCode.value = "";
+
       voucherMessage.value = "";
     }
   }
@@ -810,28 +1017,36 @@ watch(
 
 watch(
   () => props.selectedVoucherCode,
+
   (newCode) => {
     if (newCode && newCode !== voucherCode.value) {
       voucherCode.value = newCode;
+
       handleApplyVoucher();
     } else if (!newCode && isVoucherApplied.value) {
       isVoucherApplied.value = false;
+
       voucherCode.value = "";
+
       voucherMessage.value = "";
     }
   }
 );
 
 // Tải lại voucher khi tab được focus (ví dụ khách sang tab admin để đổi trạng thái voucher xong quay lại)
+
 let voucherRefreshInProgress = false;
+
 const refreshVoucherState = async () => {
   if (voucherRefreshInProgress) return;
+
   voucherRefreshInProgress = true;
 
   try {
     await fetchAvailableVouchers();
 
     // Hủy mã nếu mã đang dùng vừa bị khóa/xóa/hết điều kiện.
+
     if (isVoucherApplied.value && voucherCode.value) {
       const currentVoucher = availableVouchers.value.find(
         (voucher) =>
@@ -839,13 +1054,19 @@ const refreshVoucherState = async () => {
           voucherCode.value.trim().toUpperCase()
       );
 
-      if (!currentVoucher) {
+      if (!currentVoucher || !isVoucherCurrentlyAvailable(currentVoucher)) {
         handleCancelVoucher();
-        voucherMessage.value = "Mã giảm giá đã bị xóa hoặc không còn khả dụng.";
+
+        voucherMessage.value =
+          "Mã giảm giá đã hết hạn hoặc không còn khả dụng.";
+
         voucherMessageClass.value = "text-danger";
       } else if (!canUseVoucherLocally(currentVoucher)) {
         handleCancelVoucher();
-        voucherMessage.value = "Đơn hàng không đủ điều kiện sử dụng mã này nữa.";
+
+        voucherMessage.value =
+          "Đơn hàng không đủ điều kiện sử dụng mã này nữa.";
+
         voucherMessageClass.value = "text-danger";
       }
     }
@@ -871,15 +1092,26 @@ onMounted(async () => {
 
   if (savedVoucher && props.totalAmount > 0) {
     voucherCode.value = savedVoucher;
+
     await handleApplyVoucher();
   }
 
   window.addEventListener("focus", handleFocus);
+
   document.addEventListener("visibilitychange", handleVisibilityChange);
 });
 
 onUnmounted(() => {
+  clearVoucherExpiryTimer();
+
+  if (closeDropdownTimer) {
+    clearTimeout(closeDropdownTimer);
+
+    closeDropdownTimer = null;
+  }
+
   window.removeEventListener("focus", handleFocus);
+
   document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 </script>
@@ -887,84 +1119,131 @@ onUnmounted(() => {
 <style scoped>
 .checkout-right {
   flex: 1.2;
+
   background: white;
+
   border: 1px solid #eaeaea;
+
   border-radius: 8px;
+
   padding: 30px;
+
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+
   position: sticky;
+
   top: 20px;
 }
 
 .summary-title {
   font-size: 18px;
+
   margin: 0 0 20px 0;
+
   color: #06132b;
+
   border-bottom: 1px solid #eee;
+
   padding-bottom: 15px;
 }
 
 .empty-cart {
   padding: 30px 10px;
+
   text-align: center;
+
   color: #718096;
+
   background: #f8fafc;
+
   border-radius: 8px;
 }
 
 .mini-cart-items {
   max-height: 320px;
+
   overflow-y: auto;
+
   margin-bottom: 20px;
+
   padding-right: 5px;
 }
 
 .mini-item {
   display: grid;
+
   grid-template-columns: 58px 1fr auto;
+
   align-items: flex-start;
+
   gap: 12px;
+
   margin-bottom: 18px;
+
   position: relative;
+
   padding-bottom: 16px;
+
   border-bottom: 1px solid #f1f5f9;
 }
 
 .mini-item:last-child {
   margin-bottom: 0;
+
   border-bottom: none;
 }
 
 .mini-img-wrapper {
   position: relative;
+
   width: 58px;
+
   height: 58px;
 }
 
 .mini-qty {
   position: absolute;
+
   top: -6px;
+
   left: -6px;
+
   background: #06132b;
+
   color: white;
+
   min-width: 21px;
+
   height: 21px;
+
   padding: 0 5px;
+
   border-radius: 999px;
+
   display: flex;
+
   align-items: center;
+
   justify-content: center;
+
   font-size: 11px;
+
   font-weight: 800;
+
   z-index: 2;
 }
 
 .mini-img {
   width: 58px;
+
   height: 58px;
+
   border-radius: 8px;
+
   border: 1px solid #eaeaea;
+
   object-fit: cover;
+
   background: #f8fafc;
 }
 
@@ -974,24 +1253,35 @@ onUnmounted(() => {
 
 .item-name {
   font-size: 13px;
+
   font-weight: 700;
+
   color: #06132b;
+
   margin: 0 0 4px;
+
   line-height: 1.4;
 }
 
 .item-variant {
   margin: 0 0 5px;
+
   font-size: 12px;
+
   color: #718096;
 }
 
 .item-meta {
   display: flex;
+
   gap: 6px;
+
   align-items: flex-start;
+
   font-size: 12px;
+
   color: #64748b;
+
   margin-bottom: 8px;
 }
 
@@ -1001,42 +1291,63 @@ onUnmounted(() => {
 
 .price-stack {
   display: flex;
+
   flex-wrap: wrap;
+
   align-items: center;
+
   gap: 5px;
 }
 
 .old-unit-price {
   color: #94a3b8;
+
   text-decoration: line-through;
 }
 
 .sale-chip {
   background: #fee2e2;
+
   color: #dc2626;
+
   border: 1px solid #fecaca;
+
   border-radius: 999px;
+
   padding: 1px 6px;
+
   font-size: 10px;
+
   font-weight: 800;
 }
 
 .quantity-control {
   display: flex;
+
   align-items: center;
+
   gap: 0;
+
   margin-top: 6px;
 }
 
 .qty-btn {
   width: 30px;
+
   height: 30px;
+
   border: 1px solid #d7dde8;
+
   background: #ffffff;
+
   color: #06132b;
+
   font-size: 16px;
+
   font-weight: 800;
+
   cursor: pointer;
+
   transition: 0.2s;
 }
 
@@ -1050,164 +1361,242 @@ onUnmounted(() => {
 
 .qty-btn:hover:not(:disabled) {
   background: #06132b;
+
   border-color: #06132b;
+
   color: #ffffff;
 }
 
 .qty-btn:disabled {
   color: #cbd5e0;
+
   cursor: not-allowed;
+
   background: #f8fafc;
 }
 
 .quantity-control input {
   width: 42px;
+
   height: 30px;
+
   border: 1px solid #d7dde8;
+
   border-left: none;
+
   border-right: none;
+
   text-align: center;
+
   outline: none;
+
   font-size: 13px;
+
   font-weight: 800;
+
   color: #06132b;
+
   background: #ffffff;
 }
 
 .qty-loading {
   margin-left: 8px;
+
   font-size: 11px;
+
   color: #b78d52;
+
   font-weight: 700;
 }
 
 .stock-hint {
   margin-top: 5px;
+
   color: #718096;
+
   font-size: 11px;
 }
 
 .mini-total {
   color: #06132b;
+
   font-size: 13px;
+
   font-weight: 800;
+
   white-space: nowrap;
+
   padding-top: 2px;
 }
 
 .voucher-section {
   position: relative;
+
   margin: 20px 0 0;
+
   padding: 16px;
+
   border: 1px solid #eef2f7;
+
   border-radius: 14px;
+
   background: #f8fafc;
 }
 
 .voucher-title-row {
   display: flex;
+
   justify-content: space-between;
+
   align-items: flex-start;
+
   gap: 12px;
+
   margin-bottom: 12px;
 }
 
 .voucher-title-row h4 {
   margin: 0;
+
   color: #06132b;
+
   font-size: 14px;
+
   font-weight: 800;
 }
 
 .voucher-title-row p {
   margin: 3px 0 0;
+
   color: #718096;
+
   font-size: 12px;
 }
 
 .btn-refresh-voucher {
   width: 32px;
+
   height: 32px;
+
   border: 1px solid #d7dde8;
+
   border-radius: 999px;
+
   background: #ffffff;
+
   color: #06132b;
+
   font-weight: 900;
+
   cursor: pointer;
 }
 
 .btn-refresh-voucher:disabled {
   opacity: 0.6;
+
   cursor: not-allowed;
 }
 
 .voucher-control {
   display: flex;
+
   gap: 8px;
 }
 
 .voucher-input-wrapper {
   flex: 1;
+
   display: flex;
+
   align-items: center;
+
   background: #ffffff;
+
   border: 1px solid #d7dde8;
+
   border-radius: 10px;
+
   overflow: hidden;
 }
 
 .voucher-icon {
   width: 18px;
+
   height: 18px;
+
   color: #b78d52;
+
   margin-left: 12px;
+
   flex-shrink: 0;
 }
 
 .voucher-input-wrapper input {
   flex: 1;
+
   min-width: 0;
+
   border: none;
+
   outline: none;
+
   padding: 11px 8px;
+
   color: #06132b;
+
   font-weight: 700;
+
   background: transparent;
 }
 
 .voucher-input-wrapper input:disabled {
   cursor: not-allowed;
+
   opacity: 0.7;
 }
 
 .btn-toggle-dropdown {
   width: 38px;
+
   align-self: stretch;
+
   border: none;
+
   border-left: 1px solid #eef2f7;
+
   background: #ffffff;
+
   color: #06132b;
+
   cursor: pointer;
 }
 
 .btn-toggle-dropdown:disabled {
   cursor: not-allowed;
+
   opacity: 0.6;
 }
 
 .btn-apply-voucher,
 .btn-cancel-voucher {
   min-width: 86px;
+
   border: none;
+
   border-radius: 10px;
+
   padding: 0 14px;
+
   font-size: 13px;
+
   font-weight: 800;
+
   cursor: pointer;
 }
 
 .btn-apply-voucher {
   background: #06132b;
+
   color: #ffffff;
 }
 
@@ -1217,57 +1606,84 @@ onUnmounted(() => {
 
 .btn-cancel-voucher {
   background: #fee2e2;
+
   color: #dc2626;
+
   border: 1px solid #fecaca;
 }
 
 .btn-cancel-voucher:hover:not(:disabled) {
   background: #dc2626;
+
   color: #ffffff;
 }
 
 .btn-apply-voucher:disabled,
 .btn-cancel-voucher:disabled {
   cursor: not-allowed;
+
   opacity: 0.65;
 }
 
 .voucher-dropdown {
   position: absolute;
+
   top: 116px;
+
   left: 16px;
+
   right: 16px;
+
   background: #ffffff;
+
   border: 1px solid #e5e7eb;
+
   border-radius: 12px;
+
   box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
+
   max-height: 300px;
+
   overflow-y: auto;
+
   z-index: 30;
 }
 
 .voucher-dropdown-empty {
   padding: 16px;
+
   color: #718096;
+
   font-size: 13px;
+
   text-align: center;
 }
 
 .voucher-option {
   width: 100%;
+
   border: none;
+
   background: #ffffff;
+
   border-bottom: 1px solid #f1f5f9;
+
   padding: 12px;
+
   display: flex;
+
   justify-content: space-between;
+
   gap: 10px;
+
   text-align: left;
+
   cursor: pointer;
 }
 
 .voucher-best {
   background: #fffbef !important;
+
   border-left: 3px solid #b78d52;
 }
 
@@ -1281,24 +1697,35 @@ onUnmounted(() => {
 
 .voucher-option.disabled {
   opacity: 0.65;
+
   cursor: not-allowed;
 }
 
 .voucher-code {
   display: inline-flex;
+
   width: fit-content;
+
   background: rgba(183, 141, 82, 0.14);
+
   color: #7c541e;
+
   border: 1px solid rgba(183, 141, 82, 0.25);
+
   border-radius: 6px;
+
   padding: 3px 8px;
+
   font-size: 12px;
+
   font-weight: 900;
 }
 
 .voucher-desc {
   margin-top: 6px;
+
   color: #334155;
+
   font-size: 12px;
 }
 
@@ -1308,33 +1735,45 @@ onUnmounted(() => {
 
 .voucher-min {
   margin-top: 3px;
+
   color: #718096;
+
   font-size: 11px;
 }
 
 .voucher-option-right {
   display: flex;
+
   align-items: center;
+
   flex-shrink: 0;
 }
 
 .voucher-use {
   color: #16a34a;
+
   font-size: 12px;
+
   font-weight: 900;
 }
 
 .voucher-disabled-text {
   color: #dc2626;
+
   font-size: 12px;
+
   font-weight: 900;
 }
 
 .voucher-message {
   margin: 9px 0 0;
+
   min-height: 18px;
+
   font-size: 12px;
+
   font-weight: 600;
+
   color: #718096;
 }
 
@@ -1352,48 +1791,71 @@ onUnmounted(() => {
 
 .summary-preview {
   margin-top: 20px;
+
   padding: 20px 0;
+
   border-top: 1px dashed #cbd5e0;
 }
 
 .summary-line {
   display: flex;
+
   justify-content: space-between;
+
   margin-bottom: 10px;
+
   font-size: 14px;
+
   color: #4a5568;
 }
 
 .discount-value {
   color: #dc2626;
+
   font-weight: 800;
 }
 
 .total-line {
   border-top: 1px solid #e2e8f0;
+
   padding-top: 15px;
+
   margin-top: 5px;
+
   font-weight: bold;
+
   font-size: 16px;
+
   color: #06132b;
 }
 
 .total-val {
   font-size: 22px;
+
   color: #b78d52;
 }
 
 .btn-submit {
   width: 100%;
+
   padding: 16px;
+
   background: #06132b;
+
   color: white;
+
   border: none;
+
   border-radius: 6px;
+
   font-weight: bold;
+
   font-size: 15px;
+
   cursor: pointer;
+
   transition: 0.2s;
+
   margin-top: 10px;
 }
 
@@ -1403,18 +1865,27 @@ onUnmounted(() => {
 
 .btn-submit:disabled {
   background: #a0aec0;
+
   cursor: not-allowed;
 }
 
 .btn-back {
   width: 100%;
+
   background: transparent;
+
   border: none;
+
   color: #666;
+
   font-size: 14px;
+
   text-decoration: underline;
+
   cursor: pointer;
+
   padding: 15px 0;
+
   margin-top: 5px;
 }
 
@@ -1425,6 +1896,7 @@ onUnmounted(() => {
 @media (max-width: 768px) {
   .checkout-right {
     position: static;
+
     width: 100%;
   }
 

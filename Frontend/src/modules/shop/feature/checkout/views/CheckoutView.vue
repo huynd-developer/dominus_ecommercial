@@ -22,6 +22,7 @@
           :isSubmitting="isSubmitting"
           :updatingItemKey="updatingItemKey"
           :selectedVoucherCode="appliedVoucherCode"
+          :promotionRefreshing="isPromotionRefreshing"
           @update-quantity="handleUpdateQuantity"
           @submit-order="handlePlaceOrder"
           @back="goToCart"
@@ -161,7 +162,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import api from "@/common/api";
@@ -185,6 +186,10 @@ const cartSnapshot = ref<any[]>([]);
 const isSubmitting = ref(false);
 const isPageLoading = ref(true);
 const updatingItemKey = ref<string | number | null>(null);
+const isPromotionRefreshing = ref(false);
+
+let promotionExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+const MAX_PROMOTION_TIMER_DELAY = 2_147_000_000;
 
 const formKey = ref(0);
 
@@ -320,6 +325,86 @@ const finalTotal = computed(
 const totalItems = computed(() =>
   cartItems.value.reduce((sum, item) => sum + Number(item.quantity || 0), 0)
 );
+
+const clearPromotionExpiryTimer = () => {
+  if (promotionExpiryTimer) {
+    clearTimeout(promotionExpiryTimer);
+    promotionExpiryTimer = null;
+  }
+};
+
+const getPromotionBoundaryTimes = (item: any): number[] => {
+  const times: number[] = [];
+
+  const rawStartDate = item?.promotionStartDate;
+  const rawEndDate = item?.promotionEndDate;
+
+  if (rawStartDate) {
+    const startTime = new Date(rawStartDate).getTime();
+    if (Number.isFinite(startTime)) {
+      times.push(startTime);
+    }
+  }
+
+  if (rawEndDate) {
+    const endTime = new Date(rawEndDate).getTime();
+    if (Number.isFinite(endTime)) {
+      times.push(endTime);
+    }
+  }
+
+  return times;
+};
+
+const schedulePromotionExpiryRefresh = () => {
+  clearPromotionExpiryTimer();
+
+  const now = Date.now();
+
+  const futurePromotionTimes = cartItems.value
+    .flatMap(getPromotionBoundaryTimes)
+    .filter((time: number) => time > now);
+
+  if (futurePromotionTimes.length === 0) return;
+
+  const nextPromotionTime = Math.min(...futurePromotionTimes);
+  const delay = Math.min(
+    Math.max(0, nextPromotionTime - now + 200),
+    MAX_PROMOTION_TIMER_DELAY
+  );
+
+  promotionExpiryTimer = setTimeout(() => {
+    void refreshCheckoutAtPromotionExpiry();
+  }, delay);
+};
+
+const refreshCheckoutAtPromotionExpiry = async () => {
+  if (
+    isSubmitting.value ||
+    showPaymentModal.value ||
+    showSuccessModal.value ||
+    isPromotionRefreshing.value
+  ) {
+    return;
+  }
+
+  isPromotionRefreshing.value = true;
+
+  // Đảm bảo CheckoutSummary nhận cờ này trước khi totalAmount thay đổi,
+  // để không hiểu việc Flash Sale hết hạn là khách tự sửa giỏ hàng.
+  await nextTick();
+
+  try {
+    await loadCartSummary();
+
+    if (localStorage.getItem("applied_voucher") || appliedVoucherCode.value) {
+      await loadSavedVoucher();
+    }
+  } finally {
+    isPromotionRefreshing.value = false;
+    schedulePromotionExpiryRefresh();
+  }
+};
 
 const updateCartQuantityApi = async (item: any, quantity: number) => {
   await api.put("/v1/customer/cart/update", {
@@ -697,9 +782,46 @@ const loadCartSummary = async () => {
     }
 
     cartItems.value = items;
+    schedulePromotionExpiryRefresh();
   } catch (error: any) {
     console.error(error);
   }
+};
+
+const isVoucherCurrentlyActive = (voucher: any) => {
+  if (!voucher || voucher?.isDeleted === true || voucher?.deleted === true) {
+    return false;
+  }
+
+  const status = voucher?.status;
+  if (status != null) {
+    const normalizedStatus =
+      typeof status === "number" ? status : String(status).toUpperCase().trim();
+
+    const active =
+      normalizedStatus === 1 ||
+      ["1", "ACTIVE", "ENABLE", "ENABLED", "VALID", "AVAILABLE"].includes(
+        String(normalizedStatus)
+      );
+
+    if (!active) return false;
+  }
+
+  const now = Date.now();
+  const startTime = voucher?.startDate
+    ? new Date(voucher.startDate).getTime()
+    : null;
+  const endTime = voucher?.endDate ? new Date(voucher.endDate).getTime() : null;
+
+  if (startTime !== null && Number.isFinite(startTime) && now < startTime) {
+    return false;
+  }
+
+  if (endTime !== null && Number.isFinite(endTime) && now >= endTime) {
+    return false;
+  }
+
+  return true;
 };
 
 const loadSavedVoucher = async () => {
@@ -707,7 +829,7 @@ const loadSavedVoucher = async () => {
   if (!savedCode || totalAmount.value <= 0) return;
 
   try {
-    const resVouchers = await api.get("/v1/customer/vouchers");
+    const resVouchers = await api.get(`/v1/customer/vouchers?t=${Date.now()}`);
     let vouchers = [];
     if (Array.isArray(resVouchers.data)) vouchers = resVouchers.data;
     else if (Array.isArray(resVouchers.data?.content))
@@ -721,6 +843,11 @@ const loadSavedVoucher = async () => {
           .trim()
           .toUpperCase() === savedCode.toUpperCase()
     );
+
+    if (matchedVoucher && !isVoucherCurrentlyActive(matchedVoucher)) {
+      handleCancelVoucher();
+      return;
+    }
 
     if (matchedVoucher) {
       const minOrder = Number(
@@ -787,7 +914,7 @@ const handleUpdateQuantity = async (item: any, quantity: number) => {
 
   const sellableQuantity = getItemSellableQuantity(item);
 
-  // 💥 ĐÃ SỬA: CHỈ CHẶN NẾU ĐANG CỐ TÌNH TĂNG THÊM VƯỢT TỒN KHO. 
+  // 💥 ĐÃ SỬA: CHỈ CHẶN NẾU ĐANG CỐ TÌNH TĂNG THÊM VƯỢT TỒN KHO.
   // NẾU GIẢM (quantity < item.quantity) THÌ VẪN PHẢI CHO GIẢM ĐỂ FIX LỖI "KẸT GIỎ"
   if (quantity > sellableQuantity && quantity > Number(item.quantity || 0)) {
     await showWarning(
@@ -1361,6 +1488,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  clearPromotionExpiryTimer();
   window.removeEventListener("focus", handleFocus);
 });
 </script>

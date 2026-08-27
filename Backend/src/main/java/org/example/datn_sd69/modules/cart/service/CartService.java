@@ -331,27 +331,41 @@ public class CartService {
     }
 
     /**
-     * Set giá cho cart.
+     * Set giá hiện tại cho Cart và đồng thời trả mốc thời gian Promotion
+     * để FE có thể tự refresh đúng lúc Flash Sale bắt đầu/kết thúc.
      *
-     * Có Flash Sale active:
-     * - originalPrice = ProductVariant.Price
-     * - salePrice = giá sau giảm
-     * - price = salePrice
-     *
-     * Không có Flash Sale:
-     * - originalPrice = ProductVariant.Price
-     * - price = originalPrice
+     * QUAN TRỌNG:
+     * - Promotion tương lai KHÔNG được áp giá sale trước giờ.
+     * - promotionStartDate của promotion tương lai chỉ dùng để FE đặt timer.
+     * - Giá thực tế vẫn chỉ áp dụng khi Promotion đang active.
      */
-    private void applyCurrentPrice(CartItemResponse res, ProductVariant variant) {
+    private void applyCurrentPrice(
+            CartItemResponse res,
+            ProductVariant variant
+    ) {
         BigDecimal originalPrice = variant.getPrice() == null
                 ? BigDecimal.ZERO
                 : variant.getPrice();
 
         res.setOriginalPrice(originalPrice);
 
-        PromotionVariant activePromotion = findActivePromotion(variant);
+        /*
+         * Dùng cùng một mốc now cho cả query active/upcoming
+         * để tránh lệch đúng tại thời điểm chuyển trạng thái Promotion.
+         */
+        LocalDateTime now = LocalDateTime.now();
 
+        PromotionVariant activePromotion =
+                findActivePromotion(variant, now);
+
+        /*
+         * =========================================================
+         * KHÔNG CÓ FLASH SALE ĐANG ACTIVE
+         * =========================================================
+         */
         if (activePromotion == null) {
+
+            // Giữ nguyên nghiệp vụ giá hiện tại.
             res.setPrice(originalPrice);
             res.setSalePrice(null);
             res.setDiscountPercent(null);
@@ -359,15 +373,44 @@ public class CartService {
             res.setPromotionId(null);
             res.setPromotionName(null);
             res.setPromotionEndDate(null);
+
+            /*
+             * Chỉ tìm Flash Sale sắp tới để FE biết khi nào cần
+             * gọi lại /my-cart.
+             *
+             * KHÔNG áp giá sale tại đây.
+             */
+            PromotionVariant upcomingPromotion =
+                    findUpcomingPromotion(variant, now);
+
+            if (upcomingPromotion != null
+                    && upcomingPromotion.getPromotion() != null) {
+
+                res.setPromotionStartDate(
+                        upcomingPromotion
+                                .getPromotion()
+                                .getStartDate()
+                );
+            } else {
+                res.setPromotionStartDate(null);
+            }
+
             return;
         }
 
+        /*
+         * =========================================================
+         * FLASH SALE ĐANG ACTIVE
+         * =========================================================
+         */
         Number discountNumber = activePromotion.getDiscountPercent();
+
         Double discountPercent = discountNumber == null
                 ? null
                 : discountNumber.doubleValue();
 
-        BigDecimal salePrice = calculateSalePrice(originalPrice, discountNumber);
+        BigDecimal salePrice =
+                calculateSalePrice(originalPrice, discountNumber);
 
         res.setPrice(salePrice);
         res.setSalePrice(salePrice);
@@ -375,28 +418,82 @@ public class CartService {
         res.setHasPromotion(true);
 
         if (activePromotion.getPromotion() != null) {
-            res.setPromotionId(activePromotion.getPromotion().getId());
-            res.setPromotionName(activePromotion.getPromotion().getName());
-            res.setPromotionEndDate(activePromotion.getPromotion().getEndDate());
+            res.setPromotionId(
+                    activePromotion.getPromotion().getId()
+            );
+
+            res.setPromotionName(
+                    activePromotion.getPromotion().getName()
+            );
+
+            res.setPromotionStartDate(
+                    activePromotion.getPromotion().getStartDate()
+            );
+
+            res.setPromotionEndDate(
+                    activePromotion.getPromotion().getEndDate()
+            );
+        } else {
+            res.setPromotionId(null);
+            res.setPromotionName(null);
+            res.setPromotionStartDate(null);
+            res.setPromotionEndDate(null);
         }
     }
 
-    private PromotionVariant findActivePromotion(ProductVariant variant) {
+
+    /**
+     * Lấy Promotion đang active tại đúng mốc now.
+     */
+    private PromotionVariant findActivePromotion(
+            ProductVariant variant,
+            LocalDateTime now
+    ) {
         if (variant == null || variant.getId() == null) {
             return null;
         }
 
         List<PromotionVariant> activePromotions =
-                promotionVariantRepository.findActivePromotionByProductVariantIdByPromotionTime(
-                        variant.getId(),
-                        LocalDateTime.now()
-                );
+                promotionVariantRepository
+                        .findActivePromotionByProductVariantIdByPromotionTime(
+                                variant.getId(),
+                                now
+                        );
 
         if (activePromotions == null || activePromotions.isEmpty()) {
             return null;
         }
 
         return activePromotions.get(0);
+    }
+
+
+    /**
+     * Lấy Promotion sắp bắt đầu gần nhất.
+     *
+     * Chỉ dùng để cung cấp promotionStartDate cho FE.
+     * Không dùng để tính giá.
+     */
+    private PromotionVariant findUpcomingPromotion(
+            ProductVariant variant,
+            LocalDateTime now
+    ) {
+        if (variant == null || variant.getId() == null) {
+            return null;
+        }
+
+        List<PromotionVariant> upcomingPromotions =
+                promotionVariantRepository
+                        .findUpcomingPromotionByProductVariantIdByPromotionTime(
+                                variant.getId(),
+                                now
+                        );
+
+        if (upcomingPromotions == null || upcomingPromotions.isEmpty()) {
+            return null;
+        }
+
+        return upcomingPromotions.get(0);
     }
 
     private BigDecimal calculateSalePrice(BigDecimal originalPrice, Number discountPercent) {
