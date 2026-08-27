@@ -289,6 +289,22 @@ public class PromotionServiceImpl implements PromotionService {
         }
 
         /*
+         * Khi UPDATE, SKU đã thuộc chính campaign hiện tại được phép giữ lại dù
+         * tạm thời hết hàng. Điều này tránh việc một campaign đang/chờ chạy bị
+         * buộc phải loại SKU chỉ vì tồn có thể bán tại thời điểm chỉnh sửa = 0.
+         * Chỉ SKU mới thêm vào campaign mới phải có tồn có thể bán > 0.
+         */
+        Set<Integer> existingVariantIds = new HashSet<>();
+        if (ignorePromotionId != null) {
+            promotionVariantRepository.findDetailByPromotionId(ignorePromotionId)
+                    .stream()
+                    .map(PromotionVariant::getProductVariant)
+                    .filter(variant -> variant != null && variant.getId() != null)
+                    .map(ProductVariant::getId)
+                    .forEach(existingVariantIds::add);
+        }
+
+        /*
          * Bước 3: giữ nguyên business rule eligibility/overlap hiện tại,
          * nhưng chạy khi lock SKU vẫn còn giữ trong transaction.
          */
@@ -311,6 +327,10 @@ public class PromotionServiceImpl implements PromotionService {
                         "Biến thể " + productVariant.getSku()
                                 + " đã thuộc một chiến dịch khác trong cùng khoảng thời gian"
                 );
+            }
+
+            if (!existingVariantIds.contains(productVariantId)) {
+                validateVariantHasSellableStock(productVariant);
             }
         }
     }
@@ -378,6 +398,21 @@ public class PromotionServiceImpl implements PromotionService {
          * expirationDate để quyết định SKU có được tham gia Promotion hay không.
          * Tồn vật lý và HSD thực thuộc InventoryLot.
          */
+    }
+
+    /**
+     * Chỉ dùng khi thêm SKU mới vào campaign.
+     * Tồn được lấy từ InventoryLot (sellableQuantity), tuyệt đối không dùng
+     * ProductVariant.stockQuantity legacy.
+     */
+    private void validateVariantHasSellableStock(ProductVariant productVariant) {
+        if (getSellableQuantity(productVariant) <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Biến thể " + productVariant.getSku()
+                            + " đã hết hàng, không thể thêm vào Flash Sale"
+            );
+        }
     }
 
     private void validateExistingPromotionBeforeEnable(Promotion promotion) {
@@ -688,10 +723,11 @@ public class PromotionServiceImpl implements PromotionService {
         }
 
         /*
-         * Không dùng stock / NSX / HSD của ProductVariant để khóa lựa chọn Promotion.
-         * Promotion không sở hữu tồn kho. stockQuantity trả về bên dưới chỉ là
-         * compatibility field và được map từ sellableQuantity thật của InventoryLot.
+         * Không dùng ProductVariant.stockQuantity / NSX / HSD legacy để quyết định.
+         * Tồn hiển thị và điều kiện "Hết hàng" đều lấy từ sellableQuantity thật
+         * của InventoryLot.
          */
+        int sellableQuantity = getSellableQuantity(variant);
 
         if (available && startDate != null && endDate != null) {
             if (!endDate.isAfter(startDate)) {
@@ -712,6 +748,11 @@ public class PromotionServiceImpl implements PromotionService {
             }
         }
 
+        if (available && sellableQuantity <= 0) {
+            available = false;
+            unavailableReason = "Hết hàng";
+        }
+
         return PromotionProductVariantOptionResponse.builder()
                 .productVariantId(variant.getId())
                 .productId(variant.getProduct() != null ? variant.getProduct().getId() : null)
@@ -720,7 +761,7 @@ public class PromotionServiceImpl implements PromotionService {
                 .capacity(formatCapacity(variant))
                 .bottleType(variant.getBottleType() != null ? variant.getBottleType().getName() : null)
                 .price(variant.getPrice())
-                .stockQuantity(getSellableQuantity(variant))
+                .stockQuantity(sellableQuantity)
                 .status(variant.getStatus())
                 /*
                  * Giữ nguyên 2 field DTO để không phá contract FE hiện tại.

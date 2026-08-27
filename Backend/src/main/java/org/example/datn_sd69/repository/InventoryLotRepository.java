@@ -331,13 +331,14 @@ public interface InventoryLotRepository
     // ================= STOCK ADJUSTMENT CANDIDATES =================
 
     /**
-     * Danh sách lô dùng RIÊNG khi tạo phiếu kiểm kê.
+     * Danh sách lô dùng RIÊNG khi tạo phiếu kiểm kê mới.
      *
      * Quy tắc:
-     * - Product và ProductVariant chưa xóa -> được chọn bình thường.
-     * - Nếu Product hoặc ProductVariant đã xóa nhưng lô vẫn còn tồn vật lý
-     *   (QuantityOnHand > 0) -> vẫn phải hiển thị để có thể kiểm kê/xử lý tồn.
-     * - Product/SKU đã xóa và tồn = 0 -> không đưa vào phiếu kiểm kê mới.
+     * - Chỉ cho chọn lô thuộc Product và ProductVariant chưa bị soft-delete.
+     * - Không lọc QuantityOnHand > 0 mặc định, vì kiểm kê thực tế vẫn phải cho
+     *   phép chọn lô hệ thống đang = 0 để ghi nhận trường hợp đếm thực tế > 0.
+     * - Lô/SKU của Product hoặc ProductVariant đã xóa chỉ còn phục vụ tra cứu
+     *   lịch sử qua generic search()/detail, không được đưa vào phiếu kiểm kê mới.
      *
      * Không dùng SellableQuantity vì kiểm kê phải bao gồm cả hàng hết hạn.
      * Không thay đổi dữ liệu InventoryLot.
@@ -415,13 +416,8 @@ public interface InventoryLotRepository
                     ) ImageData
 
                     WHERE
-                        (
-                            (
-                                ISNULL(P.IsDeleted, 0) = 0
-                                AND ISNULL(PV.IsDeleted, 0) = 0
-                            )
-                            OR LS.QuantityOnHand > 0
-                        )
+                        ISNULL(P.IsDeleted, 0) = 0
+                        AND ISNULL(PV.IsDeleted, 0) = 0
 
                         AND (
                             :keyword IS NULL
@@ -503,13 +499,8 @@ public interface InventoryLotRepository
                         ON GR.Id = GRI.GoodsReceiptId
 
                     WHERE
-                        (
-                            (
-                                ISNULL(P.IsDeleted, 0) = 0
-                                AND ISNULL(PV.IsDeleted, 0) = 0
-                            )
-                            OR LS.QuantityOnHand > 0
-                        )
+                        ISNULL(P.IsDeleted, 0) = 0
+                        AND ISNULL(PV.IsDeleted, 0) = 0
 
                         AND (
                             :keyword IS NULL

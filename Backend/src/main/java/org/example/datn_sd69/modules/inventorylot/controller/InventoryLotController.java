@@ -99,18 +99,21 @@ public class InventoryLotController {
     }
 
     // =========================================================
-    // STOCK ADJUSTMENT CANDIDATES
+    // STOCK ADJUSTMENT / INVENTORY AUDIT CANDIDATES
     // =========================================================
 
     /**
-     * API dùng RIÊNG cho popup chọn lô khi tạo phiếu kiểm kê.
+     * API dùng RIÊNG cho popup chọn lô khi tạo/sửa phiếu kiểm kê.
      *
-     * Không thay đổi API GET /api/admin/inventory-lots hiện tại.
+     * Việc xác định lô nào được phép xuất hiện thuộc về
+     * InventoryLotService/InventoryLotRepository.
+     *
+     * Không thay đổi API GET /api/admin/inventory-lots hiện tại,
+     * vì API generic vẫn phải phục vụ tra cứu lô/lịch sử.
      */
     @GetMapping("/audit-candidates")
     @PreAuthorize("hasAnyAuthority('OWNER', 'MANAGER', 'CASHIER')")
-    public ResponseEntity<Page<InventoryLotListResponse>>
-    getAuditCandidates(
+    public ResponseEntity<Page<InventoryLotListResponse>> getAuditCandidates(
             @RequestParam(required = false)
             String keyword,
 
