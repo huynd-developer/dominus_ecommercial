@@ -58,6 +58,7 @@ interface CartItem {
   hasPromotion?: boolean | null;
   promotionId?: number | null;
   promotionName?: string | null;
+  promotionStartDate?: string | null;
   promotionEndDate?: string | null;
   /** LEGACY compatibility. FE Cart không dùng để quyết định tồn. */
   stockQuantity?: number | null;
@@ -83,7 +84,7 @@ interface CartItem {
   available?: boolean | null;
   sellable?: boolean | null;
   unavailableReason?: string | null;
-  
+
   // Flag nhận biết SP đã bị xóa hay chưa
   isDeleted?: boolean | null;
 }
@@ -100,9 +101,7 @@ const getItemQuantity = (item: CartItem) => Number(item?.quantity || 0);
 
 const getSellableQuantity = (item: CartItem | any) => {
   const value = Number(
-    item?.sellableQuantity ??
-      item?.productVariant?.sellableQuantity ??
-      0
+    item?.sellableQuantity ?? item?.productVariant?.sellableQuantity ?? 0
   );
   if (!Number.isFinite(value) || value <= 0) return 0;
   return Math.trunc(value);
@@ -138,7 +137,8 @@ const isItemAvailable = (item: CartItem) => {
   if (!item) return false;
 
   if (item.available === false || item.sellable === false) return false;
-  if (item.variantStatus != null && Number(item.variantStatus) !== 1) return false;
+  if (item.variantStatus != null && Number(item.variantStatus) !== 1)
+    return false;
 
   const quantity = Number(item.quantity || 0);
   const sellableQuantity = getSellableQuantity(item);
@@ -146,16 +146,44 @@ const isItemAvailable = (item: CartItem) => {
   return quantity > 0 && sellableQuantity > 0 && quantity <= sellableQuantity;
 };
 
-
-const totalAmount = computed(() => cartItems.value.reduce((sum, item) => isItemAvailable(item) ? sum + getItemPrice(item) * getItemQuantity(item) : sum, 0));
-const canCheckout = computed(() => cartItems.value.length > 0 && cartItems.value.every((item) => isItemAvailable(item)));
+const totalAmount = computed(() =>
+  cartItems.value.reduce(
+    (sum, item) =>
+      isItemAvailable(item)
+        ? sum + getItemPrice(item) * getItemQuantity(item)
+        : sum,
+    0
+  )
+);
+const canCheckout = computed(
+  () =>
+    cartItems.value.length > 0 &&
+    cartItems.value.every((item) => isItemAvailable(item))
+);
 
 // Hàm Toast hiển thị chạy ngầm không có await để tránh chặn UI
-const showToast = (icon: "success" | "error" | "warning" | "info", title: string) => {
-  Swal.fire({ toast: true, position: "top-end", icon, title, showConfirmButton: false, timer: 1800, timerProgressBar: true });
+const showToast = (
+  icon: "success" | "error" | "warning" | "info",
+  title: string
+) => {
+  Swal.fire({
+    toast: true,
+    position: "top-end",
+    icon,
+    title,
+    showConfirmButton: false,
+    timer: 1800,
+    timerProgressBar: true,
+  });
 };
 const showError = async (title: string, text: string) => {
-  await Swal.fire({ icon: "error", title, text, confirmButtonText: "Đóng", confirmButtonColor: "#bd9a5f" });
+  await Swal.fire({
+    icon: "error",
+    title,
+    text,
+    confirmButtonText: "Đóng",
+    confirmButtonColor: "#bd9a5f",
+  });
 };
 
 const handleApplyVoucher = (discount: number, voucherCode: string) => {
@@ -170,11 +198,24 @@ const resetVoucher = () => {
   discountAmount.value = 0;
   appliedVoucherCode.value = "";
   localStorage.removeItem("applied_voucher");
-  if (hadVoucher) showToast("info", "Vui lòng áp dụng lại mã giảm giá do giỏ hàng đã thay đổi!");
+  if (hadVoucher)
+    showToast(
+      "info",
+      "Vui lòng áp dụng lại mã giảm giá do giỏ hàng đã thay đổi!"
+    );
 };
 
 const extractCartItems = (payload: any): CartItem[] => {
-  const candidates = [payload, payload?.data, payload?.content, payload?.items, payload?.cartItems, payload?.data?.content, payload?.data?.items, payload?.data?.cartItems];
+  const candidates = [
+    payload,
+    payload?.data,
+    payload?.content,
+    payload?.items,
+    payload?.cartItems,
+    payload?.data?.content,
+    payload?.data?.items,
+    payload?.data?.cartItems,
+  ];
   for (const candidate of candidates) {
     if (Array.isArray(candidate)) return candidate;
   }
@@ -182,32 +223,47 @@ const extractCartItems = (payload: any): CartItem[] => {
 };
 
 const getItemProductId = (item: CartItem) => {
-  const i = item as any; 
+  const i = item as any;
   return Number(
-    i?.productId || i?.ProductId ||
-    i?.product?.id || i?.product?.productId || i?.Product?.id || i?.Product?.productId ||
-    i?.productVariant?.productId || i?.productVariant?.product?.id ||
-    i?.ProductVariant?.ProductId || i?.ProductVariant?.Product?.Id ||
-    i?.variant?.productId || i?.variant?.product?.id ||
-    0
+    i?.productId ||
+      i?.ProductId ||
+      i?.product?.id ||
+      i?.product?.productId ||
+      i?.Product?.id ||
+      i?.Product?.productId ||
+      i?.productVariant?.productId ||
+      i?.productVariant?.product?.id ||
+      i?.ProductVariant?.ProductId ||
+      i?.ProductVariant?.Product?.Id ||
+      i?.variant?.productId ||
+      i?.variant?.product?.id ||
+      0
   );
 };
 
 const getItemVariantId = (item: CartItem) => {
   const i = item as any;
   return Number(
-    i?.productVariantId || i?.ProductVariantId ||
-    i?.variantId || i?.VariantId ||
-    i?.productVariant?.id || i?.ProductVariant?.Id ||
-    i?.productVariant?.productVariantId ||
-    i?.variant?.id || i?.Variant?.Id ||
-    0
+    i?.productVariantId ||
+      i?.ProductVariantId ||
+      i?.variantId ||
+      i?.VariantId ||
+      i?.productVariant?.id ||
+      i?.ProductVariant?.Id ||
+      i?.productVariant?.productVariantId ||
+      i?.variant?.id ||
+      i?.Variant?.Id ||
+      0
   );
 };
 
-const extractImageValue = (value: any, visited = new WeakSet<object>()): string => {
+const extractImageValue = (
+  value: any,
+  visited = new WeakSet<object>()
+): string => {
   if (!value) return "";
-  if (typeof value === "string" || typeof value === "number") return String(value).trim();
+  if (typeof value === "string" || typeof value === "number")
+    return String(value).trim();
   if (Array.isArray(value)) {
     for (const item of value) {
       const image = extractImageValue(item, visited);
@@ -219,8 +275,14 @@ const extractImageValue = (value: any, visited = new WeakSet<object>()): string 
     if (visited.has(value)) return "";
     visited.add(value);
     const candidates = [
-      value?.image, value?.imageUrl, value?.mainImage, value?.thumbnailUrl,
-      value?.productImage, value?.variantImage, value?.product, value?.productVariant
+      value?.image,
+      value?.imageUrl,
+      value?.mainImage,
+      value?.thumbnailUrl,
+      value?.productImage,
+      value?.variantImage,
+      value?.product,
+      value?.productVariant,
     ];
     for (const candidate of candidates) {
       const image = extractImageValue(candidate, visited);
@@ -232,10 +294,14 @@ const extractImageValue = (value: any, visited = new WeakSet<object>()): string 
 
 const getProductVariants = (productData: any) => {
   const candidates = [
-    productData?.variants, productData?.Variants, 
-    productData?.productVariants, productData?.ProductVariants, 
-    productData?.productVariantList, productData?.ProductVariantList,
-    productData?.productVariantResponses, productData?.productVariantDTOs
+    productData?.variants,
+    productData?.Variants,
+    productData?.productVariants,
+    productData?.ProductVariants,
+    productData?.productVariantList,
+    productData?.ProductVariantList,
+    productData?.productVariantResponses,
+    productData?.productVariantDTOs,
   ];
   for (const candidate of candidates) {
     if (Array.isArray(candidate)) return candidate;
@@ -245,26 +311,36 @@ const getProductVariants = (productData: any) => {
 
 const findMatchingVariant = (productData: any, variantId: number) => {
   if (!variantId) return null;
-  return getProductVariants(productData).find((variant: any) => {
-    return Number(variant?.productVariantId || variant?.id || variant?.Id || 0) === variantId;
-  }) || null;
+  return (
+    getProductVariants(productData).find((variant: any) => {
+      return (
+        Number(variant?.productVariantId || variant?.id || variant?.Id || 0) ===
+        variantId
+      );
+    }) || null
+  );
 };
-
 
 const fetchProductDetail = async (productId: number) => {
   if (!productId) return null;
   try {
     const t = Date.now();
-    let res = await api.get(`/v1/products/${productId}?t=${t}`).catch(() => null);
-    if (!res) res = await api.get(`/customer/products/${productId}?t=${t}`).catch(() => null);
+    let res = await api
+      .get(`/v1/products/${productId}?t=${t}`)
+      .catch(() => null);
+    if (!res)
+      res = await api
+        .get(`/customer/products/${productId}?t=${t}`)
+        .catch(() => null);
     if (!res || !res.data) return null;
 
     // Chống lỗi BE trả về 200 nhưng ruột data bị null
-    if (res.data.hasOwnProperty('data') && res.data.data === null) return null;
-    if (res.data.hasOwnProperty('result') && res.data.result === null) return null;
+    if (res.data.hasOwnProperty("data") && res.data.data === null) return null;
+    if (res.data.hasOwnProperty("result") && res.data.result === null)
+      return null;
 
     const data = res.data.data ?? res.data.result ?? res.data;
-    
+
     // Chặn object rỗng hoặc báo lỗi 404 fake
     if (Object.keys(data).length <= 2 || data.status === 404) return null;
 
@@ -301,8 +377,7 @@ const enrichCartItemForDisplay = async (item: CartItem): Promise<CartItem> => {
     : null;
 
   const fallbackImage =
-    extractImageValue(matchedVariant) ||
-    extractImageValue(productData);
+    extractImageValue(matchedVariant) || extractImageValue(productData);
 
   return {
     ...item,
@@ -316,7 +391,6 @@ const enrichCartItemForDisplay = async (item: CartItem): Promise<CartItem> => {
 const enrichCartItemsForDisplay = async (items: CartItem[]) => {
   return await Promise.all(items.map((item) => enrichCartItemForDisplay(item)));
 };
-
 
 const preserveCartOrder = (items: CartItem[]) => {
   if (!cartItems.value.length) return items;
@@ -337,21 +411,99 @@ const preserveCartOrder = (items: CartItem[]) => {
   });
 };
 
-const loadCart = async (options: { preserveOrder?: boolean } = {}): Promise<boolean> => {
+const MAX_PROMOTION_TIMER_DELAY = 2_147_000_000;
+
+let promotionBoundaryTimer: ReturnType<typeof setTimeout> | null = null;
+
+const clearPromotionBoundaryTimer = () => {
+  if (promotionBoundaryTimer !== null) {
+    clearTimeout(promotionBoundaryTimer);
+    promotionBoundaryTimer = null;
+  }
+};
+
+const getPromotionBoundaryTimes = (item: CartItem): number[] => {
+  const times: number[] = [];
+
+  const rawStartDate = item?.promotionStartDate;
+  const rawEndDate = item?.promotionEndDate;
+
+  if (rawStartDate) {
+    const startTime = new Date(rawStartDate).getTime();
+
+    if (Number.isFinite(startTime)) {
+      times.push(startTime);
+    }
+  }
+
+  if (rawEndDate) {
+    const endTime = new Date(rawEndDate).getTime();
+
+    if (Number.isFinite(endTime)) {
+      times.push(endTime);
+    }
+  }
+
+  return times;
+};
+
+const schedulePromotionBoundaryRefresh = () => {
+  clearPromotionBoundaryTimer();
+
+  const now = Date.now();
+
+  const futureTimes = cartItems.value
+    .flatMap(getPromotionBoundaryTimes)
+    .filter((time) => time > now);
+
+  if (futureTimes.length === 0) {
+    return;
+  }
+
+  const nextBoundary = Math.min(...futureTimes);
+
+  const delay = Math.min(
+    Math.max(0, nextBoundary - now + 200),
+    MAX_PROMOTION_TIMER_DELAY
+  );
+
+  promotionBoundaryTimer = setTimeout(() => {
+    promotionBoundaryTimer = null;
+
+    /*
+     * Không reload trang.
+     * Chỉ gọi lại API hiện tại để BE tính giá theo thời gian mới.
+     */
+    void refreshCurrentCart();
+  }, delay);
+};
+
+const loadCart = async (
+  options: { preserveOrder?: boolean } = {}
+): Promise<boolean> => {
   try {
     isLoading.value = true;
     const res = await api.get(`/v1/customer/cart/my-cart?t=${Date.now()}`);
     let items = extractCartItems(res.data);
-    
+
     // Cart BE quyết định nghiệp vụ; enrich chỉ bổ sung dữ liệu hiển thị/dropdown.
     const enrichedItems = await enrichCartItemsForDisplay(items);
-    cartItems.value = options.preserveOrder ? preserveCartOrder(enrichedItems) : enrichedItems;
-    
+
+    cartItems.value = options.preserveOrder
+      ? preserveCartOrder(enrichedItems)
+      : enrichedItems;
+
+    /*
+     * Sau mỗi lần lấy Cart mới, đặt timer tới StartDate/EndDate gần nhất.
+     */
+    schedulePromotionBoundaryRefresh();
+
     if (!canCheckout.value) resetVoucher();
     return true;
   } catch (err: any) {
     showError("Lỗi", "Không tải được giỏ hàng");
-    if (err?.response?.status === 401 || err?.response?.status === 403) router.push("/login");
+    if (err?.response?.status === 401 || err?.response?.status === 403)
+      router.push("/login");
     return false;
   } finally {
     isLoading.value = false;
@@ -369,7 +521,10 @@ const updateQty = async (item: CartItem, newQty: number) => {
   }
 
   if (newQty > sellableQuantity) {
-    showToast("warning", `Sản phẩm chỉ còn ${sellableQuantity} sản phẩm có thể bán`);
+    showToast(
+      "warning",
+      `Sản phẩm chỉ còn ${sellableQuantity} sản phẩm có thể bán`
+    );
     return;
   }
 
@@ -411,7 +566,7 @@ const updateVariant = async (item: CartItem, newVariantId: number) => {
     // Thêm phân loại mới vào giỏ
     await api.post("/v1/customer/cart/add", {
       productVariantId: newVariantId,
-      quantity: Number(item.quantity || 1)
+      quantity: Number(item.quantity || 1),
     });
 
     // Xóa phân loại cũ khỏi giỏ
@@ -419,14 +574,15 @@ const updateVariant = async (item: CartItem, newVariantId: number) => {
 
     resetVoucher();
     showToast("success", "Đã đổi phân loại sản phẩm");
-    
+
     // Tải lại dữ liệu
     await loadCart();
   } catch (err: any) {
     console.error("Lỗi đổi biến thể:", err);
     showError(
       "Lỗi",
-      err?.response?.data?.message || "Không thể đổi loại sản phẩm. Vui lòng thử lại!"
+      err?.response?.data?.message ||
+        "Không thể đổi loại sản phẩm. Vui lòng thử lại!"
     );
     await loadCart();
   } finally {
@@ -481,12 +637,13 @@ const goToCheckout = async () => {
   router.push("/checkout");
 };
 
-
 const shippingFee = ref(30000);
 
 const finalTotal = computed(() => {
   if (cartItems.value.length === 0) return 0;
-  return Math.max(0, totalAmount.value - discountAmount.value) + shippingFee.value;
+  return (
+    Math.max(0, totalAmount.value - discountAmount.value) + shippingFee.value
+  );
 });
 
 const loadSavedVoucher = async () => {
@@ -501,8 +658,13 @@ const loadSavedVoucher = async () => {
     const res = await api.get("/v1/customer/vouchers/apply", {
       params: { code: savedCode, orderTotal: totalAmount.value },
     });
-    const discount = Number(res.data?.discountAmount ?? res.data?.discount ?? res.data?.amount ?? 0);
-    discountAmount.value = Math.min(Math.max(discount, 0), Number(totalAmount.value || 0));
+    const discount = Number(
+      res.data?.discountAmount ?? res.data?.discount ?? res.data?.amount ?? 0
+    );
+    discountAmount.value = Math.min(
+      Math.max(discount, 0),
+      Number(totalAmount.value || 0)
+    );
     appliedVoucherCode.value = savedCode;
   } catch (error) {
     discountAmount.value = 0;
@@ -547,10 +709,11 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  clearPromotionBoundaryTimer();
+
   window.removeEventListener("focus", handleFocus);
   document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
-
 </script>
 
 <style scoped>
@@ -570,6 +733,8 @@ onUnmounted(() => {
   align-items: flex-start;
 }
 @media (max-width: 992px) {
-  .main-content.full-width { flex-direction: column; }
+  .main-content.full-width {
+    flex-direction: column;
+  }
 }
 </style>

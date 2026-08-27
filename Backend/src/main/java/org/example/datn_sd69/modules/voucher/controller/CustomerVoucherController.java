@@ -19,7 +19,7 @@ public class CustomerVoucherController {
 
     /**
      * API áp voucher cho khách mua online.
-     *
+     * <p>
      * GET /api/v1/customer/vouchers/apply?code=SALE10&orderTotal=650000
      */
     @GetMapping("/apply")
@@ -38,7 +38,7 @@ public class CustomerVoucherController {
 
     /**
      * API lấy voucher đang hoạt động cho khách hàng.
-     *
+     * <p>
      * GET /api/v1/customer/vouchers
      */
     @GetMapping
@@ -46,12 +46,32 @@ public class CustomerVoucherController {
         try {
             LocalDateTime now = LocalDateTime.now();
 
-            List<Voucher> activeVouchers = voucherService.getAllVouchers()
+            List<Voucher> vouchers = voucherService.getAllVouchers()
                     .stream()
                     .filter(voucher -> voucher != null)
+
+                    /*
+                     * status = 1 nghĩa là Admin đang cho phép Voucher hoạt động.
+                     *
+                     * Voucher tương lai vẫn được trả xuống FE để FE biết
+                     * startDate và tự đặt timer.
+                     *
+                     * Việc Voucher có được sử dụng thật hay không vẫn do
+                     * API /apply kiểm tra startDate <= now < endDate.
+                     */
                     .filter(voucher -> valueOrZero(voucher.getStatus()) == 1)
-                    .filter(voucher -> voucher.getStartDate() == null || !voucher.getStartDate().isAfter(now))
-                    .filter(voucher -> voucher.getEndDate() == null || voucher.getEndDate().isAfter(now))
+
+                    /*
+                     * Voucher đã hết hạn thì không cần trả xuống FE.
+                     */
+                    .filter(voucher ->
+                            voucher.getEndDate() == null
+                                    || voucher.getEndDate().isAfter(now)
+                    )
+
+                    /*
+                     * Voucher hết lượt thì không cần hiển thị.
+                     */
                     .filter(voucher -> {
                         int usageLimit = valueOrZero(voucher.getUsageLimit());
                         int usedCount = valueOrZero(voucher.getUsedCount());
@@ -60,9 +80,12 @@ public class CustomerVoucherController {
                     })
                     .toList();
 
-            return ResponseEntity.ok(activeVouchers);
+            return ResponseEntity.ok(vouchers);
+
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(e.getMessage());
+            return ResponseEntity
+                    .internalServerError()
+                    .body(e.getMessage());
         }
     }
 
