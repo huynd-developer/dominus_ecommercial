@@ -10,25 +10,11 @@
         </div>
       </div>
 
+      <!-- ĐÃ SỬA: Bỏ Hạng và Điểm, chỉ giữ lại Email cho đỡ trống layout -->
       <div v-if="store.profile" class="rank-card mb-4">
         <div>
-          <div class="text-muted small">Hạng thành viên</div>
-          <div class="fw-bold fs-4">
-            <!-- Đã áp dụng hàm dịch hạng thành viên sang tiếng Việt -->
-            {{ formatRank(store.profile.customerRank) }}
-          </div>
-        </div>
-
-        <div>
-          <div class="text-muted small">Tổng điểm tích lũy</div>
-          <div class="fw-bold fs-4">
-            {{ store.profile.loyaltyPoints || 0 }}
-          </div>
-        </div>
-
-        <div>
-          <div class="text-muted small">Email</div>
-          <div class="fw-semibold">
+          <div class="text-muted small">Email tài khoản</div>
+          <div class="fw-bold fs-5">
             {{ store.profile.email }}
           </div>
         </div>
@@ -140,19 +126,6 @@ const handleTabClick = (tab: ProfileTab) => {
   });
 };
 
-// HÀM MỚI: Dịch hạng thành viên sang tiếng Việt
-const formatRank = (rank: string | null | undefined) => {
-  const normalized = String(rank || "Bronze").toUpperCase();
-  switch (normalized) {
-    case "BRONZE": return "Đồng";
-    case "SILVER": return "Bạc";
-    case "GOLD": return "Vàng";
-    case "PLATINUM": return "Bạch kim";
-    case "DIAMOND": return "Kim cương";
-    default: return rank || "Đồng";
-  }
-};
-
 onMounted(() => {
   syncTabFromRoute();
   store.loadInitialData();
@@ -178,10 +151,8 @@ watch(
   justify-content: space-between;
 }
 
+/* ĐÃ SỬA: Bỏ grid chia 3 cột đi vì giờ chỉ còn 1 mục Email */
 .rank-card {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 18px;
   background: #ffffff;
   padding: 22px;
   border-radius: 18px;
@@ -238,14 +209,11 @@ watch(
 }
 
 @media (max-width: 992px) {
-  .rank-card {
-    grid-template-columns: 1fr;
-  }
-
   .profile-layout {
     grid-template-columns: 1fr;
   }
 }
+
 .message-box {
   border-radius: 14px;
   padding: 12px 16px;

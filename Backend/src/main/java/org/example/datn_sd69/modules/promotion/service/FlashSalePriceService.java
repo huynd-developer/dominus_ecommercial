@@ -58,4 +58,33 @@ public class FlashSalePriceService {
         return new BigDecimal(value.toString())
                 .setScale(2, RoundingMode.HALF_UP);
     }
+
+    // THÊM METHOD NÀY ĐỂ SỬA LỖI Ở ORDER SERVICE
+    public BigDecimal getEffectiveFlashSalePrice(Integer variantId) {
+        BigDecimal discountPercent = findActiveFlashSalePercent(variantId);
+        if (discountPercent == null || discountPercent.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+
+        try {
+            List<?> result = entityManager.createQuery(
+                            "SELECT pv.price FROM ProductVariant pv WHERE pv.id = :variantId"
+                    )
+                    .setParameter("variantId", variantId)
+                    .getResultList();
+
+            if (result == null || result.isEmpty() || result.get(0) == null) {
+                return null;
+            }
+
+            BigDecimal originalPrice = (BigDecimal) result.get(0);
+            BigDecimal discountFactor = BigDecimal.ONE.subtract(
+                    discountPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP)
+            );
+
+            return originalPrice.multiply(discountFactor).setScale(2, RoundingMode.HALF_UP);
+        } catch (Exception e) {
+            return null;
+        }
+    }
 }

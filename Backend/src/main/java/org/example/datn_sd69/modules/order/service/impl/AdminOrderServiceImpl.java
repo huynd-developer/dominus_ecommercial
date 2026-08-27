@@ -129,21 +129,11 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
     private static final String DELIVERY_EVIDENCE_CLOUDINARY_FOLDER = "order-delivery-evidence";
 
-    /*
-     * InventoryLot / StockMovement
-     *
-     * 3 = SALE_OUT
-     * 4 = RETURN_IN
-     *
-     * Đơn ONLINE chỉ xuất kho khi Admin xác nhận đơn.
-     * Hủy khi còn PENDING không hoàn kho vì chưa có SALE_OUT.
-     */
     private static final byte MOVEMENT_SALE_OUT = 3;
     private static final byte MOVEMENT_RETURN_IN = 4;
 
     private static final String STOCK_REFERENCE_ONLINE_ORDER = "ONLINE_ORDER";
     private static final String STOCK_REFERENCE_ONLINE_RETURN = "ONLINE_ORDER_RETURN";
-
 
     private static final Set<Integer> VALID_ORDER_STATUSES = Set.of(
             STATUS_PENDING,
@@ -268,11 +258,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     public AdminOrderResponse confirmOrder(Integer orderId) {
         Order order = findOrderForUpdateOrThrow(orderId);
 
-        /*
-         * Generic Admin confirm chỉ dành cho đơn ONLINE.
-         * POS/IN_STORE đã có workflow tồn kho riêng và có thể đã SALE_OUT,
-         * nên tuyệt đối không được đi qua deductStockWhenConfirm() lần nữa.
-         */
         if (!"ONLINE".equalsIgnoreCase(normalizeOptionalText(order.getOrderType()))) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -368,14 +353,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         applyDeliveryFailedRefundInfo(order);
 
-        /*
-         * COD không phát sinh bước "xác nhận hoàn tiền" sau giao hàng thất bại.
-         * Vì hàng đã SALE_OUT khi Admin xác nhận đơn, phải RETURN_IN ngay
-         * về đúng các InventoryLot đã xuất khi ghi nhận giao thất bại.
-         *
-         * Đơn trả trước (VNPay/VietQR/...) giữ NGUYÊN flow cũ:
-         * chỉ hoàn kho tại bước xác nhận hoàn tiền nếu Admin chọn restoreStock.
-         */
         String paymentMethod = normalizeOptionalText(order.getPaymentMethod());
         boolean isCodPayment =
                 paymentMethod != null
@@ -447,11 +424,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     public AdminOrderResponse cancelOrder(Integer orderId, AdminCancelOrderRequest request) {
         Order order = findOrderForUpdateOrThrow(orderId);
 
-        /*
-         * Generic Admin cancel chỉ dành cho đơn ONLINE.
-         * PENDING ONLINE chưa SALE_OUT nên hủy không hoàn kho.
-         * POS/IN_STORE phải đi qua POS workflow để xử lý đúng các lot đã xuất.
-         */
         if (!"ONLINE".equalsIgnoreCase(normalizeOptionalText(order.getOrderType()))) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -468,9 +440,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         String cancelReason = normalizeAdminCancelReason(request);
 
-        /*
-         * LUỒNG NGHIỆP VỤ: Đơn Chờ xác nhận chưa trừ kho -> Hủy TUYỆT ĐỐI KHÔNG CỘNG KHO
-         */
         if (isPrepaidPaymentMethod(order.getPaymentMethod())) {
             order.setStatus(STATUS_AWAITING_REFUND);
             order.setDeliveryRefundAmount(defaultMoney(order.getFinalAmount()));
@@ -479,12 +448,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             order.setDeliveryRefundAmount(null);
         }
 
-        /*
-         * ONLINE đã reserve Voucher từ lúc tạo Order PENDING.
-         * Hủy đơn thành công phải hoàn đúng 1 lượt.
-         * Order hiện đã được khóa PESSIMISTIC_WRITE nên thao tác hủy lặp sẽ
-         * bị chặn bởi status và không thể hoàn Voucher lần 2.
-         */
         restoreVoucherUsage(order);
 
         order.setCancelReason(cancelReason);
@@ -509,7 +472,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             );
         }
 
-        // Ép buộc Admin chỉ được bấm xác nhận hoàn tiền khi khách đã điền Bank Info
         if (!hasDeliveryRefundBankInfo(order)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -517,10 +479,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             );
         }
 
-        /*
-         * Xác nhận tiền đã chuyển xong -> Đẩy từ 8 về 4, ghi dấu vết.
-         * Tuyệt đối KHÔNG CỘNG KHO.
-         */
         order.setStatus(STATUS_CANCELLED);
         order.setDeliveryRefundedAt(LocalDateTime.now());
         order.setDeliveryRefundedByName(getCurrentAdminDisplayName());
@@ -620,10 +578,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
             restoreStockWhenReturnRefunded(returnItems);
         }
 
-        /*
-         * Ghi đúng thời điểm tiền hoàn thực sự hoàn tất để Owner Report có thể
-         * ghi nhận refund theo kỳ phát sinh, không sửa ngược kỳ bán gốc.
-         */
         LocalDateTime refundedAt = LocalDateTime.now();
 
         returnItems.forEach(item -> {
@@ -792,14 +746,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         return fullReason;
     }
 
-
-    /**
-     * Xác nhận đơn ONLINE:
-     * - Không dùng ProductVariant.StockQuantity.
-     * - Lấy tồn bán được từ InventoryLot.
-     * - Phân bổ SALE_OUT theo FEFO.
-     * - ReferenceLineId của SALE_OUT = OrderItemId để truy vết line hàng.
-     */
     private void deductStockWhenConfirm(Order order) {
         if (order == null || order.getId() == null) {
             throw new ResponseStatusException(
@@ -854,12 +800,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         }
     }
 
-    /**
-     * Xuất đúng quantity của một OrderItem theo FEFO.
-     * <p>
-     * Repository dùng UPDLOCK + ROWLOCK + HOLDLOCK nên các lần xác nhận
-     * đồng thời không cùng lấy một lượng tồn.
-     */
     private void deductOrderItemStockByFefo(
             Order order,
             OrderItem item,
@@ -952,12 +892,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                 : variantSku;
     }
 
-    /**
-     * Giao hàng thất bại và nghiệp vụ đã chọn nhập lại kho:
-     * hoàn phần tồn CHƯA được hoàn của chính các lot đã SALE_OUT.
-     * <p>
-     * Không chạy FEFO lại khi hoàn.
-     */
     private void restoreStockWhenDeliveryRefunded(Order order) {
         if (order == null || order.getId() == null) {
             return;
@@ -973,13 +907,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         );
     }
 
-    /**
-     * Hoàn hàng theo từng ReturnRequestItem.
-     * <p>
-     * Chỉ RETURN_IN vào các InventoryLot đã thực sự SALE_OUT của đúng OrderItem.
-     * Với hoàn một phần, hệ thống hoàn lần lượt trên các movement đã xuất của
-     * OrderItem đó; tuyệt đối không chọn lot mới bằng FEFO.
-     */
     private void restoreStockWhenReturnRefunded(
             List<ReturnRequestItem> returnItems
     ) {
@@ -1128,12 +1055,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         }
     }
 
-    /**
-     * Hoàn toàn bộ phần còn lại của các SALE_OUT thuộc Order.
-     * <p>
-     * RETURN_IN.ReferenceLineId = StockMovement.Id của SALE_OUT gốc.
-     * Nhờ vậy cùng một movement không bị hoàn hai lần.
-     */
     private void restoreRemainingSaleMovements(
             Integer orderId,
             Integer createdBy,
@@ -1209,12 +1130,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         }
     }
 
-    /**
-     * Tổng số lượng đã RETURN_IN cho từng SALE_OUT gốc.
-     * <p>
-     * Chỉ các movement mới theo chuẩn này có ReferenceLineId trỏ tới
-     * StockMovement.Id của SALE_OUT. Dữ liệu legacy null không được suy đoán.
-     */
     private Map<Long, Integer> loadReturnedQuantityBySaleMovementId(
             Integer orderId
     ) {
@@ -1283,7 +1198,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                         if (hasResultSet) {
                             try (var resultSet = statement.getResultSet()) {
                                 while (resultSet != null && resultSet.next()) {
-                                    // Không cần dữ liệu trả về.
                                 }
                             }
                         } else if (statement.getUpdateCount() == -1) {
@@ -1298,9 +1212,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         );
     }
 
-    /**
-     * StockMovement.CreatedBy bắt buộc phải là Users.Id hiện tại.
-     */
     private Integer getCurrentAdminUserId() {
         Authentication authentication =
                 SecurityContextHolder
@@ -1476,7 +1387,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                     "Chỉ được tải lên file ảnh minh chứng"
             );
         }
-
     }
 
     private String getFileExtension(String filename) {
@@ -2446,21 +2356,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                 .orElse(null);
     }
 
-    private List<String> parseMediaString(String mediaStr) {
-        if (mediaStr == null || mediaStr.trim().isEmpty()) {
-            return new ArrayList<>();
-        }
-        String[] parts = mediaStr.split(",");
-        List<String> list = new ArrayList<>();
-        for (String p : parts) {
-            String cleaned = p.trim();
-            if (!cleaned.isEmpty()) {
-                list.add(cleaned);
-            }
-        }
-        return list;
-    }
-
     private AdminOrderItemResponse mapOrderItemToResponse(OrderItem item) {
         AdminOrderItemResponse response = new AdminOrderItemResponse();
 
@@ -2580,14 +2475,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
                 ));
     }
 
-    /**
-     * Dùng cho toàn bộ mutation của Admin Order.
-     *
-     * Khóa row Orders trước khi kiểm tra trạng thái để hai request đồng thời
-     * trên cùng một đơn không cùng xử lý từ một trạng thái cũ.
-     *
-     * GET/list/detail vẫn dùng findOrderOrThrow() nên không bị khóa thừa.
-     */
     private void restoreVoucherUsage(Order order) {
         if (order == null
                 || order.getVoucher() == null

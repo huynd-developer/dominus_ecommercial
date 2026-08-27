@@ -135,9 +135,10 @@
                     <div class="user-info">
                       <div class="user-name">{{ displayName }}</div>
 
+                      <!-- ĐÃ SỬA: Ẩn Hạng và Điểm đi, thay bằng chữ Khách hàng -->
                       <div v-if="isUserRole" class="rank-badge mt-1">
-                        <i class="bi bi-gem me-1"></i>
-                        Hạng {{ translateRank(userRank) }} - {{ userPoints }} Điểm
+                        <i class="bi bi-person-badge me-1"></i>
+                        Khách hàng
                       </div>
 
                       <div v-else class="rank-badge mt-1">
@@ -375,7 +376,6 @@ const mapSuggestItem = (p: any): SuggestItem => {
 
   const variantList = Array.isArray(rawVariants) ? rawVariants : [];
 
-  // Giá của từng dung tích (10ml / 50ml / 100ml ...)
   const variantPrices = variantList
     .map((v: any) => Number(v?.salePrice ?? v?.price ?? 0))
     .filter((n: number) => n > 0);
@@ -386,10 +386,7 @@ const mapSuggestItem = (p: any): SuggestItem => {
   let priceFrom = false;
 
   if (variantPrices.length > 0) {
-    // Trang chi tiết mặc định chọn dung tích nhỏ nhất => lấy giá thấp nhất
     price = Math.min(...variantPrices);
-
-    // Nhiều mức giá khác nhau => hiển thị dạng "từ ..."
     priceFrom = Math.max(...variantPrices) > price;
   } else {
     const basePrice =
@@ -430,7 +427,6 @@ const fetchSuggest = async (searchText: string) => {
   suggestLoading.value = true;
 
   try {
-    // Nếu backend dùng tên param khác (search / name / q) thì sửa đúng dòng này
     const res = await api.get("/v1/products", {
       params: {
         keyword: searchText,
@@ -440,16 +436,14 @@ const fetchSuggest = async (searchText: string) => {
     });
 
     if (currentSeq !== suggestSeq) {
-      return; // kết quả cũ về trễ, bỏ qua
+      return; 
     }
 
     const rows = resolveSuggestRows(res.data);
     const lowerText = searchText.toLowerCase();
 
-    // Lọc lại ở client phòng khi backend chưa lọc theo từ khoá
     const matched = rows.filter((p: any) => matchSuggestKeyword(p, lowerText));
 
-    // Nếu backend đã lọc đúng thì "matched" vẫn giữ nguyên kết quả
     const finalRows = matched.length > 0 ? matched : [];
 
     suggestList.value = finalRows.slice(0, SUGGEST_SIZE).map(mapSuggestItem);
@@ -650,16 +644,15 @@ const handleProfileUpdated = (event: Event) => {
 };
 
 const handleSearch = () => {
-  showSuggest.value = false; // đóng dropdown gợi ý khi submit
+  showSuggest.value = false; 
 
   const trimmedKeyword = keyword.value.trim();
 
   if (!trimmedKeyword) {
-    router.push({ name: "ProductList" }); // Về danh sách mặc định
+    router.push({ name: "ProductList" }); 
     return;
   }
 
-  // Đẩy sang Component ProductDetailView kèm từ khóa
   router.push({
     name: "ProductList",
     query: {
@@ -730,7 +723,6 @@ watch(
   }
 );
 
-// Hàm dịch hạng sang tiếng Việt
 const translateRank = (rankName: string) => {
   if (!rankName) return 'Thành viên mới';
 
@@ -849,7 +841,7 @@ const translateRank = (rankName: string) => {
   font-size: 18px;
 }
 
-/* ============ DROPDOWN GỢI Ý TÌM KIẾM (THÊM MỚI) ============ */
+/* ============ DROPDOWN GỢI Ý TÌM KIẾM ============ */
 
 .search-suggest {
   position: absolute;
@@ -904,7 +896,7 @@ const translateRank = (rankName: string) => {
 .suggest-img img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .suggest-img i {
