@@ -173,4 +173,32 @@ public interface PromotionVariantRepository extends JpaRepository<PromotionVaria
             Integer productVariantId,
             LocalDateTime now
     );
+
+    /**
+     * Lấy thời điểm bắt đầu Flash Sale sắp tới gần nhất của toàn hệ thống.
+     * <p>
+     * Chỉ dùng cho Public/Home để FE đặt timer tự refresh đúng StartDate.
+     * <p>
+     * Không coi Promotion tương lai là active.
+     * Không áp dụng giá sale trước giờ bắt đầu.
+     * Điều kiện ProductVariant/Product giữ đồng bộ với query Flash Sale active.
+     */
+    @Query("""
+            SELECT DISTINCT p.startDate
+            FROM PromotionVariant pv
+            JOIN pv.promotion p
+            JOIN pv.productVariant v
+            JOIN v.product product
+            WHERE COALESCE(p.isDeleted, false) = false
+              AND p.status = 1
+              AND p.startDate > :now
+              AND p.endDate > :now
+              AND COALESCE(v.isDeleted, false) = false
+              AND v.status = 1
+              AND product.status = 1
+            ORDER BY p.startDate ASC
+            """)
+    List<LocalDateTime> findUpcomingFlashSaleStartDates(
+            LocalDateTime now
+    );
 }

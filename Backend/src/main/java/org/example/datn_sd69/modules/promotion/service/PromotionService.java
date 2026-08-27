@@ -35,6 +35,13 @@ public interface PromotionService {
 
     Page<FlashSaleProductResponse> getActiveFlashSaleProducts(Pageable pageable);
 
+    /**
+     * Thời điểm bắt đầu gần nhất của một Flash Sale tương lai.
+     *
+     * Dùng cho FE đặt timer tự refresh, không dùng để quyết định Promotion active.
+     */
+    LocalDateTime getNextFlashSaleStartDate();
+
     Page<PromotionProductVariantOptionResponse> searchProductVariantsForPromotion(
             String keyword,
             LocalDateTime startDate,
@@ -42,4 +49,5 @@ public interface PromotionService {
             Integer ignorePromotionId,
             Pageable pageable
     );
+
 }
