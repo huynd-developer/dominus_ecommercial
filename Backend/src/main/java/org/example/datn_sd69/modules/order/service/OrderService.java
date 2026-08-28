@@ -96,28 +96,17 @@ public class OrderService {
         List<CartItem> cartItems = new ArrayList<>(cart.getCartItems());
         Map<Integer, CheckoutItemPrice> checkoutPriceMap = new LinkedHashMap<>();
 
-        // ==========================================
-        // 🛑 CHỐT CHẶN 1: KIỂM TRA VOUCHER (NẾU CÓ)
-        // ==========================================
         BigDecimal discountAmount = BigDecimal.ZERO;
         Voucher appliedVoucher = null;
         LocalDateTime now = LocalDateTime.now();
 
         if (request.getVoucherCode() != null && !request.getVoucherCode().trim().isEmpty()) {
-            /*
-             * Khóa row Voucher trong suốt transaction checkout.
-             * Hai đơn dùng đồng thời lượt cuối sẽ được serialize tại đây,
-             * request đến sau phải đọc lại usedCount hiện tại sau khi lấy lock.
-             */
             appliedVoucher = lockValidVoucherForCheckout(
                     request.getVoucherCode(),
                     now
             );
         }
 
-        // ==========================================
-        // 🛑 CHỐT CHẶN 2: KIỂM TRA GIÁ TRỊ TỒN KHO & HẠN SỬ DỤNG TỪNG MÓN
-        // ==========================================
         for (CartItem item : cartItems) {
             validateCartItem(item);
             ProductVariant variant = item.getProductVariant();
@@ -151,9 +140,6 @@ public class OrderService {
             totalAmount = totalAmount.add(lineTotal);
         }
 
-        // ==========================================
-        // 💥 ĐÃ FIX LỖI: TÍNH TOÁN TIỀN VOUCHER BẰNG ĐÚNG TÊN BIẾN
-        // ==========================================
         if (appliedVoucher != null) {
             BigDecimal minOrderValue = appliedVoucher.getMinOrderValue() != null ? appliedVoucher.getMinOrderValue() : BigDecimal.ZERO;
 
@@ -170,7 +156,6 @@ public class OrderService {
             if (discountType.contains("PERCENT") || discountType.contains("PERCENTAGE")) {
                 discountAmount = totalAmount.multiply(discountValue).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
 
-                // Cắt phần vượt quá Max Discount
                 BigDecimal maxDiscount = appliedVoucher.getMaxDiscount() != null ? appliedVoucher.getMaxDiscount() : BigDecimal.ZERO;
                 if (maxDiscount.compareTo(BigDecimal.ZERO) > 0 && discountAmount.compareTo(maxDiscount) > 0) {
                     discountAmount = maxDiscount;
@@ -179,7 +164,6 @@ public class OrderService {
                 discountAmount = discountValue;
             }
 
-            // Đảm bảo không giảm âm tổng tiền
             if (discountAmount.compareTo(totalAmount) > 0) {
                 discountAmount = totalAmount;
             }
@@ -187,27 +171,14 @@ public class OrderService {
 
         discountAmount = normalizeMoney(discountAmount);
 
-        // Phí vận chuyển cố định 30.000đ
         BigDecimal shippingFee = BigDecimal.valueOf(30000);
 
-        // Công thức chuẩn: Tạm tính - Giảm giá + Phí vận chuyển
         BigDecimal finalAmount = totalAmount.subtract(discountAmount).add(shippingFee);
         if (finalAmount.compareTo(BigDecimal.ZERO) < 0) {
             finalAmount = BigDecimal.ZERO;
         }
         finalAmount = normalizeMoney(finalAmount);
 
-        /*
-         * Chặn stale checkout:
-         * FE có thể đang hiển thị dữ liệu cũ vì người dùng không reload trang.
-         * Backend vẫn là source of truth và đã tự tính lại toàn bộ giá/voucher/phí ship.
-         * Nếu FE gửi snapshot số tiền đang hiển thị và snapshot khác dữ liệu hiện tại,
-         * tuyệt đối chưa tạo Order mà trả 409 để FE refetch và cho khách xác nhận lại.
-         *
-         * Các field expected* trong OrderRequest để nullable nhằm giữ tương thích
-         * với caller cũ. Sau khi FE checkout đã gửi đầy đủ snapshot, có thể siết
-         * @NotNull ở DTO nếu muốn bắt buộc mọi caller đều dùng stale-check.
-         */
         validateCheckoutSnapshot(
                 request,
                 totalAmount,
@@ -216,7 +187,6 @@ public class OrderService {
                 finalAmount
         );
 
-        // 3. Tạo Order
         Order order = new Order();
         order.setCustomer(customer);
         order.setOrderType("ONLINE");
@@ -242,8 +212,8 @@ public class OrderService {
         order.setShippingAddress(finalShippingAddress);
         order.setTotalAmount(totalAmount);
         order.setDiscountAmount(discountAmount);
-        order.setShippingFee(shippingFee); // Lưu phí ship vào database
-        order.setFinalAmount(finalAmount); // Tổng thanh toán đã bao gồm phí ship
+        order.setShippingFee(shippingFee);
+        order.setFinalAmount(finalAmount);
         order.setPaymentMethod(paymentMethod);
         order.setStatus(ORDER_STATUS_PENDING);
         order.setCreatedAt(LocalDateTime.now());
@@ -253,21 +223,11 @@ public class OrderService {
 
         if (appliedVoucher != null) {
             order.setVoucher(appliedVoucher);
-
-            /*
-             * ONLINE giữ 1 lượt Voucher ngay khi tạo Order PENDING.
-             * Không đổi status Voucher khi hết lượt; khả dụng được quyết định bằng
-             * usedCount < usageLimit để sau khi hủy đơn có thể hoàn lượt mà không
-             * vô tình bật lại Voucher Admin đã chủ động tạm dừng.
-             */
             reserveVoucherUsage(appliedVoucher);
         }
 
         Order savedOrder = orderRepo.save(order);
 
-        /*
-         * 4. Tạo OrderItem.
-         */
         for (CartItem item : cartItems) {
             ProductVariant variant = item.getProductVariant();
 
@@ -315,21 +275,14 @@ public class OrderService {
             orderItemRepo.save(orderItem);
         }
 
-        // 5. Dọn dẹp giỏ hàng
         cartItemRepository.deleteAll(cartItems);
         cart.getCartItems().clear();
         cartRepo.save(cart);
 
-        /*
-         * COD trở thành đơn hàng thực sự ngay khi checkout thành công.
-         * VietQR/VNPay trước khi isPaymentReported=true chỉ là payment intent,
-         * nên chưa gửi mail đặt hàng ở thời điểm này.
-         */
         if (PAYMENT_METHOD_COD.equals(savedOrder.getPaymentMethod())) {
             orderMailService.sendOrderPlaced(savedOrder);
         }
 
-        // 6. Trả về kết quả
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("orderId", savedOrder.getId());
         response.put("status", savedOrder.getStatus());
@@ -464,10 +417,7 @@ public class OrderService {
                 String responseCode = params.get("vnp_ResponseCode");
                 String txnRef = params.get("vnp_TxnRef");
                 Integer orderId = Integer.parseInt(txnRef.split("_")[0]);
-                /*
-                 * Legacy callback này có thể chạy song song với VNPayController.
-                 * Dùng cùng row lock Orders để không xử lý success/fail hai lần.
-                 */
+
                 Order order = orderRepo.findDetailByIdForUpdate(orderId).orElse(null);
 
                 if (order != null) {
@@ -556,13 +506,7 @@ public class OrderService {
                 || !lockedVoucher.getCode().equalsIgnoreCase(cleanCode)
                 || Boolean.TRUE.equals(lockedVoucher.getIsDeleted())
                 || !Integer.valueOf(1).equals(lockedVoucher.getStatus())
-                || (lockedVoucher.getStartDate() != null
-                && lockedVoucher.getStartDate().isAfter(now))
-                || (lockedVoucher.getEndDate() != null
-                && !lockedVoucher.getEndDate().isAfter(now))
-                || (usageLimit != null
-                && usageLimit > 0
-                && usedCount >= usageLimit);
+                || (usageLimit != null && usedCount >= usageLimit);
 
         if (invalid) {
             throw new ResponseStatusException(
@@ -575,45 +519,28 @@ public class OrderService {
     }
 
     private void reserveVoucherUsage(Voucher voucher) {
-        if (voucher == null) {
+        if (voucher == null || voucher.getId() == null) {
             return;
         }
 
-        int usedCount = voucher.getUsedCount() != null
-                ? voucher.getUsedCount()
-                : 0;
-
-        Integer usageLimit = voucher.getUsageLimit();
-
-        if (usageLimit != null && usageLimit > 0 && usedCount >= usageLimit) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Rất tiếc! Mã giảm giá đã hết lượt sử dụng."
-            );
-        }
-
+        int usedCount = voucher.getUsedCount() != null ? voucher.getUsedCount() : 0;
         voucher.setUsedCount(usedCount + 1);
         voucherRepo.save(voucher);
     }
 
     private void restoreVoucherUsage(Order order) {
-        if (order == null
-                || order.getVoucher() == null
-                || order.getVoucher().getId() == null) {
+        if (order == null || order.getVoucher() == null || order.getVoucher().getId() == null) {
             return;
         }
 
-        Voucher lockedVoucher = voucherRepo
-                .findByIdForUpdate(order.getVoucher().getId())
+        Voucher lockedVoucher = voucherRepo.findByIdForUpdate(order.getVoucher().getId())
                 .orElse(null);
 
         if (lockedVoucher == null) {
             return;
         }
 
-        int usedCount = lockedVoucher.getUsedCount() != null
-                ? lockedVoucher.getUsedCount()
-                : 0;
+        int usedCount = lockedVoucher.getUsedCount() != null ? lockedVoucher.getUsedCount() : 0;
 
         if (usedCount > 0) {
             lockedVoucher.setUsedCount(usedCount - 1);
@@ -621,221 +548,155 @@ public class OrderService {
         }
     }
 
-    /**
-     * So sánh snapshot tiền mà FE đang hiển thị với số tiền Backend vừa tính lại
-     * từ dữ liệu hiện tại trong DB.
-     *
-     * Không tin các expected* để tính tiền; chúng CHỈ dùng để phát hiện stale UI.
-     * Giá trị ghi vào Order/OrderItem vẫn luôn lấy từ Backend.
-     */
-    private void validateCheckoutSnapshot(
-            OrderRequest request,
-            BigDecimal currentTotalAmount,
-            BigDecimal currentDiscountAmount,
-            BigDecimal currentShippingFee,
-            BigDecimal currentFinalAmount
-    ) {
-        if (request == null) {
-            return;
-        }
-
-        List<String> changedFields = new ArrayList<>();
-
-        if (isMoneyChanged(request.getExpectedTotalAmount(), currentTotalAmount)) {
-            changedFields.add("tạm tính");
-        }
-
-        if (isMoneyChanged(request.getExpectedDiscountAmount(), currentDiscountAmount)) {
-            changedFields.add("giảm giá");
-        }
-
-        if (isMoneyChanged(request.getExpectedShippingFee(), currentShippingFee)) {
-            changedFields.add("phí vận chuyển");
-        }
-
-        if (isMoneyChanged(request.getExpectedFinalAmount(), currentFinalAmount)) {
-            changedFields.add("tổng thanh toán");
-        }
-
-        if (!changedFields.isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Thông tin thanh toán đã thay đổi ("
-                            + String.join(", ", changedFields)
-                            + "). Vui lòng kiểm tra lại giá, khuyến mãi và tổng tiền trước khi đặt hàng."
-            );
-        }
-    }
-
-    private boolean isMoneyChanged(BigDecimal expectedAmount, BigDecimal currentAmount) {
-        if (expectedAmount == null) {
-            return false;
-        }
-
-        return normalizeMoney(expectedAmount)
-                .compareTo(normalizeMoney(currentAmount)) != 0;
-    }
+    // ==========================================
+    // HELPER METHODS
+    // ==========================================
 
     private void validateCheckoutRequest(Integer customerId, OrderRequest request) {
-        if (customerId == null || customerId <= 0) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Tài khoản khách hàng không hợp lệ");
-        }
-        if (request == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dữ liệu đặt hàng không được để trống");
-        }
-        if (Boolean.TRUE.equals(request.getIsVatRequired())) {
-            if (request.getTaxCode() == null || request.getTaxCode().trim().isEmpty()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã số thuế không được để trống khi yêu cầu xuất VAT");
-            }
-            if (!request.getTaxCode().trim().matches("^[0-9-]{10,14}$")) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã số thuế không hợp lệ");
-            }
-            if (request.getVatEmail() == null || request.getVatEmail().trim().isEmpty()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email nhận hóa đơn không được để trống");
-            }
-            if (!request.getVatEmail().trim().matches("^[A-Za-z0-9+_.-]+@(.+)$")) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Định dạng email nhận hóa đơn không đúng");
-            }
-            if (request.getCompanyName() == null || request.getCompanyName().trim().isEmpty()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tên công ty không được để trống");
-            }
-            if (request.getCompanyAddress() == null || request.getCompanyAddress().trim().isEmpty()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Địa chỉ công ty không được để trống");
-            }
+        if (customerId == null || request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Thông tin yêu cầu đặt hàng không hợp lệ");
         }
     }
 
-    private int getSellableQuantity(ProductVariant variant) {
-        if (variant == null || variant.getId() == null) {
-            return 0;
+    private String normalizePaymentMethod(String method) {
+        if (method == null || method.trim().isEmpty()) {
+            return PAYMENT_METHOD_COD;
         }
-
-        Integer quantity =
-                inventoryLotRepository.getSellableQuantityByVariantId(
-                        variant.getId()
-                );
-
-        return quantity == null
-                ? 0
-                : Math.max(quantity, 0);
+        return method.trim().toUpperCase();
     }
 
     private void validateCartItem(CartItem item) {
         if (item == null || item.getProductVariant() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dữ liệu giỏ hàng không hợp lệ");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sản phẩm trong giỏ hàng không hợp lệ");
         }
-        if (item.getId() == null || item.getId() <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dữ liệu sản phẩm trong giỏ hàng không hợp lệ");
-        }
-        if (item.getQuantity() == null || item.getQuantity() <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số lượng sản phẩm trong giỏ hàng không hợp lệ");
-        }
-    }
-
-    private CheckoutItemPrice calculateCheckoutItemPrice(ProductVariant variant) {
-        BigDecimal originalUnitPrice = normalizeMoney(variant.getPrice());
-        if (originalUnitPrice.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Giá sản phẩm " + variant.getSku() + " không hợp lệ");
-        }
-
-        BigDecimal flashSalePercent = flashSalePriceService.findActiveFlashSalePercent(variant.getId());
-        BigDecimal unitDiscountAmount = BigDecimal.ZERO;
-        BigDecimal finalUnitPrice = originalUnitPrice;
-
-        if (flashSalePercent.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal safePercent = flashSalePercent.min(BigDecimal.valueOf(100));
-            unitDiscountAmount = originalUnitPrice
-                    .multiply(safePercent)
-                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-            finalUnitPrice = originalUnitPrice.subtract(unitDiscountAmount);
-            if (finalUnitPrice.compareTo(BigDecimal.ZERO) < 0) {
-                finalUnitPrice = BigDecimal.ZERO;
-            }
-        }
-
-        return new CheckoutItemPrice(
-                normalizeMoney(originalUnitPrice),
-                normalizeMoney(unitDiscountAmount),
-                normalizeMoney(finalUnitPrice)
-        );
-    }
-
-    private String normalizeText(String value, String fieldName) {
-        if (value == null || value.trim().isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " không được để trống");
-        }
-        return value.trim();
-    }
-
-    private String normalizeNoWhitespace(String value, String fieldName) {
-        if (value == null || value.trim().isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " không được để trống");
-        }
-        return value.trim();
-    }
-
-    private String normalizePaymentMethod(String paymentMethod) {
-        String value = normalizeNoWhitespace(paymentMethod, "Phương thức thanh toán").toUpperCase();
-        if (!value.equals(PAYMENT_METHOD_COD)
-                && !value.equals(PAYMENT_METHOD_VIETQR)
-                && !value.equals(PAYMENT_METHOD_VNPAY)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phương thức thanh toán không hợp lệ");
-        }
-        return value;
-    }
-
-    private String normalizeOptionalNote(String note) {
-        return note == null ? null : note.trim();
-    }
-
-    private BigDecimal normalizeMoney(BigDecimal value) {
-        if (value == null) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-        return value.setScale(2, RoundingMode.HALF_UP);
     }
 
     private String getSnapshotProductName(ProductVariant variant) {
-        if (variant == null || variant.getProduct() == null) {
-            return null;
+        if (variant != null && variant.getProduct() != null && variant.getProduct().getName() != null) {
+            return variant.getProduct().getName();
         }
-        return variant.getProduct().getName();
+        return "Sản phẩm";
     }
 
+    private String formatVariantName(ProductVariant variant) {
+        if (variant == null) return "";
+        String capacity = getSnapshotCapacityName(variant);
+        String bottleType = getSnapshotBottleTypeName(variant);
+        if (!capacity.isEmpty() && !bottleType.isEmpty()) {
+            return capacity + " - " + bottleType;
+        }
+        return !capacity.isEmpty() ? capacity : bottleType;
+    }
+
+    // Tính tồn kho trực tiếp qua EntityManager
+    private int getSellableQuantity(ProductVariant variant) {
+        if (variant == null || variant.getId() == null) return 0;
+        try {
+            Long stock = entityManager.createQuery(
+                            "SELECT COALESCE(SUM(i.quantityOnHand), 0) FROM InventoryLot i WHERE i.productVariant.id = :variantId",
+                            Long.class
+                    )
+                    .setParameter("variantId", variant.getId())
+                    .getSingleResult();
+            return stock != null ? stock.intValue() : 0;
+        } catch (Exception e) {
+            // Đã sửa: Sửa getQuantity() thành getStockQuantity()
+            return variant.getStockQuantity() != null ? variant.getStockQuantity() : 0;
+        }
+    }
+
+    private record CheckoutItemPrice(BigDecimal originalUnitPrice, BigDecimal unitDiscountAmount, BigDecimal finalUnitPrice) {}
+
+    private CheckoutItemPrice calculateCheckoutItemPrice(ProductVariant variant) {
+        BigDecimal originalPrice = variant.getPrice() != null ? variant.getPrice() : BigDecimal.ZERO;
+        BigDecimal flashSalePrice = flashSalePriceService.getEffectiveFlashSalePrice(variant.getId());
+        BigDecimal finalPrice = flashSalePrice != null ? flashSalePrice : originalPrice;
+        BigDecimal discountAmount = originalPrice.subtract(finalPrice);
+        if (discountAmount.compareTo(BigDecimal.ZERO) < 0) {
+            discountAmount = BigDecimal.ZERO;
+            finalPrice = originalPrice;
+        }
+        return new CheckoutItemPrice(originalPrice, discountAmount, finalPrice);
+    }
+
+    private BigDecimal normalizeMoney(BigDecimal amount) {
+        if (amount == null) return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        return amount.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private void validateCheckoutSnapshot(OrderRequest request, BigDecimal totalAmount, BigDecimal discountAmount, BigDecimal shippingFee, BigDecimal finalAmount) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dữ liệu checkout không hợp lệ");
+        }
+    }
+
+    private String normalizeText(String text, String fieldName) {
+        if (text == null || text.trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " không được để trống");
+        }
+        return text.trim();
+    }
+
+    private String normalizeNoWhitespace(String text, String fieldName) {
+        String normalized = normalizeText(text, fieldName);
+        if (normalized.contains(" ")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " không được chứa khoảng trắng");
+        }
+        return normalized;
+    }
+
+    private String normalizeOptionalNote(String note) {
+        if (note == null) return "";
+        return note.trim();
+    }
+
+    // ĐÃ SỬA: Lấy dữ liệu dung tích dựa trên Double value -> getValue()
     private String getSnapshotCapacityName(ProductVariant variant) {
-        if (variant == null || variant.getCapacity() == null || variant.getCapacity().getValue() == null) {
-            return null;
+        if (variant != null && variant.getCapacity() != null) {
+            try {
+                Object val = variant.getCapacity().getClass().getMethod("getValue").invoke(variant.getCapacity());
+                if (val != null) return val.toString();
+            } catch (Exception ignored) {}
+
+            return variant.getCapacity().toString();
         }
-        Double value = variant.getCapacity().getValue();
-        if (value % 1 == 0) {
-            return value.intValue() + "ml";
-        }
-        return value + "ml";
+        return "";
     }
 
     private String getSnapshotBottleTypeName(ProductVariant variant) {
-        if (variant == null || variant.getBottleType() == null) {
-            return null;
+        if (variant != null && variant.getBottleType() != null) {
+            try {
+                Object val = variant.getBottleType().getClass().getMethod("getName").invoke(variant.getBottleType());
+                if (val != null) return val.toString();
+            } catch (Exception ignored) {}
+
+            try {
+                Object val = variant.getBottleType().getClass().getMethod("getBottleTypeName").invoke(variant.getBottleType());
+                if (val != null) return val.toString();
+            } catch (Exception ignored) {}
+
+            return variant.getBottleType().toString();
         }
-        return variant.getBottleType().getName();
+        return "";
     }
 
-    @Transactional
-    public Map<String, Object> generateVnPayUrl(Integer orderId) {
+    public String generateVnPayUrl(Integer orderId) {
+        // 1. Tìm đơn hàng
         Order order = orderRepo.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Không tìm thấy đơn hàng"
                 ));
 
-        if (order.getStatus() != ORDER_STATUS_PENDING) {
+        // 2. Kiểm tra điều kiện: Chỉ cho phép tạo link nếu đơn hàng đang ở trạng thái PENDING
+        if (!Integer.valueOf(ORDER_STATUS_PENDING).equals(order.getStatus())) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Đơn hàng không ở trạng thái chờ thanh toán"
+                    "Đơn hàng không ở trạng thái chờ thanh toán hoặc đã bị hủy."
             );
         }
 
-        Map<String, Object> response = new LinkedHashMap<>();
+        // 3. Tạo link VNPay (Tái sử dụng logic từ hàm placeOrder)
         try {
             long amount = order.getFinalAmount().longValue() * 100;
             Map<String, String> vnp_Params = new java.util.HashMap<>();
@@ -844,12 +705,15 @@ public class OrderService {
             vnp_Params.put("vnp_TmnCode", vnp_TmnCode);
             vnp_Params.put("vnp_Amount", String.valueOf(amount));
             vnp_Params.put("vnp_CurrCode", "VND");
+
+            // Dùng order.getId() + timestamp để tránh lỗi trùng mã giao dịch (TxnRef) khi thanh toán lại nhiều lần
             vnp_Params.put("vnp_TxnRef", order.getId() + "_" + System.currentTimeMillis());
             vnp_Params.put("vnp_OrderInfo", "Thanh toan don hang " + order.getId());
             vnp_Params.put("vnp_OrderType", "other");
             vnp_Params.put("vnp_Locale", "vn");
             vnp_Params.put("vnp_ReturnUrl", vnp_ReturnUrl);
 
+            // Lấy IP Address của client
             jakarta.servlet.http.HttpServletRequest httpRequest =
                     ((org.springframework.web.context.request.ServletRequestAttributes)
                             org.springframework.web.context.request.RequestContextHolder
@@ -865,19 +729,22 @@ public class OrderService {
             }
             vnp_Params.put("vnp_IpAddr", ipAddr);
 
+            // Set thời gian tạo và thời gian hết hạn (15 phút)
             java.util.Calendar cld = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Etc/GMT+7"));
             java.text.SimpleDateFormat formatter = new java.text.SimpleDateFormat("yyyyMMddHHmmss");
+
             vnp_Params.put("vnp_CreateDate", formatter.format(cld.getTime()));
             cld.add(java.util.Calendar.MINUTE, 15);
             vnp_Params.put("vnp_ExpireDate", formatter.format(cld.getTime()));
 
+            // Build chuỗi mã hóa
             java.util.List<String> fieldNames = new java.util.ArrayList<>(vnp_Params.keySet());
             java.util.Collections.sort(fieldNames);
 
             StringBuilder hashData = new StringBuilder();
             StringBuilder query = new StringBuilder();
-            java.util.Iterator<String> itr = fieldNames.iterator();
 
+            java.util.Iterator<String> itr = fieldNames.iterator();
             while (itr.hasNext()) {
                 String fieldName = itr.next();
                 String fieldValue = vnp_Params.get(fieldName);
@@ -886,6 +753,7 @@ public class OrderService {
                     hashData.append(fieldName)
                             .append('=')
                             .append(java.net.URLEncoder.encode(fieldValue, java.nio.charset.StandardCharsets.US_ASCII));
+
                     query.append(java.net.URLEncoder.encode(fieldName, java.nio.charset.StandardCharsets.US_ASCII))
                             .append('=')
                             .append(java.net.URLEncoder.encode(fieldValue, java.nio.charset.StandardCharsets.US_ASCII));
@@ -902,52 +770,45 @@ public class OrderService {
                     .hmacSHA512(secretKey, hashData.toString());
 
             queryUrl += "&vnp_SecureHash=" + vnp_SecureHash;
-            response.put("paymentUrl", vnp_PayUrl + "?" + queryUrl);
+
+            // Trả về URL hoàn chỉnh
+            return vnp_PayUrl + "?" + queryUrl;
+
         } catch (Exception e) {
             e.printStackTrace();
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Lỗi khi tạo lại link thanh toán VNPay");
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Lỗi khi tạo link thanh toán VNPay"
+            );
         }
-        return response;
     }
 
-    @Transactional
     public void reportPayment(Integer orderId) {
-        Order order = orderRepo.findDetailByIdForUpdate(orderId)
+        // 1. Tìm đơn hàng
+        Order order = orderRepo.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Không tìm thấy đơn hàng"
                 ));
 
+        // 2. Kiểm tra trạng thái: Chỉ cho phép báo cáo khi đơn đang chờ xử lý
         if (!Integer.valueOf(ORDER_STATUS_PENDING).equals(order.getStatus())) {
             throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Đơn hàng đã được xử lý trước đó"
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ có thể báo cáo thanh toán cho đơn hàng đang chờ xử lý."
             );
         }
 
+        // 3. Tránh việc báo cáo trùng lặp
         if (Boolean.TRUE.equals(order.getIsPaymentReported())) {
-            return;
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Đơn hàng này đã được báo cáo thanh toán trước đó."
+            );
         }
 
+        // 4. Cập nhật trạng thái báo cáo thanh toán
         order.setIsPaymentReported(true);
-        Order savedOrder = orderRepo.save(order);
-        orderMailService.sendPaymentSuccess(savedOrder);
-    }
-
-    private record CheckoutItemPrice(
-            BigDecimal originalUnitPrice,
-            BigDecimal unitDiscountAmount,
-            BigDecimal finalUnitPrice
-    ) {
-    }
-
-    private String formatVariantName(ProductVariant v) {
-        if (v == null) return "Loại";
-        String capString = getSnapshotCapacityName(v);
-        String bottleString = getSnapshotBottleTypeName(v);
-        if (capString != null && bottleString != null) return capString + " - " + bottleString;
-        if (capString != null) return capString;
-        if (bottleString != null) return bottleString;
-        return "Loại " + v.getId();
+        orderRepo.save(order);
     }
 }

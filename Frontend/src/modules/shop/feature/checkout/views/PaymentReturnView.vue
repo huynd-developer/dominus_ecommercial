@@ -184,17 +184,23 @@ const savePendingVnpayOutcome = (
   data: any,
   success: boolean
 ) => {
+  // ĐÃ SỬA: Ép cứng trạng thái là 4 (Đã hủy) nếu nhận được mã lỗi 24 (Khách tự hủy thanh toán)
+  let resolvedStatus = getNullableStatus(data);
+  if (responseCode.value === "24") {
+      resolvedStatus = 4; // Trạng thái hủy
+  }
+
   const outcome: PendingVnpayOutcome = {
     orderId:
       data?.orderId ??
       data?.id ??
       getFallbackOrderId(),
-    status: getNullableStatus(data),
+    status: resolvedStatus,
     success,
     message:
       data?.message ||
       data?.error ||
-      "",
+      (responseCode.value === "24" ? "Khách hàng hủy thanh toán" : ""),
     processedAt: new Date().toISOString(),
   };
 
@@ -213,13 +219,6 @@ const clearPendingVnpayState = () => {
 };
 
 const isSuccessResponse = (data: any) => {
-  /*
-   * Chỉ BE /api/vnpay/return được quyền kết luận payment success.
-   * Không dùng vnp_ResponseCode trên URL để tự kết luận vì BE còn phải:
-   * - verify chữ ký/amount
-   * - xử lý InventoryLot/StockMovement
-   * - chống callback trùng
-   */
   return data?.success === true;
 };
 
@@ -259,7 +258,6 @@ const buildDetails = (data: any) => {
 
   const discountAmountVal = getNumber(data?.discountAmount);
 
-  // Giữ nguyên cách hiển thị phí ship hiện tại.
   const shippingFeeVal = getNumber(data?.shippingFee ?? 30000);
 
   const details: ResultDetail[] = [
@@ -366,14 +364,23 @@ const buildDetails = (data: any) => {
 const verifyPaymentReturn = async () => {
   try {
     status.value = "processing";
-
     const params = normalizeQueryParams();
 
-    /*
-     * Dùng duy nhất VNPayController mới.
-     * Không fallback sang endpoint OrderService cũ vì endpoint cũ chỉ đánh dấu
-     * payment reported và không phải flow InventoryLot/FEFO hiện tại.
-     */
+    // ĐÃ SỬA: Nếu mã phản hồi là 24 (Khách hủy) thì gọi ngay API hủy đơn của VNPay
+    if (responseCode.value === "24") {
+        const orderIdToCancel = getFallbackOrderId();
+        if (orderIdToCancel) {
+            // Tự động hủy đơn hàng bằng API của bạn để BE xử lý hoàn kho (như lúc ấn nút Hủy của VietQR)
+            await api.patch(`/customer/orders/${orderIdToCancel}/cancel`, {
+                cancelReason: "Khách hàng hủy thanh toán VNPay",
+            }).catch(e => console.error("Lỗi khi hủy đơn tự động:", e));
+        }
+        
+        savePendingVnpayOutcome({}, false);
+        await router.replace("/checkout");
+        return;
+    }
+
     const res = await api.get("/vnpay/return", {
       params,
     });
@@ -396,19 +403,9 @@ const verifyPaymentReturn = async () => {
       return;
     }
 
-    /*
-     * BE đã trả response thất bại có trạng thái order.
-     * Ghi outcome để CheckoutView chỉ restore cart nếu order thực sự CANCELLED.
-     */
     savePendingVnpayOutcome(data, false);
-
     await router.replace("/checkout");
   } catch (error: any) {
-    /*
-     * Network/server/signature error không đồng nghĩa payment thất bại.
-     * Ghi outcome UNKNOWN (status null nếu BE không trả) và KHÔNG tự add cart.
-     * CheckoutView sẽ giữ an toàn cho tới khi có kết quả chắc chắn.
-     */
     const errorData =
       error?.response?.data &&
       typeof error.response.data === "object"
@@ -421,7 +418,6 @@ const verifyPaymentReturn = async () => {
           };
 
     savePendingVnpayOutcome(errorData, false);
-
     await router.replace("/checkout");
   }
 };

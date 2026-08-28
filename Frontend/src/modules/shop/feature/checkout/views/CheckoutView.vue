@@ -11,24 +11,12 @@
       <template v-else>
         <CheckoutForm :key="formKey" :form="orderForm" />
 
-        <CheckoutSummary
-          :cartItems="cartItems"
-          :totalItems="totalItems"
-          :totalAmount="totalAmount"
-          :discountAmount="discountAmount"
-          :shippingFee="shippingFee"
-          :isCalculatingShip="isCalculatingShip"
-          :finalTotal="finalTotal"
-          :isSubmitting="isSubmitting"
-          :updatingItemKey="updatingItemKey"
-          :selectedVoucherCode="appliedVoucherCode"
-          :promotionRefreshing="isPromotionRefreshing"
-          @update-quantity="handleUpdateQuantity"
-          @submit-order="handlePlaceOrder"
-          @back="goToCart"
-          @apply-voucher="handleApplyVoucher"
-          @cancel-voucher="handleCancelVoucher"
-        />
+        <CheckoutSummary :cartItems="cartItems" :totalItems="totalItems" :totalAmount="totalAmount"
+          :discountAmount="discountAmount" :shippingFee="shippingFee" :isCalculatingShip="isCalculatingShip"
+          :finalTotal="finalTotal" :isSubmitting="isSubmitting" :updatingItemKey="updatingItemKey"
+          :selectedVoucherCode="appliedVoucherCode" :promotionRefreshing="isPromotionRefreshing"
+          @update-quantity="handleUpdateQuantity" @submit-order="handlePlaceOrder" @back="goToCart"
+          @apply-voucher="handleApplyVoucher" @cancel-voucher="handleCancelVoucher" />
       </template>
     </main>
 
@@ -36,48 +24,30 @@
 
     <Teleport to="body">
       <Transition name="fade-modal">
-        <div
-          v-if="showPaymentModal"
-          class="premium-modal-overlay"
-          @click.self="handleCancelPayment"
-        >
+        <div v-if="showPaymentModal" class="premium-modal-overlay" @click.self="handleCancelPayment">
           <div
             class="payment-box bg-white p-4 rounded-4 shadow-lg text-center d-flex flex-column align-items-center mx-3 position-relative"
-            style="max-width: 420px; animation: slideUp 0.3s ease-out"
-          >
-            <button
-              type="button"
-              class="btn-close position-absolute top-0 end-0 m-3"
-              aria-label="Close"
-              @click="handleCancelPayment"
-            ></button>
+            style="max-width: 420px; animation: slideUp 0.3s ease-out">
+            <button type="button" class="btn-close position-absolute top-0 end-0 m-3" aria-label="Close"
+              @click="handleCancelPayment"></button>
 
             <div class="mb-2 mt-2">
-              <i
-                v-if="currentPaymentMethod === 'VIETQR'"
-                class="bi bi-qr-code-scan text-primary"
-                style="font-size: 2.5rem"
-              ></i>
-              <i
-                v-else-if="currentPaymentMethod === 'VNPAY'"
-                class="bi bi-credit-card-2-front text-info"
-                style="font-size: 2.5rem"
-              ></i>
+              <i v-if="currentPaymentMethod === 'VIETQR'" class="bi bi-qr-code-scan text-primary"
+                style="font-size: 2.5rem"></i>
+              <i v-else-if="currentPaymentMethod === 'VNPAY'" class="bi bi-credit-card-2-front text-info"
+                style="font-size: 2.5rem"></i>
             </div>
 
             <h4 class="mb-2 fw-bold" style="color: #06132b">
               Thanh toán đơn hàng
             </h4>
 
-            <div
-              class="timer-box d-flex align-items-center justify-content-center gap-2 mb-2 p-2 rounded-3"
-              style="
+            <div class="timer-box d-flex align-items-center justify-content-center gap-2 mb-2 p-2 rounded-3" style="
                 background-color: #fef2f2;
                 color: #dc2626;
                 border: 1px solid #fecaca;
                 width: 100%;
-              "
-            >
+              ">
               <i class="bi bi-clock-history fs-5"></i>
               <span class="fs-5 fw-bold">{{ formattedCountdown }}</span>
             </div>
@@ -87,12 +57,8 @@
                 Vui lòng mở ứng dụng ngân hàng và quét mã QR bên dưới để hoàn
                 tất.
               </p>
-              <img
-                :src="qrCodeUrl"
-                alt="Mã VietQR"
-                class="img-fluid rounded mb-3"
-                style="border: 2px dashed #bd9a5f; padding: 8px"
-              />
+              <img :src="qrCodeUrl" alt="Mã VietQR" class="img-fluid rounded mb-3"
+                style="border: 2px dashed #bd9a5f; padding: 8px" />
             </template>
 
             <template v-if="currentPaymentMethod === 'VNPAY'">
@@ -103,37 +69,26 @@
             </template>
 
             <div class="d-flex gap-2 w-100 mt-2 flex-wrap">
-              <button
-                @click="handleCancelPayment"
-                class="btn btn-outline-danger flex-grow-1 py-3 fw-bold rounded-3"
-                style="font-size: 0.9rem"
-              >
+              <button @click="handleCancelPayment" class="btn btn-outline-danger flex-grow-1 py-3 fw-bold rounded-3"
+                style="font-size: 0.9rem">
                 Hủy thanh toán
               </button>
 
-              <button
-                v-if="currentPaymentMethod === 'VIETQR'"
-                @click="confirmQrPayment"
-                class="btn btn-success flex-grow-1 py-3 fw-bold rounded-3"
-                style="
+              <button v-if="currentPaymentMethod === 'VIETQR'" @click="confirmQrPayment"
+                class="btn btn-success flex-grow-1 py-3 fw-bold rounded-3" style="
                   background-color: #10b981;
                   border: none;
                   font-size: 0.9rem;
-                "
-              >
+                ">
                 Đã chuyển khoản <i class="bi bi-check-circle ms-1"></i>
               </button>
 
-              <button
-                v-if="currentPaymentMethod === 'VNPAY'"
-                @click="goToVnpayGateway"
-                class="btn btn-primary flex-grow-1 py-3 fw-bold rounded-3"
-                style="
+              <button v-if="currentPaymentMethod === 'VNPAY'" @click="goToVnpayGateway"
+                class="btn btn-primary flex-grow-1 py-3 fw-bold rounded-3" style="
                   background-color: #0284c7;
                   border: none;
                   font-size: 0.9rem;
-                "
-              >
+                ">
                 Thanh toán ngay <i class="bi bi-box-arrow-up-right ms-1"></i>
               </button>
             </div>
@@ -143,18 +98,10 @@
 
       <Transition name="fade-modal">
         <div v-if="showSuccessModal" class="premium-modal-overlay">
-          <OrderResultCard
-            mode="success"
-            title="Đặt hàng thành công!"
-            :message="successMessage"
-            :status-text="successStatusText"
-            :details="successDetails"
-            primary-text="Tiếp tục mua sắm"
-            secondary-text="Xem lịch sử đơn hàng"
-            primary-icon="bi bi-arrow-right ms-2"
-            @primary="goToHome"
-            @secondary="goToOrders"
-          />
+          <OrderResultCard mode="success" title="Đặt hàng thành công!" :message="successMessage"
+            :status-text="successStatusText" :details="successDetails" primary-text="Tiếp tục mua sắm"
+            secondary-text="Xem lịch sử đơn hàng" primary-icon="bi bi-arrow-right ms-2" @primary="goToHome"
+            @secondary="goToOrders" />
         </div>
       </Transition>
     </Teleport>
@@ -277,19 +224,19 @@ const getCartItemKey = (item: any) =>
 const getProductVariantId = (item: any) =>
   Number(
     item?.productVariantId ||
-      item?.variantId ||
-      item?.productVariant?.id ||
-      item?.id ||
-      0
+    item?.variantId ||
+    item?.productVariant?.id ||
+    item?.id ||
+    0
   );
 const getCartItemId = (item: any) => Number(item?.cartItemId || item?.id || 0);
 const getItemPrice = (item: any) =>
   Number(
     item?.price ??
-      item?.salePrice ??
-      item?.finalPrice ??
-      item?.originalPrice ??
-      0
+    item?.salePrice ??
+    item?.finalPrice ??
+    item?.originalPrice ??
+    0
   );
 
 const getItemSellableQuantity = (item: any) => {
@@ -390,8 +337,6 @@ const refreshCheckoutAtPromotionExpiry = async () => {
 
   isPromotionRefreshing.value = true;
 
-  // Đảm bảo CheckoutSummary nhận cờ này trước khi totalAmount thay đổi,
-  // để không hiểu việc Flash Sale hết hạn là khách tự sửa giỏ hàng.
   await nextTick();
 
   try {
@@ -488,7 +433,6 @@ const handleApplyVoucher = (discount: number, code: string) => {
   else localStorage.removeItem("applied_voucher");
 };
 
-// ĐÃ SỬA: Xóa tận gốc mọi tàn dư của Voucher khi nhấn nút Hủy
 const handleCancelVoucher = () => {
   discountAmount.value = 0;
   appliedVoucherCode.value = "";
@@ -553,9 +497,9 @@ const validateCheckoutForm = async (): Promise<any | null> => {
         "Sản phẩm không thể đặt hàng",
         String(
           item?.unavailableReason ||
-            `${getItemDisplayName(
-              item
-            )} hiện đang ngừng bán hoặc không còn khả dụng.`
+          `${getItemDisplayName(
+            item
+          )} hiện đang ngừng bán hoặc không còn khả dụng.`
         )
       );
       return null;
@@ -639,30 +583,30 @@ const loadCartSummary = async () => {
           try {
             const productId = Number(
               item?.productId ||
-                item?.ProductId ||
-                item?.product?.id ||
-                item?.product?.productId ||
-                item?.Product?.id ||
-                item?.Product?.productId ||
-                item?.productVariant?.productId ||
-                item?.productVariant?.product?.id ||
-                item?.ProductVariant?.ProductId ||
-                item?.ProductVariant?.Product?.Id ||
-                item?.variant?.productId ||
-                item?.variant?.product?.id ||
-                0
+              item?.ProductId ||
+              item?.product?.id ||
+              item?.product?.productId ||
+              item?.Product?.id ||
+              item?.Product?.productId ||
+              item?.productVariant?.productId ||
+              item?.productVariant?.product?.id ||
+              item?.ProductVariant?.ProductId ||
+              item?.ProductVariant?.Product?.Id ||
+              item?.variant?.productId ||
+              item?.variant?.product?.id ||
+              0
             );
             const variantId = Number(
               item?.productVariantId ||
-                item?.ProductVariantId ||
-                item?.variantId ||
-                item?.VariantId ||
-                item?.productVariant?.id ||
-                item?.ProductVariant?.Id ||
-                item?.productVariant?.productVariantId ||
-                item?.variant?.id ||
-                item?.Variant?.Id ||
-                0
+              item?.ProductVariantId ||
+              item?.variantId ||
+              item?.VariantId ||
+              item?.productVariant?.id ||
+              item?.ProductVariant?.Id ||
+              item?.productVariant?.productVariantId ||
+              item?.variant?.id ||
+              item?.Variant?.Id ||
+              0
             );
 
             if (!productId) {
@@ -725,8 +669,8 @@ const loadCartSummary = async () => {
               const sellableQuantity = Math.max(
                 Number(
                   matchedVariant?.sellableQuantity ??
-                    item?.sellableQuantity ??
-                    0
+                  item?.sellableQuantity ??
+                  0
                 ) || 0,
                 0
               );
@@ -751,8 +695,8 @@ const loadCartSummary = async () => {
                   (variantStatus !== 1
                     ? "Sản phẩm đang ngừng bán."
                     : sellableQuantity <= 0
-                    ? "Sản phẩm hiện không còn tồn có thể bán."
-                    : null),
+                      ? "Sản phẩm hiện không còn tồn có thể bán."
+                      : null),
 
                 product: productData,
                 productVariant: matchedVariant,
@@ -852,9 +796,9 @@ const loadSavedVoucher = async () => {
     if (matchedVoucher) {
       const minOrder = Number(
         matchedVoucher.minOrderValue ||
-          matchedVoucher.minimumOrderValue ||
-          matchedVoucher.minOrderAmount ||
-          0
+        matchedVoucher.minimumOrderValue ||
+        matchedVoucher.minOrderAmount ||
+        0
       );
       if (totalAmount.value >= minOrder) {
         const type = String(
@@ -862,16 +806,16 @@ const loadSavedVoucher = async () => {
         ).toUpperCase();
         const value = Number(
           matchedVoucher.discountValue ||
-            matchedVoucher.value ||
-            matchedVoucher.discount ||
-            0
+          matchedVoucher.value ||
+          matchedVoucher.discount ||
+          0
         );
         const maxDiscount = Number(
           matchedVoucher.maxDiscount ||
-            matchedVoucher.maxDiscountAmount ||
-            matchedVoucher.maximumDiscountAmount ||
-            matchedVoucher.maxAmount ||
-            0
+          matchedVoucher.maxDiscountAmount ||
+          matchedVoucher.maximumDiscountAmount ||
+          matchedVoucher.maxAmount ||
+          0
         );
 
         let calc = 0;
@@ -894,10 +838,10 @@ const loadSavedVoucher = async () => {
       resApply.data?.data ?? resApply.data?.result ?? resApply.data;
     const discount = Number(
       respData?.discountAmount ||
-        respData?.discountValue ||
-        respData?.discount ||
-        respData?.amount ||
-        0
+      respData?.discountValue ||
+      respData?.discount ||
+      respData?.amount ||
+      0
     );
     discountAmount.value = Math.min(
       Math.max(discount, 0),
@@ -914,8 +858,6 @@ const handleUpdateQuantity = async (item: any, quantity: number) => {
 
   const sellableQuantity = getItemSellableQuantity(item);
 
-  // 💥 ĐÃ SỬA: CHỈ CHẶN NẾU ĐANG CỐ TÌNH TĂNG THÊM VƯỢT TỒN KHO.
-  // NẾU GIẢM (quantity < item.quantity) THÌ VẪN PHẢI CHO GIẢM ĐỂ FIX LỖI "KẸT GIỎ"
   if (quantity > sellableQuantity && quantity > Number(item.quantity || 0)) {
     await showWarning(
       "Không đủ tồn kho",
@@ -926,7 +868,6 @@ const handleUpdateQuantity = async (item: any, quantity: number) => {
     return;
   }
 
-  // Ép số lượng cập nhật không được vượt quá số lượng tối đa hiện có trong kho
   const finalQuantity = Math.min(quantity, sellableQuantity);
 
   try {
@@ -987,7 +928,7 @@ const handlePlaceOrder = async () => {
     successMessage.value =
       respData?.message ??
       res.data?.message ??
-      "Cảm ơn bạn đã mua sắm tại Dominus.";
+      "Cảm ơn bạn đã mua sắm tại Dominus. Đơn hàng của bạn đang chờ cửa hàng xác nhận.";
 
     const confirmedSubtotal = Number(
       respData?.totalAmount ?? res.data?.totalAmount ?? feSubtotal
@@ -1018,17 +959,17 @@ const handlePlaceOrder = async () => {
         label: "Phương thức",
         value: formatPaymentMethod(
           respData?.paymentMethod ??
-            res.data?.paymentMethod ??
-            orderPayload.paymentMethod
+          res.data?.paymentMethod ??
+          orderPayload.paymentMethod
         ),
       },
       ...(confirmedDiscount > 0
         ? [
-            {
-              label: "Mã giảm giá",
-              value: feVoucherCode || "Đã áp dụng",
-            },
-          ]
+          {
+            label: "Mã giảm giá",
+            value: feVoucherCode || "Đã áp dụng",
+          },
+        ]
         : []),
       {
         label: "Tạm tính",
@@ -1037,12 +978,12 @@ const handlePlaceOrder = async () => {
       },
       ...(confirmedDiscount > 0
         ? [
-            {
-              label: "Giảm giá",
-              value: `-${formatCurrency(confirmedDiscount)}`,
-              money: true,
-            },
-          ]
+          {
+            label: "Giảm giá",
+            value: `-${formatCurrency(confirmedDiscount)}`,
+            money: true,
+          },
+        ]
         : []),
       {
         label: "Phí vận chuyển",
@@ -1131,14 +1072,22 @@ const cancelAndRestoreCart = async () => {
   stopPaymentTimer();
   try {
     isPageLoading.value = true;
-    if (createdOrderId.value) {
-      await api.patch(`/customer/orders/${createdOrderId.value}/cancel`, {
-        cancelReason: "Muốn thay đổi phương thức thanh toán",
+    
+    const orderIdToCancel = createdOrderId.value || localStorage.getItem('pendingVnpayOrderId');
+    createdOrderId.value = null;
+
+    if (orderIdToCancel) {
+      await api.patch(`/customer/orders/${orderIdToCancel}/cancel`, {
+        cancelReason: "Khác"
       });
+      localStorage.removeItem('pendingVnpayOrderId');
     }
 
-    if (cartSnapshot.value && cartSnapshot.value.length > 0) {
-      const addPromises = cartSnapshot.value.map((item: any) => {
+    const snapshotToRestore = [...cartSnapshot.value];
+    cartSnapshot.value = [];
+
+    if (snapshotToRestore && snapshotToRestore.length > 0) {
+      const addPromises = snapshotToRestore.map((item: any) => {
         const variantId = item.productVariantId || item.variantId || item.id;
         return api.post("/v1/customer/cart/add", {
           productVariantId: Number(variantId),
@@ -1159,7 +1108,7 @@ const cancelAndRestoreCart = async () => {
       position: "top-end",
       icon: "info",
       title: "Chưa thanh toán",
-      text: "Bạn vừa rời khỏi quá trình thanh toán.",
+      text: "Giỏ hàng đã được khôi phục để bạn tiếp tục mua sắm.",
       showConfirmButton: false,
       timer: 3500,
     });
@@ -1208,6 +1157,11 @@ const goToVnpayGateway = () => {
   );
   sessionStorage.setItem("pending_vnpay_order", String(createdOrderId.value));
   sessionStorage.setItem("pending_vnpay_form", JSON.stringify(orderForm.value));
+  
+  if (createdOrderId.value) {
+    localStorage.setItem('pendingVnpayOrderId', String(createdOrderId.value));
+  }
+
   if (appliedVoucherCode.value)
     sessionStorage.setItem("pending_vnpay_voucher", appliedVoucherCode.value);
   window.location.href = vnpayUrl.value;
@@ -1227,7 +1181,6 @@ const confirmQrPayment = async () => {
   isConfirmingQrPayment.value = true;
 
   try {
-    // BE là source of truth: chỉ báo thành công sau khi report-payment đã ghi nhận xong.
     await api.post(`/v1/orders/${createdOrderId.value}/report-payment`);
 
     stopPaymentTimer();
@@ -1244,14 +1197,12 @@ const confirmQrPayment = async () => {
       const map = saved ? JSON.parse(saved) : {};
       map[String(createdOrderId.value)] = true;
       localStorage.setItem("dominus_paid_orders", JSON.stringify(map));
-    } catch (e) {}
+    } catch (e) { }
 
     setTimeout(() => {
       showSuccessModal.value = true;
     }, 200);
   } catch (error: any) {
-    // Nếu timer đã hết đúng lúc đang chờ BE, xử lý timeout sau khi request thất bại
-    // để không cho report-payment và cancel chạy song song trên cùng Order.
     if (paymentCountdown.value <= 0) {
       isConfirmingQrPayment.value = false;
       showPaymentModal.value = false;
@@ -1315,6 +1266,7 @@ const clearPendingVnpayBackup = () => {
   sessionStorage.removeItem("pending_vnpay_cart");
   sessionStorage.removeItem("pending_vnpay_form");
   sessionStorage.removeItem("pending_vnpay_voucher");
+  localStorage.removeItem("pendingVnpayOrderId");
   sessionStorage.removeItem(PENDING_VNPAY_OUTCOME_KEY);
 };
 
@@ -1325,7 +1277,7 @@ const restorePendingVnpayFormAndVoucher = () => {
     try {
       Object.assign(orderForm.value, JSON.parse(pendingForm));
       formKey.value++;
-    } catch {}
+    } catch { }
   }
 
   const pendingVoucher = sessionStorage.getItem("pending_vnpay_voucher");
@@ -1344,10 +1296,10 @@ const restorePendingVnpayCart = async (items: any[]) => {
   for (const item of items) {
     const variantId = Number(
       item?.productVariantId ||
-        item?.variantId ||
-        item?.productVariant?.id ||
-        item?.id ||
-        0
+      item?.variantId ||
+      item?.productVariant?.id ||
+      item?.id ||
+      0
     );
 
     const quantity = Number(item?.quantity || 1);
@@ -1363,13 +1315,24 @@ const restorePendingVnpayCart = async (items: any[]) => {
   }
 };
 
+// Khóa đồng bộ chống gọi trùng lặp (race condition) do pageshow và onMounted kích hoạt song song
+let isRestoringBackup = false;
+
 const checkAndRestoreVnpayBackup = async () => {
+  if (isRestoringBackup) {
+    return false;
+  }
+
   const pendingOrder = sessionStorage.getItem("pending_vnpay_order");
   const pendingCart = sessionStorage.getItem("pending_vnpay_cart");
 
   if (!pendingOrder || !pendingCart) {
     return false;
   }
+
+  // Khóa ngay lập tức trước khi thực hiện bất kỳ async await nào
+  isRestoringBackup = true;
+  clearPendingVnpayBackup();
 
   isPageLoading.value = true;
   showPaymentModal.value = false;
@@ -1390,20 +1353,17 @@ const checkAndRestoreVnpayBackup = async () => {
       (outcome?.success === true || outcomeStatus === 1 || outcomeStatus === 3);
 
     if (alreadyPaidOrCompleted) {
-      clearPendingVnpayBackup();
       localStorage.removeItem("applied_voucher");
+      isRestoringBackup = false;
       return false;
     }
 
-    const confirmedCancelled =
-      sameOrder && outcome?.success === false && outcomeStatus === 4;
-
-    if (!confirmedCancelled) {
-      await showWarning(
-        "Đang chờ xác minh VNPay",
-        "Chưa có kết quả thất bại chính thức từ máy chủ nên hệ thống chưa tự khôi phục giỏ hàng để tránh tạo đơn trùng sau khi khách đã thanh toán. Vui lòng kiểm tra lại kết quả giao dịch hoặc lịch sử đơn hàng."
-      );
-      return false;
+    try {
+      await api.patch(`/customer/orders/${pendingOrder}/cancel`, {
+        cancelReason: "Khác"
+      });
+    } catch (e) {
+      console.error("Lỗi khi hủy đơn tự động:", e);
     }
 
     const items = JSON.parse(pendingCart);
@@ -1419,8 +1379,6 @@ const checkAndRestoreVnpayBackup = async () => {
     vnpayUrl.value = "";
     qrCodeUrl.value = "";
 
-    clearPendingVnpayBackup();
-
     window.dispatchEvent(new Event("cart-updated"));
     await loadCartSummary();
 
@@ -1428,19 +1386,28 @@ const checkAndRestoreVnpayBackup = async () => {
       await loadSavedVoucher();
     }
 
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "info",
+      title: "Chưa thanh toán",
+      text: "Giỏ hàng đã được khôi phục để bạn tiếp tục mua sắm.",
+      showConfirmButton: false,
+      timer: 3500,
+    });
+
     return true;
   } catch (error: any) {
     await showError(
-      "Không thể khôi phục giỏ hàng",
-      getErrorMessage(
-        error,
-        "Đơn VNPay đã được hủy nhưng chưa thể khôi phục đầy đủ giỏ hàng. Vui lòng tải lại trang và thử lại."
-      )
+      "Lỗi khôi phục giỏ hàng",
+      "Có lỗi xảy ra khi khôi phục giỏ hàng của bạn. Vui lòng tải lại trang."
     );
 
     return false;
   } finally {
     isPageLoading.value = false;
+    // Mở khóa sau khi hoàn tất xử lý
+    isRestoringBackup = false;
   }
 };
 
@@ -1471,7 +1438,7 @@ onMounted(async () => {
         delete parsedDraft.wardName;
         delete parsedDraft.specificAddress;
         Object.assign(orderForm.value, parsedDraft);
-      } catch (e) {}
+      } catch (e) { }
     }
 
     await checkAndRestoreVnpayBackup();
@@ -1500,6 +1467,7 @@ onUnmounted(() => {
   padding-bottom: 50px;
   color: #06132b;
 }
+
 .main-content.full-width {
   max-width: 1400px;
   width: 100%;
@@ -1509,6 +1477,7 @@ onUnmounted(() => {
   gap: 30px;
   align-items: flex-start;
 }
+
 .checkout-loading {
   width: 100%;
   min-height: 380px;
@@ -1522,6 +1491,7 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 12px;
 }
+
 .premium-modal-overlay {
   position: fixed;
   inset: 0;
@@ -1533,25 +1503,30 @@ onUnmounted(() => {
   z-index: 9999;
   padding: 24px;
 }
+
 @keyframes slideUp {
   from {
     opacity: 0;
     transform: translateY(30px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
+
 .fade-modal-enter-active,
 .fade-modal-leave-active {
   transition: all 0.3s ease;
 }
+
 .fade-modal-enter-from,
 .fade-modal-leave-to {
   opacity: 0;
   transform: scale(0.9);
 }
+
 @media (max-width: 992px) {
   .main-content.full-width {
     flex-direction: column;
