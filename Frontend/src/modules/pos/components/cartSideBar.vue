@@ -1309,26 +1309,40 @@ const shouldShowCustomerSaveControls = computed(() => {
   );
 });
 
-const isCashierTransferTarget = (employee: any) => {
-  return (
-    String(employee?.roleName || "")
-      .trim()
-      .toUpperCase() === "CASHIER"
-  );
-};
-
 const filteredTransferTargets = computed(() => {
   const keyword = transferKeyword.value.trim().toLowerCase();
 
-  const cashierTargets = (posStore.transferTargets || []).filter(
-    isCashierTransferTarget
+  /*
+   * Tìm nhân viên hiện đang giữ chính đơn được chuyển.
+   * Người đó không phải là "đích chuyển" hợp lệ vì đơn đã thuộc họ.
+   */
+  const currentHeldOrder = (posStore.heldOrders || []).find(
+    (held: any) =>
+      Number(held.orderId) === Number(transferOrderId.value || 0)
+  );
+
+  const currentCashierId = Number(currentHeldOrder?.cashierId || 0);
+
+  /*
+   * BE đã lọc:
+   * - ACTIVE
+   * - CASHIER / MANAGER / OWNER
+   * - không phải người đang đăng nhập
+   *
+   * FE chỉ loại thêm người đang giữ chính đơn này
+   * để không cho người dùng chọn một thao tác vô nghĩa.
+   */
+  const transferTargets = (posStore.transferTargets || []).filter(
+    (employee: any) =>
+      !currentCashierId ||
+      Number(employee.employeeId) !== currentCashierId
   );
 
   if (!keyword) {
-    return cashierTargets;
+    return transferTargets;
   }
 
-  return cashierTargets.filter((employee) => {
+  return transferTargets.filter((employee) => {
     return (
       String(employee.employeeCode || "")
         .toLowerCase()
