@@ -132,6 +132,11 @@ const routes: Array<RouteRecordRaw> = [
     name: "Register",
     component: () => import("@/modules/auth/views/RegisterView.vue"),
   },
+        {
+  path: '/login/employee',
+  name: 'EmployeeLoginView',
+  component: () => import('@/modules/auth/views/EmployeeLoginView.vue')
+},
 
   // ==========================================
   // ADMIN

@@ -709,9 +709,17 @@ const formatDisplayPrice = (price?: number) => {
 
 const onPriceInput = (index: any, event: Event) => {
   const input = event.target as HTMLInputElement;
-  const rawValue = input.value.replace(/\D/g, "");
+  let rawValue = input.value.replace(/\D/g, "");
+  
+  // Cắt chuỗi để chỉ lấy tối đa 10 chữ số đầu tiên
+  if (rawValue.length > 10) {
+    rawValue = rawValue.slice(0, 10);
+  }
+
   const numericValue = rawValue ? Number(rawValue) : 0;
   formData.value.variants[index].price = numericValue;
+  
+  // Format lại hiển thị với dấu phẩy
   input.value = rawValue
     ? new Intl.NumberFormat("en-US").format(numericValue)
     : "";
