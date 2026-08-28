@@ -2940,7 +2940,7 @@ watch(
   font-weight: 700;
 }
 .product-name {
-  font-family: var(--aura-serif);
+   font-family: Arial, "Segoe UI", sans-serif;
   font-size: 17px;
   font-weight: 700;
   color: var(--aura-black);
