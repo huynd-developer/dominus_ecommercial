@@ -238,13 +238,9 @@ const formatMoney = (value: number): string => {
  * Ưu tiên sellableQuantity từ InventoryLot.
  * stockQuantity chỉ giữ làm fallback compatibility trong giai đoạn migrate.
  */
-const getProductSellableQuantity = (
-  product?: PosProduct | null
-): number => {
+const getProductSellableQuantity = (product?: PosProduct | null): number => {
   const quantity = Number(
-    product?.sellableQuantity ??
-      product?.stockQuantity ??
-      0
+    product?.sellableQuantity ?? product?.stockQuantity ?? 0
   );
 
   if (!Number.isFinite(quantity) || quantity <= 0) {
@@ -362,7 +358,9 @@ const getBackendStatus = (error: any): number => {
 };
 
 const isStaleSensitivePosMessage = (message?: string | null): boolean => {
-  const value = String(message || "").trim().toLowerCase();
+  const value = String(message || "")
+    .trim()
+    .toLowerCase();
 
   if (!value) return false;
 
@@ -384,10 +382,7 @@ const shouldRefreshAfterStaleSensitiveError = (
   error: any,
   message?: string | null
 ): boolean => {
-  return (
-    getBackendStatus(error) === 409 ||
-    isStaleSensitivePosMessage(message)
-  );
+  return getBackendStatus(error) === 409 || isStaleSensitivePosMessage(message);
 };
 
 const isPendingPaymentNotFoundMessage = (message?: string | null): boolean => {
@@ -502,12 +497,7 @@ const mapPosProductFromBackend = (
    * stockQuantity chỉ map cùng giá trị để giữ compatibility.
    */
   const sellableQuantity = Math.max(
-    Number(
-      raw.sellableQuantity ??
-        raw.stockQuantity ??
-        raw.stock ??
-        0
-    ) || 0,
+    Number(raw.sellableQuantity ?? raw.stockQuantity ?? raw.stock ?? 0) || 0,
     0
   );
 
@@ -524,9 +514,7 @@ const mapPosProductFromBackend = (
   let sellable = raw.sellable;
 
   if (sellable == null) {
-    sellable =
-      Number(status ?? 1) === 1 &&
-      sellableQuantity > 0;
+    sellable = Number(status ?? 1) === 1 && sellableQuantity > 0;
   }
 
   return {
@@ -2403,8 +2391,12 @@ export const usePosStore = defineStore("posStore", {
           }
 
           return (
-            String(product?.sku || "").trim().toLowerCase() ===
-            String(currentProduct?.sku || "").trim().toLowerCase()
+            String(product?.sku || "")
+              .trim()
+              .toLowerCase() ===
+            String(currentProduct?.sku || "")
+              .trim()
+              .toLowerCase()
           );
         });
 
@@ -2466,16 +2458,11 @@ export const usePosStore = defineStore("posStore", {
           },
         });
 
-        this.voucherCode = String(
-          data?.voucherCode || data?.code || cleanCode
-        )
+        this.voucherCode = String(data?.voucherCode || data?.code || cleanCode)
           .trim()
           .toUpperCase();
 
-        this.discountAmount = Math.max(
-          Number(data?.discountAmount || 0),
-          0
-        );
+        this.discountAmount = Math.max(Number(data?.discountAmount || 0), 0);
       } catch {
         /*
          * Voucher có thể vừa bị khóa/hết hạn/hết lượt/đổi điều kiện.
@@ -3191,11 +3178,7 @@ export const usePosStore = defineStore("posStore", {
       );
 
       const sellable =
-        item.sellable ??
-        (
-          Number(status ?? 1) === 1 &&
-          sellableQuantity > 0
-        );
+        item.sellable ?? (Number(status ?? 1) === 1 && sellableQuantity > 0);
 
       const product: PosProduct = {
         id: Number(item.variantId || item.productVariantId || item.id || 0),
@@ -3339,9 +3322,14 @@ export const usePosStore = defineStore("posStore", {
         this.activeHeldOrderCanCheckout = data.canCheckout !== false;
         this.activeHeldOrderCanTransfer = data.canTransfer !== false;
         this.activeHeldOrderCanCancel = data.canCancel !== false;
-        if (this.cart.length > 0) {
-          await this.fetchAvailableVouchers();
-        }
+        /*
+         * Đơn lưu tạm có thể đã được tạo khi voucher còn hiệu lực,
+         * nhưng lúc mở lại voucher có thể đã hết hạn/hết lượt/bị khóa/đổi điều kiện.
+         *
+         * Không được chỉ restore snapshot voucher cũ.
+         * Phải revalidate voucher đang gắn với tổng tiền hiện tại.
+         */
+        await this.revalidateSelectedVoucherForCurrentTotal();
 
         const openedTotalQuantity = this.cart.reduce((total, item) => {
           return total + Number(item.quantity || 0);

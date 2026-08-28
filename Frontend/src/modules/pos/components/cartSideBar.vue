@@ -871,6 +871,166 @@ import { usePosStore } from "@/modules/pos/stores/posStore";
 
 const posStore = usePosStore();
 const router = useRouter();
+const VOUCHER_AUTO_SYNC_MS = 30_000;
+
+let voucherAutoSyncTimer: ReturnType<typeof setInterval> | null = null;
+let voucherAutoSyncPromise: Promise<void> | null = null;
+/*
+ * Timer chạy đúng mốc startDate/endDate của voucher.
+ *
+ * Interval 30 giây phía dưới vẫn giữ làm fallback khi:
+ * - Admin sửa voucher ở nơi khác
+ * - voucher bị khóa/hết lượt
+ * - dữ liệu thay đổi không phải do thời gian
+ *
+ * Voucher start/end đã biết thì KHÔNG phải chờ 30 giây.
+ */
+let voucherBoundaryTimer: ReturnType<typeof setTimeout> | null = null;
+
+const VOUCHER_BOUNDARY_EPSILON_MS = 100;
+const VOUCHER_BOUNDARY_RETRY_MS = 300;
+const MAX_SAFE_TIMEOUT_MS = 2_147_000_000;
+const syncVoucherByTime = async () => {
+  if (voucherAutoSyncPromise) {
+    await voucherAutoSyncPromise;
+    return;
+  }
+
+  if (
+    document.visibilityState === "hidden" ||
+    posStore.cart.length === 0 ||
+    posStore.isOrderLocked ||
+    posStore.isLoading
+  ) {
+    return;
+  }
+
+  voucherAutoSyncPromise = (async () => {
+    await posStore.revalidateSelectedVoucherForCurrentTotal();
+  })();
+
+  try {
+    await voucherAutoSyncPromise;
+  } finally {
+    voucherAutoSyncPromise = null;
+
+    scheduleNextVoucherBoundary();
+  }
+};
+
+const parseVoucherBoundaryTime = (value?: string | null): number | null => {
+  if (!value) {
+    return null;
+  }
+
+  const timestamp = new Date(value).getTime();
+
+  if (!Number.isFinite(timestamp)) {
+    return null;
+  }
+
+  return timestamp;
+};
+
+const getNextVoucherBoundaryAt = (): number | null => {
+  const now = Date.now();
+  let nextBoundary: number | null = null;
+
+  for (const voucher of posStore.availableVouchers || []) {
+    const boundaries = [
+      parseVoucherBoundaryTime(voucher.startDate),
+      parseVoucherBoundaryTime(voucher.endDate),
+    ];
+
+    for (const boundary of boundaries) {
+      if (boundary === null || boundary <= now) {
+        continue;
+      }
+
+      if (nextBoundary === null || boundary < nextBoundary) {
+        nextBoundary = boundary;
+      }
+    }
+  }
+
+  return nextBoundary;
+};
+
+function scheduleNextVoucherBoundary() {
+  if (voucherBoundaryTimer) {
+    clearTimeout(voucherBoundaryTimer);
+    voucherBoundaryTimer = null;
+  }
+
+  /*
+   * Không được tự thay voucher sau khi đơn đã nhận tiền
+   * hoặc đã tạo payment intent.
+   */
+  if (
+    document.visibilityState === "hidden" ||
+    posStore.cart.length === 0 ||
+    posStore.isOrderLocked
+  ) {
+    return;
+  }
+
+  const nextBoundary = getNextVoucherBoundaryAt();
+
+  if (nextBoundary === null) {
+    return;
+  }
+
+  /*
+   * +100ms để chắc chắn đã vượt qua đúng mốc thời gian BE.
+   */
+  const delay = Math.min(
+    Math.max(nextBoundary - Date.now() + VOUCHER_BOUNDARY_EPSILON_MS, 0),
+    MAX_SAFE_TIMEOUT_MS
+  );
+
+  voucherBoundaryTimer = setTimeout(() => {
+    voucherBoundaryTimer = null;
+    void handleVoucherBoundaryReached();
+  }, delay);
+}
+
+async function handleVoucherBoundaryReached() {
+  if (
+    document.visibilityState === "hidden" ||
+    posStore.cart.length === 0 ||
+    posStore.isOrderLocked
+  ) {
+    return;
+  }
+
+  /*
+   * Nếu đúng thời điểm voucher đổi trạng thái mà POS đang xử lý
+   * request khác thì không chen ngang.
+   *
+   * Retry rất ngắn sau khi request hiện tại kết thúc.
+   */
+  if (posStore.isLoading) {
+    voucherBoundaryTimer = setTimeout(() => {
+      voucherBoundaryTimer = null;
+      void handleVoucherBoundaryReached();
+    }, VOUCHER_BOUNDARY_RETRY_MS);
+
+    return;
+  }
+
+  await syncVoucherByTime();
+}
+
+const handleVoucherVisibilityChange = () => {
+  /*
+   * Khi quay lại tab POS, đồng bộ voucher ngay.
+   * Không cần click dropdown và không reload trang.
+   */
+  if (document.visibilityState === "visible") {
+    void syncVoucherByTime();
+  }
+};
+
 const handleTransferHeldOrderEvent = async (event: Event) => {
   const customEvent = event as CustomEvent;
   const orderId = Number(customEvent.detail?.orderId || 0);
@@ -908,6 +1068,24 @@ onMounted(() => {
   );
 
   window.addEventListener("pos-cancel-held-order", handleCancelHeldOrderEvent);
+
+  /*
+   * Quay lại tab POS thì đồng bộ voucher ngay.
+   */
+  document.addEventListener("visibilitychange", handleVoucherVisibilityChange);
+
+  /*
+   * Đồng bộ lần đầu.
+   */
+  void syncVoucherByTime();
+
+  /*
+   * Khi POS đang được mở trước mặt,
+   * cứ 30 giây đồng bộ voucher một lần.
+   */
+  voucherAutoSyncTimer = setInterval(() => {
+    void syncVoucherByTime();
+  }, VOUCHER_AUTO_SYNC_MS);
 });
 
 onUnmounted(() => {
@@ -920,6 +1098,21 @@ onUnmounted(() => {
     "pos-cancel-held-order",
     handleCancelHeldOrderEvent
   );
+
+  document.removeEventListener(
+    "visibilitychange",
+    handleVoucherVisibilityChange
+  );
+
+  if (voucherAutoSyncTimer) {
+    clearInterval(voucherAutoSyncTimer);
+    voucherAutoSyncTimer = null;
+  }
+
+  if (voucherBoundaryTimer) {
+    clearTimeout(voucherBoundaryTimer);
+    voucherBoundaryTimer = null;
+  }
 });
 
 const customerPhoneInput = ref("");
@@ -1335,9 +1528,11 @@ const openVoucherDropdown = async () => {
 
   showVoucherDropdown.value = true;
 
-  if (!posStore.availableVouchers || posStore.availableVouchers.length === 0) {
-    await posStore.fetchAvailableVouchers();
-  }
+  /*
+   * Mỗi lần mở danh sách thì đồng bộ voucher hiện tại.
+   * Không phụ thuộc list đang rỗng hay không.
+   */
+  await syncVoucherByTime();
 };
 
 const scheduleCloseVoucherDropdown = () => {
@@ -1365,7 +1560,7 @@ const toggleVoucherDropdown = async () => {
 
 const handleRefreshVouchers = async () => {
   showVoucherDropdown.value = true;
-  await posStore.fetchAvailableVouchers();
+  await syncVoucherByTime();
 };
 
 const handleSelectVoucher = async (voucher: any) => {
@@ -1622,6 +1817,27 @@ watch(
   { immediate: true }
 );
 
+/*
+ * Khi API trả danh sách voucher mới hoặc cart/lock thay đổi,
+ * tính lại chính xác mốc startDate/endDate gần nhất.
+ */
+watch(
+  () => [
+    posStore.cart.length,
+    posStore.isOrderLocked,
+    (posStore.availableVouchers || [])
+      .map(
+        (voucher) =>
+          `${voucher.code}|${voucher.startDate || ""}|${voucher.endDate || ""}`
+      )
+      .join("||"),
+  ],
+  () => {
+    scheduleNextVoucherBoundary();
+  },
+  { immediate: true }
+);
+
 const getActiveOnlinePaymentOrderId = () => {
   /*
    * Chỉ coi là hóa đơn online đang chờ khi có id pending thật sự.
@@ -1852,10 +2068,6 @@ const handleHoldOrder = async () => {
 
   const wasUpdatingHeldOrder = Boolean(posStore.activeHeldOrderId);
 
-  /*
-   * Nếu chưa mở đơn lưu tạm thì check trùng SĐT trước khi tạo đơn lưu tạm mới.
-   * Nếu đang mở đơn lưu tạm thì cho cập nhật chính đơn lưu tạm đó.
-   */
   if (!posStore.activeHeldOrderId) {
     const currentPhone = normalizePhone(
       posStore.customer?.phone || customerPhoneInput.value
@@ -1871,16 +2083,16 @@ const handleHoldOrder = async () => {
       const message = `Khách hàng này đang có đơn lưu tạm #${duplicatedHeldOrder.orderId} chưa thanh toán. Vui lòng mở đơn lưu tạm đó ở khu Đơn hàng đang xử lý để cập nhật sản phẩm.`;
 
       setPosError(message);
-
-      /*
-       * Header đang là nơi hiển thị đơn lưu tạm,
-       * nên chỉ cần reload danh sách, không mở panel bên cart nữa.
-       */
       await posStore.fetchHeldOrders();
-
       return;
     }
   }
+
+  /*
+   * Voucher có thể vừa hết hạn/đổi điều kiện.
+   * Chờ sync xong trước khi build payload lưu đơn.
+   */
+  await syncVoucherByTime();
 
   const result = await posStore.holdCurrentOrder();
 
@@ -1902,9 +2114,6 @@ const handleHoldOrder = async () => {
   showCashModal.value = false;
   closeTransferModal();
 
-  /*
-   * Sau khi lưu/cập nhật, reload header đơn lưu tạm.
-   */
   await posStore.fetchHeldOrders();
 
   showPosToast(
@@ -1912,18 +2121,6 @@ const handleHoldOrder = async () => {
       ? "Đã cập nhật đơn lưu tạm thành công."
       : "Đã lưu tạm đơn thành công. Đơn đã hiển thị ở phía trên."
   );
-};
-
-const handleOpenHeldOrder = async (orderId: number) => {
-  const result = await posStore.openHeldOrder(orderId);
-
-  if (result && posStore.customer?.phone) {
-    customerPhoneInput.value = normalizePhone(posStore.customer.phone);
-  }
-
-  if (result && posStore.voucherCode) {
-    await posStore.fetchAvailableVouchers();
-  }
 };
 
 const openTransferModal = async (orderId: number) => {
@@ -2196,6 +2393,8 @@ const handleCheckoutAction = async () => {
   if (!validateCustomerBeforeCheckout()) {
     return;
   }
+
+  await syncVoucherByTime();
 
   if (posStore.paymentMethod === "CASH") {
     displayCash.value = new Intl.NumberFormat("vi-VN").format(
@@ -2583,7 +2782,7 @@ const processCashPayment = async () => {
     posStore.errorMsg = "Vui lòng nhập số tiền khách đưa.";
     return;
   }
-
+  await syncVoucherByTime();
   if (cashAfterThisPayment.value < posStore.finalAmount) {
     const ok = posStore.registerPartialCashPayment(rawCashGiven.value);
 

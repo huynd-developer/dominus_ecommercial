@@ -2946,7 +2946,9 @@ watch(
   color: var(--aura-black);
   line-height: 1.28;
   margin: 0 0 10px;
+
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -3409,10 +3411,13 @@ watch(
   margin: 0 0 5px;
   text-align: center;
   line-height: 1.3;
+
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+
   cursor: pointer;
   transition: color 0.2s;
 }
@@ -3638,7 +3643,9 @@ watch(
   font-weight: 700;
   color: #0a142f;
   margin: 0 0 8px;
+
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -3758,7 +3765,9 @@ watch(
   color: #06132b;
   font-family: "Playfair Display", serif;
   line-height: 1.3;
+
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
