@@ -46,11 +46,17 @@ public class OrderController {
     /**
      * BỔ SUNG: API để lấy lại link thanh toán VNPay cho đơn hàng cũ (Nút "Thanh toán lại")
      */
+    /**
+     * BỔ SUNG: API để lấy lại link thanh toán VNPay cho đơn hàng cũ (Nút "Thanh toán lại")
+     */
     @GetMapping("/{orderId}/vnpay-url")
     @PreAuthorize("hasAuthority('USER')")
     public ResponseEntity<?> getVnPayUrl(@PathVariable Integer orderId) {
-        Map<String, Object> result = orderService.generateVnPayUrl(orderId);
-        return ResponseEntity.ok(result);
+        // Hứng kết quả kiểu String trả về từ Service
+        String paymentUrl = orderService.generateVnPayUrl(orderId);
+
+        // Bọc vào Map để trả về JSON chuẩn cho client
+        return ResponseEntity.ok(Map.of("paymentUrl", paymentUrl));
     }
 
     /**

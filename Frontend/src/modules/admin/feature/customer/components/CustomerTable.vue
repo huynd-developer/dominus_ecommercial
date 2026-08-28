@@ -7,8 +7,6 @@
           <th>Khách hàng</th>
           <th>Liên hệ</th>
           <th>Địa chỉ</th>
-          <th>Hạng</th>
-          <th>Điểm</th>
           <th>Ngày tạo</th>
           <th>Trạng thái</th>
           <th class="text-end">Thao tác</th>
@@ -17,14 +15,15 @@
 
       <tbody>
         <tr v-if="loading">
-          <td colspan="9" class="text-center py-5 text-muted">
+          <!-- ĐÃ SỬA: Giảm colspan từ 9 xuống 7 vì đã xóa 2 cột -->
+          <td colspan="7" class="text-center py-5 text-muted">
             <span class="spinner-border spinner-border-sm me-2"></span>
             Đang tải dữ liệu khách hàng...
           </td>
         </tr>
 
         <tr v-else-if="customers.length === 0">
-          <td colspan="9" class="text-center py-5 text-muted">
+          <td colspan="7" class="text-center py-5 text-muted">
             Không tìm thấy khách hàng nào
           </td>
         </tr>
@@ -58,22 +57,11 @@
             <div class="small text-muted">{{ customer.email }}</div>
           </td>
 
-          <!-- ĐÃ SỬA GỌI HÀM FORMAT ADDRESS Ở ĐÂY -->
           <td class="text-truncate" style="max-width: 230px" :title="formatAddress(customer.address)">
             {{ formatAddress(customer.address) }}
           </td>
 
-          <td>
-            <span class="badge rounded-pill text-bg-warning">
-              {{ customer.customerRank || "Bronze" }}
-            </span>
-          </td>
-
-          <td>
-            <span class="fw-semibold">
-              {{ customer.loyaltyPoints ?? 0 }}
-            </span>
-          </td>
+          <!-- ĐÃ XÓA 2 cột Hạng và Điểm ở đây -->
 
           <td>
             {{ formatDate(customer.createdAt) }}
@@ -152,17 +140,14 @@ const getStatusText = (status: number) => {
   return status === 1 ? "Đang hoạt động" : "Đã khóa";
 };
 
-// HÀM FORMAT ĐỊA CHỈ TỪ DANH SÁCH BẢNG CUSTOMER_ADDRESS
 const formatAddress = (addressData: any) => {
   if (!addressData) return "Chưa cập nhật";
   
   try {
-    // Nếu dữ liệu trả về dạng mảng từ API Address
     if (Array.isArray(addressData) && addressData.length > 0) {
       const defaultAddr = addressData.find((a: any) => a.isDefault) || addressData[0];
       return defaultAddr.fullAddress || defaultAddr.specificAddress || 'Chưa cập nhật';
     }
-    // Nếu dữ liệu dạng chuỗi JSON cũ
     if (typeof addressData === 'string' && addressData.trim().startsWith('[')) {
       const parsed = JSON.parse(addressData);
       if (Array.isArray(parsed) && parsed.length > 0) {
