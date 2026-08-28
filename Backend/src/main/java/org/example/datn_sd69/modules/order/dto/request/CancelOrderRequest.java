@@ -14,7 +14,7 @@ public class CancelOrderRequest {
     @NotBlank(message = "Vui lòng chọn lý do hủy đơn")
     @Size(max = 255, message = "Lý do hủy đơn không được vượt quá 255 ký tự")
     @Pattern(
-            regexp = "^(Muốn thay đổi địa chỉ nhận hàng|...[giữ nguyên khúc giữa]...|Khác|Khách hàng rời khỏi trang thanh toán|Khách hàng rời khỏi trang thanh toán VNPay)$",
+            regexp = ALLOWED_CANCEL_REASON_REGEX,
             message = "Lý do hủy đơn không hợp lệ"
     )
     private String cancelReason;
