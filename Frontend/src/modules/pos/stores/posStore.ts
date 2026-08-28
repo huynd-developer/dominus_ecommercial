@@ -3115,14 +3115,50 @@ export const usePosStore = defineStore("posStore", {
         if (!this.activeHeldOrderId && duplicateHeldOrderId) {
           await this.fetchHeldOrders();
 
-          const opened = await this.openHeldOrder(Number(duplicateHeldOrderId));
+          const duplicateHeldOrder = this.heldOrders.find(
+            (held) => Number(held.orderId) === Number(duplicateHeldOrderId)
+          );
 
-          if (opened) {
-            this.errorMsg =
-              `Khách hàng này đã có đơn lưu tạm #${duplicateHeldOrderId}. ` +
-              "Đã mở đơn lưu tạm và giữ sản phẩm đang chọn, bấm Lưu tạm lại để cập nhật.";
-            return false;
+          /*
+           * Chỉ tự mở khi đơn lưu tạm thực sự được phép mở bởi tài khoản hiện tại.
+           *
+           * - CASHIER: đơn của chính mình -> được mở.
+           * - Đơn thuộc nhân viên khác -> không tự GET detail để tránh 400.
+           * - MANAGER/OWNER nhìn thấy đơn người khác nhưng canOpen=false:
+           *   phải chuyển đơn về mình trước rồi mới mở/thanh toán.
+           */
+          if (duplicateHeldOrder?.canOpen !== false && duplicateHeldOrder) {
+            const opened = await this.openHeldOrder(
+              Number(duplicateHeldOrderId)
+            );
+
+            if (opened) {
+              this.errorMsg =
+                `Khách hàng này đã có đơn lưu tạm #${duplicateHeldOrderId}. ` +
+                "Đã mở đơn lưu tạm và giữ sản phẩm đang chọn, bấm Lưu tạm lại để cập nhật.";
+
+              return false;
+            }
           }
+
+          /*
+           * Có đơn lưu tạm nhưng tài khoản hiện tại không được mở.
+           * Không tạo thêm đơn mới cho cùng khách hàng.
+           */
+          if (duplicateHeldOrder) {
+            this.errorMsg =
+              `Khách hàng này đang có đơn lưu tạm #${duplicateHeldOrderId}` +
+              (duplicateHeldOrder.cashierName
+                ? ` thuộc ${duplicateHeldOrder.cashierName}`
+                : " thuộc nhân viên khác") +
+              ". Vui lòng chuyển đơn lưu tạm về cho bạn trước khi cập nhật.";
+          } else {
+            this.errorMsg =
+              `Khách hàng này đang có đơn lưu tạm #${duplicateHeldOrderId} thuộc nhân viên khác. ` +
+              "Không được tạo thêm đơn lưu tạm cho cùng khách hàng.";
+          }
+
+          return false;
         }
 
         this.errorMsg = message;
