@@ -43,6 +43,12 @@ const route = useRoute();
 const productList = ref<any[]>([]);
 const isLoading = ref(false);
 
+let flashSaleStartTimer: ReturnType<typeof window.setTimeout> | null = null;
+let flashSaleEndTimer: ReturnType<typeof window.setTimeout> | null = null;
+
+const FLASH_SALE_BOUNDARY_EPSILON_MS = 200;
+const MAX_SAFE_TIMEOUT_MS = 2_147_000_000;
+
 const BACKEND_URL = "http://localhost:8080";
 
 const toNumber = (value: unknown, fallback = 0) => {
@@ -69,10 +75,13 @@ const normalizeText = (value: unknown) => {
 
 const normalizeCapacityKey = (value: unknown) => {
   // Cắt chữ ml và khoảng trắng
-  const text = normalizeText(value).replace(/ml/g, "").replace(/\s+/g, "").trim();
+  const text = normalizeText(value)
+    .replace(/ml/g, "")
+    .replace(/\s+/g, "")
+    .trim();
   // Ép về số để 10.0 hay 10 đều thành 10
   const num = parseFloat(text);
-  
+
   return !Number.isNaN(num) ? String(num) : text;
 };
 
@@ -354,11 +363,7 @@ const getProductIdValue = (item: any) => {
 
 const getVariantIdValue = (item: any) => {
   return Number(
-    item?.productVariantId ??
-      item?.variantId ??
-      item?.id ??
-      item?.Id ??
-      0
+    item?.productVariantId ?? item?.variantId ?? item?.id ?? item?.Id ?? 0
   );
 };
 
@@ -374,8 +379,7 @@ const buildPriceFields = (
   const finalSalePrice =
     salePrice > 0 ? salePrice : originalPrice > 0 ? originalPrice : fallback;
 
-  const finalOriginalPrice =
-    originalPrice > 0 ? originalPrice : finalSalePrice;
+  const finalOriginalPrice = originalPrice > 0 ? originalPrice : finalSalePrice;
 
   const discountPercent = getDiscountPercentFromPrice(
     finalSalePrice,
@@ -589,11 +593,7 @@ const mapProduct = (item: any) => {
     id: item?.id || item?.Id || item?.productId,
     productId: item?.productId || item?.id || item?.Id,
     brandId: Number(
-      item?.brandId ??
-        item?.BrandId ??
-        item?.brand?.id ??
-        item?.brand?.Id ??
-        0
+      item?.brandId ?? item?.BrandId ?? item?.brand?.id ?? item?.brand?.Id ?? 0
     ),
     name: item?.name || item?.Name || item?.productName || "Sản phẩm",
 
@@ -734,7 +734,11 @@ const mapFlashSaleGroupedProducts = (rows: any[]) => {
       variantId: representativeVariant?.productVariantId,
 
       name: firstItem?.productName || firstItem?.name || "Sản phẩm Flash Sale",
-      brand: firstItem?.brandName || firstItem?.brand || firstItem?.promotionName || "Flash Sale",
+      brand:
+        firstItem?.brandName ||
+        firstItem?.brand ||
+        firstItem?.promotionName ||
+        "Flash Sale",
       color: "#0a192f",
 
       imageUrl: productImage,
@@ -786,18 +790,130 @@ const mapFlashSaleGroupedProducts = (rows: any[]) => {
 
   return groupedProducts;
 };
+const clearFlashSaleStartTimer = () => {
+  if (flashSaleStartTimer !== null) {
+    window.clearTimeout(flashSaleStartTimer);
+    flashSaleStartTimer = null;
+  }
+};
 
+const clearFlashSaleEndTimer = () => {
+  if (flashSaleEndTimer !== null) {
+    window.clearTimeout(flashSaleEndTimer);
+    flashSaleEndTimer = null;
+  }
+};
+
+const parseFlashSaleBoundary = (value?: string | null): number | null => {
+  if (!value) {
+    return null;
+  }
+
+  const timestamp = new Date(value).getTime();
+
+  return Number.isFinite(timestamp) ? timestamp : null;
+};
+
+/*
+ * Flash Sale tương lai:
+ * tới đúng StartDate thì gọi lại fetchProducts().
+ */
+const scheduleNextFlashSaleStart = (nextStartDate?: string | null) => {
+  clearFlashSaleStartTimer();
+
+  const startTime = parseFlashSaleBoundary(nextStartDate);
+
+  if (startTime === null) {
+    return;
+  }
+
+  const now = Date.now();
+
+  if (startTime <= now) {
+    return;
+  }
+
+  const delay = Math.min(
+    Math.max(startTime - now + FLASH_SALE_BOUNDARY_EPSILON_MS, 0),
+    MAX_SAFE_TIMEOUT_MS
+  );
+
+  flashSaleStartTimer = window.setTimeout(async () => {
+    flashSaleStartTimer = null;
+
+    await fetchProducts();
+  }, delay);
+};
+
+/*
+ * Flash Sale đang chạy:
+ * lấy EndDate gần nhất và tới giờ thì gọi lại fetchProducts().
+ */
+const scheduleNextFlashSaleEnd = (activeFlashSaleProducts: any[]) => {
+  clearFlashSaleEndTimer();
+
+  const now = Date.now();
+
+  const endTimes = (activeFlashSaleProducts || [])
+    .map((product) => parseFlashSaleBoundary(product?.endDate))
+    .filter((value): value is number => value !== null && value > now)
+    .sort((a, b) => a - b);
+
+  if (endTimes.length === 0) {
+    return;
+  }
+
+  const nextEndTime = endTimes[0]!;
+
+  const delay = Math.min(
+    Math.max(nextEndTime - now + FLASH_SALE_BOUNDARY_EPSILON_MS, 0),
+    MAX_SAFE_TIMEOUT_MS
+  );
+
+  flashSaleEndTimer = window.setTimeout(async () => {
+    flashSaleEndTimer = null;
+
+    await fetchProducts();
+  }, delay);
+};
 const fetchActiveFlashSaleGroupedProducts = async () => {
   try {
     const res = await api.get("/promotions/flash-sale", {
       params: {
         page: 0,
         size: 200,
+
+        /*
+         * Chỉ caller này cần metadata thời gian.
+         * Caller cũ của BE vẫn giữ response Page cũ.
+         */
+        includeTiming: true,
+
+        /*
+         * Tránh browser/proxy giữ response cũ tại đúng boundary.
+         */
+        t: Date.now(),
       },
     });
 
-    const rawRows = extractArrayData(res.data);
-    return Array.isArray(rawRows) ? mapFlashSaleGroupedProducts(rawRows) : [];
+    const data = res.data?.data || res.data;
+
+    const rawRows = extractArrayData(data);
+
+    const groupedProducts = Array.isArray(rawRows)
+      ? mapFlashSaleGroupedProducts(rawRows)
+      : [];
+
+    /*
+     * Hẹn đúng mốc gần nhất:
+     * - startDate của Flash Sale tương lai;
+     * - endDate của Flash Sale đang chạy.
+     */
+    scheduleNextFlashSaleStart(data?.nextStartDate ?? null);
+
+    scheduleNextFlashSaleEnd(groupedProducts);
+
+    return groupedProducts;
   } catch (error) {
     console.error("Lỗi tải Flash Sale để đồng bộ danh sách:", error);
     return [];
@@ -1017,9 +1133,7 @@ const fetchProducts = async () => {
       productList.value = mergeFlashSaleIntoProducts(
         normalProducts,
         flashSaleProducts
-      ).filter((item: any) =>
-        flashSaleProductIds.has(getProductIdValue(item))
-      );
+      ).filter((item: any) => flashSaleProductIds.has(getProductIdValue(item)));
     } else {
       const [productRes, flashSaleProducts] = await Promise.all([
         api.get("/v1/products", {
@@ -1295,6 +1409,9 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  clearFlashSaleStartTimer();
+  clearFlashSaleEndTimer();
+
   window.removeEventListener("focus", handleFocus);
 });
 
