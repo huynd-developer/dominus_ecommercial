@@ -25,9 +25,9 @@ const mockPage = (title: string, assignee: string) => ({
         h("h1", `🚧 Trang ${title}`),
         h(
           "p",
-          `Giao diện đang được xây dựng bởi: ${assignee}. Sau khi code xong file Vue, hãy mở comment import trong router ra!`
+          `Giao diện đang được xây dựng bởi: ${assignee}. Sau khi code xong file Vue, hãy mở comment import trong router ra!`,
         ),
-      ]
+      ],
     ),
 });
 
@@ -49,9 +49,7 @@ const routes: Array<RouteRecordRaw> = [
         path: "customer/profile",
         name: "CustomerProfile",
         component: () =>
-          import(
-            "@/modules/shop/feature/profile/views/CustomerProfileView.vue"
-          ),
+          import("@/modules/shop/feature/profile/views/CustomerProfileView.vue"),
         meta: {
           requiresAuth: true,
           allowedRoles: ["USER"],
@@ -132,11 +130,6 @@ const routes: Array<RouteRecordRaw> = [
     name: "Register",
     component: () => import("@/modules/auth/views/RegisterView.vue"),
   },
-        {
-  path: '/login/employee',
-  name: 'EmployeeLoginView',
-  component: () => import('@/modules/auth/views/EmployeeLoginView.vue')
-},
 
   // ==========================================
   // ADMIN
@@ -202,9 +195,7 @@ const routes: Array<RouteRecordRaw> = [
         path: "fragrance-families",
         name: "AdminFragranceFamilies",
         component: () =>
-          import(
-            "@/modules/admin/feature/fragranceFamily/views/FragranceFamilyView.vue"
-          ),
+          import("@/modules/admin/feature/fragranceFamily/views/FragranceFamilyView.vue"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
@@ -218,9 +209,7 @@ const routes: Array<RouteRecordRaw> = [
         path: "concentrations",
         name: "AdminConcentrations",
         component: () =>
-          import(
-            "@/modules/admin/feature/concentration/views/ConcentrationView.vue"
-          ),
+          import("@/modules/admin/feature/concentration/views/ConcentrationView.vue"),
         meta: { requiresAuth: true, allowedRoles: ["OWNER", "MANAGER"] },
       },
       {
@@ -254,9 +243,7 @@ const routes: Array<RouteRecordRaw> = [
         path: "goods-receipts",
         name: "AdminGoodsReceipts",
         component: () =>
-          import(
-            "@/modules/admin/feature/goodsReceipt/views/GoodsReceiptView.vue"
-          ),
+          import("@/modules/admin/feature/goodsReceipt/views/GoodsReceiptView.vue"),
         meta: {
           requiresAuth: true,
           allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
@@ -266,9 +253,7 @@ const routes: Array<RouteRecordRaw> = [
         path: "inventory-lots",
         name: "AdminInventoryLots",
         component: () =>
-          import(
-            "@/modules/admin/feature/inventoryLot/views/InventoryLotView.vue"
-          ),
+          import("@/modules/admin/feature/inventoryLot/views/InventoryLotView.vue"),
         meta: {
           requiresAuth: true,
           allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
@@ -278,9 +263,7 @@ const routes: Array<RouteRecordRaw> = [
         path: "inventory-audit",
         name: "AdminInventoryAudit",
         component: () =>
-          import(
-            "@/modules/admin/feature/inventoryAudit/views/InventoryAuditView.vue"
-          ),
+          import("@/modules/admin/feature/inventoryAudit/views/InventoryAuditView.vue"),
         meta: {
           requiresAuth: true,
           allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
@@ -295,9 +278,7 @@ const routes: Array<RouteRecordRaw> = [
         path: "expiry-alerts",
         name: "AdminExpiryAlerts",
         component: () =>
-          import(
-            "@/modules/admin/feature/expiryAlert/views/ExpiryAlertView.vue"
-          ),
+          import("@/modules/admin/feature/expiryAlert/views/ExpiryAlertView.vue"),
         meta: {
           requiresAuth: true,
           allowedRoles: ["OWNER", "MANAGER", "CASHIER"],
@@ -307,9 +288,7 @@ const routes: Array<RouteRecordRaw> = [
         path: "stock-movements",
         name: "AdminStockMovements",
         component: () =>
-          import(
-            "@/modules/admin/feature/stockMovement/views/StockMovementView.vue"
-          ),
+          import("@/modules/admin/feature/stockMovement/views/StockMovementView.vue"),
         meta: {
           requiresAuth: true,
           allowedRoles: ["OWNER", "MANAGER", "CASHIER"],

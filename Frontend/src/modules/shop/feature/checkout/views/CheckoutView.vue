@@ -856,6 +856,18 @@ const loadSavedVoucher = async () => {
 const handleUpdateQuantity = async (item: any, quantity: number) => {
   if (isSubmitting.value || updatingItemKey.value || quantity < 1) return;
 
+  if (quantity > 10) {
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "warning",
+      title: "Chỉ được mua tối đa 10 sản phẩm!",
+      showConfirmButton: false,
+      timer: 3000,
+    });
+    return;
+  }
+
   const sellableQuantity = getItemSellableQuantity(item);
 
   if (quantity > sellableQuantity && quantity > Number(item.quantity || 0)) {
