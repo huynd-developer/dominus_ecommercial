@@ -518,7 +518,7 @@
                       v-if="getReturnShippingFee(order) > 0"
                       class="return-info-row"
                     >
-                      <span>Phí vận chuyển:</span>
+                      <span>Phí vận chuyển hoàn:</span>
                       <strong>{{
                         formatMoney(getReturnShippingFee(order))
                       }}</strong>
