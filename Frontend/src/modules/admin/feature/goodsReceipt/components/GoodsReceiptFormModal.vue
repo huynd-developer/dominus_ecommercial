@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  ref,
+  watch,
+  onMounted,
+  onBeforeUnmount,
+} from "vue";
 import Swal from "sweetalert2";
 import goodsReceiptService from "../services/goods-receipt.service";
 import type {
@@ -188,6 +195,40 @@ const clearSkuSearch = async () => {
   skuKeyword.value = "";
   await loadSkuOptions();
 };
+
+/**
+ * Refresh danh sách SKU khi user quay lại tab/window.
+ *
+ * Chỉ tải lại danh sách lựa chọn.
+ * KHÔNG reset form.
+ * KHÔNG xóa SKU đã chọn.
+ * KHÔNG thay quantity/unitCost/date/note đang nhập.
+ */
+const refreshSkuOptionsOnFocus = async () => {
+  if (!props.visible || props.saving || loadingSku.value) {
+    return;
+  }
+
+  await loadSkuOptions();
+};
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === "visible" && props.visible) {
+    void refreshSkuOptionsOnFocus();
+  }
+};
+
+onMounted(() => {
+  window.addEventListener("focus", refreshSkuOptionsOnFocus);
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("focus", refreshSkuOptionsOnFocus);
+
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
+});
 
 watch(
   () => props.visible,
@@ -418,9 +459,7 @@ const submit = async () => {
      * CREATE không gửi snapshot.
      * UPDATE DRAFT gửi đúng revision của detail mà user đang nhìn thấy.
      */
-    expectedRevision: isEdit.value
-      ? props.detail?.revision ?? null
-      : undefined,
+    expectedRevision: isEdit.value ? props.detail?.revision ?? null : undefined,
   };
 
   emit("save", payload);

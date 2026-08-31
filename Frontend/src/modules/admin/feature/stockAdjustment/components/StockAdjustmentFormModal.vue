@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, onMounted, onBeforeUnmount } from "vue";
 import Swal from "sweetalert2";
 import stockAdjustmentService from "../services/stock-adjustment.service";
 
@@ -115,9 +115,7 @@ const DECREASE_REASONS = [
   "Điều chỉnh sau kiểm kê định kỳ",
 ] as const;
 
-const reasonsForDifference = (
-  difference: number | null
-): readonly string[] => {
+const reasonsForDifference = (difference: number | null): readonly string[] => {
   if (difference === null || difference === 0) return [];
   return difference > 0 ? INCREASE_REASONS : DECREASE_REASONS;
 };
@@ -216,6 +214,40 @@ const clearLotSearch = async () => {
   await loadLotOptions();
 };
 
+/**
+ * Refresh danh sách lô khi user quay lại tab/window.
+ *
+ * Chỉ tải lại lotOptions.
+ * KHÔNG reset form.
+ * KHÔNG xóa lô đã chọn.
+ * KHÔNG thay tồn thực tế/lý do user đang nhập.
+ */
+const refreshLotOptionsOnFocus = async () => {
+  if (!props.visible || props.saving || loadingLots.value) {
+    return;
+  }
+
+  await loadLotOptions();
+};
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === "visible" && props.visible) {
+    void refreshLotOptionsOnFocus();
+  }
+};
+
+onMounted(() => {
+  window.addEventListener("focus", refreshLotOptionsOnFocus);
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("focus", refreshLotOptionsOnFocus);
+
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
+});
+
 watch(
   () => props.visible,
   async (visible) => {
@@ -241,9 +273,7 @@ const isLotSelected = (inventoryLotId: number) =>
 
 const selectLot = (lot: InventoryLotListResponse) => {
   if (isLotSelected(lot.id)) {
-    items.value = items.value.filter(
-      (item) => item.inventoryLotId !== lot.id
-    );
+    items.value = items.value.filter((item) => item.inventoryLotId !== lot.id);
     return;
   }
 
@@ -498,9 +528,7 @@ const submit = async () => {
     ),
 
     // CREATE không gửi revision; UPDATE gửi đúng snapshot mà người dùng đang nhìn.
-    expectedRevision: isEdit.value
-      ? props.detail?.revision ?? null
-      : undefined,
+    expectedRevision: isEdit.value ? props.detail?.revision ?? null : undefined,
   };
 
   emit("save", payload);
@@ -551,9 +579,7 @@ const close = () => {
                 </p>
               </div>
 
-              <div class="selected-badge">
-                Đã chọn {{ items.length }} lô
-              </div>
+              <div class="selected-badge">Đã chọn {{ items.length }} lô</div>
             </div>
 
             <div class="lot-search">
@@ -597,10 +623,7 @@ const close = () => {
               Đang tải danh sách lô...
             </div>
 
-            <div
-              v-else-if="lotOptions.length === 0"
-              class="lot-state"
-            >
+            <div v-else-if="lotOptions.length === 0" class="lot-state">
               Không tìm thấy lô phù hợp.
             </div>
 
@@ -614,10 +637,7 @@ const close = () => {
                 @click="selectLot(option)"
               >
                 <span class="lot-card-check">
-                  <i
-                    v-if="isLotSelected(option.id)"
-                    class="bi bi-check-lg"
-                  ></i>
+                  <i v-if="isLotSelected(option.id)" class="bi bi-check-lg"></i>
                 </span>
 
                 <span
@@ -649,10 +669,7 @@ const close = () => {
 
                 <span class="lot-card-body">
                   <strong>{{ option.productName }}</strong>
-                  <span
-                    v-if="variantLabel(option)"
-                    class="variant-info"
-                  >
+                  <span v-if="variantLabel(option)" class="variant-info">
                     {{ variantLabel(option) }}
                   </span>
                   <span class="sku-code">{{ option.sku }}</span>
@@ -664,10 +681,7 @@ const close = () => {
                       <strong>{{ formatNumber(option.quantityOnHand) }}</strong>
                     </span>
 
-                    <span
-                      v-if="option.isExpired"
-                      class="expired-text"
-                    >
+                    <span v-if="option.isExpired" class="expired-text">
                       Đã hết hạn
                     </span>
                   </span>
@@ -687,10 +701,7 @@ const close = () => {
               </div>
             </div>
 
-            <div
-              v-if="items.length === 0"
-              class="selected-empty"
-            >
+            <div v-if="items.length === 0" class="selected-empty">
               Chưa có lô nào được chọn.
             </div>
 
@@ -709,10 +720,7 @@ const close = () => {
                 </thead>
 
                 <tbody>
-                  <tr
-                    v-for="row in items"
-                    :key="row.inventoryLotId"
-                  >
+                  <tr v-for="row in items" :key="row.inventoryLotId">
                     <td class="image-cell">
                       <span
                         class="selected-thumb"
@@ -745,10 +753,7 @@ const close = () => {
                     <td>
                       <div class="product-cell">
                         <strong>{{ row.productName }}</strong>
-                        <span
-                          v-if="variantLabel(row)"
-                          class="variant-info"
-                        >
+                        <span v-if="variantLabel(row)" class="variant-info">
                           {{ variantLabel(row) }}
                         </span>
                         <span>{{ row.sku }}</span>
@@ -775,15 +780,14 @@ const close = () => {
                     </td>
 
                     <td>
-                      <div
-                        class="difference-box"
-                        :class="differenceClass(row)"
-                      >
+                      <div class="difference-box" :class="differenceClass(row)">
                         <strong>
                           {{
                             differenceOf(row) === null
                               ? "—"
-                              : `${Number(differenceOf(row)) > 0 ? "+" : ""}${differenceOf(row)}`
+                              : `${
+                                  Number(differenceOf(row)) > 0 ? "+" : ""
+                                }${differenceOf(row)}`
                           }}
                         </strong>
                         <small>{{ resultLabel(row) }}</small>
@@ -805,8 +809,8 @@ const close = () => {
                               differenceOf(row) === null
                                 ? "Nhập tồn thực tế trước"
                                 : differenceOf(row) === 0
-                                  ? "Không cần lý do"
-                                  : "-- Chọn lý do --"
+                                ? "Không cần lý do"
+                                : "-- Chọn lý do --"
                             }}
                           </option>
 
@@ -865,23 +869,14 @@ const close = () => {
               Đóng
             </button>
 
-            <button
-              type="submit"
-              class="primary-btn"
-              :disabled="saving"
-            >
+            <button type="submit" class="primary-btn" :disabled="saving">
               {{
-                saving
-                  ? "Đang lưu..."
-                  : isEdit
-                    ? "Cập nhật phiếu"
-                    : "Lưu tạm"
+                saving ? "Đang lưu..." : isEdit ? "Cập nhật phiếu" : "Lưu tạm"
               }}
             </button>
           </div>
         </form>
       </div>
-
 
       <div
         v-if="previewImageUrl"
@@ -1416,7 +1411,6 @@ button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-
 
 .image-preview-backdrop {
   position: fixed;
