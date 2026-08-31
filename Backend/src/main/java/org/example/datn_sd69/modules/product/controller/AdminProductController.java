@@ -85,6 +85,26 @@ public class AdminProductController {
     }
 
     /**
+     * Danh sách sản phẩm đã xóa mềm.
+     *
+     * Chỉ OWNER được xem vì hiện tại quyền xóa sản phẩm
+     * cũng chỉ dành cho OWNER.
+     */
+    @GetMapping("/admin/deleted")
+    @PreAuthorize("hasAuthority('OWNER')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getDeletedProductsAdmin(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        productService.getDeletedProductsAdmin(page, size),
+                        "Lấy danh sách sản phẩm đã xóa thành công"
+                )
+        );
+    }
+
+    /**
      * Cập nhật sản phẩm
      */
     @PutMapping("/admin/{id}")
@@ -115,6 +135,27 @@ public class AdminProductController {
                 ApiResponse.success(
                         null,
                         "Ẩn sản phẩm thành công"
+                )
+        );
+    }
+
+    /**
+     * Khôi phục sản phẩm đã xóa mềm.
+     *
+     * Chỉ đổi isDeleted từ true -> false.
+     * Không tự thay đổi status của sản phẩm.
+     */
+    @PutMapping("/admin/{id}/restore")
+    @PreAuthorize("hasAuthority('OWNER')")
+    public ResponseEntity<ApiResponse<String>> restoreProduct(
+            @PathVariable Integer id) {
+
+        productService.restoreProduct(id);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        null,
+                        "Khôi phục sản phẩm thành công"
                 )
         );
     }

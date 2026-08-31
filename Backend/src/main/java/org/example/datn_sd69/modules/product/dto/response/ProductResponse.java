@@ -35,7 +35,7 @@ public class ProductResponse {
     private Boolean isNiche;
 
     private Integer status;
-
+    private Boolean isDeleted;
     private Double rating;
     private Long reviewCount;
 

@@ -4,9 +4,15 @@ import Swal from "sweetalert2";
 
 import type { Product, ProductVariant } from "../types/product.type";
 
-const props = defineProps<{
-  paginatedData: Product[];
-}>();
+const props = withDefaults(
+  defineProps<{
+    paginatedData: Product[];
+    deletedMode?: boolean;
+  }>(),
+  {
+    deletedMode: false,
+  }
+);
 
 const emit = defineEmits<{
   (e: "edit", product: Product): void;
@@ -15,6 +21,7 @@ const emit = defineEmits<{
   (e: "start-selling", id: number): void;
   (e: "toggle-variant-status", product: Product, variant: ProductVariant): void;
   (e: "delete", id: number): void;
+  (e: "restore", id: number): void;
 }>();
 
 const API_URL = import.meta.env.VITE_API_URL || "";
@@ -23,6 +30,7 @@ const expandedRowIds = ref<number[]>([]);
 
 const toggleRow = (id: number) => {
   const index = expandedRowIds.value.indexOf(id);
+
   if (index === -1) {
     expandedRowIds.value.push(id);
   } else {
@@ -35,10 +43,14 @@ const formatPrice = (price: number) => {
 };
 
 const calculateTotalStock = (variants?: ProductVariant[]) =>
-  variants?.reduce((sum, item) => sum + Number(item.totalQuantity ?? 0), 0) ?? 0;
+  variants?.reduce((sum, item) => sum + Number(item.totalQuantity ?? 0), 0) ??
+  0;
 
 const calculateTotalSellableStock = (variants?: ProductVariant[]) =>
-  variants?.reduce((sum, item) => sum + Number(item.sellableQuantity ?? 0), 0) ?? 0;
+  variants?.reduce(
+    (sum, item) => sum + Number(item.sellableQuantity ?? 0),
+    0
+  ) ?? 0;
 
 const getStockClass = (stock: number) => {
   if (stock === 0) return "danger";
@@ -48,56 +60,82 @@ const getStockClass = (stock: number) => {
 
 const getImageUrl = (url?: string) => {
   if (!url) return "";
+
   return url.startsWith("http") ? url : `${API_URL}${url}`;
 };
 
 const FALLBACK_IMAGE =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(`
-  <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
-    <rect width="100%" height="100%" fill="#f1f5f9"/>
-    <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#94a3b8" font-family="Arial" font-size="14">Không có ảnh</text>
-  </svg>
-`);
+    <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+      <rect width="100%" height="100%" fill="#f1f5f9"/>
+      <text
+        x="50%"
+        y="50%"
+        dominant-baseline="middle"
+        text-anchor="middle"
+        fill="#94a3b8"
+        font-family="Arial"
+        font-size="14"
+      >
+        Không có ảnh
+      </text>
+    </svg>
+  `);
 
 const onImageError = (event: Event) => {
   const img = event.target as HTMLImageElement;
   img.src = FALLBACK_IMAGE;
 };
 
-// Thêm 2 hàm này để chặn bấm Mở Bán khi hết hàng
-const handleStartSelling = (product: any) => {
-  if (product.stock <= 0) {
-    Swal.fire({ title: "Không thể mở bán", text: "Sản phẩm đã hết hàng trong kho. Vui lòng nhập thêm hàng để mở bán!", icon: "warning", confirmButtonColor: "#f59e0b" });
-    return;
-  }
-  emit('start-selling', product.id);
+/**
+ * status là trạng thái nghiệp vụ do admin quyết định.
+ *
+ * Không ép status = 0 khi hết hàng.
+ * status = 1 + sellableQuantity = 0 => chỉ HIỂN THỊ "Hết hàng".
+ */
+const handleStartSelling = (product: Product) => {
+  emit("start-selling", product.id);
 };
 
-const handleToggleVariantStatus = (product: any, variant: any) => {
-  const vStock = Number(variant.totalQuantity ?? 0);
-  if (variant.status === 0 && vStock <= 0) {
-    Swal.fire({ title: "Không thể mở bán", text: "Biến thể này đã hết hàng trong kho. Vui lòng nhập thêm hàng để mở bán!", icon: "warning", confirmButtonColor: "#f59e0b" });
+const handleToggleVariantStatus = (
+  product: Product,
+  variant: ProductVariant
+) => {
+  if (props.deletedMode || product.isDeleted === true) {
     return;
   }
-  emit('toggle-variant-status', product, variant);
+
+  emit("toggle-variant-status", product, variant);
 };
 
-// Sửa lại hàm Xóa để chặn nếu còn hàng
-const handleDelete = (product: Product | any) => {
-  if (product.stock > 0) {
+/**
+ * Giữ nguyên rule hiện tại:
+ * còn tồn vật lý thì chưa cho xóa Product.
+ *
+ * Chỉ thay hard-delete wording bằng soft-delete wording.
+ */
+const handleDelete = (product: Product) => {
+  const stock = calculateTotalStock(product.variants);
+
+  if (stock > 0) {
     Swal.fire({
       title: "Không thể xóa!",
-      text: "Sản phẩm vẫn còn hàng trong kho. Vui lòng bán hết hoặc xuất hủy trước khi xóa!",
+      text:
+        "Sản phẩm vẫn còn hàng trong kho. " +
+        "Vui lòng bán hết hoặc xuất hủy trước khi xóa!",
       icon: "warning",
-      confirmButtonColor: "#dc2626"
+      confirmButtonColor: "#dc2626",
     });
+
     return;
   }
 
   Swal.fire({
     title: "Xác nhận xóa?",
-    text: `Bạn có chắc chắn muốn xóa sản phẩm "${product.name}" không? Thao tác này không thể hoàn tác!`,
+    text:
+      `Sản phẩm "${product.name}" sẽ được chuyển vào ` +
+      "danh sách Đã xóa và có thể khôi phục sau.",
     icon: "warning",
     showCancelButton: true,
     confirmButtonColor: "#dc2626",
@@ -111,33 +149,103 @@ const handleDelete = (product: Product | any) => {
   });
 };
 
-// Ép trạng thái thành Ngừng Bán nếu số lượng = 0
+/**
+ * Trạng thái HIỂN THỊ Product.
+ *
+ * Không sửa product.status.
+ */
+const getProductStatusLabel = (product: Product) => {
+  if (props.deletedMode || product.isDeleted === true) {
+    return "Đã xóa";
+  }
+
+  if (product.status !== 1) {
+    return "Ngừng bán";
+  }
+
+  const sellableStock = calculateTotalSellableStock(product.variants);
+
+  if (sellableStock <= 0) {
+    return "Hết hàng";
+  }
+
+  return "Đang bán";
+};
+
+const getProductStatusClass = (product: Product) => {
+  if (props.deletedMode || product.isDeleted === true) {
+    return "deleted";
+  }
+
+  if (product.status !== 1) {
+    return "inactive";
+  }
+
+  if (calculateTotalSellableStock(product.variants) <= 0) {
+    return "out-of-stock";
+  }
+
+  return "active";
+};
+
+/**
+ * Trạng thái HIỂN THỊ Variant.
+ *
+ * Không sửa variant.status.
+ */
+const getVariantStatusLabel = (variant: ProductVariant) => {
+  if (variant.status !== 1) {
+    return "Ngừng bán";
+  }
+
+  if (Number(variant.sellableQuantity ?? 0) <= 0) {
+    return "Hết hàng";
+  }
+
+  return "Đang bán";
+};
+
+const getVariantStatusClass = (variant: ProductVariant) => {
+  if (variant.status !== 1) {
+    return "inactive";
+  }
+
+  if (Number(variant.sellableQuantity ?? 0) <= 0) {
+    return "out-of-stock";
+  }
+
+  return "active";
+};
+
+/**
+ * Chỉ bổ sung dữ liệu phục vụ hiển thị.
+ *
+ * Không:
+ * - sửa Product.status
+ * - sửa Variant.status
+ * - lọc Variant
+ * - dùng stockQuantity legacy
+ */
 const rows = computed(() =>
   props.paginatedData.map((product) => {
-    const stock = calculateTotalStock(product.variants);
-    const sellableStock = calculateTotalSellableStock(product.variants);
+    const variants = product.variants ?? [];
 
-    // 💥 Tự động ép thành Ngừng bán nếu hết hàng
-    const displayStatus = stock <= 0 ? 0 : product.status;
-    
-    const processedVariants = product.variants?.map(v => {
-       const vStock = Number(v.totalQuantity ?? 0);
-       return {
-          ...v,
-          status: vStock <= 0 ? 0 : v.status
-       }
-    });
+    const stock = calculateTotalStock(variants);
+
+    const sellableStock = calculateTotalSellableStock(variants);
 
     return {
       ...product,
-      status: displayStatus,
-      variants: processedVariants,
+      variants,
+
       stock,
       sellableStock,
+
       stockClass: getStockClass(stock),
+
       sellableStockClass: getStockClass(sellableStock),
     };
-  }),
+  })
 );
 </script>
 
@@ -147,29 +255,45 @@ const rows = computed(() =>
       <thead>
         <tr>
           <th width="75">Ảnh</th>
+
           <th>Sản phẩm</th>
+
           <th>Thương hiệu</th>
+
           <th>Danh mục</th>
+
           <th>Nồng độ</th>
+
           <th class="text-center">Tồn thực tế</th>
+
           <th class="text-center">Có thể bán</th>
+
           <th class="text-center">Trạng thái</th>
+
           <th width="180" class="text-center">Thao tác</th>
         </tr>
       </thead>
+
       <tbody>
         <tr v-if="rows.length === 0">
           <td colspan="9" class="empty">
             <i class="bi bi-box-seam"></i>
-            <p>Chưa có sản phẩm</p>
+
+            <p>
+              {{ deletedMode ? "Chưa có sản phẩm đã xóa" : "Chưa có sản phẩm" }}
+            </p>
           </td>
         </tr>
 
         <template v-for="product in rows" :key="product.id">
-          <tr 
+          <tr
             :class="[
-              { 'row-expanded': expandedRowIds.includes(product.id) }, 
-              product.status !== 1 ? 'row-inactive' : ''
+              {
+                'row-expanded': expandedRowIds.includes(product.id),
+              },
+              product.status !== 1 || product.isDeleted === true
+                ? 'row-inactive'
+                : '',
             ]"
           >
             <td>
@@ -181,19 +305,25 @@ const rows = computed(() =>
                   decoding="async"
                   @error="onImageError"
                 />
+
                 <div v-else class="image-placeholder">
                   <i class="bi bi-image"></i>
                 </div>
               </div>
             </td>
+
             <td>
               <div class="product-info">
-                <div class="product-name">{{ product.name }}</div>
-                <div
-                  class="expand-trigger"
-                  @click="toggleRow(product.id)"
-                >
-                  <span>{{ product.variants?.length || 0 }} biến thể</span>
+                <div class="product-name">
+                  {{ product.name }}
+                </div>
+
+                <div class="expand-trigger" @click="toggleRow(product.id)">
+                  <span>
+                    {{ product.variants?.length || 0 }}
+                    biến thể
+                  </span>
+
                   <i
                     class="bi"
                     :class="
@@ -205,9 +335,19 @@ const rows = computed(() =>
                 </div>
               </div>
             </td>
-            <td>{{ product.brandName }}</td>
-            <td>{{ product.categoryName }}</td>
-            <td>{{ product.concentrationName }}</td>
+
+            <td>
+              {{ product.brandName }}
+            </td>
+
+            <td>
+              {{ product.categoryName }}
+            </td>
+
+            <td>
+              {{ product.concentrationName }}
+            </td>
+
             <td class="text-center">
               <span
                 class="stock-badge"
@@ -217,6 +357,7 @@ const rows = computed(() =>
                 {{ product.stock }}
               </span>
             </td>
+
             <td class="text-center">
               <span
                 class="stock-badge"
@@ -226,125 +367,181 @@ const rows = computed(() =>
                 {{ product.sellableStock }}
               </span>
             </td>
+
             <td class="text-center">
-              <!-- TRẠNG THÁI SẢN PHẨM CHÍNH -->
-              <span
-                class="status"
-                :class="product.status === 1 ? 'active' : 'inactive'"
-              >
-                {{ product.status === 1 ? "Đang bán" : "Ngừng bán" }}
+              <span class="status" :class="getProductStatusClass(product)">
+                {{ getProductStatusLabel(product) }}
               </span>
             </td>
+
             <td>
               <div class="actions">
-                <button
-                  class="icon-btn clone"
-                  title="Nhân bản sản phẩm"
-                  @click="emit('clone', product)"
-                >
-                  <i class="bi bi-files"></i>
-                </button>
+                <!-- PRODUCT ĐÃ XÓA -->
+                <template v-if="deletedMode || product.isDeleted === true">
+                  <button
+                    class="icon-btn restore"
+                    title="Khôi phục sản phẩm"
+                    @click="emit('restore', product.id)"
+                  >
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                  </button>
+                </template>
 
-                <button
-                  class="icon-btn edit"
-                  title="Chỉnh sửa"
-                  @click="emit('edit', product)"
-                >
-                  <i class="bi bi-pencil"></i>
-                </button>
-                
-                <button
-                  v-if="product.status === 1"
-                  class="icon-btn toggle-status-off"
-                  title="Ngừng bán"
-                  @click="emit('stop-selling', product.id)"
-                >
-                  <i class="bi bi-eye-slash"></i>
-                </button>
-                <button
-                  v-else
-                  class="icon-btn toggle-status-on"
-                  title="Mở bán"
-                  @click="handleStartSelling(product)"
-                >
-                  <i class="bi bi-eye"></i>
-                </button>
+                <!-- PRODUCT CHƯA XÓA -->
+                <template v-else>
+                  <button
+                    class="icon-btn clone"
+                    title="Nhân bản sản phẩm"
+                    @click="emit('clone', product)"
+                  >
+                    <i class="bi bi-files"></i>
+                  </button>
 
-                <button
-                  class="icon-btn delete"
-                  title="Xóa sản phẩm"
-                  @click="handleDelete(product)"
-                >
-                  <i class="bi bi-trash"></i>
-                </button>
+                  <button
+                    class="icon-btn edit"
+                    title="Chỉnh sửa"
+                    @click="emit('edit', product)"
+                  >
+                    <i class="bi bi-pencil"></i>
+                  </button>
+
+                  <button
+                    v-if="product.status === 1"
+                    class="icon-btn toggle-status-off"
+                    title="Ngừng bán"
+                    @click="emit('stop-selling', product.id)"
+                  >
+                    <i class="bi bi-eye-slash"></i>
+                  </button>
+
+                  <button
+                    v-else
+                    class="icon-btn toggle-status-on"
+                    title="Mở bán"
+                    @click="handleStartSelling(product)"
+                  >
+                    <i class="bi bi-eye"></i>
+                  </button>
+
+                  <button
+                    class="icon-btn delete"
+                    title="Xóa sản phẩm"
+                    @click="handleDelete(product)"
+                  >
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </template>
               </div>
             </td>
           </tr>
 
-          <!-- Dòng phụ hiển thị chi tiết biến thể -->
+          <!-- DÒNG BIẾN THỂ -->
           <tr v-if="expandedRowIds.includes(product.id)" class="variant-row">
             <td class="p-0 border-0 bg-transparent"></td>
+
             <td colspan="8" class="p-0 border-0">
               <div class="variant-container slide-down">
                 <div class="variant-arrow"></div>
-                <div class="px-4 py-2 bg-light border-bottom fw-bold text-dark d-flex align-items-center gap-2" style="font-size: 13px;">
-                  <i class="bi bi-list-nested text-primary"></i> Chi tiết các biến thể sản phẩm
+
+                <div
+                  class="px-4 py-2 bg-light border-bottom fw-bold text-dark d-flex align-items-center gap-2"
+                  style="font-size: 13px"
+                >
+                  <i class="bi bi-list-nested text-primary"></i>
+
+                  Chi tiết các biến thể sản phẩm
                 </div>
+
                 <table class="table variant-table m-0">
                   <thead>
                     <tr>
                       <th width="120">Dung tích</th>
+
                       <th width="200">Loại chai</th>
+
                       <th class="text-end" width="150">Giá bán</th>
+
                       <th class="text-center" width="110">Tồn thực tế</th>
+
                       <th class="text-center" width="110">Có thể bán</th>
-                      <th class="text-center" width="150">Trạng thái biến thể</th>
+
+                      <th class="text-center" width="150">
+                        Trạng thái biến thể
+                      </th>
                     </tr>
                   </thead>
+
                   <tbody>
-                    <tr v-for="v in product.variants" :key="v.id" :class="{'opacity-50': v.status !== 1}">
+                    <tr
+                      v-for="v in product.variants"
+                      :key="v.id"
+                      :class="{
+                        'opacity-50': v.status !== 1,
+                      }"
+                    >
                       <td class="fw-semibold text-dark">
-                        {{ v.capacityName }} ml
+                        {{ v.capacityName }}
+                        ml
                       </td>
-                      <td>{{ v.bottleTypeName }}</td>
+
+                      <td>
+                        {{ v.bottleTypeName }}
+                      </td>
+
                       <td class="text-end text-danger fw-bold">
                         {{ formatPrice(v.price) }}
                       </td>
+
                       <td class="text-center">
                         <span
                           class="badge px-3 py-1.5"
                           :class="
-                            Number(v.totalQuantity ?? 0) > 0 ? 'bg-success' : 'bg-danger'
+                            Number(v.totalQuantity ?? 0) > 0
+                              ? 'bg-success'
+                              : 'bg-danger'
                           "
                           title="Tổng số lượng thực tế đang có trong các lô kho"
                         >
                           {{ v.totalQuantity ?? 0 }}
                         </span>
                       </td>
+
                       <td class="text-center">
                         <span
                           class="badge px-3 py-1.5"
                           :class="
-                            Number(v.sellableQuantity ?? 0) > 0 ? 'bg-success' : 'bg-danger'
+                            Number(v.sellableQuantity ?? 0) > 0
+                              ? 'bg-success'
+                              : 'bg-danger'
                           "
                           title="Số lượng còn có thể bán, không tính hàng hết hạn"
                         >
                           {{ v.sellableQuantity ?? 0 }}
                         </span>
                       </td>
+
                       <td class="text-center">
-                        <!-- TRẠNG THÁI BIẾN THỂ -->
                         <span
                           class="status"
                           :class="[
-                            v.status === 1 ? 'active' : 'inactive',
-                            'clickable-status'
+                            getVariantStatusClass(v),
+                            {
+                              'clickable-status': !deletedMode,
+                            },
                           ]"
-                          title="Bấm để chuyển đổi nhanh trạng thái biến thể"
+                          :title="
+                            deletedMode
+                              ? undefined
+                              : 'Bấm để chuyển đổi nhanh trạng thái biến thể'
+                          "
                           @click="handleToggleVariantStatus(product, v)"
                         >
-                          {{ v.status === 1 ? "Đang bán" : "Ngừng bán" }}
-                          <i class="bi bi-arrow-repeat ms-1 fs-7"></i>
+                          {{ getVariantStatusLabel(v) }}
+
+                          <i
+                            v-if="!deletedMode"
+                            class="bi bi-arrow-repeat ms-1 fs-7"
+                          ></i>
                         </span>
                       </td>
                     </tr>
@@ -360,24 +557,96 @@ const rows = computed(() =>
 </template>
 
 <style scoped>
-.table-wrapper { overflow: auto; }
-.product-table { margin: 0; border-collapse: separate; border-spacing: 0; }
-.product-table thead { position: sticky; top: 0; background: white; z-index: 5; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); }
+.table-wrapper {
+  overflow: auto;
+}
 
-.product-table thead th { padding: 14px 12px; border-bottom: 2px solid #edf2f7; font-size: 13.5px; color: #64748b; font-weight: 600; }
-.product-table tbody td { padding: 14px 12px; vertical-align: middle; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+.product-table {
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+}
 
-.product-table tbody tr { transition: all 0.25s ease; }
-.product-table tbody tr:hover:not(.variant-row) { background: #f8fafc; }
-.row-expanded td { border-bottom-color: transparent !important; background: #f8fafc; }
-.row-inactive > td { background-color: #f8fafc !important; }
-.row-inactive .image-box img { filter: grayscale(100%); opacity: 0.6; }
+.product-table thead {
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 5;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
 
-.image-box { width: 55px; height: 55px; }
-.image-box img { width: 100%; height: 100%; border-radius: 10px; object-fit: cover; border: 1px solid #e2e8f0; transition: 0.25s; }
-.image-box img:hover { transform: scale(1.08); }
-.image-placeholder { width: 55px; height: 55px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: #f1f5f9; color: #94a3b8; font-size: 20px; }
-.product-name { font-weight: 600; color: #1e293b; font-size: 14.5px; }
+.product-table thead th {
+  padding: 14px 12px;
+  border-bottom: 2px solid #edf2f7;
+  font-size: 13.5px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.product-table tbody td {
+  padding: 14px 12px;
+  vertical-align: middle;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 14px;
+}
+
+.product-table tbody tr {
+  transition: all 0.25s ease;
+}
+
+.product-table tbody tr:hover:not(.variant-row) {
+  background: #f8fafc;
+}
+
+.row-expanded td {
+  border-bottom-color: transparent !important;
+  background: #f8fafc;
+}
+
+.row-inactive > td {
+  background-color: #f8fafc !important;
+}
+
+.row-inactive .image-box img {
+  filter: grayscale(100%);
+  opacity: 0.6;
+}
+
+.image-box {
+  width: 55px;
+  height: 55px;
+}
+
+.image-box img {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid #e2e8f0;
+  transition: 0.25s;
+}
+
+.image-box img:hover {
+  transform: scale(1.08);
+}
+
+.image-placeholder {
+  width: 55px;
+  height: 55px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  color: #94a3b8;
+  font-size: 20px;
+}
+
+.product-name {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 14.5px;
+}
 
 .expand-trigger {
   display: inline-flex;
@@ -394,16 +663,20 @@ const rows = computed(() =>
   margin-top: 5px;
   user-select: none;
 }
+
 .expand-trigger:hover {
   background: #e2e8f0;
   color: #1e293b;
 }
+
 .expand-trigger i {
   font-size: 11px;
   transition: transform 0.3s ease;
 }
 
-.variant-row { background: #f8fafc; }
+.variant-row {
+  background: #f8fafc;
+}
 
 .variant-container {
   max-width: 900px;
@@ -415,50 +688,234 @@ const rows = computed(() =>
   position: relative;
   overflow: hidden;
 }
-.variant-arrow { position: absolute; top: -8px; left: 35px; width: 14px; height: 14px; background: #ffffff; border-top: 1px solid #cbd5e1; border-left: 1px solid #cbd5e1; transform: rotate(45deg); }
 
-.variant-table th { background: #f8fafc; font-size: 12.5px; padding: 10px 14px; color: #475569; border-bottom: 1px solid #e2e8f0; }
-.variant-table td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
-.variant-table tr:last-child td { border-bottom: none; }
-.variant-table tr:hover td { background: #f8fbff; }
-
-.opacity-50 { opacity: 0.5; }
-
-.stock-badge { padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; }
-.stock-badge.success { background: #dcfce7; color: #15803d; }
-.stock-badge.warning { background: #fef3c7; color: #b45309; }
-.stock-badge.danger { background: #fee2e2; color: #dc2626; }
-
-.status { display: inline-flex; align-items: center; justify-content: center; min-width: 90px; padding: 4px 10px; border-radius: 999px; font-weight: 600; font-size: 12px; }
-.clickable-status { cursor: pointer; transition: 0.2s; }
-.clickable-status:hover { opacity: 0.85; transform: scale(1.03); box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-
-.active { background: #dcfce7; color: #15803d; }
-.inactive { background: #f3f4f6; color: #475569; }
-
-.actions { display: flex; justify-content: center; gap: 5px; }
-.icon-btn { width: 34px; height: 34px; border: none; border-radius: 9px; transition: 0.25s; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; }
-.icon-btn:disabled { cursor: not-allowed; }
-
-.clone { background: #f3e8ff; color: #9333ea; }
-.clone:hover:not(:disabled) { background: #9333ea; color: white; transform: translateY(-2px); }
-.edit { background: #eff6ff; color: #2563eb; }
-.edit:hover:not(:disabled) { background: #2563eb; color: white; transform: translateY(-2px); }
-.toggle-status-off { background: #fffbeb; color: #d97706; }
-.toggle-status-off:hover:not(:disabled) { background: #d97706; color: white; transform: translateY(-2px); }
-.toggle-status-on { background: #dcfce7; color: #15803d; }
-.toggle-status-on:hover:not(:disabled) { background: #15803d; color: white; transform: translateY(-2px); }
-.delete { background: #fef2f2; color: #dc2626; }
-.delete:hover:not(:disabled) { background: #dc2626; color: white; transform: translateY(-2px); }
-
-.empty { text-align: center; padding: 60px !important; color: #94a3b8; }
-.empty i { font-size: 42px; display: block; margin-bottom: 8px; }
-
-.slide-down { animation: slideDown 0.25s ease-out forwards; transform-origin: top; }
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
+.variant-arrow {
+  position: absolute;
+  top: -8px;
+  left: 35px;
+  width: 14px;
+  height: 14px;
+  background: #ffffff;
+  border-top: 1px solid #cbd5e1;
+  border-left: 1px solid #cbd5e1;
+  transform: rotate(45deg);
 }
-.custom-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+
+.variant-table th {
+  background: #f8fafc;
+  font-size: 12.5px;
+  padding: 10px 14px;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.variant-table td {
+  padding: 10px 14px;
+  font-size: 13px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.variant-table tr:last-child td {
+  border-bottom: none;
+}
+
+.variant-table tr:hover td {
+  background: #f8fbff;
+}
+
+.opacity-50 {
+  opacity: 0.5;
+}
+
+.stock-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.stock-badge.success {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.stock-badge.warning {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.stock-badge.danger {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 90px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.clickable-status {
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.clickable-status:hover {
+  opacity: 0.85;
+  transform: scale(1.03);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.active {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.inactive {
+  background: #f3f4f6;
+  color: #475569;
+}
+
+.out-of-stock {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.deleted {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+}
+
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 9px;
+  transition: 0.25s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.icon-btn:disabled {
+  cursor: not-allowed;
+}
+
+.clone {
+  background: #f3e8ff;
+  color: #9333ea;
+}
+
+.clone:hover:not(:disabled) {
+  background: #9333ea;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.edit {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.edit:hover:not(:disabled) {
+  background: #2563eb;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.toggle-status-off {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.toggle-status-off:hover:not(:disabled) {
+  background: #d97706;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.toggle-status-on {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.toggle-status-on:hover:not(:disabled) {
+  background: #15803d;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.delete {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.delete:hover:not(:disabled) {
+  background: #dc2626;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.restore {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.restore:hover:not(:disabled) {
+  background: #059669;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.empty {
+  text-align: center;
+  padding: 60px !important;
+  color: #94a3b8;
+}
+
+.empty i {
+  font-size: 42px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.slide-down {
+  animation: slideDown 0.25s ease-out forwards;
+  transform-origin: top;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 8px;
+}
 </style>

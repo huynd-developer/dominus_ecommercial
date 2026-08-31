@@ -10,7 +10,7 @@ export const useProductStore = defineStore("productStore", () => {
   const appStore = useAppStore();
 
   const products = ref<ProductResponse[]>([]);
-
+  const deletedProducts = ref<ProductResponse[]>([]);
   const brandList = ref<any[]>([]);
   const categoryList = ref<any[]>([]);
   const concentrationList = ref<any[]>([]);
@@ -62,6 +62,28 @@ export const useProductStore = defineStore("productStore", () => {
     } catch (e: any) {
       appStore.notifyError(
         e?.response?.data?.message ?? "Không thể tải danh sách sản phẩm"
+      );
+    } finally {
+      isLoading.value = false;
+    }
+  };
+
+  const fetchDeletedProducts = async () => {
+    isLoading.value = true;
+
+    try {
+      const pageData = await productService.getDeletedProducts(0, 999);
+
+      deletedProducts.value = Array.isArray(pageData?.content)
+        ? pageData.content
+        : Array.isArray(pageData)
+        ? pageData
+        : [];
+    } catch (e: any) {
+      deletedProducts.value = [];
+
+      appStore.notifyError(
+        e?.response?.data?.message ?? "Không thể tải danh sách sản phẩm đã xóa"
       );
     } finally {
       isLoading.value = false;
@@ -146,6 +168,7 @@ export const useProductStore = defineStore("productStore", () => {
 
   return {
     products,
+    deletedProducts,
 
     brandList,
     categoryList,
@@ -157,6 +180,7 @@ export const useProductStore = defineStore("productStore", () => {
     isLoading,
 
     fetchProducts,
+    fetchDeletedProducts,
     fetchDropdowns,
   };
 });

@@ -17,6 +17,13 @@ public interface ProductRepository
     Page<Product> findByIsDeletedFalse(
             Pageable pageable);
 
+    /*
+     * Chỉ dùng cho màn/tab sản phẩm đã xóa mềm.
+     * Không ảnh hưởng danh sách sản phẩm đang hoạt động hiện tại.
+     */
+    Page<Product> findByIsDeletedTrue(
+            Pageable pageable);
+
     Page<Product> findByStatusAndIsDeletedFalse(
             Integer status,
             Pageable pageable);
@@ -40,7 +47,9 @@ public interface ProductRepository
             @Param("id") Integer id
     );
 
-    // Kiểm tra xem có sản phẩm nào đang sử dụng nhóm hương này không (bỏ qua sản phẩm đã xóa)
-    boolean existsByFragranceFamilies_IdAndIsDeletedFalse(Integer fragranceFamilyId);
-
+    // Kiểm tra xem có sản phẩm nào đang sử dụng nhóm hương này không
+    // (bỏ qua sản phẩm đã xóa)
+    boolean existsByFragranceFamilies_IdAndIsDeletedFalse(
+            Integer fragranceFamilyId
+    );
 }

@@ -1,9 +1,6 @@
-import request from '@/common/services/request'
+import request from "@/common/services/request";
 
-import type {
-  ProductRequestDTO,
-  ProductResponse
-} from '../types/product.type'
+import type { ProductRequestDTO, ProductResponse } from "../types/product.type";
 
 /**
  * Chuẩn hóa response nhưng KHÔNG thay đổi dữ liệu nghiệp vụ.
@@ -37,147 +34,119 @@ import type {
  */
 const unwrapResponse = (response: any) => {
   if (response == null) {
-    return response
+    return response;
   }
 
   // AxiosResponse chuẩn
-  const body =
-    response?.data !== undefined
-      ? response.data
-      : response
+  const body = response?.data !== undefined ? response.data : response;
 
   // Response wrapper của BE:
   // { success, message, data: {...} }
   if (
     body &&
-    typeof body === 'object' &&
+    typeof body === "object" &&
     !Array.isArray(body) &&
     body.data !== undefined &&
-    (
-      body.success !== undefined ||
-      body.message !== undefined
-    )
+    (body.success !== undefined || body.message !== undefined)
   ) {
-    return body.data
+    return body.data;
   }
 
-  return body
-}
+  return body;
+};
 
 export const productService = {
-
   // =====================================
   // PRODUCT
   // =====================================
 
-  getProducts: async (
-    page = 0,
-    size = 10
-  ) => {
+  getProducts: async (page = 0, size = 10) => {
     const response = await request.get(
       `/api/v1/products/admin?page=${page}&size=${size}`
-    )
+    );
 
-    return unwrapResponse(response)
+    return unwrapResponse(response);
   },
 
-  getProductById: async (
-    id: number
-  ): Promise<ProductResponse> => {
+  getDeletedProducts: async (page = 0, size = 10) => {
     const response = await request.get(
-      `/api/v1/products/${id}`
-    )
+      `/api/v1/products/admin/deleted?page=${page}&size=${size}`
+    );
 
-    return response.data ?? response
+    return unwrapResponse(response);
   },
 
-  createProduct: async (
-    payload: ProductRequestDTO
-  ) => {
-    const response = await request.post(
-      '/api/v1/products/admin',
-      payload
-    )
+  getProductById: async (id: number): Promise<ProductResponse> => {
+    const response = await request.get(`/api/v1/products/${id}`);
 
-    return response.data ?? response
+    return response.data ?? response;
   },
 
-  updateProduct: async (
-    id: number,
-    payload: ProductRequestDTO
-  ) => {
-    const response = await request.put(
-      `/api/v1/products/admin/${id}`,
-      payload
-    )
+  createProduct: async (payload: ProductRequestDTO) => {
+    const response = await request.post("/api/v1/products/admin", payload);
 
-    return response.data ?? response
+    return response.data ?? response;
   },
 
-  deleteProduct: async (
-    id: number
-  ) => {
-    const response = await request.delete(
-      `/api/v1/products/admin/${id}`
-    )
+  updateProduct: async (id: number, payload: ProductRequestDTO) => {
+    const response = await request.put(`/api/v1/products/admin/${id}`, payload);
 
-    return response.data ?? response
+    return response.data ?? response;
+  },
+
+  deleteProduct: async (id: number) => {
+    const response = await request.delete(`/api/v1/products/admin/${id}`);
+
+    return response.data ?? response;
+  },
+  restoreProduct: async (id: number) => {
+    const response = await request.put(`/api/v1/products/admin/${id}/restore`);
+
+    return response.data ?? response;
   },
 
   // =====================================
   // PRODUCT IMAGE
   // =====================================
 
-  uploadImage: async (
-    productId: number,
-    file: File
-  ) => {
-    const formData = new FormData()
+  uploadImage: async (productId: number, file: File) => {
+    const formData = new FormData();
 
-    formData.append('file', file)
+    formData.append("file", file);
 
     const response = await request.post(
       `/api/v1/products/admin/${productId}/images`,
       formData,
       {
         headers: {
-          'Content-Type': 'multipart/form-data'
-        }
+          "Content-Type": "multipart/form-data",
+        },
       }
-    )
+    );
 
-    return response.data ?? response
+    return response.data ?? response;
   },
 
-  getImagesByProduct: async (
-    productId: number
-  ) => {
-    const response = await request.get(
-      `/api/v1/products/${productId}/images`
-    )
+  getImagesByProduct: async (productId: number) => {
+    const response = await request.get(`/api/v1/products/${productId}/images`);
 
-    return response.data ?? response
+    return response.data ?? response;
   },
 
-  setPrimaryImage: async (
-    productId: number,
-    imageId: number
-  ) => {
+  setPrimaryImage: async (productId: number, imageId: number) => {
     const response = await request.put(
       `/api/v1/products/admin/${productId}/images/${imageId}/primary`
-    )
+    );
 
-    return response.data ?? response
+    return response.data ?? response;
   },
 
-  deleteImage: async (
-    imageId: number
-  ) => {
+  deleteImage: async (imageId: number) => {
     const response = await request.delete(
       `/api/v1/products/admin/images/${imageId}`
-    )
+    );
 
-    return response.data ?? response
+    return response.data ?? response;
   },
 
   // =====================================
@@ -185,50 +154,44 @@ export const productService = {
   // =====================================
 
   getBrands: async () => {
-    const response = await request.get(
-      '/api/admin/brands?page=0&size=999'
-    )
+    const response = await request.get("/api/admin/brands?page=0&size=999");
 
-    return response.data ?? response
+    return response.data ?? response;
   },
 
   getCategories: async () => {
-    const response = await request.get(
-      '/api/admin/categories?page=0&size=999'
-    )
+    const response = await request.get("/api/admin/categories?page=0&size=999");
 
-    return response.data ?? response
+    return response.data ?? response;
   },
 
   getConcentrations: async () => {
     const response = await request.get(
-      '/api/admin/concentrations?page=0&size=999'
-    )
+      "/api/admin/concentrations?page=0&size=999"
+    );
 
-    return response.data ?? response
+    return response.data ?? response;
   },
 
   getCapacities: async () => {
-    const response = await request.get(
-      '/api/admin/capacities?page=0&size=999'
-    )
+    const response = await request.get("/api/admin/capacities?page=0&size=999");
 
-    return response.data ?? response
+    return response.data ?? response;
   },
 
   getBottleTypes: async () => {
     const response = await request.get(
-      '/api/admin/bottle-types?page=0&size=999'
-    )
+      "/api/admin/bottle-types?page=0&size=999"
+    );
 
-    return response.data ?? response
+    return response.data ?? response;
   },
 
   getFragranceFamilies: async () => {
     const response = await request.get(
-      '/api/admin/fragrance-families?page=0&size=999'
-    )
+      "/api/admin/fragrance-families?page=0&size=999"
+    );
 
-    return response.data ?? response
-  }
-}
+    return response.data ?? response;
+  },
+};

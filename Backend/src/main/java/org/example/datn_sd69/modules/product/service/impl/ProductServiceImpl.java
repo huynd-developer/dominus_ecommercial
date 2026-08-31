@@ -257,6 +257,13 @@ public class ProductServiceImpl implements ProductService {
                 .orElseThrow(() ->
                         new RuntimeException("Không tìm thấy sản phẩm"));
 
+        if (Boolean.TRUE.equals(product.getIsDeleted())) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Không tìm thấy sản phẩm"
+            );
+        }
+
         return mapToResponse(product);
     }
 
@@ -304,12 +311,54 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Map<String, Object> getDeletedProductsAdmin(int page, int size) {
+
+        Page<Product> productPage =
+                productRepository.findByIsDeletedTrue(
+                        PageRequest.of(
+                                page,
+                                size,
+                                Sort.by(Sort.Direction.DESC, "id")
+                        )
+                );
+
+        List<ProductResponse> items =
+                productPage.getContent()
+                        .stream()
+                        .map(this::mapToResponse)
+                        .toList();
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("content", items);
+        result.put("currentPage", productPage.getNumber());
+        result.put("totalItems", productPage.getTotalElements());
+        result.put("totalPages", productPage.getTotalPages());
+
+        return result;
+    }
+
+    @Override
     public void deleteProduct(Integer id) {
 
         Product product =
                 findActiveProductForUpdateOrThrow(id);
 
         product.setIsDeleted(true);
+
+        productRepository.save(product);
+    }
+    @Override
+    public void restoreProduct(Integer id) {
+
+        Product product =
+                findProductForUpdateOrThrow(id);
+
+        if (!Boolean.TRUE.equals(product.getIsDeleted())) {
+            throw conflict("Sản phẩm chưa bị xóa.");
+        }
+
+        product.setIsDeleted(false);
 
         productRepository.save(product);
     }
@@ -789,6 +838,10 @@ public class ProductServiceImpl implements ProductService {
 
         response.setStatus(
                 product.getStatus()
+        );
+
+        response.setIsDeleted(
+                product.getIsDeleted()
         );
         Set<ProductResponse.FragranceFamilyDTO> fragranceDTOs =
                 product.getFragranceFamilies()

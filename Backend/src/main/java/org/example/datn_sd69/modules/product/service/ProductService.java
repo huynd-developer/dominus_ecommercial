@@ -17,13 +17,28 @@ public interface ProductService {
     ProductResponse updateProduct(Integer id,
                                   ProductRequest request);
 
+    /*
+     * Xóa mềm sản phẩm.
+     * Không xóa record Product khỏi database.
+     */
     void deleteProduct(Integer id);
+
+    /*
+     * Khôi phục sản phẩm đã xóa mềm.
+     */
+    void restoreProduct(Integer id);
 
     Map<String, Object> getAllProducts(int page,
                                        int size);
 
     Map<String, Object> getAllProductsAdmin(int page,
                                             int size);
+
+    /*
+     * Danh sách sản phẩm đã xóa mềm để admin có thể khôi phục.
+     */
+    Map<String, Object> getDeletedProductsAdmin(int page,
+                                                int size);
 
     String uploadImage(
             Integer productId,
