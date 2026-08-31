@@ -27,6 +27,20 @@ const route = useRoute();
 
 const searchQuery = ref(String(route.query.q || ""));
 
+/**
+ * Chỉ lọc trạng thái ở FE.
+ *
+ * Không thay đổi status Product/Variant.
+ * Tab Đã xóa bỏ qua filter này.
+ */
+type ProductStatusFilter =
+  | "ALL"
+  | "ACTIVE"
+  | "OUT_OF_STOCK"
+  | "INACTIVE";
+
+const statusFilter = ref<ProductStatusFilter>("ALL");
+
 const showModal = ref(false);
 
 const selectedProduct = ref<Product | null>(null);
@@ -197,24 +211,55 @@ const sourceProducts = computed(() =>
 const filteredData = computed(() => {
   const keyword = searchQuery.value.trim().toLowerCase();
 
-  const source = sourceProducts.value;
+  return sourceProducts.value.filter((item) => {
+    /**
+     * Giữ nguyên tìm kiếm hiện tại cho cả 2 tab.
+     */
+    if (keyword) {
+      const text = [
+        item.name,
+        item.brandName,
+        item.categoryName,
+        item.concentrationName,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
 
-  if (!keyword) {
-    return source;
-  }
+      if (!text.includes(keyword)) {
+        return false;
+      }
+    }
 
-  return source.filter((item) => {
-    const text = [
-      item.name,
-      item.brandName,
-      item.categoryName,
-      item.concentrationName,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
+    /**
+     * Trạng thái chỉ lọc ở tab Sản phẩm.
+     *
+     * Tab Đã xóa chỉ mang ý nghĩa isDeleted = true,
+     * nên không dùng Đang bán/Hết hàng/Ngừng bán để lọc.
+     */
+    if (!deletedMode.value && statusFilter.value !== "ALL") {
+      const sellableQuantity = (item.variants ?? []).reduce(
+        (sum, variant) =>
+          sum + Number(variant.sellableQuantity ?? 0),
+        0
+      );
 
-    return text.includes(keyword);
+      const productStatus = Number(item.status);
+
+      if (statusFilter.value === "ACTIVE") {
+        return productStatus === 1 && sellableQuantity > 0;
+      }
+
+      if (statusFilter.value === "OUT_OF_STOCK") {
+        return productStatus === 1 && sellableQuantity <= 0;
+      }
+
+      if (statusFilter.value === "INACTIVE") {
+        return productStatus !== 1;
+      }
+    }
+
+    return true;
   });
 });
 
@@ -262,6 +307,14 @@ watch(searchQuery, () => {
       q: searchQuery.value || undefined,
     },
   });
+});
+
+/**
+ * Đổi filter chỉ reset phân trang.
+ * Không gọi API và không thay đổi dữ liệu Product.
+ */
+watch(statusFilter, () => {
+  currentPage.value = 1;
 });
 
 const refreshProducts = async () => {
@@ -801,6 +854,18 @@ const rows = computed(() => {
       </div>
 
       <div class="toolbar-right">
+        <select
+          v-if="!deletedMode"
+          v-model="statusFilter"
+          class="form-select"
+          style="width: 155px"
+        >
+          <option value="ALL">Tất cả trạng thái</option>
+          <option value="ACTIVE">Đang bán</option>
+          <option value="OUT_OF_STOCK">Hết hàng</option>
+          <option value="INACTIVE">Ngừng bán</option>
+        </select>
+
         <select v-model="pageSize" class="form-select" style="width: 100px">
           <option :value="10">10</option>
 
