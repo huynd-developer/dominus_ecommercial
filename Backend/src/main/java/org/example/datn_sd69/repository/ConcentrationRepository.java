@@ -29,4 +29,5 @@ public interface ConcentrationRepository extends JpaRepository<Concentration, In
     // 👇 THÊM HÀM NÀY ĐỂ XỬ LÝ TÌM KIẾM TỪ KHÓA TỪ VUE GỬI LÊN 👇
     @Query("SELECT c FROM Concentration c WHERE c.isDeleted = false AND LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%'))")
     Page<Concentration> searchByName(@Param("keyword") String keyword, Pageable pageable);
+
 }

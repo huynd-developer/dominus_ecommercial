@@ -103,7 +103,10 @@
       </button>
 
       <Transition name="filter-collapse">
-        <div v-show="isGroupOpen('capacities')" class="checkbox-list col scrollable-list">
+        <div
+          v-show="isGroupOpen('capacities')"
+          class="checkbox-list col scrollable-list"
+        >
           <label
             v-for="item in capacities"
             :key="item.id || formatCapacityValue(item)"
@@ -144,7 +147,10 @@
       </button>
 
       <Transition name="filter-collapse">
-        <div v-show="isGroupOpen('concentrations')" class="checkbox-list col scrollable-list">
+        <div
+          v-show="isGroupOpen('concentrations')"
+          class="checkbox-list col scrollable-list"
+        >
           <label
             v-for="item in concentrations"
             :key="item.id"
@@ -185,7 +191,10 @@
       </button>
 
       <Transition name="filter-collapse">
-        <div v-show="isGroupOpen('fragranceFamilies')" class="checkbox-list col scrollable-list">
+        <div
+          v-show="isGroupOpen('fragranceFamilies')"
+          class="checkbox-list col scrollable-list"
+        >
           <label
             v-for="item in fragranceFamilies"
             :key="item.id"
@@ -226,7 +235,10 @@
       </button>
 
       <Transition name="filter-collapse">
-        <div v-show="isGroupOpen('bottleTypes')" class="checkbox-list col scrollable-list">
+        <div
+          v-show="isGroupOpen('bottleTypes')"
+          class="checkbox-list col scrollable-list"
+        >
           <label
             v-for="item in bottleTypes"
             :key="item.id"
@@ -252,7 +264,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { onMounted, onBeforeUnmount, reactive, ref } from "vue";
 import api from "@/common/api";
 
 interface FilterOption {
@@ -289,7 +301,7 @@ const bottleTypes = ref<FilterOption[]>([]);
 const capacities = ref<FilterOption[]>([]);
 const concentrations = ref<FilterOption[]>([]);
 const fragranceFamilies = ref<FilterOption[]>([]);
-
+const refreshingFilters = ref(false);
 const selectedFilters = reactive<SelectedFilters>({
   genders: [],
   bottleTypes: [],
@@ -314,7 +326,7 @@ const isGroupOpen = (group: FilterGroupKey) => {
   return expandedGroups[group];
 };
 
-const extractArrayData = <T,>(data: any): T[] => {
+const extractArrayData = <T>(data: any): T[] => {
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.content)) return data.content;
   if (Array.isArray(data?.data?.content)) return data.data.content;
@@ -330,7 +342,7 @@ const getTotalPages = (data: any) => {
 };
 
 // ĐÃ SỬA: Thêm tham số t để chặn trình duyệt lưu cache dữ liệu cũ
-const fetchAllFilterOptions = async <T,>(url: string): Promise<T[]> => {
+const fetchAllFilterOptions = async <T>(url: string): Promise<T[]> => {
   const size = 100;
   let page = 0;
   let totalPages = 1;
@@ -341,7 +353,7 @@ const fetchAllFilterOptions = async <T,>(url: string): Promise<T[]> => {
       params: {
         page,
         size,
-        t: Date.now() // Tham số chống cache
+        t: Date.now(), // Tham số chống cache
       },
     });
 
@@ -420,9 +432,39 @@ const fetchFilters = async () => {
     console.error("Lỗi khi tải bộ lọc từ API:", error);
   }
 };
+const refreshFiltersSilently = async () => {
+  if (refreshingFilters.value) {
+    return;
+  }
 
+  refreshingFilters.value = true;
+
+  try {
+    await fetchFilters();
+  } finally {
+    refreshingFilters.value = false;
+  }
+};
+
+const handleWindowFocus = () => {
+  void refreshFiltersSilently();
+};
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === "visible") {
+    void refreshFiltersSilently();
+  }
+};
 onMounted(() => {
   fetchFilters();
+
+  window.addEventListener("focus", handleWindowFocus);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("focus", handleWindowFocus);
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 </script>
 

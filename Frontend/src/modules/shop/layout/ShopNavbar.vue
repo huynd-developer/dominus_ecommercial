@@ -110,7 +110,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, onBeforeUnmount, ref } from "vue";
 import { RouterLink } from "vue-router";
 import api from "@/common/api";
 
@@ -121,7 +121,7 @@ interface Brand {
 }
 
 const brands = ref<Brand[]>([]);
-
+const refreshingBrands = ref(false);
 const extractBrandContent = (responseData: any): Brand[] => {
   if (Array.isArray(responseData)) {
     return responseData;
@@ -176,9 +176,39 @@ const fetchBrands = async () => {
     brands.value = [];
   }
 };
+const refreshBrandsSilently = async () => {
+  if (refreshingBrands.value) {
+    return;
+  }
 
+  refreshingBrands.value = true;
+
+  try {
+    await fetchBrands();
+  } finally {
+    refreshingBrands.value = false;
+  }
+};
+
+const handleWindowFocus = () => {
+  void refreshBrandsSilently();
+};
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === "visible") {
+    void refreshBrandsSilently();
+  }
+};
 onMounted(() => {
   fetchBrands();
+
+  window.addEventListener("focus", handleWindowFocus);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("focus", handleWindowFocus);
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 
 const getBrandMonogram = (brandName: string) => {

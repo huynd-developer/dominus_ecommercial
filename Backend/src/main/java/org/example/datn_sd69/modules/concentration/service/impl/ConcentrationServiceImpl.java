@@ -93,7 +93,7 @@ public class ConcentrationServiceImpl implements ConcentrationService {
         Concentration concentration = getById(id);
 
         // ĐÃ THÊM: Kiểm tra ràng buộc
-        boolean isUsed = productRepository.existsByConcentrationIdAndIsDeletedFalse(id);
+        boolean isUsed = productRepository.existsByConcentrationId(id);
         if (isUsed) {
             throw new IllegalStateException("Không thể ném vào thùng rác! Đang có sản phẩm thuộc nồng độ này.");
         }

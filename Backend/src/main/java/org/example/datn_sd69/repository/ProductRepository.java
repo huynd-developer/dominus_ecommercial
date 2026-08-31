@@ -52,4 +52,6 @@ public interface ProductRepository
     boolean existsByFragranceFamilies_IdAndIsDeletedFalse(
             Integer fragranceFamilyId
     );
+
+    boolean existsByConcentrationId(Integer concentrationId);
 }
