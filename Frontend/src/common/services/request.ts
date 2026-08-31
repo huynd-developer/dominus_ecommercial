@@ -3,6 +3,7 @@ import axios, {
   type AxiosError,
   type InternalAxiosRequestConfig,
 } from "axios";
+import Swal from "sweetalert2";
 
 const baseURL = "http://localhost:8080";
 
@@ -13,6 +14,7 @@ const request: AxiosInstance = axios.create({
 });
 
 let isRefreshing = false;
+let handlingForcedLogout = false;
 let failedQueue: any[] = [];
 
 const processQueue = (error: any, token: string | null = null) => {
@@ -37,26 +39,81 @@ request.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error),
+  (error) => Promise.reject(error)
 );
 
 // 2. Interceptor nhận về của custom request
 request.interceptors.response.use(
   // Tự động bóc tách 1 lớp 'data' của axios
-  (response) => response.data, 
+  (response) => response.data,
   async (error: AxiosError) => {
     const originalRequest: any = error.config;
+    const requestUrl = originalRequest?.url || "";
+
+    const authorizationHeader =
+      typeof originalRequest?.headers?.get === "function"
+        ? originalRequest.headers.get("Authorization")
+        : originalRequest?.headers?.Authorization ||
+          originalRequest?.headers?.authorization;
+
+    const requestHadToken = Boolean(authorizationHeader);
 
     // Xử lý lỗi 403 (Cấm truy cập)
     if (error.response && error.response.status === 403) {
       const errorData: any = error.response.data;
-      
-      // Đã tắt cái alert quê mùa này đi
-      // alert(errorData?.message || "Bạn không có quyền thực hiện hành động này!"); 
-      
-      // Ghi log ngầm ra console để dev dễ fix bug
-      console.error("Lỗi 403 Forbidden:", errorData?.message); 
-      
+      const code = errorData?.code;
+
+      /*
+       * Chỉ logout khi BE xác nhận tài khoản đã bị vô hiệu hóa/xóa.
+       *
+       * KHÔNG logout với 403 phân quyền bình thường.
+       */
+      if (
+        (code === "ACCOUNT_DISABLED" || code === "ACCOUNT_REMOVED") &&
+        requestHadToken &&
+        !requestUrl.includes("/auth/") &&
+        !handlingForcedLogout
+      ) {
+        handlingForcedLogout = true;
+
+        const removed = code === "ACCOUNT_REMOVED";
+
+        await Swal.fire({
+          icon: "warning",
+          title: removed
+            ? "Tài khoản không còn tồn tại"
+            : "Tài khoản không còn hoạt động",
+          text:
+            errorData?.message ||
+            (removed
+              ? "Tài khoản của bạn không còn tồn tại hoặc đã bị xóa."
+              : "Tài khoản của bạn đã bị khóa hoặc không còn hoạt động. Vui lòng liên hệ quản trị viên."),
+          confirmButtonText: "Đồng ý",
+          confirmButtonColor: "#bd9a5f",
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+        });
+
+        localStorage.removeItem("token");
+        localStorage.removeItem("role");
+        localStorage.removeItem("name");
+        localStorage.removeItem("customerAvatarUrl");
+
+        if (window.location.pathname.startsWith("/admin")) {
+          window.location.href = "/admin/login";
+        } else {
+          window.location.href = "/login";
+        }
+
+        return Promise.reject(error);
+      }
+
+      /*
+       * 403 phân quyền bình thường:
+       * giữ nguyên hành vi cũ, không logout.
+       */
+      console.error("Lỗi 403 Forbidden:", errorData?.message);
+
       return Promise.reject(error);
     }
 
@@ -77,7 +134,11 @@ request.interceptors.response.use(
     }
 
     const refreshToken = localStorage.getItem("refreshToken");
-    if (!refreshToken || refreshToken === "null" || refreshToken === "undefined") {
+    if (
+      !refreshToken ||
+      refreshToken === "null" ||
+      refreshToken === "undefined"
+    ) {
       return Promise.reject(error);
     }
 
@@ -109,28 +170,31 @@ request.interceptors.response.use(
         const newAccessToken = resData.data.accessToken;
         localStorage.setItem("accessToken", newAccessToken);
         processQueue(null, newAccessToken);
-        
+
         if (!originalRequest.headers) {
           originalRequest.headers = new axios.AxiosHeaders();
         }
-        originalRequest.headers.set("Authorization", `Bearer ${newAccessToken}`);
-        return request(originalRequest); 
+        originalRequest.headers.set(
+          "Authorization",
+          `Bearer ${newAccessToken}`
+        );
+        return request(originalRequest);
       }
       throw new Error("Refresh token invalid");
     } catch (refreshError) {
       processQueue(refreshError, null);
       localStorage.removeItem("token");
-localStorage.removeItem("role");
-localStorage.removeItem("name");
-      
+      localStorage.removeItem("role");
+      localStorage.removeItem("name");
+
       if (window.location.pathname.startsWith("/admin")) {
-        window.location.href = "/login"; 
+        window.location.href = "/login";
       }
       return Promise.reject(error);
     } finally {
       isRefreshing = false;
     }
-  },
+  }
 );
 
 export default request;
