@@ -24,10 +24,14 @@
         </div>
 
         <button
-          v-if="posStore.cart.length > 0"
+          v-if="posStore.cart.length > 0 || !!posStore.activeHeldOrderId"
           class="btn btn-sm btn-outline-danger font-xs"
           type="button"
-          @click="handleCancelOrder"
+          @click="
+            posStore.activeHeldOrderId && posStore.cart.length === 0
+              ? handleCancelActiveHeldOrder()
+              : handleCancelOrder()
+          "
         >
           <i class="bi bi-trash"></i>
           {{ cancelOrderButtonLabel }}
@@ -1141,12 +1145,20 @@ const customerLocked = computed(() => {
 
 const cancelOrderButtonLabel = computed(() => {
   /*
-   * Trả lại logic cũ của nút header:
-   * - Đang mở đơn lưu tạm thì là "Đóng"
-   * - Các trường hợp còn lại là "Hủy"
+   * Case đặc biệt:
+   * Đơn lưu tạm vẫn tồn tại nhưng toàn bộ sản phẩm trong đơn
+   * không còn khả dụng/đã bị xóa khỏi danh sách POS.
    *
-   * Đổi phương thức thanh toán không nằm ở nút này.
-   * Nhân viên đổi phương thức bằng các nút Tiền mặt/VNPay/VietQR bên dưới.
+   * Phải cho phép hủy đơn lưu tạm để tránh đơn bị mắc kẹt.
+   */
+  if (posStore.activeHeldOrderId && posStore.cart.length === 0) {
+    return "Hủy đơn lưu tạm";
+  }
+
+  /*
+   * Giữ nguyên nghiệp vụ cũ:
+   * - Đơn lưu tạm còn sản phẩm -> chỉ "Đóng" form.
+   * - Đơn thường -> "Hủy".
    */
   if (posStore.activeHeldOrderId) {
     return "Đóng";
@@ -1317,8 +1329,7 @@ const filteredTransferTargets = computed(() => {
    * Người đó không phải là "đích chuyển" hợp lệ vì đơn đã thuộc họ.
    */
   const currentHeldOrder = (posStore.heldOrders || []).find(
-    (held: any) =>
-      Number(held.orderId) === Number(transferOrderId.value || 0)
+    (held: any) => Number(held.orderId) === Number(transferOrderId.value || 0)
   );
 
   const currentCashierId = Number(currentHeldOrder?.cashierId || 0);
@@ -1334,8 +1345,7 @@ const filteredTransferTargets = computed(() => {
    */
   const transferTargets = (posStore.transferTargets || []).filter(
     (employee: any) =>
-      !currentCashierId ||
-      Number(employee.employeeId) !== currentCashierId
+      !currentCashierId || Number(employee.employeeId) !== currentCashierId
   );
 
   if (!keyword) {
