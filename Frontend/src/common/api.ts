@@ -7,8 +7,13 @@ const api = axios.create({
 });
 
 /*
- * Tránh nhiều request cùng nhận 401 và mở nhiều popup
- * "Phiên đăng nhập đã hết hạn" cùng lúc.
+ * Tránh nhiều request cùng lỗi authentication
+ * và mở nhiều popup cùng lúc.
+ *
+ * Dùng chung cho:
+ * - 401: phiên đăng nhập hết hạn
+ * - ACCOUNT_DISABLED: tài khoản bị khóa/ngừng hoạt động
+ * - ACCOUNT_REMOVED: tài khoản đã bị xóa
  */
 let handlingUnauthorized = false;
 
@@ -41,23 +46,136 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => response,
+
   async (error) => {
     const originalRequest = error.config;
+
     const requestUrl = originalRequest?.url || "";
+
     const status = error.response?.status;
 
+    const responseCode = error.response?.data?.code;
+
+    const responseMessage = error.response?.data?.message;
+
     /*
+     * Kiểm tra request thực tế có gửi Bearer token hay không.
+     */
+    const requestHadToken = Boolean(
+      originalRequest?.headers?.Authorization ||
+        originalRequest?.headers?.authorization
+    );
+
+    /*
+     * =========================================================
+     * 1. TÀI KHOẢN BỊ KHÓA / NGỪNG HOẠT ĐỘNG / SOFT DELETE
+     * =========================================================
+     *
+     * Chỉ xử lý đúng code do JwtAuthenticationFilter trả về.
+     *
+     * KHÔNG bắt tất cả 403 vì 403 còn được dùng cho lỗi phân quyền.
+     */
+    if (
+      status === 403 &&
+      responseCode === "ACCOUNT_DISABLED" &&
+      !requestUrl.includes("/auth/") &&
+      requestHadToken &&
+      !handlingUnauthorized
+    ) {
+      handlingUnauthorized = true;
+
+      /*
+       * Hiển thị thông báo TRƯỚC.
+       *
+       * Không xóa token ngay để tránh router/watcher nào đó
+       * redirect làm popup biến mất trước khi user nhìn thấy.
+       */
+      await Swal.fire({
+        icon: "warning",
+        title: "Tài khoản không còn hoạt động",
+        text:
+          responseMessage ||
+          "Tài khoản của bạn đã bị khóa hoặc không còn hoạt động. Vui lòng liên hệ quản trị viên.",
+        confirmButtonText: "Đồng ý",
+        confirmButtonColor: "#bd9a5f",
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+      });
+
+      /*
+       * Sau khi user đã thấy thông báo mới clear session.
+       */
+      localStorage.removeItem("token");
+      localStorage.removeItem("role");
+      localStorage.removeItem("name");
+      localStorage.removeItem("customerAvatarUrl");
+
+      /*
+       * Employee/Admin -> admin login
+       * Customer       -> customer login
+       */
+      if (window.location.pathname.startsWith("/admin")) {
+        window.location.href = "/admin/login";
+      } else {
+        window.location.href = "/login";
+      }
+
+      return Promise.reject(error);
+    }
+
+    /*
+     * =========================================================
+     * 2. TÀI KHOẢN ĐÃ BỊ XÓA KHỎI DATABASE
+     * =========================================================
+     */
+    if (
+      status === 403 &&
+      responseCode === "ACCOUNT_REMOVED" &&
+      !requestUrl.includes("/auth/") &&
+      requestHadToken &&
+      !handlingUnauthorized
+    ) {
+      handlingUnauthorized = true;
+
+      await Swal.fire({
+        icon: "warning",
+        title: "Tài khoản không còn tồn tại",
+        text:
+          responseMessage ||
+          "Tài khoản của bạn không còn tồn tại hoặc đã bị xóa.",
+        confirmButtonText: "Đồng ý",
+        confirmButtonColor: "#bd9a5f",
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+      });
+
+      localStorage.removeItem("token");
+      localStorage.removeItem("role");
+      localStorage.removeItem("name");
+      localStorage.removeItem("customerAvatarUrl");
+
+      if (window.location.pathname.startsWith("/admin")) {
+        window.location.href = "/admin/login";
+      } else {
+        window.location.href = "/login";
+      }
+
+      return Promise.reject(error);
+    }
+
+    /*
+     * =========================================================
+     * 3. PHIÊN ĐĂNG NHẬP HẾT HẠN
+     * =========================================================
+     *
+     * GIỮ NGUYÊN LOGIC CŨ.
+     *
      * Chỉ coi là "phiên đăng nhập đã hết hạn" khi request thực tế
      * đã gửi Bearer token nhưng backend trả 401.
      *
      * Nếu request không có token thì không tự bật popup hết phiên;
      * các chức năng cần login sẽ tự yêu cầu đăng nhập theo flow hiện tại.
      */
-    const requestHadToken = Boolean(
-      originalRequest?.headers?.Authorization ||
-      originalRequest?.headers?.authorization
-    );
-
     if (
       status === 401 &&
       !requestUrl.includes("/auth/") &&
