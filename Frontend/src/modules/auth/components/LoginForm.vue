@@ -134,18 +134,20 @@
             d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"
           />
         </svg>
-        <span>{{ loading ? "Authenticating..." : "Đăng nhập" }}</span>
+        <!-- Chuyển 'Authenticating...' thành tiếng Việt -->
+        <span>{{ loading ? "Đang xác thực..." : "Đăng nhập" }}</span>
       </button>
     </form>
 
     <div v-if="!isAdminMode" class="text-center mt-4 pt-2 border-top">
       <p class="footer-link m-0">
-        New here?
+        <!-- Đổi text tiếng Anh -->
+        Chưa có tài khoản?
         <router-link
           to="/register"
           class="text-dark-blue fw-semibold decoration-none"
         >
-          Create an Account
+          Tạo tài khoản
         </router-link>
       </p>
     </div>

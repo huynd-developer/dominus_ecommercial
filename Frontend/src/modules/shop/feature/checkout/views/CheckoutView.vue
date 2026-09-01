@@ -451,8 +451,10 @@ const loadCustomerProfile = async () => {
     const phone = String(profile.phone || profile.customerPhone || "").trim();
 
     orderForm.value.profileLoaded = true;
-    if (!orderForm.value.customerName) orderForm.value.customerName = name;
-    if (!orderForm.value.customerPhone) orderForm.value.customerPhone = phone;
+    orderForm.value.profileLoaded = true;
+// Luôn lấy thông tin chính chủ từ Profile đè lên dữ liệu nháp
+orderForm.value.customerName = name;
+orderForm.value.customerPhone = phone;
   } catch (error: any) {
     await showError(
       "Vui lòng đăng nhập",
