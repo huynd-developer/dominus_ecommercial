@@ -28,179 +28,182 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     })
     @Query(
             value = """
-            SELECT o
-            FROM Order o
-            LEFT JOIN o.voucher voucher
-            WHERE
-                (
-                    :keyword IS NULL
-                    OR TRIM(:keyword) = ''
+                        SELECT o
+                        FROM Order o
+                        LEFT JOIN o.voucher voucher
+                        WHERE
+                            (
+                                :keyword IS NULL
+                                OR TRIM(:keyword) = ''
 
-                    OR LOWER(COALESCE(o.customerName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(COALESCE(o.customerPhone, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(COALESCE(o.shippingAddress, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                OR LOWER(COALESCE(o.customerName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                OR LOWER(COALESCE(o.customerPhone, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                OR LOWER(COALESCE(o.shippingAddress, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
 
-                    OR LOWER(COALESCE(o.paymentMethod, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(COALESCE(o.orderType, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(COALESCE(voucher.code, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                OR LOWER(COALESCE(o.paymentMethod, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                OR LOWER(COALESCE(o.orderType, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                OR LOWER(COALESCE(voucher.code, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
 
-                    OR CAST(o.id AS string) LIKE CONCAT('%', :keyword, '%')
-                    OR CONCAT('#', CAST(o.id AS string)) LIKE CONCAT('%', :keyword, '%')
+                                OR CAST(o.id AS string) LIKE CONCAT('%', :keyword, '%')
+                                OR CONCAT('#', CAST(o.id AS string)) LIKE CONCAT('%', :keyword, '%')
 
-                    OR LOWER(CONCAT('DH', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(CONCAT('DH0', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(CONCAT('DH00', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(CONCAT('DH000', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(CONCAT('DH0000', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(CONCAT('DH00000', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                OR LOWER(CONCAT('DH', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                OR LOWER(CONCAT('DH0', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                OR LOWER(CONCAT('DH00', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                OR LOWER(CONCAT('DH000', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                OR LOWER(CONCAT('DH0000', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                OR LOWER(CONCAT('DH00000', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
 
-                    OR EXISTS (
-                        SELECT 1
-                        FROM OrderItem oi
-                        LEFT JOIN oi.productVariant pv
-                        LEFT JOIN pv.product product
-                        LEFT JOIN pv.capacity capacity
-                        LEFT JOIN pv.bottleType bottleType
-                        WHERE oi.order = o
-                          AND (
-                              LOWER(COALESCE(product.name, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                              OR LOWER(COALESCE(pv.sku, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                              OR LOWER(COALESCE(bottleType.name, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                              OR CAST(capacity.value AS string) LIKE CONCAT('%', :keyword, '%')
-                              OR LOWER(COALESCE(oi.note, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                          )
-                    )
-                )
+                                OR EXISTS (
+                                    SELECT 1
+                                    FROM OrderItem oi
+                                    LEFT JOIN oi.productVariant pv
+                                    LEFT JOIN pv.product product
+                                    LEFT JOIN pv.capacity capacity
+                                    LEFT JOIN pv.bottleType bottleType
+                                    WHERE oi.order = o
+                                      AND (
+                                          LOWER(COALESCE(product.name, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                          OR LOWER(COALESCE(pv.sku, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                          OR LOWER(COALESCE(bottleType.name, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                          OR CAST(capacity.value AS string) LIKE CONCAT('%', :keyword, '%')
+                                          OR LOWER(COALESCE(oi.note, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                      )
+                                )
+                            )
 
-                AND (:status IS NULL OR o.status = :status)
+                            AND (:status IS NULL OR o.status = :status)
 
-                AND (
-                    :orderType IS NULL
-                    OR TRIM(:orderType) = ''
-                    OR UPPER(COALESCE(o.orderType, '')) = UPPER(:orderType)
-                )
+                            AND (
+                                :orderType IS NULL
+                                OR TRIM(:orderType) = ''
+                                OR UPPER(COALESCE(o.orderType, '')) = UPPER(:orderType)
+                            )
 
-                AND (
-                    :paymentMethod IS NULL
-                    OR TRIM(:paymentMethod) = ''
-                    OR UPPER(:paymentMethod) = 'ALL'
-                    OR (
-                        UPPER(:paymentMethod) = 'MIXED'
-                        AND UPPER(COALESCE(o.paymentMethod, '')) LIKE 'MIXED%'
-                    )
-                    OR UPPER(COALESCE(o.paymentMethod, '')) = UPPER(:paymentMethod)
-                )
+                            AND (
+                                :paymentMethod IS NULL
+                                OR TRIM(:paymentMethod) = ''
+                                OR UPPER(:paymentMethod) = 'ALL'
+                                OR (
+                                    UPPER(:paymentMethod) = 'MIXED'
+                                    AND UPPER(COALESCE(o.paymentMethod, '')) LIKE 'MIXED%'
+                                )
+                                OR UPPER(COALESCE(o.paymentMethod, '')) = UPPER(:paymentMethod)
+                            )
 
-                AND (:fromDate IS NULL OR o.createdAt >= :fromDate)
-                AND (:toDate IS NULL OR o.createdAt < :toDate)
+                            AND (:fromDate IS NULL OR o.createdAt >= :fromDate)
+                            AND (:toDate IS NULL OR o.createdAt < :toDate)
 
-                AND (:minAmount IS NULL OR o.finalAmount >= :minAmount)
-                AND (:maxAmount IS NULL OR o.finalAmount <= :maxAmount)
+                            AND (:minAmount IS NULL OR o.finalAmount >= :minAmount)
+                            AND (:maxAmount IS NULL OR o.finalAmount <= :maxAmount)
 
-                AND (
-                    o.paymentMethod IS NULL
-                    OR UPPER(o.paymentMethod) <> 'HOLD'
-                )
-                AND NOT (
-                    UPPER(COALESCE(o.orderType, '')) = 'ONLINE'
-                    AND (o.isPaymentReported IS NULL OR o.isPaymentReported = false)
-                    AND UPPER(COALESCE(o.paymentMethod, '')) IN (
-                        'VNPAY',
-                        'VIETQR',
-                        'MIXED_VNPAY',
-                        'MIXED_VIETQR'
-                    )
-                    AND o.status IN (0, 4)
-                )
-            ORDER BY o.createdAt DESC
-        """,
+                            AND (
+                                o.paymentMethod IS NULL
+                                OR UPPER(o.paymentMethod) <> 'HOLD'
+                            )
+                            AND NOT (
+                                UPPER(COALESCE(o.orderType, '')) = 'ONLINE'
+                                AND (o.isPaymentReported IS NULL OR o.isPaymentReported = false)
+                                AND UPPER(COALESCE(o.paymentMethod, '')) IN (
+                                    'VNPAY',
+                                    'VIETQR',
+                                    'MIXED_VNPAY',
+                                    'MIXED_VIETQR'
+                                )
+                                AND o.status IN (0, 4)
+                            )
+                        ORDER BY
+                                                     CASE WHEN o.status = 0 THEN 0 ELSE 1 END ASC,
+                                                     o.createdAt DESC,
+                                                     o.id DESC
+                    """,
             countQuery = """
-            SELECT COUNT(o)
-            FROM Order o
-            LEFT JOIN o.voucher voucher
-            WHERE
-                (
-                    :keyword IS NULL
-                    OR TRIM(:keyword) = ''
+                                SELECT COUNT(o)
+                                FROM Order o
+                                LEFT JOIN o.voucher voucher
+                                WHERE
+                                    (
+                                        :keyword IS NULL
+                                        OR TRIM(:keyword) = ''
 
-                    OR LOWER(COALESCE(o.customerName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(COALESCE(o.customerPhone, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(COALESCE(o.shippingAddress, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                        OR LOWER(COALESCE(o.customerName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                        OR LOWER(COALESCE(o.customerPhone, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                        OR LOWER(COALESCE(o.shippingAddress, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
 
-                    OR LOWER(COALESCE(o.paymentMethod, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(COALESCE(o.orderType, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(COALESCE(voucher.code, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                        OR LOWER(COALESCE(o.paymentMethod, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                        OR LOWER(COALESCE(o.orderType, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                        OR LOWER(COALESCE(voucher.code, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
 
-                    OR CAST(o.id AS string) LIKE CONCAT('%', :keyword, '%')
-                    OR CONCAT('#', CAST(o.id AS string)) LIKE CONCAT('%', :keyword, '%')
+                                        OR CAST(o.id AS string) LIKE CONCAT('%', :keyword, '%')
+                                        OR CONCAT('#', CAST(o.id AS string)) LIKE CONCAT('%', :keyword, '%')
 
-                    OR LOWER(CONCAT('DH', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(CONCAT('DH0', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(CONCAT('DH00', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(CONCAT('DH000', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(CONCAT('DH0000', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(CONCAT('DH00000', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                        OR LOWER(CONCAT('DH', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                        OR LOWER(CONCAT('DH0', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                        OR LOWER(CONCAT('DH00', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                        OR LOWER(CONCAT('DH000', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                        OR LOWER(CONCAT('DH0000', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                        OR LOWER(CONCAT('DH00000', CAST(o.id AS string))) LIKE LOWER(CONCAT('%', :keyword, '%'))
 
-                    OR EXISTS (
-                        SELECT 1
-                        FROM OrderItem oi
-                        LEFT JOIN oi.productVariant pv
-                        LEFT JOIN pv.product product
-                        LEFT JOIN pv.capacity capacity
-                        LEFT JOIN pv.bottleType bottleType
-                        WHERE oi.order = o
-                          AND (
-                              LOWER(COALESCE(product.name, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                              OR LOWER(COALESCE(pv.sku, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                              OR LOWER(COALESCE(bottleType.name, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                              OR CAST(capacity.value AS string) LIKE CONCAT('%', :keyword, '%')
-                              OR LOWER(COALESCE(oi.note, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                          )
+                                        OR EXISTS (
+                                            SELECT 1
+                                            FROM OrderItem oi
+                                            LEFT JOIN oi.productVariant pv
+                                            LEFT JOIN pv.product product
+                                            LEFT JOIN pv.capacity capacity
+                                            LEFT JOIN pv.bottleType bottleType
+                                            WHERE oi.order = o
+                                              AND (
+                                                  LOWER(COALESCE(product.name, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                                  OR LOWER(COALESCE(pv.sku, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                                  OR LOWER(COALESCE(bottleType.name, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                                  OR CAST(capacity.value AS string) LIKE CONCAT('%', :keyword, '%')
+                                                  OR LOWER(COALESCE(oi.note, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                                              )
+                                        )
+                                    )
+
+                                    AND (:status IS NULL OR o.status = :status)
+
+                                    AND (
+                                        :orderType IS NULL
+                                        OR TRIM(:orderType) = ''
+                                        OR UPPER(COALESCE(o.orderType, '')) = UPPER(:orderType)
+                                    )
+
+                                    AND (
+                                        :paymentMethod IS NULL
+                                        OR TRIM(:paymentMethod) = ''
+                                        OR UPPER(:paymentMethod) = 'ALL'
+                                        OR (
+                                            UPPER(:paymentMethod) = 'MIXED'
+                                            AND UPPER(COALESCE(o.paymentMethod, '')) LIKE 'MIXED%'
+                                        )
+                                        OR UPPER(COALESCE(o.paymentMethod, '')) = UPPER(:paymentMethod)
+                                    )
+
+                                    AND (:fromDate IS NULL OR o.createdAt >= :fromDate)
+                                    AND (:toDate IS NULL OR o.createdAt < :toDate)
+
+                                    AND (:minAmount IS NULL OR o.finalAmount >= :minAmount)
+                                    AND (:maxAmount IS NULL OR o.finalAmount <= :maxAmount)
+
+                                    AND (
+                        o.paymentMethod IS NULL
+                        OR UPPER(o.paymentMethod) <> 'HOLD'
                     )
-                )
 
-                AND (:status IS NULL OR o.status = :status)
-
-                AND (
-                    :orderType IS NULL
-                    OR TRIM(:orderType) = ''
-                    OR UPPER(COALESCE(o.orderType, '')) = UPPER(:orderType)
-                )
-
-                AND (
-                    :paymentMethod IS NULL
-                    OR TRIM(:paymentMethod) = ''
-                    OR UPPER(:paymentMethod) = 'ALL'
-                    OR (
-                        UPPER(:paymentMethod) = 'MIXED'
-                        AND UPPER(COALESCE(o.paymentMethod, '')) LIKE 'MIXED%'
+                    AND NOT (
+                        UPPER(COALESCE(o.orderType, '')) = 'ONLINE'
+                        AND (o.isPaymentReported IS NULL OR o.isPaymentReported = false)
+                        AND UPPER(COALESCE(o.paymentMethod, '')) IN (
+                            'VNPAY',
+                            'VIETQR',
+                            'MIXED_VNPAY',
+                            'MIXED_VIETQR'
+                        )
+                        AND o.status IN (0, 4)
                     )
-                    OR UPPER(COALESCE(o.paymentMethod, '')) = UPPER(:paymentMethod)
-                )
-
-                AND (:fromDate IS NULL OR o.createdAt >= :fromDate)
-                AND (:toDate IS NULL OR o.createdAt < :toDate)
-
-                AND (:minAmount IS NULL OR o.finalAmount >= :minAmount)
-                AND (:maxAmount IS NULL OR o.finalAmount <= :maxAmount)
-
-                AND (
-    o.paymentMethod IS NULL
-    OR UPPER(o.paymentMethod) <> 'HOLD'
-)
-
-AND NOT (
-    UPPER(COALESCE(o.orderType, '')) = 'ONLINE'
-    AND (o.isPaymentReported IS NULL OR o.isPaymentReported = false)
-    AND UPPER(COALESCE(o.paymentMethod, '')) IN (
-        'VNPAY',
-        'VIETQR',
-        'MIXED_VNPAY',
-        'MIXED_VIETQR'
-    )
-    AND o.status IN (0, 4)
-)
-"""
+                    """
     )
     Page<Order> searchAdminOrders(
             @Param("keyword") String keyword,
@@ -305,11 +308,11 @@ AND NOT (
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
-        SELECT o
-        FROM Order o
-        WHERE o.id = :orderId
-          AND o.customer.userId = :customerId
-    """)
+                SELECT o
+                FROM Order o
+                WHERE o.id = :orderId
+                  AND o.customer.userId = :customerId
+            """)
     Optional<Order> findByIdAndCustomer_UserIdForUpdate(
             @Param("orderId") Integer orderId,
             @Param("customerId") Integer customerId
@@ -323,14 +326,14 @@ AND NOT (
             "voucher"
     })
     @Query("""
-        SELECT o
-        FROM Order o
-        WHERE o.status = 0
-          AND UPPER(o.paymentMethod) = 'HOLD'
-          AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
-          AND (:cashierId IS NULL OR o.cashier.userId = :cashierId)
-        ORDER BY o.createdAt DESC
-    """)
+                SELECT o
+                FROM Order o
+                WHERE o.status = 0
+                  AND UPPER(o.paymentMethod) = 'HOLD'
+                  AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
+                  AND (:cashierId IS NULL OR o.cashier.userId = :cashierId)
+                ORDER BY o.createdAt DESC
+            """)
     List<Order> findHeldOrders(@Param("cashierId") Integer cashierId);
 
     @EntityGraph(attributePaths = {
@@ -341,10 +344,10 @@ AND NOT (
             "voucher"
     })
     @Query("""
-        SELECT o
-        FROM Order o
-        WHERE o.id = :orderId
-    """)
+                SELECT o
+                FROM Order o
+                WHERE o.id = :orderId
+            """)
     Optional<Order> findDetailById(@Param("orderId") Integer orderId);
 
     /**
@@ -360,10 +363,10 @@ AND NOT (
             "voucher"
     })
     @Query("""
-        SELECT o
-        FROM Order o
-        WHERE o.id = :orderId
-    """)
+                SELECT o
+                FROM Order o
+                WHERE o.id = :orderId
+            """)
     Optional<Order> findDetailByIdForUpdate(
             @Param("orderId") Integer orderId
     );
@@ -376,13 +379,13 @@ AND NOT (
             "voucher"
     })
     @Query("""
-        SELECT o
-        FROM Order o
-        WHERE o.id = :orderId
-          AND o.status = 0
-          AND UPPER(o.paymentMethod) = 'HOLD'
-          AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
-    """)
+                SELECT o
+                FROM Order o
+                WHERE o.id = :orderId
+                  AND o.status = 0
+                  AND UPPER(o.paymentMethod) = 'HOLD'
+                  AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
+            """)
     Optional<Order> findHeldOrderById(@Param("orderId") Integer orderId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -394,13 +397,13 @@ AND NOT (
             "voucher"
     })
     @Query("""
-        SELECT o
-        FROM Order o
-        WHERE o.id = :orderId
-          AND o.status = 0
-          AND UPPER(o.paymentMethod) = 'HOLD'
-          AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
-    """)
+                SELECT o
+                FROM Order o
+                WHERE o.id = :orderId
+                  AND o.status = 0
+                  AND UPPER(o.paymentMethod) = 'HOLD'
+                  AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
+            """)
     Optional<Order> findHeldOrderByIdForUpdate(
             @Param("orderId") Integer orderId
     );
@@ -418,14 +421,14 @@ AND NOT (
             "voucher"
     })
     @Query("""
-        SELECT o
-        FROM Order o
-        WHERE o.status = 0
-          AND UPPER(o.paymentMethod) = 'HOLD'
-          AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
-          AND o.customerPhone = :phone
-        ORDER BY o.createdAt DESC
-    """)
+                SELECT o
+                FROM Order o
+                WHERE o.status = 0
+                  AND UPPER(o.paymentMethod) = 'HOLD'
+                  AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
+                  AND o.customerPhone = :phone
+                ORDER BY o.createdAt DESC
+            """)
     List<Order> findActiveHeldOrdersByCustomerPhone(@Param("phone") String phone);
 
     @EntityGraph(attributePaths = {
@@ -436,19 +439,19 @@ AND NOT (
             "voucher"
     })
     @Query("""
-        SELECT o
-        FROM Order o
-        WHERE o.id = :orderId
-          AND o.status = 0
-          AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
-          AND UPPER(o.paymentMethod) IN (
-              'VNPAY',
-              'VIETQR',
-              'MIXED',
-              'MIXED_VNPAY',
-              'MIXED_VIETQR'
-          )
-    """)
+                SELECT o
+                FROM Order o
+                WHERE o.id = :orderId
+                  AND o.status = 0
+                  AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
+                  AND UPPER(o.paymentMethod) IN (
+                      'VNPAY',
+                      'VIETQR',
+                      'MIXED',
+                      'MIXED_VNPAY',
+                      'MIXED_VIETQR'
+                  )
+            """)
     Optional<Order> findPendingPaymentOrderById(@Param("orderId") Integer orderId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -460,30 +463,30 @@ AND NOT (
             "voucher"
     })
     @Query("""
-        SELECT o
-        FROM Order o
-        WHERE o.id = :orderId
-          AND o.status = 0
-          AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
-          AND UPPER(o.paymentMethod) IN (
-              'VNPAY',
-              'VIETQR',
-              'MIXED',
-              'MIXED_VNPAY',
-              'MIXED_VIETQR'
-          )
-    """)
+                SELECT o
+                FROM Order o
+                WHERE o.id = :orderId
+                  AND o.status = 0
+                  AND UPPER(o.orderType) IN ('POS', 'IN_STORE')
+                  AND UPPER(o.paymentMethod) IN (
+                      'VNPAY',
+                      'VIETQR',
+                      'MIXED',
+                      'MIXED_VNPAY',
+                      'MIXED_VIETQR'
+                  )
+            """)
     Optional<Order> findPendingPaymentOrderByIdForUpdate(
             @Param("orderId") Integer orderId
     );
 
     @Query(value = """
-        SELECT COALESCE(SUM(o.FinalAmount - ISNULL(o.Shippingfee, 0)), 0)
-        FROM [Orders] o
-        WHERE o.Status = :status
-          AND o.CompletedAt >= :fromDate
-          AND o.CompletedAt < :toDate
-    """, nativeQuery = true)
+                SELECT COALESCE(SUM(o.FinalAmount - ISNULL(o.Shippingfee, 0)), 0)
+                FROM [Orders] o
+                WHERE o.Status = :status
+                  AND o.CompletedAt >= :fromDate
+                  AND o.CompletedAt < :toDate
+            """, nativeQuery = true)
     BigDecimal sumFinalAmountByStatusAndCompletedAtBetween(
             @Param("status") Integer status,
             @Param("fromDate") LocalDateTime fromDate,
@@ -491,12 +494,12 @@ AND NOT (
     );
 
     @Query(value = """
-        SELECT COUNT(o.Id)
-        FROM [Orders] o
-        WHERE o.Status = :status
-          AND o.CompletedAt >= :fromDate
-          AND o.CompletedAt < :toDate
-    """, nativeQuery = true)
+                SELECT COUNT(o.Id)
+                FROM [Orders] o
+                WHERE o.Status = :status
+                  AND o.CompletedAt >= :fromDate
+                  AND o.CompletedAt < :toDate
+            """, nativeQuery = true)
     Long countOrdersByStatusAndCompletedAtBetween(
             @Param("status") Integer status,
             @Param("fromDate") LocalDateTime fromDate,
@@ -504,13 +507,13 @@ AND NOT (
     );
 
     @Query(value = """
-        SELECT *
-        FROM [Orders] o
-        WHERE o.Status = :status
-          AND o.CompletedAt >= :fromDate
-          AND o.CompletedAt < :toDate
-        ORDER BY o.CompletedAt ASC
-    """, nativeQuery = true)
+                SELECT *
+                FROM [Orders] o
+                WHERE o.Status = :status
+                  AND o.CompletedAt >= :fromDate
+                  AND o.CompletedAt < :toDate
+                ORDER BY o.CompletedAt ASC
+            """, nativeQuery = true)
     List<Order> findCompletedOrdersForChart(
             @Param("status") Integer status,
             @Param("fromDate") LocalDateTime fromDate,
@@ -518,13 +521,13 @@ AND NOT (
     );
 
     @Query("""
-        SELECT o.orderType, COALESCE(SUM(o.finalAmount - COALESCE(o.shippingFee, 0)), 0), COUNT(o)
-        FROM Order o
-        WHERE o.status = :status
-          AND o.completedAt >= :fromDate
-          AND o.completedAt < :toDate
-        GROUP BY o.orderType
-    """)
+                SELECT o.orderType, COALESCE(SUM(o.finalAmount - COALESCE(o.shippingFee, 0)), 0), COUNT(o)
+                FROM Order o
+                WHERE o.status = :status
+                  AND o.completedAt >= :fromDate
+                  AND o.completedAt < :toDate
+                GROUP BY o.orderType
+            """)
     List<Object[]> getSummaryBreakdownByOrderType(
             @Param("status") Integer status,
             @Param("fromDate") LocalDateTime fromDate,
@@ -551,73 +554,73 @@ AND NOT (
      * không bị gộp nhầm vào POS.
      */
     @Query(value = """
-        SELECT COALESCE(SUM(
-            CASE
-                WHEN UPPER(LTRIM(RTRIM(COALESCE(o.OrderType, '')))) = 'ONLINE'
-                    THEN o.FinalAmount - ISNULL(o.Shippingfee, 0)
-                ELSE o.FinalAmount
-            END
-        ), 0)
-        FROM [Orders] o
-        WHERE o.CompletedAt IS NOT NULL
-          AND o.CompletedAt >= :fromDate
-          AND o.CompletedAt < :toDate
-          AND UPPER(LTRIM(RTRIM(COALESCE(o.OrderType, ''))))
-              IN ('ONLINE', 'IN_STORE', 'POS')
-    """, nativeQuery = true)
+                SELECT COALESCE(SUM(
+                    CASE
+                        WHEN UPPER(LTRIM(RTRIM(COALESCE(o.OrderType, '')))) = 'ONLINE'
+                            THEN o.FinalAmount - ISNULL(o.Shippingfee, 0)
+                        ELSE o.FinalAmount
+                    END
+                ), 0)
+                FROM [Orders] o
+                WHERE o.CompletedAt IS NOT NULL
+                  AND o.CompletedAt >= :fromDate
+                  AND o.CompletedAt < :toDate
+                  AND UPPER(LTRIM(RTRIM(COALESCE(o.OrderType, ''))))
+                      IN ('ONLINE', 'IN_STORE', 'POS')
+            """, nativeQuery = true)
     BigDecimal sumGrossSalesRevenueForOwnerReport(
             @Param("fromDate") LocalDateTime fromDate,
             @Param("toDate") LocalDateTime toDate
     );
 
     @Query(value = """
-        SELECT COUNT(o.Id)
-        FROM [Orders] o
-        WHERE o.CompletedAt IS NOT NULL
-          AND o.CompletedAt >= :fromDate
-          AND o.CompletedAt < :toDate
-          AND UPPER(LTRIM(RTRIM(COALESCE(o.OrderType, ''))))
-              IN ('ONLINE', 'IN_STORE', 'POS')
-    """, nativeQuery = true)
+                SELECT COUNT(o.Id)
+                FROM [Orders] o
+                WHERE o.CompletedAt IS NOT NULL
+                  AND o.CompletedAt >= :fromDate
+                  AND o.CompletedAt < :toDate
+                  AND UPPER(LTRIM(RTRIM(COALESCE(o.OrderType, ''))))
+                      IN ('ONLINE', 'IN_STORE', 'POS')
+            """, nativeQuery = true)
     Long countCompletedSalesForOwnerReport(
             @Param("fromDate") LocalDateTime fromDate,
             @Param("toDate") LocalDateTime toDate
     );
 
     @Query(value = """
-        SELECT *
-        FROM [Orders] o
-        WHERE o.CompletedAt IS NOT NULL
-          AND o.CompletedAt >= :fromDate
-          AND o.CompletedAt < :toDate
-          AND UPPER(LTRIM(RTRIM(COALESCE(o.OrderType, ''))))
-              IN ('ONLINE', 'IN_STORE', 'POS')
-        ORDER BY o.CompletedAt ASC, o.Id ASC
-    """, nativeQuery = true)
+                SELECT *
+                FROM [Orders] o
+                WHERE o.CompletedAt IS NOT NULL
+                  AND o.CompletedAt >= :fromDate
+                  AND o.CompletedAt < :toDate
+                  AND UPPER(LTRIM(RTRIM(COALESCE(o.OrderType, ''))))
+                      IN ('ONLINE', 'IN_STORE', 'POS')
+                ORDER BY o.CompletedAt ASC, o.Id ASC
+            """, nativeQuery = true)
     List<Order> findSalesForOwnerReportChart(
             @Param("fromDate") LocalDateTime fromDate,
             @Param("toDate") LocalDateTime toDate
     );
 
     @Query(value = """
-        SELECT
-            UPPER(LTRIM(RTRIM(o.OrderType))) AS orderType,
-            COALESCE(SUM(
-                CASE
-                    WHEN UPPER(LTRIM(RTRIM(o.OrderType))) = 'ONLINE'
-                        THEN o.FinalAmount - ISNULL(o.Shippingfee, 0)
-                    ELSE o.FinalAmount
-                END
-            ), 0) AS revenue,
-            COUNT(o.Id) AS totalOrders
-        FROM [Orders] o
-        WHERE o.CompletedAt IS NOT NULL
-          AND o.CompletedAt >= :fromDate
-          AND o.CompletedAt < :toDate
-          AND UPPER(LTRIM(RTRIM(COALESCE(o.OrderType, ''))))
-              IN ('ONLINE', 'IN_STORE', 'POS')
-        GROUP BY UPPER(LTRIM(RTRIM(o.OrderType)))
-    """, nativeQuery = true)
+                SELECT
+                    UPPER(LTRIM(RTRIM(o.OrderType))) AS orderType,
+                    COALESCE(SUM(
+                        CASE
+                            WHEN UPPER(LTRIM(RTRIM(o.OrderType))) = 'ONLINE'
+                                THEN o.FinalAmount - ISNULL(o.Shippingfee, 0)
+                            ELSE o.FinalAmount
+                        END
+                    ), 0) AS revenue,
+                    COUNT(o.Id) AS totalOrders
+                FROM [Orders] o
+                WHERE o.CompletedAt IS NOT NULL
+                  AND o.CompletedAt >= :fromDate
+                  AND o.CompletedAt < :toDate
+                  AND UPPER(LTRIM(RTRIM(COALESCE(o.OrderType, ''))))
+                      IN ('ONLINE', 'IN_STORE', 'POS')
+                GROUP BY UPPER(LTRIM(RTRIM(o.OrderType)))
+            """, nativeQuery = true)
     List<Object[]> getOwnerReportSalesBreakdownByOrderType(
             @Param("fromDate") LocalDateTime fromDate,
             @Param("toDate") LocalDateTime toDate
@@ -625,12 +628,12 @@ AND NOT (
 
     // --- JOB TỰ ĐỘNG HỦY ĐƠN ONLINE TRẢ TRƯỚC CHƯA THANH TOÁN ---
     @Query("""
-        SELECT o FROM Order o
-        WHERE o.status = 0
-          AND UPPER(o.orderType) = 'ONLINE'
-          AND (o.isPaymentReported IS NULL OR o.isPaymentReported = false)
-          AND UPPER(o.paymentMethod) IN ('VNPAY', 'VIETQR', 'MIXED_VNPAY', 'MIXED_VIETQR')
-          AND o.createdAt <= :timeoutThreshold
-    """)
+                SELECT o FROM Order o
+                WHERE o.status = 0
+                  AND UPPER(o.orderType) = 'ONLINE'
+                  AND (o.isPaymentReported IS NULL OR o.isPaymentReported = false)
+                  AND UPPER(o.paymentMethod) IN ('VNPAY', 'VIETQR', 'MIXED_VNPAY', 'MIXED_VIETQR')
+                  AND o.createdAt <= :timeoutThreshold
+            """)
     List<Order> findUnpaidPrepaidOrders(@Param("timeoutThreshold") LocalDateTime timeoutThreshold);
 }

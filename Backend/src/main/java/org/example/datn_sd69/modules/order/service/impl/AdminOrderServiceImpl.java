@@ -57,7 +57,6 @@ import java.time.format.DateTimeParseException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -239,7 +238,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         List<AdminOrderResponse> responses = orderPage.getContent()
                 .stream()
-                .sorted(this::compareOrdersForAdminList)
                 .map(order -> mapOrderToResponse(order, false))
                 .toList();
 
@@ -1172,16 +1170,16 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     ) {
         jdbcTemplate.execute(
                 """
-                EXEC dbo.usp_PostStockMovement
-                    @InventoryLotId = ?,
-                    @MovementType = ?,
-                    @QuantityChange = ?,
-                    @CreatedBy = ?,
-                    @ReferenceType = ?,
-                    @ReferenceId = ?,
-                    @ReferenceLineId = ?,
-                    @Reason = ?
-                """,
+                        EXEC dbo.usp_PostStockMovement
+                            @InventoryLotId = ?,
+                            @MovementType = ?,
+                            @QuantityChange = ?,
+                            @CreatedBy = ?,
+                            @ReferenceType = ?,
+                            @ReferenceId = ?,
+                            @ReferenceLineId = ?,
+                            @Reason = ?
+                        """,
                 (PreparedStatementCallback<Void>) statement -> {
                     statement.setObject(1, inventoryLotId);
                     statement.setByte(2, movementType);
@@ -1870,58 +1868,6 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         }
 
         return response;
-    }
-
-    private int compareOrdersForAdminList(Order first, Order second) {
-        boolean firstReturnRequested = safeStatus(first) == STATUS_RETURN_REQUESTED;
-        boolean secondReturnRequested = safeStatus(second) == STATUS_RETURN_REQUESTED;
-
-        if (firstReturnRequested != secondReturnRequested) {
-            return firstReturnRequested ? -1 : 1;
-        }
-
-        LocalDateTime firstTime = firstReturnRequested
-                ? getLatestReturnRequestedAt(first)
-                : getOrderSortTime(first);
-
-        LocalDateTime secondTime = secondReturnRequested
-                ? getLatestReturnRequestedAt(second)
-                : getOrderSortTime(second);
-
-        int timeCompare = Comparator
-                .nullsLast(LocalDateTime::compareTo)
-                .compare(secondTime, firstTime);
-
-        if (timeCompare != 0) {
-            return timeCompare;
-        }
-
-        return Integer.compare(
-                second == null || second.getId() == null ? 0 : second.getId(),
-                first == null || first.getId() == null ? 0 : first.getId()
-        );
-    }
-
-    private LocalDateTime getOrderSortTime(Order order) {
-        if (order == null) {
-            return null;
-        }
-
-        if (order.getCompletedAt() != null) {
-            return order.getCompletedAt();
-        }
-
-        return order.getCreatedAt();
-    }
-
-    private LocalDateTime getLatestReturnRequestedAt(Order order) {
-        ReturnRequest returnRequest = getLatestReturnRequest(order);
-
-        if (returnRequest != null && returnRequest.getCreatedAt() != null) {
-            return returnRequest.getCreatedAt();
-        }
-
-        return getOrderSortTime(order);
     }
 
     private ReturnRequest getLatestReturnRequest(Order order) {
