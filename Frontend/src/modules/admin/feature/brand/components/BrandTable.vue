@@ -3,13 +3,15 @@
     <table class="table align-middle brand-table">
       <thead>
         <tr>
-          <th scope="col" width="90">Ảnh Logo</th>
-          <th scope="col" width="30%">Tên thương hiệu</th>
-          <th scope="col" width="35%">Mô tả</th>
-          <th scope="col" class="text-center" width="140">Trạng thái (Ẩn/Hiện)</th>
+          <th scope="col" width="110">Ảnh Logo</th>
+          <th scope="col">Tên thương hiệu</th>
+          <th scope="col" class="text-center" width="180">
+            Trạng thái (Ẩn/Hiện)
+          </th>
           <th scope="col" class="text-center" width="140">Thao tác</th>
         </tr>
       </thead>
+
       <tbody>
         <tr v-for="brand in brands" :key="brand.id">
           <td>
@@ -21,16 +23,15 @@
                 decoding="async"
                 @error="onImageError"
               />
+
               <div v-else class="image-placeholder">
                 <i class="bi bi-image"></i>
               </div>
             </div>
           </td>
 
-          <td class="brand-name">{{ brand.name }}</td>
-
-          <td class="brand-desc text-truncate" :title="brand.description">
-            {{ brand.description || 'Chưa có mô tả' }}
+          <td class="brand-name">
+            {{ brand.name }}
           </td>
 
           <td class="text-center">
@@ -66,7 +67,7 @@
         </tr>
 
         <tr v-if="brands.length === 0">
-          <td colspan="5" class="empty">
+          <td colspan="4" class="empty">
             <i class="bi bi-star"></i>
             <p>Không tìm thấy thương hiệu nào.</p>
           </td>
@@ -80,23 +81,41 @@
 import type { Brand } from "../types/brand.type";
 
 defineProps<{ brands: Brand[] }>();
-const emit = defineEmits(["edit", "delete", "toggle-status"]);
+
+const emit = defineEmits([
+  "edit",
+  "delete",
+  "toggle-status"
+]);
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
 const getImageUrl = (url?: string) => {
   if (!url) return "";
-  return url.startsWith("http") ? url : `${API_URL}${url}`;
+
+  return url.startsWith("http")
+    ? url
+    : `${API_URL}${url}`;
 };
 
 const FALLBACK_IMAGE =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(`
-  <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
-    <rect width="100%" height="100%" fill="#f1f5f9"/>
-    <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#94a3b8" font-family="Arial" font-size="14">Không có ảnh</text>
-  </svg>
-`);
+    <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+      <rect width="100%" height="100%" fill="#f1f5f9"/>
+      <text
+        x="50%"
+        y="50%"
+        dominant-baseline="middle"
+        text-anchor="middle"
+        fill="#94a3b8"
+        font-family="Arial"
+        font-size="14"
+      >
+        Không có ảnh
+      </text>
+    </svg>
+  `);
 
 const onImageError = (event: Event) => {
   const img = event.target as HTMLImageElement;
@@ -146,12 +165,6 @@ const onImageError = (event: Event) => {
   font-weight: 600;
   color: #1e293b;
   font-size: 15px;
-}
-
-.brand-desc {
-  max-width: 250px;
-  color: #64748b;
-  font-size: 13px;
 }
 
 .image-box {
