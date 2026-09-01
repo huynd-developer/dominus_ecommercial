@@ -28,18 +28,27 @@
 
     <div class="order-filter-tabs mb-3">
       <div class="order-status-tabs">
-        <button
-          v-for="item in statusTabs"
-          :key="String(item.value)"
-          type="button"
-          class="underline-tab"
-          :class="{ active: status === item.value }"
-          :disabled="loading"
-          @click="changeStatusTab(item.value)"
-        >
-          {{ item.label }}
-        </button>
-      </div>
+  <button
+    v-for="item in statusTabs"
+    :key="String(item.value)"
+    type="button"
+    class="underline-tab"
+    :class="{ active: status === item.value }"
+    :disabled="loading"
+    @click="changeStatusTab(item.value)"
+  >
+    {{ item.label }}
+    
+    <!-- ĐÃ THÊM: Badge hiển thị số lượng yêu cầu hoàn khi tab value = 6 -->
+    <span 
+      v-if="item.value === 6 && pendingReturnCount > 0" 
+      class="badge bg-danger ms-1"
+      style="font-size: 11px; padding: 3px 6px;"
+    >
+      {{ pendingReturnCount }}
+    </span>
+  </button>
+</div>
 
       <div class="order-type-tabs">
         <button
@@ -347,6 +356,8 @@ function isConflict(error: any) {
 }
 
 async function refreshOrderStateSilently(orderId?: number) {
+  fetchPendingReturnCount();
+  
   try {
     const rawData = await orderService.getOrders({
       keyword: keyword.value,
@@ -421,6 +432,7 @@ async function handleWindowFocus() {
 
 async function loadOrders() {
   loading.value = true;
+  fetchPendingReturnCount();
 
   try {
     const rawData = await orderService.getOrders({
@@ -2466,6 +2478,22 @@ function getStatusText(status: number) {
       return "Đã hủy / Chờ hoàn tiền"; // THÊM DÒNG NÀY ĐỂ ÁP DỤNG TRẠNG THÁI MỚI
     default:
       return "Không xác định";
+  }
+}
+// ĐÃ THÊM: Biến và hàm hỗ trợ đếm riêng số lượng đơn Yêu cầu hoàn (status = 6)
+const pendingReturnCount = ref(0);
+
+async function fetchPendingReturnCount() {
+  try {
+    const rawData = await orderService.getOrders({
+      status: 6, 
+      page: 0,
+      size: 1, // Chỉ lấy 1 bản ghi để nhẹ request, chủ yếu lấy totalElements
+    });
+    const pageData = resolvePageData(rawData);
+    pendingReturnCount.value = pageData.totalElements;
+  } catch (error) {
+    // Không ném lỗi để tránh ảnh hưởng đến luồng code chính
   }
 }
 </script>

@@ -1,8 +1,6 @@
 <template>
   <div class="card border-0 shadow-sm">
-    <div
-      class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center"
-    >
+    <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
       <div>
         <h5 class="mb-0 fw-bold">Lịch sử đơn hàng</h5>
         <div class="small text-muted mt-1">
@@ -10,15 +8,9 @@
         </div>
       </div>
 
-      <button
-        class="btn btn-outline-dark btn-sm"
-        :disabled="store.orderLoading || reviewLoading"
-        @click="fetchOrdersAndReviews(true)"
-      >
-        <span
-          v-if="store.orderLoading || reviewLoading"
-          class="spinner-border spinner-border-sm me-1"
-        ></span>
+      <button class="btn btn-outline-dark btn-sm" :disabled="store.orderLoading || reviewLoading"
+        @click="fetchOrdersAndReviews(true)">
+        <span v-if="store.orderLoading || reviewLoading" class="spinner-border spinner-border-sm me-1"></span>
         Làm mới
       </button>
     </div>
@@ -26,62 +18,30 @@
     <div class="card-body">
       <!-- THANH TAB TRẠNG THÁI -->
       <div v-if="!store.orderLoading" class="status-tabs mb-4">
-        <div
-          class="tab-item"
-          :class="{ active: currentTab === 'ALL' }"
-          @click="currentTab = 'ALL'"
-        >
+        <div class="tab-item" :class="{ active: currentTab === 'ALL' }" @click="currentTab = 'ALL'">
           Tất cả
         </div>
-        <div
-          class="tab-item"
-          :class="{ active: currentTab === 0 }"
-          @click="currentTab = 0"
-        >
+        <div class="tab-item" :class="{ active: currentTab === 0 }" @click="currentTab = 0">
           Chờ xác nhận
         </div>
-        <div
-          class="tab-item"
-          :class="{ active: currentTab === 1 }"
-          @click="currentTab = 1"
-        >
+        <div class="tab-item" :class="{ active: currentTab === 1 }" @click="currentTab = 1">
           Đã xác nhận
         </div>
-        <div
-          class="tab-item"
-          :class="{ active: currentTab === 2 }"
-          @click="currentTab = 2"
-        >
+        <div class="tab-item" :class="{ active: currentTab === 2 }" @click="currentTab = 2">
           Đang giao
         </div>
-        <div
-          class="tab-item"
-          :class="{ active: currentTab === 3 }"
-          @click="currentTab = 3"
-        >
+        <div class="tab-item" :class="{ active: currentTab === 3 }" @click="currentTab = 3">
           Hoàn thành
         </div>
-        <div
-          class="tab-item"
-          :class="{ active: currentTab === 4 }"
-          @click="currentTab = 4"
-        >
+        <div class="tab-item" :class="{ active: currentTab === 4 }" @click="currentTab = 4">
           Đã hủy
         </div>
 
-        <div
-          class="tab-item"
-          :class="{ active: currentTab === 5 }"
-          @click="currentTab = 5"
-        >
+        <div class="tab-item" :class="{ active: currentTab === 5 }" @click="currentTab = 5">
           Giao thất bại
         </div>
 
-        <div
-          class="tab-item"
-          :class="{ active: currentTab === 'RETURN' }"
-          @click="currentTab = 'RETURN'"
-        >
+        <div class="tab-item" :class="{ active: currentTab === 'RETURN' }" @click="currentTab = 'RETURN'">
           Hoàn hàng
         </div>
       </div>
@@ -97,18 +57,10 @@
       </div>
 
       <div v-else class="order-list">
-        <div
-          v-for="order in filteredOrders"
-          :key="order.orderId"
-          class="order-card"
-          :class="{ opened: isOrderOpen(order.orderId) }"
-        >
-          <button
-            type="button"
-            class="order-header-button"
-            @click="toggleOrder(order.orderId)"
-            :aria-expanded="isOrderOpen(order.orderId)"
-          >
+        <div v-for="order in filteredOrders" :key="order.orderId" class="order-card"
+          :class="{ opened: isOrderOpen(order.orderId) }">
+          <button type="button" class="order-header-button" @click="toggleOrder(order.orderId)"
+            :aria-expanded="isOrderOpen(order.orderId)">
             <div class="order-header-content">
               <div>
                 <strong>Đơn {{ generateOrderCode(order.orderId) }}</strong>
@@ -127,26 +79,13 @@
                 </div>
               </div>
 
-              <i
-                class="bi bi-chevron-down order-chevron"
-                :class="{ rotated: isOrderOpen(order.orderId) }"
-              ></i>
+              <i class="bi bi-chevron-down order-chevron" :class="{ rotated: isOrderOpen(order.orderId) }"></i>
             </div>
           </button>
 
-          <Transition
-            name="order-collapse"
-            @before-enter="beforeEnter"
-            @enter="enter"
-            @after-enter="afterEnter"
-            @before-leave="beforeLeave"
-            @leave="leave"
-            @after-leave="afterLeave"
-          >
-            <div
-              v-show="isOrderOpen(order.orderId)"
-              class="order-collapse-body"
-            >
+          <Transition name="order-collapse" @before-enter="beforeEnter" @enter="enter" @after-enter="afterEnter"
+            @before-leave="beforeLeave" @leave="leave" @after-leave="afterLeave">
+            <div v-show="isOrderOpen(order.orderId)" class="order-collapse-body">
               <div class="accordion-body custom-order-body">
                 <div class="order-info-box">
                   <div class="info-item">
@@ -183,15 +122,10 @@
                     <i class="bi bi-truck me-2"></i>Theo dõi kiện hàng
                   </h6>
                   <div class="timeline">
-                    <div
-                      v-for="(track, index) in getTrackingHistory(order)"
-                      :key="index"
-                      class="timeline-item"
-                      :class="{
-                        'is-active': track.active,
-                        'is-cancel': track.isCancel,
-                      }"
-                    >
+                    <div v-for="(track, index) in getTrackingHistory(order)" :key="index" class="timeline-item" :class="{
+                      'is-active': track.active,
+                      'is-cancel': track.isCancel,
+                    }">
                       <div class="timeline-time">
                         <div class="t-date">
                           {{ formatTrackingTime(track.time).date }}
@@ -203,45 +137,30 @@
 
                       <div class="timeline-marker">
                         <div class="dot"></div>
-                        <div
-                          v-if="index !== getTrackingHistory(order).length - 1"
-                          class="line"
-                        ></div>
+                        <div v-if="index !== getTrackingHistory(order).length - 1" class="line"></div>
                       </div>
 
                       <div class="timeline-content">
                         <div class="t-title">{{ track.title }}</div>
                         <div class="t-desc">{{ track.desc }}</div>
 
-                        <div
-                          v-if="
-                            track.title === 'Đã giao' &&
-                            Number(order.status) === 3 &&
-                            getDeliverySuccessMedia(order).length > 0
-                          "
-                          class="tracking-delivery-media"
-                        >
+                        <div v-if="
+                          track.title === 'Đã giao' &&
+                          Number(order.status) === 3 &&
+                          getDeliverySuccessMedia(order).length > 0
+                        " class="tracking-delivery-media">
                           <div class="return-media-list">
-                            <button
-                              v-for="(
-                                media, mediaIndex
-                              ) in getDeliverySuccessMedia(order)"
-                              :key="`delivery-success-${media.url}-${mediaIndex}`"
-                              type="button"
-                              class="return-media-button"
-                              @click.stop="
+                            <button v-for="(
+media, mediaIndex
+                              ) in getDeliverySuccessMedia(order)" :key="`delivery-success-${media.url}-${mediaIndex}`"
+                              type="button" class="return-media-button" @click.stop="
                                 openDeliverySuccessMediaPreview(
                                   order,
                                   mediaIndex
                                 )
-                              "
-                            >
-                              <img
-                                :src="media.url"
-                                class="return-media-thumb"
-                                alt="Minh chứng giao hàng thành công"
-                                @error="handleImageError"
-                              />
+                                ">
+                              <img :src="media.url" class="return-media-thumb" alt="Minh chứng giao hàng thành công"
+                                @error="handleImageError" />
 
                               <span class="return-media-overlay">
                                 <i class="bi bi-zoom-in"></i>
@@ -250,57 +169,37 @@
                           </div>
                         </div>
 
-                        <div
-                          v-if="
-                            track.title === 'Giao hàng thất bại' &&
-                            Number(order.status) === 5 &&
-                            (order.deliveryFailedDescription ||
-                              getDeliveryFailedMedia(order).length > 0)
-                          "
-                          class="tracking-delivery-media is-failed"
-                        >
-                          <div
-                            v-if="order.deliveryFailedDescription"
-                            class="tracking-delivery-note"
-                          >
+                        <div v-if="
+                          track.title === 'Giao hàng thất bại' &&
+                          Number(order.status) === 5 &&
+                          (order.deliveryFailedDescription ||
+                            getDeliveryFailedMedia(order).length > 0)
+                        " class="tracking-delivery-media is-failed">
+                          <div v-if="order.deliveryFailedDescription" class="tracking-delivery-note">
                             <span>Mô tả:</span>
                             <strong>{{
                               order.deliveryFailedDescription
                             }}</strong>
                           </div>
 
-                          <div
-                            v-if="getDeliveryFailedMedia(order).length > 0"
-                            class="tracking-delivery-proof"
-                          >
-                            <div
-                              class="tracking-delivery-media-label text-danger"
-                            >
+                          <div v-if="getDeliveryFailedMedia(order).length > 0" class="tracking-delivery-proof">
+                            <div class="tracking-delivery-media-label text-danger">
                               <i class="bi bi-x-circle me-1"></i>
                               Ảnh minh chứng giao thất bại:
                             </div>
 
                             <div class="return-media-list">
-                              <button
-                                v-for="(
-                                  media, mediaIndex
-                                ) in getDeliveryFailedMedia(order)"
-                                :key="`delivery-failed-${media.url}-${mediaIndex}`"
-                                type="button"
-                                class="return-media-button"
-                                @click.stop="
+                              <button v-for="(
+media, mediaIndex
+                                ) in getDeliveryFailedMedia(order)" :key="`delivery-failed-${media.url}-${mediaIndex}`"
+                                type="button" class="return-media-button" @click.stop="
                                   openDeliveryFailedMediaPreview(
                                     order,
                                     mediaIndex
                                   )
-                                "
-                              >
-                                <img
-                                  :src="media.url"
-                                  class="return-media-thumb"
-                                  alt="Minh chứng giao hàng thất bại"
-                                  @error="handleImageError"
-                                />
+                                  ">
+                                <img :src="media.url" class="return-media-thumb" alt="Minh chứng giao hàng thất bại"
+                                  @error="handleImageError" />
 
                                 <span class="return-media-overlay">
                                   <i class="bi bi-zoom-in"></i>
@@ -315,14 +214,10 @@
                 </div>
                 <!-- KẾT THÚC KHỐI THEO DÕI -->
 
-                <div
-                  v-if="
-                    Number(order.status) === 5 &&
-                    isDeliveryRefundInfoVisible(order)
-                  "
-                  class="order-delivery-refund-info mb-3"
-                  :class="getDeliveryRefundBoxClass(order)"
-                >
+                <div v-if="
+                  Number(order.status) === 5 &&
+                  isDeliveryRefundInfoVisible(order)
+                " class="order-delivery-refund-info mb-3" :class="getDeliveryRefundBoxClass(order)">
                   <div class="delivery-refund-top">
                     <div>
                       <div class="delivery-refund-title">
@@ -374,47 +269,31 @@
                       </div>
                     </template>
 
-                    <div
-                      v-if="order.deliveryRefundedAt"
-                      class="delivery-refund-line"
-                    >
+                    <div v-if="order.deliveryRefundedAt" class="delivery-refund-line">
                       <span>Hoàn lúc:</span>
                       <strong>{{
                         formatDate(order.deliveryRefundedAt)
                       }}</strong>
                     </div>
 
-                    <div
-                      v-if="order.deliveryRefundedByName"
-                      class="delivery-refund-line"
-                    >
+                    <div v-if="order.deliveryRefundedByName" class="delivery-refund-line">
                       <span>Người xác nhận:</span>
                       <strong>{{ order.deliveryRefundedByName }}</strong>
                     </div>
                   </div>
 
-                  <div
-                    v-if="canSubmitDeliveryRefundBank(order)"
-                    class="delivery-refund-actions"
-                  >
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-outline-primary"
-                      :disabled="store.orderLoading"
-                      @click.stop="openDeliveryRefundBankModal(order)"
-                    >
+                  <div v-if="canSubmitDeliveryRefundBank(order)" class="delivery-refund-actions">
+                    <button type="button" class="btn btn-sm btn-outline-primary" :disabled="store.orderLoading"
+                      @click.stop="openDeliveryRefundBankModal(order)">
                       <i class="bi bi-bank me-1"></i>
                       Nhập thông tin hoàn tiền
                     </button>
                   </div>
 
-                  <div
-                    v-else-if="
-                      hasAnyDeliveryRefundBankInfo(order) &&
-                      !isDeliveryRefundCompleted(order)
-                    "
-                    class="delivery-refund-once-note"
-                  >
+                  <div v-else-if="
+                    hasAnyDeliveryRefundBankInfo(order) &&
+                    !isDeliveryRefundCompleted(order)
+                  " class="delivery-refund-once-note">
                     <i class="bi bi-info-circle me-1"></i>
                     Thông tin tài khoản hoàn tiền đã được gửi một lần. Nếu thông
                     tin chưa chính xác, vui lòng liên hệ shop trước khi shop
@@ -423,26 +302,12 @@
                 </div>
 
                 <div class="order-items">
-                  <div
-                    v-for="item in order.items"
-                    :key="item.orderItemId"
-                    class="order-item"
-                  >
-                    <div
-                      class="product-block"
-                      role="button"
-                      tabindex="0"
-                      title="Xem chi tiết sản phẩm"
-                      @click.stop="goToProductDetail(item)"
-                      @keydown.enter.stop="goToProductDetail(item)"
-                      @keydown.space.prevent.stop="goToProductDetail(item)"
-                    >
-                      <img
-                        :src="getItemImage(item)"
-                        class="item-img"
-                        :alt="item.productName || 'Sản phẩm'"
-                        @error="handleImageError"
-                      />
+                  <div v-for="item in order.items" :key="item.orderItemId" class="order-item">
+                    <div class="product-block" role="button" tabindex="0" title="Xem chi tiết sản phẩm"
+                      @click.stop="goToProductDetail(item)" @keydown.enter.stop="goToProductDetail(item)"
+                      @keydown.space.prevent.stop="goToProductDetail(item)">
+                      <img :src="getItemImage(item)" class="item-img" :alt="item.productName || 'Sản phẩm'"
+                        @error="handleImageError" />
 
                       <div class="product-info">
                         <div class="product-name">
@@ -486,23 +351,14 @@
                           </span>
                         </div>
 
-                        <div
-                          v-if="getMyReviewByOrderItemId(item.orderItemId)"
-                          class="my-review-box mt-2"
-                        >
+                        <div v-if="getMyReviewByOrderItemId(item.orderItemId)" class="my-review-box mt-2">
                           <div class="review-stars">
-                            <i
-                              v-for="star in 5"
-                              :key="star"
-                              class="bi"
-                              :class="
-                                star <=
-                                (getMyReviewByOrderItemId(item.orderItemId)
-                                  ?.rating || 0)
-                                  ? 'bi-star-fill'
-                                  : 'bi-star'
-                              "
-                            ></i>
+                            <i v-for="star in 5" :key="star" class="bi" :class="star <=
+                              (getMyReviewByOrderItemId(item.orderItemId)
+                                ?.rating || 0)
+                              ? 'bi-star-fill'
+                              : 'bi-star'
+                              "></i>
 
                             <span class="ms-2 small text-muted">
                               {{
@@ -512,13 +368,10 @@
                             </span>
                           </div>
 
-                          <div
-                            v-if="
-                              getMyReviewByOrderItemId(item.orderItemId)
-                                ?.comment
-                            "
-                            class="small review-comment"
-                          >
+                          <div v-if="
+                            getMyReviewByOrderItemId(item.orderItemId)
+                              ?.comment
+                          " class="small review-comment">
                             "{{
                               getMyReviewByOrderItemId(item.orderItemId)
                                 ?.comment
@@ -535,19 +388,14 @@
                             }}
                           </div>
 
-                          <div
-                            v-if="
-                              getReviewApprovalText(
-                                getMyReviewByOrderItemId(item.orderItemId)
-                              )
-                            "
-                            class="review-approval-status mt-1"
-                            :class="
-                              getReviewApprovalClass(
-                                getMyReviewByOrderItemId(item.orderItemId)
-                              )
-                            "
-                          >
+                          <div v-if="
+                            getReviewApprovalText(
+                              getMyReviewByOrderItemId(item.orderItemId)
+                            )
+                          " class="review-approval-status mt-1" :class="getReviewApprovalClass(
+                            getMyReviewByOrderItemId(item.orderItemId)
+                          )
+                            ">
                             {{
                               getReviewApprovalText(
                                 getMyReviewByOrderItemId(item.orderItemId)
@@ -555,14 +403,11 @@
                             }}
                           </div>
 
-                          <div
-                            v-if="
-                              getReviewRejectReason(
-                                getMyReviewByOrderItemId(item.orderItemId)
-                              )
-                            "
-                            class="review-reject-reason mt-1"
-                          >
+                          <div v-if="
+                            getReviewRejectReason(
+                              getMyReviewByOrderItemId(item.orderItemId)
+                            )
+                          " class="review-reject-reason mt-1">
                             <i class="bi bi-info-circle me-1"></i>
                             <span>Lý do:</span>
                             <strong>
@@ -574,95 +419,63 @@
                             </strong>
                           </div>
 
-                          <button
-                            v-if="
-                              canEditExistingReview(
-                                getMyReviewByOrderItemId(item.orderItemId)
-                              )
-                            "
-                            type="button"
-                            class="btn btn-sm btn-outline-dark review-edit-btn mt-2"
-                            :disabled="submittingReview"
-                            @click.stop="openEditReview(order, item)"
-                          >
+                          <button v-if="
+                            canEditExistingReview(
+                              getMyReviewByOrderItemId(item.orderItemId)
+                            )
+                          " type="button" class="btn btn-sm btn-outline-dark review-edit-btn mt-2"
+                            :disabled="submittingReview" @click.stop="openEditReview(order, item)">
                             <i class="bi bi-pencil-square me-1"></i>
                             Sửa đánh giá
                           </button>
 
-                          <div
-                            v-if="
-                              getReviewMediaByOrderItemId(item.orderItemId)
-                                .length > 0
-                            "
-                            class="review-media-section"
-                          >
+                          <div v-if="
+                            getReviewMediaByOrderItemId(item.orderItemId)
+                              .length > 0
+                          " class="review-media-section">
                             <div class="review-media-label">
                               Ảnh/video đánh giá:
                             </div>
 
                             <div class="review-media-list">
-                              <button
-                                v-for="(
-                                  media, mediaIndex
+                              <button v-for="(
+media, mediaIndex
                                 ) in getReviewMediaByOrderItemId(
-                                  item.orderItemId
-                                )"
-                                :key="`${media.url}-${mediaIndex}`"
-                                type="button"
-                                class="review-media-button"
-                                :title="
-                                  media.isVideo
-                                    ? 'Xem video đánh giá'
-                                    : 'Xem ảnh đánh giá'
-                                "
-                                @click.stop="
-                                  openReviewMediaPreview(
-                                    item.orderItemId,
-                                    mediaIndex
-                                  )
-                                "
-                              >
-                                <video
-                                  v-if="media.isVideo"
-                                  :src="media.url"
-                                  class="review-media-thumb"
-                                  muted
-                                  playsinline
-                                  preload="metadata"
-                                ></video>
+  item.orderItemId
+)" :key="`${media.url}-${mediaIndex}`" type="button" class="review-media-button"
+                                :title="media.isVideo
+                                  ? 'Xem video đánh giá'
+                                  : 'Xem ảnh đánh giá'
+                                  " @click.stop="
+                                    openReviewMediaPreview(
+                                      item.orderItemId,
+                                      mediaIndex
+                                    )
+                                    ">
+                                <video v-if="media.isVideo" :src="media.url" class="review-media-thumb" muted
+                                  playsinline preload="metadata"></video>
 
-                                <img
-                                  v-else
-                                  :src="media.url"
-                                  class="review-media-thumb"
-                                  alt="Ảnh đánh giá sản phẩm"
-                                  @error="handleImageError"
-                                />
+                                <img v-else :src="media.url" class="review-media-thumb" alt="Ảnh đánh giá sản phẩm"
+                                  @error="handleImageError" />
 
                                 <span class="review-media-overlay">
-                                  <i
-                                    class="bi"
-                                    :class="
-                                      media.isVideo
-                                        ? 'bi-play-circle'
-                                        : 'bi-zoom-in'
-                                    "
-                                  ></i>
+                                  <i class="bi" :class="media.isVideo
+                                    ? 'bi-play-circle'
+                                    : 'bi-zoom-in'
+                                    "></i>
                                 </span>
                               </button>
                             </div>
                           </div>
                         </div>
 
-                        <div
-                          v-else-if="
-                            getReviewState(order.orderId, item.orderItemId)
-                              ?.message &&
-                            !getReviewState(order.orderId, item.orderItemId)
-                              ?.canReview
-                          "
-                          class="small mt-1 text-muted"
-                        >
+                        <div v-else-if="
+                          getReviewState(order.orderId, item.orderItemId)
+                            ?.message &&
+                          !getReviewState(order.orderId, item.orderItemId)
+                            ?.canReview
+                        " class="small mt-1"
+                          :class="getReviewState(order.orderId, item.orderItemId)?.message?.toLowerCase().includes('quá hạn') ? 'text-danger' : 'text-muted'">
                           {{
                             getReviewState(order.orderId, item.orderItemId)
                               ?.message
@@ -673,10 +486,7 @@
 
                     <div class="order-item-side">
                       <div v-if="hasItemPrice(item)" class="item-price-box">
-                        <div
-                          v-if="hasItemSale(item)"
-                          class="item-original-price"
-                        >
+                        <div v-if="hasItemSale(item)" class="item-original-price">
                           {{ formatMoney(getItemOriginalUnitPrice(item)) }}
                         </div>
 
@@ -684,37 +494,23 @@
                           {{ formatMoney(getItemFinalUnitPrice(item)) }}
                         </div>
 
-                        <div
-                          v-if="Number(item.quantity || 0) > 1"
-                          class="item-line-total"
-                        >
+                        <div v-if="Number(item.quantity || 0) > 1" class="item-line-total">
                           Thành tiền:
                           {{ formatMoney(getItemLineTotal(item)) }}
                         </div>
                       </div>
 
                       <div class="review-action">
-                        <button
-                          v-if="order.status === 3"
-                          type="button"
-                          class="btn btn-sm"
-                          :class="
-                            isReviewed(order.orderId, item.orderItemId)
-                              ? 'btn-outline-secondary'
-                              : 'btn-review'
-                          "
-                          :disabled="
-                            reviewLoadingByOrder[order.orderId] ||
+                        <button v-if="order.status === 3" type="button" class="btn btn-sm" :class="isReviewed(order.orderId, item.orderItemId)
+                          ? 'btn-outline-secondary'
+                          : 'btn-review'
+                          " :disabled="reviewLoadingByOrder[order.orderId] ||
                             !canReview(order.orderId, item.orderItemId)
-                          "
-                          @click.stop="
-                            openReview(order.orderId, item.orderItemId)
-                          "
-                        >
-                          <span
-                            v-if="reviewLoadingByOrder[order.orderId]"
-                            class="spinner-border spinner-border-sm me-1"
-                          ></span>
+                            " @click.stop="
+                              openReview(order.orderId, item.orderItemId)
+                              ">
+                          <span v-if="reviewLoadingByOrder[order.orderId]"
+                            class="spinner-border spinner-border-sm me-1"></span>
 
                           {{
                             isReviewed(order.orderId, item.orderItemId)
@@ -723,12 +519,7 @@
                           }}
                         </button>
 
-                        <button
-                          v-else
-                          type="button"
-                          class="btn btn-sm btn-outline-secondary"
-                          disabled
-                        >
+                        <button v-else type="button" class="btn btn-sm btn-outline-secondary" disabled>
                           Chưa mở
                         </button>
                       </div>
@@ -737,10 +528,7 @@
                 </div>
 
                 <div class="order-summary-row">
-                  <div
-                    v-if="order.status === 4 || order.status === 8"
-                    class="order-cancel-info"
-                  >
+                  <div v-if="order.status === 4 || order.status === 8" class="order-cancel-info">
                     <div class="cancel-info-title">
                       <i class="bi bi-x-circle me-1"></i>
                       Lý do hủy:
@@ -750,11 +538,8 @@
                       {{ getOrderCancelReason(order) }}
                     </div>
 
-                    <div
-                      v-if="isPrepaidOrder(order)"
-                      class="order-delivery-refund-info w-100"
-                      :class="getCancelRefundBoxClass(order)"
-                    >
+                    <div v-if="isPrepaidOrder(order)" class="order-delivery-refund-info w-100"
+                      :class="getCancelRefundBoxClass(order)">
                       <div class="delivery-refund-top">
                         <div>
                           <div class="delivery-refund-title">
@@ -801,10 +586,7 @@
                           </div>
                         </template>
 
-                        <div
-                          v-if="isCancelRefunded(order)"
-                          class="delivery-refund-line"
-                        >
+                        <div v-if="isCancelRefunded(order)" class="delivery-refund-line">
                           <span>Hoàn lúc:</span>
                           <strong>{{
                             formatDate(order.deliveryRefundedAt) || "Đã xử lý"
@@ -812,28 +594,18 @@
                         </div>
                       </div>
 
-                      <div
-                        v-if="canSubmitCancelRefundBank(order)"
-                        class="delivery-refund-actions"
-                      >
-                        <button
-                          type="button"
-                          class="btn btn-sm btn-outline-primary"
-                          :disabled="store.orderLoading"
-                          @click.stop="openCancelRefundBankModal(order)"
-                        >
+                      <div v-if="canSubmitCancelRefundBank(order)" class="delivery-refund-actions">
+                        <button type="button" class="btn btn-sm btn-outline-primary" :disabled="store.orderLoading"
+                          @click.stop="openCancelRefundBankModal(order)">
                           <i class="bi bi-bank me-1"></i>
                           Nhập thông tin hoàn tiền
                         </button>
                       </div>
 
-                      <div
-                        v-else-if="
-                          hasCancelRefundBankInfo(order) &&
-                          !isCancelRefunded(order)
-                        "
-                        class="delivery-refund-once-note"
-                      >
+                      <div v-else-if="
+                        hasCancelRefundBankInfo(order) &&
+                        !isCancelRefunded(order)
+                      " class="delivery-refund-once-note">
                         <i class="bi bi-info-circle me-1"></i>
                         Thông tin tài khoản hoàn tiền đã được gửi một lần. Nếu
                         thông tin chưa chính xác, vui lòng liên hệ shop trước
@@ -842,11 +614,8 @@
                     </div>
                   </div>
 
-                  <div
-                    v-else-if="isReturnInfoVisible(order)"
-                    class="order-return-info"
-                    :class="getReturnProcessClass(order)"
-                  >
+                  <div v-else-if="isReturnInfoVisible(order)" class="order-return-info"
+                    :class="getReturnProcessClass(order)">
                     <div class="return-info-top">
                       <div>
                         <div class="return-info-title">
@@ -869,25 +638,18 @@
                         </div>
                       </div>
 
-                      <span
-                        class="return-process-badge"
-                        :class="getReturnProcessBadgeClass(order)"
-                      >
+                      <span class="return-process-badge" :class="getReturnProcessBadgeClass(order)">
                         {{ getReturnProcessText(order) }}
                       </span>
                     </div>
 
                     <div class="return-process-timeline">
-                      <div
-                        v-for="step in getReturnProcessTimeline(order)"
-                        :key="step.key"
-                        class="return-process-step"
+                      <div v-for="step in getReturnProcessTimeline(order)" :key="step.key" class="return-process-step"
                         :class="{
                           'is-done': step.done,
                           'is-active': step.active,
                           'is-rejected': step.rejected,
-                        }"
-                      >
+                        }">
                         <div class="return-step-marker">
                           <i class="bi" :class="step.icon"></i>
                         </div>
@@ -904,15 +666,9 @@
                       </div>
                     </div>
 
-                    <div
-                      v-if="getReturnProcessAlert(order)"
-                      class="return-process-alert"
-                      :class="getReturnProcessAlert(order)?.className"
-                    >
-                      <i
-                        class="bi"
-                        :class="getReturnProcessAlert(order)?.icon"
-                      ></i>
+                    <div v-if="getReturnProcessAlert(order)" class="return-process-alert"
+                      :class="getReturnProcessAlert(order)?.className">
+                      <i class="bi" :class="getReturnProcessAlert(order)?.icon"></i>
                       <div>
                         <strong>{{
                           getReturnProcessAlert(order)?.title
@@ -927,35 +683,23 @@
                         <strong>{{ getOrderReturnReason(order) }}</strong>
                       </div>
 
-                      <div
-                        v-if="getOrderReturnDescription(order)"
-                        class="return-info-description"
-                      >
+                      <div v-if="getOrderReturnDescription(order)" class="return-info-description">
                         {{ getOrderReturnDescription(order) }}
                       </div>
 
-                      <div
-                        v-if="getOrderReturnRejectReason(order)"
-                        class="return-info-line return-reject-line"
-                      >
+                      <div v-if="getOrderReturnRejectReason(order)" class="return-info-line return-reject-line">
                         <span>Lý do từ chối:</span>
                         <strong>{{ getOrderReturnRejectReason(order) }}</strong>
                       </div>
 
-                      <div
-                        v-if="getOrderReturnRefundAmount(order) > 0"
-                        class="return-info-line return-refund-line"
-                      >
+                      <div v-if="getOrderReturnRefundAmount(order) > 0" class="return-info-line return-refund-line">
                         <span>{{ getReturnRefundLabel(order) }}:</span>
                         <strong>{{
                           formatMoney(getOrderReturnRefundAmount(order))
                         }}</strong>
                       </div>
 
-                      <div
-                        v-if="getOrderRefundMethodText(order)"
-                        class="return-info-line"
-                      >
+                      <div v-if="getOrderRefundMethodText(order)" class="return-info-line">
                         <span>Hoàn tiền vào:</span>
                         <strong>{{ getOrderRefundMethodText(order) }}</strong>
                       </div>
@@ -966,31 +710,15 @@
                         Sản phẩm yêu cầu hoàn:
                       </div>
 
-                      <div
-                        v-if="getOrderReturnSelectedItems(order).length > 0"
-                        class="return-selected-list"
-                      >
-                        <button
-                          v-for="returnItem in getOrderReturnSelectedItems(
-                            order
-                          )"
-                          :key="`return-item-${
-                            returnItem.orderItemId ||
-                            returnItem.productVariantId ||
-                            returnItem.productId
-                          }`"
-                          type="button"
-                          class="return-selected-item"
-                          @click.stop="goToProductDetail(returnItem)"
-                        >
-                          <img
-                            :src="returnItem.image || FALLBACK_IMAGE"
-                            class="return-selected-img"
-                            :alt="
-                              returnItem.productName || 'Sản phẩm hoàn hàng'
-                            "
-                            @error="handleImageError"
-                          />
+                      <div v-if="getOrderReturnSelectedItems(order).length > 0" class="return-selected-list">
+                        <button v-for="returnItem in getOrderReturnSelectedItems(
+                          order
+                        )" :key="`return-item-${returnItem.orderItemId ||
+                          returnItem.productVariantId ||
+                          returnItem.productId
+                          }`" type="button" class="return-selected-item" @click.stop="goToProductDetail(returnItem)">
+                          <img :src="returnItem.image || FALLBACK_IMAGE" class="return-selected-img" :alt="returnItem.productName || 'Sản phẩm hoàn hàng'
+                            " @error="handleImageError" />
 
                           <div class="return-selected-content">
                             <div class="return-selected-name-row">
@@ -998,10 +726,7 @@
                                 {{ returnItem.productName || "Sản phẩm" }}
                               </div>
 
-                              <span
-                                class="return-selected-status"
-                                :class="getReturnItemStatusClass(returnItem)"
-                              >
+                              <span class="return-selected-status" :class="getReturnItemStatusClass(returnItem)">
                                 {{ getReturnItemStatusText(returnItem) }}
                               </span>
                             </div>
@@ -1033,23 +758,18 @@
                                 }}</strong>
                               </span>
 
-                              <span
-                                v-if="Number(returnItem.itemAmount || 0) > 0"
-                              >
+                              <span v-if="Number(returnItem.itemAmount || 0) > 0">
                                 Tiền hàng:
                                 <strong>{{
                                   formatMoney(returnItem.itemAmount)
                                 }}</strong>
                               </span>
 
-                              <span
-                                v-if="
-                                  Number(
-                                    returnItem.voucherAllocatedAmount || 0
-                                  ) > 0
-                                "
-                                class="return-selected-discount"
-                              >
+                              <span v-if="
+                                Number(
+                                  returnItem.voucherAllocatedAmount || 0
+                                ) > 0
+                              " class="return-selected-discount">
                                 Voucher phân bổ:
                                 <strong>
                                   -{{
@@ -1060,10 +780,7 @@
                                 </strong>
                               </span>
 
-                              <span
-                                v-if="Number(returnItem.refundAmount || 0) > 0"
-                                class="return-selected-refund"
-                              >
+                              <span v-if="Number(returnItem.refundAmount || 0) > 0" class="return-selected-refund">
                                 Hoàn:
                                 <strong>{{
                                   formatMoney(returnItem.refundAmount)
@@ -1071,10 +788,7 @@
                               </span>
                             </div>
 
-                            <div
-                              v-if="getReturnItemRejectReason(returnItem)"
-                              class="return-item-reject-note"
-                            >
+                            <div v-if="getReturnItemRejectReason(returnItem)" class="return-item-reject-note">
                               Lý do từ chối:
                               {{ getReturnItemRejectReason(returnItem) }}
                             </div>
@@ -1087,44 +801,22 @@
                       </div>
                     </div>
 
-                    <div
-                      v-if="getOrderReturnMedia(order).length > 0"
-                      class="return-media-section"
-                    >
+                    <div v-if="getOrderReturnMedia(order).length > 0" class="return-media-section">
                       <div class="return-media-label">
                         Ảnh/video bằng chứng:
                       </div>
 
                       <div class="return-media-list">
-                        <button
-                          v-for="(media, index) in getOrderReturnMedia(order)"
-                          :key="`${media.url}-${index}`"
-                          type="button"
-                          class="return-media-button"
-                          @click.stop="openReturnMediaPreview(order, index)"
-                        >
-                          <video
-                            v-if="media.isVideo"
-                            :src="media.url"
-                            class="return-media-thumb"
-                            muted
-                            preload="metadata"
-                          ></video>
+                        <button v-for="(media, index) in getOrderReturnMedia(order)" :key="`${media.url}-${index}`"
+                          type="button" class="return-media-button" @click.stop="openReturnMediaPreview(order, index)">
+                          <video v-if="media.isVideo" :src="media.url" class="return-media-thumb" muted
+                            preload="metadata"></video>
 
-                          <img
-                            v-else
-                            :src="media.url"
-                            class="return-media-thumb"
-                            alt="Ảnh bằng chứng hoàn hàng"
-                          />
+                          <img v-else :src="media.url" class="return-media-thumb" alt="Ảnh bằng chứng hoàn hàng" />
 
                           <span class="return-media-overlay">
-                            <i
-                              class="bi"
-                              :class="
-                                media.isVideo ? 'bi-play-circle' : 'bi-zoom-in'
-                              "
-                            ></i>
+                            <i class="bi" :class="media.isVideo ? 'bi-play-circle' : 'bi-zoom-in'
+                              "></i>
                           </span>
                         </button>
                       </div>
@@ -1153,9 +845,7 @@
                       }}</strong>
                     </div>
 
-                    <div
-                      class="d-flex justify-content-between fs-5 mt-2 pt-2 border-top"
-                    >
+                    <div class="d-flex justify-content-between fs-5 mt-2 pt-2 border-top">
                       <span>Tổng thanh toán:</span>
                       <strong class="text-danger">
                         {{ formatMoney(getOrderFinalAmount(order)) }}
@@ -1166,120 +856,83 @@
 
                 <!-- KHỐI CÁC NÚT THAO TÁC -->
                 <div class="text-end mt-3 d-flex justify-content-end gap-2">
-                  <template
-                    v-if="
-                      order.status === 0 &&
-                      (order.paymentMethod || '')
-                        .toUpperCase()
-                        .includes('VNPAY')
-                    "
-                  >
-                    <div
-                      v-if="isOrderPendingVerification(order)"
-                      class="d-flex align-items-center me-auto text-success fw-bold"
-                      style="font-size: 14px"
-                    >
+                  <template v-if="
+                    order.status === 0 &&
+                    (order.paymentMethod || '')
+                      .toUpperCase()
+                      .includes('VNPAY')
+                  ">
+                    <div v-if="isOrderPendingVerification(order)"
+                      class="d-flex align-items-center me-auto text-success fw-bold" style="font-size: 14px">
                       <i class="bi bi-check-circle-fill me-1"></i> Đang chờ shop
                       đối soát...
                     </div>
                     <template v-else>
-                      <div
-                        class="d-flex align-items-center me-3 text-warning fw-bold"
-                        style="font-size: 14px"
-                      >
+                      <div class="d-flex align-items-center me-3 text-warning fw-bold" style="font-size: 14px">
                         <i class="bi bi-clock-history me-1"></i> Đang chờ xác
                         nhận thanh toán
                       </div>
                     </template>
                   </template>
 
-                  <template
-                    v-if="
-                      order.status === 0 &&
-                      (order.paymentMethod || '')
-                        .toUpperCase()
-                        .includes('VIETQR')
-                    "
-                  >
-                    <div
-                      v-if="isOrderPendingVerification(order)"
-                      class="d-flex align-items-center me-auto text-success fw-bold"
-                      style="font-size: 14px"
-                    >
+                  <template v-if="
+                    order.status === 0 &&
+                    (order.paymentMethod || '')
+                      .toUpperCase()
+                      .includes('VIETQR')
+                  ">
+                    <div v-if="isOrderPendingVerification(order)"
+                      class="d-flex align-items-center me-auto text-success fw-bold" style="font-size: 14px">
                       <i class="bi bi-check-circle-fill me-1"></i> Đang chờ shop
                       đối soát...
                     </div>
                     <template v-else>
-                      <div
-                        class="d-flex align-items-center me-3 text-warning fw-bold"
-                        style="font-size: 14px"
-                      >
+                      <div class="d-flex align-items-center me-3 text-warning fw-bold" style="font-size: 14px">
                         <i class="bi bi-clock-history me-1"></i> Đang chờ khách
                         chuyển khoản
                       </div>
                     </template>
                   </template>
 
-                  <button
-                    v-if="order.canCancel && isOnlineOrder(order)"
-                    class="btn btn-outline-danger btn-sm"
-                    :disabled="store.orderLoading"
-                    @click="cancelOrder(order)"
-                  >
+                  <button v-if="order.canCancel && isOnlineOrder(order)" class="btn btn-outline-danger btn-sm"
+                    :disabled="store.orderLoading" @click="cancelOrder(order)">
                     Hủy đơn
                   </button>
 
-                  <button
-                    v-if="
-                      order.status === 4 ||
-                      order.status === 8 ||
-                      order.status === 3
-                    "
-                    class="btn btn-primary btn-sm px-3 text-white"
-                    style="background-color: #bd9a5f; border-color: #bd9a5f"
-                    @click="handleReorder(order)"
-                  >
+                  <button v-if="
+                    order.status === 4 ||
+                    order.status === 8 ||
+                    order.status === 3
+                  " class="btn btn-primary btn-sm px-3 text-white"
+                    style="background-color: #bd9a5f; border-color: #bd9a5f" @click="handleReorder(order)">
                     <i class="bi bi-cart-plus me-1"></i> Mua lại
                   </button>
 
-                  <button
-                    v-if="canRequestReturn(order)"
-                    type="button"
-                    class="btn btn-outline-danger btn-sm"
-                    :disabled="store.orderLoading"
-                    @click="requestReturn(order)"
-                  >
+                  <!-- NÚT YÊU CẦU HOÀN HÀNG -->
+                  <button v-if="canRequestReturn(order)" type="button" class="btn btn-outline-danger btn-sm"
+                    :disabled="store.orderLoading" @click="requestReturn(order)">
                     Yêu cầu hoàn hàng
                   </button>
 
-                  <span
-                    v-else-if="shouldShowReturnDeadlineText(order)"
-                    class="text-muted small align-self-center"
-                  >
+                  <!-- Đã sửa: Thêm logic đổi màu text-danger nếu có chữ 'quá hạn' (Đã xóa bỏ thẻ bị duplicate bên dưới) -->
+                  <span v-else-if="shouldShowReturnDeadlineText(order)" class="small align-self-center"
+                    :class="getReturnDeadlineText(order).includes('quá hạn') ? 'text-danger' : 'text-muted'">
                     {{ getReturnDeadlineText(order) }}
                   </span>
 
                   <!-- NÚT HỦY YÊU CẦU HOÀN HÀNG -->
-                  <button
-                    v-if="canCancelReturnRequest(order)"
-                    type="button"
-                    class="btn btn-outline-secondary btn-sm"
-                    :disabled="store.orderLoading"
-                    @click="cancelReturnRequest(order)"
-                  >
+                  <button v-if="canCancelReturnRequest(order)" type="button" class="btn btn-outline-secondary btn-sm"
+                    :disabled="store.orderLoading" @click="cancelReturnRequest(order)">
                     Hủy yêu cầu hoàn hàng
                   </button>
 
-                  <span
-                    v-if="
-                      !order.canCancel &&
-                      order.status !== 3 &&
-                      order.status !== 4 &&
-                      order.status !== 8 &&
-                      order.status !== 0
-                    "
-                    class="text-muted small align-self-center"
-                  >
+                  <span v-if="
+                    !order.canCancel &&
+                    order.status !== 3 &&
+                    order.status !== 4 &&
+                    order.status !== 8 &&
+                    order.status !== 0
+                  " class="text-muted small align-self-center">
                     Đơn hàng không còn được hủy
                   </span>
                 </div>
@@ -1290,21 +943,10 @@
       </div>
     </div>
 
-    <ReviewModal
-      v-model="reviewModalVisible"
-      :item="selectedReviewItem"
-      :loading="submittingReview"
-      :mode="reviewModalMode"
-      :existing-review="selectedEditingReview"
-      @submit="submitReview"
-    />
-    <ReturnRequestModal
-      v-model="returnModalVisible"
-      :order="selectedReturnOrder"
-      :loading="submittingReturn"
-      :default-email="getDefaultReturnEmail()"
-      @submit="submitReturnRequest"
-    />
+    <ReviewModal v-model="reviewModalVisible" :item="selectedReviewItem" :loading="submittingReview"
+      :mode="reviewModalMode" :existing-review="selectedEditingReview" @submit="submitReview" />
+    <ReturnRequestModal v-model="returnModalVisible" :order="selectedReturnOrder" :loading="submittingReturn"
+      :default-email="getDefaultReturnEmail()" @submit="submitReturnRequest" />
   </div>
 </template>
 
@@ -1367,7 +1009,7 @@ const initPaidOrders = () => {
     if (saved) {
       paidOrdersMap.value = JSON.parse(saved);
     }
-  } catch (e) {}
+  } catch (e) { }
 };
 
 // 💥 BƯỚC 1: LÀM LẠI BỘ HÀM TÍNH TOÁN BẤT CHẤP API TRẢ SAO
@@ -1550,8 +1192,8 @@ const openCancelRefundBankModal = async (order: CustomerOrderResponse) => {
         <div class="delivery-refund-modal-alert">
           <i class="bi bi-info-circle"></i>
           <span>Shop sẽ hoàn <strong>${escapeHtml(
-            formatMoney(getOrderFinalAmount(order))
-          )}</strong> cho đơn hủy ${escapeHtml(
+      formatMoney(getOrderFinalAmount(order))
+    )}</strong> cho đơn hủy ${escapeHtml(
       generateOrderCode(order.orderId)
     )}. Thông tin này chỉ gửi được 1 lần và không thể tự chỉnh sửa.</span>
         </div>
@@ -1639,7 +1281,7 @@ const openCancelRefundBankModal = async (order: CustomerOrderResponse) => {
         if (bankHiddenInput) {
           bankHiddenInput.value =
             matchedBank &&
-            normalizeBankSearchText(matchedBank.displayName) ===
+              normalizeBankSearchText(matchedBank.displayName) ===
               normalizeBankSearchText(keyword)
               ? matchedBank.displayName
               : "";
@@ -1711,14 +1353,14 @@ const openCancelRefundBankModal = async (order: CustomerOrderResponse) => {
       <div style="text-align:left;line-height:1.6">
         <p style="margin-bottom:8px">Thông tin tài khoản hoàn tiền <b>chỉ gửi được 1 lần</b>. Sau khi gửi, bạn không thể tự chỉnh sửa trên hệ thống. Vui lòng kiểm tra thật kĩ</p>
         <p style="margin-bottom:4px"><b>Ngân hàng:</b> ${escapeHtml(
-          result.value.bankName
-        )}</p>
+      result.value.bankName
+    )}</p>
         <p style="margin-bottom:4px"><b>Số tài khoản:</b> ${escapeHtml(
-          result.value.bankAccountNumber
-        )}</p>
+      result.value.bankAccountNumber
+    )}</p>
         <p style="margin-bottom:0"><b>Chủ tài khoản:</b> ${escapeHtml(
-          result.value.bankAccountHolder
-        )}</p>
+      result.value.bankAccountHolder
+    )}</p>
       </div>
     `,
     showCancelButton: true,
@@ -2169,7 +1811,7 @@ const handleCustomerOrderConflict = async (
     text: getErrorMessage(
       error,
       fallback ||
-        "Trạng thái đơn hàng đã được cập nhật ở nơi khác. Dữ liệu mới đã được tải lại, vui lòng kiểm tra và thao tác lại."
+      "Trạng thái đơn hàng đã được cập nhật ở nơi khác. Dữ liệu mới đã được tải lại, vui lòng kiểm tra và thao tác lại."
     ),
     confirmButtonColor: "#bd9a5f",
     confirmButtonText: "Đã hiểu",
@@ -2510,8 +2152,8 @@ const submitReview = async (payload: {
           ? "Cập nhật đánh giá thành công. Ảnh/video đang chờ duyệt."
           : "Cập nhật đánh giá thành công"
         : hasReviewMedia
-        ? "Gửi đánh giá thành công. Ảnh/video đang chờ duyệt."
-        : "Gửi đánh giá thành công"
+          ? "Gửi đánh giá thành công. Ảnh/video đang chờ duyệt."
+          : "Gửi đánh giá thành công"
     );
 
     await fetchMyReviews();
@@ -2714,9 +2356,8 @@ const getTrackingHistory = (order: any) => {
         ? new Date(order.completedAt)
         : new Date(baseDate + 48 * 60 * 60 * 1000),
       title: "Đã giao",
-      desc: `Kiện hàng của bạn đã được giao. Người nhận: ${
-        order.customerName || "Bạn"
-      }`,
+      desc: `Kiện hàng của bạn đã được giao. Người nhận: ${order.customerName || "Bạn"
+        }`,
       active: true,
     });
 
@@ -2945,43 +2586,43 @@ const hasRealReturnRequestObject = (request: any) => {
 
   return Boolean(
     hasTextValue(request?.id) ||
-      hasTextValue(request?.returnRequestId) ||
-      hasTextValue(request?.code) ||
-      hasTextValue(request?.returnCode) ||
-      hasTextValue(request?.requestCode) ||
-      hasTextValue(request?.reason) ||
-      hasTextValue(request?.returnReason) ||
-      hasTextValue(request?.returnRequestReason) ||
-      hasTextValue(request?.description) ||
-      hasTextValue(request?.returnDescription) ||
-      hasTextValue(request?.createdAt) ||
-      hasTextValue(request?.returnRequestedAt) ||
-      hasTextValue(request?.requestedAt) ||
-      hasTextValue(request?.rejectReason) ||
-      hasTextValue(request?.rejectedReason) ||
-      hasTextValue(request?.returnRejectReason) ||
-      hasPositiveMoneyValue(
-        request?.refundAmount,
-        request?.returnRefundAmount,
-        request?.estimatedRefundAmount
-      ) ||
-      hasArrayData(request?.items) ||
-      hasArrayData(request?.returnItems) ||
-      hasArrayData(request?.returnRequestItems) ||
-      hasArrayData(request?.returnedItems) ||
-      hasArrayData(request?.refundItems) ||
-      hasArrayData(request?.mediaFiles) ||
-      hasArrayData(request?.returnMediaUrls) ||
-      hasArrayData(request?.returnMediaFiles) ||
-      hasArrayData(request?.returnMedias) ||
-      hasArrayData(request?.returnImages) ||
-      normalizeReturnStatusValue(
-        request?.processStatus ??
-          request?.status ??
-          request?.returnStatus ??
-          request?.refundStatus ??
-          null
-      ) !== null
+    hasTextValue(request?.returnRequestId) ||
+    hasTextValue(request?.code) ||
+    hasTextValue(request?.returnCode) ||
+    hasTextValue(request?.requestCode) ||
+    hasTextValue(request?.reason) ||
+    hasTextValue(request?.returnReason) ||
+    hasTextValue(request?.returnRequestReason) ||
+    hasTextValue(request?.description) ||
+    hasTextValue(request?.returnDescription) ||
+    hasTextValue(request?.createdAt) ||
+    hasTextValue(request?.returnRequestedAt) ||
+    hasTextValue(request?.requestedAt) ||
+    hasTextValue(request?.rejectReason) ||
+    hasTextValue(request?.rejectedReason) ||
+    hasTextValue(request?.returnRejectReason) ||
+    hasPositiveMoneyValue(
+      request?.refundAmount,
+      request?.returnRefundAmount,
+      request?.estimatedRefundAmount
+    ) ||
+    hasArrayData(request?.items) ||
+    hasArrayData(request?.returnItems) ||
+    hasArrayData(request?.returnRequestItems) ||
+    hasArrayData(request?.returnedItems) ||
+    hasArrayData(request?.refundItems) ||
+    hasArrayData(request?.mediaFiles) ||
+    hasArrayData(request?.returnMediaUrls) ||
+    hasArrayData(request?.returnMediaFiles) ||
+    hasArrayData(request?.returnMedias) ||
+    hasArrayData(request?.returnImages) ||
+    normalizeReturnStatusValue(
+      request?.processStatus ??
+      request?.status ??
+      request?.returnStatus ??
+      request?.refundStatus ??
+      null
+    ) !== null
   );
 };
 
@@ -2990,37 +2631,37 @@ const hasOrderReturnData = (order: any) => {
 
   const directReturnStatus = normalizeReturnStatusValue(
     order?.returnProcessStatus ??
-      order?.returnStatus ??
-      order?.refundStatus ??
-      order?.returnRequestStatus ??
-      null
+    order?.returnStatus ??
+    order?.refundStatus ??
+    order?.returnRequestStatus ??
+    null
   );
 
   return Boolean(
     Number(order?.status) === 6 ||
-      Number(order?.status) === 7 ||
-      hasRealReturnRequestObject(request) ||
-      hasTextValue(order?.returnReason) ||
-      hasTextValue(order?.returnDescription) ||
-      hasTextValue(order?.returnRequestedAt) ||
-      hasTextValue(order?.returnRejectReason) ||
-      hasTextValue(order?.rejectReason) ||
-      hasTextValue(order?.rejectedReason) ||
-      hasArrayData(order?.returnItems) ||
-      hasArrayData(order?.returnRequestItems) ||
-      hasArrayData(order?.returnedItems) ||
-      hasArrayData(order?.refundItems) ||
-      hasArrayData(order?.returnMediaUrls) ||
-      hasArrayData(order?.returnImages) ||
-      hasArrayData(order?.returnVideos) ||
-      hasArrayData(order?.returnMediaFiles) ||
-      hasArrayData(order?.returnMedias) ||
-      hasPositiveMoneyValue(
-        order?.returnRefundAmount,
-        order?.estimatedRefundAmount,
-        order?.returnEstimatedRefundAmount
-      ) ||
-      directReturnStatus !== null
+    Number(order?.status) === 7 ||
+    hasRealReturnRequestObject(request) ||
+    hasTextValue(order?.returnReason) ||
+    hasTextValue(order?.returnDescription) ||
+    hasTextValue(order?.returnRequestedAt) ||
+    hasTextValue(order?.returnRejectReason) ||
+    hasTextValue(order?.rejectReason) ||
+    hasTextValue(order?.rejectedReason) ||
+    hasArrayData(order?.returnItems) ||
+    hasArrayData(order?.returnRequestItems) ||
+    hasArrayData(order?.returnedItems) ||
+    hasArrayData(order?.refundItems) ||
+    hasArrayData(order?.returnMediaUrls) ||
+    hasArrayData(order?.returnImages) ||
+    hasArrayData(order?.returnVideos) ||
+    hasArrayData(order?.returnMediaFiles) ||
+    hasArrayData(order?.returnMedias) ||
+    hasPositiveMoneyValue(
+      order?.returnRefundAmount,
+      order?.estimatedRefundAmount,
+      order?.returnEstimatedRefundAmount
+    ) ||
+    directReturnStatus !== null
   );
 };
 
@@ -3219,14 +2860,14 @@ const getOrderReturnProcessStatus = (order: any): ReturnProcessStatus => {
 
   const directStatus = normalizeReturnStatusValue(
     order?.returnProcessStatus ??
-      order?.returnStatus ??
-      order?.refundStatus ??
-      order?.returnRequestStatus ??
-      request?.processStatus ??
-      request?.status ??
-      request?.returnStatus ??
-      request?.refundStatus ??
-      null
+    order?.returnStatus ??
+    order?.refundStatus ??
+    order?.returnRequestStatus ??
+    request?.processStatus ??
+    request?.status ??
+    request?.returnStatus ??
+    request?.refundStatus ??
+    null
   );
 
   if (directStatus) {
@@ -3277,10 +2918,10 @@ const getOrderReturnProcessStatus = (order: any): ReturnProcessStatus => {
 const getReturnProcessText = (order: any) => {
   const directText = String(
     order?.returnProcessStatusText ??
-      order?.returnStatusText ??
-      order?.refundStatusText ??
-      getOrderReturnRequest(order)?.statusText ??
-      ""
+    order?.returnStatusText ??
+    order?.refundStatusText ??
+    getOrderReturnRequest(order)?.statusText ??
+    ""
   ).trim();
 
   if (directText) {
@@ -3480,8 +3121,8 @@ const getReturnProcessAlert = (order: any): ReturnProcessAlert | null => {
       desc:
         refundAmount > 0
           ? `Shop đã xác nhận hoàn ${formatMoney(
-              refundAmount
-            )} qua ${refundMethod}.`
+            refundAmount
+          )} qua ${refundMethod}.`
           : "Shop đã xác nhận xử lý hoàn tiền cho yêu cầu này.",
       icon: "bi-check-circle",
       className: "is-refunded",
@@ -3494,8 +3135,8 @@ const getReturnProcessAlert = (order: any): ReturnProcessAlert | null => {
       desc:
         refundAmount > 0
           ? `Shop sẽ hoàn ${formatMoney(
-              refundAmount
-            )} qua ${refundMethod}. Chỉ khi shop xác nhận đã hoàn tiền, trạng thái mới chuyển sang hoàn tất.`
+            refundAmount
+          )} qua ${refundMethod}. Chỉ khi shop xác nhận đã hoàn tiền, trạng thái mới chuyển sang hoàn tất.`
           : "Shop đã chấp nhận yêu cầu và đang xử lý bước hoàn tiền.",
       icon: "bi-clock-history",
       className: "is-accepted",
@@ -3543,10 +3184,10 @@ const getOrderRefundMethodText = (order: any) => {
 
   const rawMethod = String(
     order?.refundMethod ??
-      order?.returnRefundMethod ??
-      request?.refundMethod ??
-      request?.returnRefundMethod ??
-      ""
+    order?.returnRefundMethod ??
+    request?.refundMethod ??
+    request?.returnRefundMethod ??
+    ""
   )
     .trim()
     .toUpperCase()
@@ -3602,16 +3243,16 @@ const isDeliveryRefundInfoVisible = (order: any) => {
 const hasDeliveryRefundBankInfo = (order: any) => {
   return Boolean(
     String(order?.deliveryRefundBankName || "").trim() &&
-      String(order?.deliveryRefundBankAccountNumber || "").trim() &&
-      String(order?.deliveryRefundBankAccountHolder || "").trim()
+    String(order?.deliveryRefundBankAccountNumber || "").trim() &&
+    String(order?.deliveryRefundBankAccountHolder || "").trim()
   );
 };
 
 const hasAnyDeliveryRefundBankInfo = (order: any) => {
   return Boolean(
     String(order?.deliveryRefundBankName || "").trim() ||
-      String(order?.deliveryRefundBankAccountNumber || "").trim() ||
-      String(order?.deliveryRefundBankAccountHolder || "").trim()
+    String(order?.deliveryRefundBankAccountNumber || "").trim() ||
+    String(order?.deliveryRefundBankAccountHolder || "").trim()
   );
 };
 
@@ -3831,8 +3472,8 @@ const buildDeliveryRefundBankOptionsHtml = (
 
   const banks = cleanKeyword
     ? deliveryRefundBanks.value.filter((bank) =>
-        bank.searchText.includes(cleanKeyword)
-      )
+      bank.searchText.includes(cleanKeyword)
+    )
     : deliveryRefundBanks.value;
 
   if (banks.length === 0) {
@@ -3847,20 +3488,20 @@ const buildDeliveryRefundBankOptionsHtml = (
     .map((bank) => {
       const isSelected =
         normalizeBankSearchText(bank.displayName) ===
-          normalizeBankSearchText(selected) ||
+        normalizeBankSearchText(selected) ||
         normalizeBankSearchText(bank.name) ===
-          normalizeBankSearchText(selected) ||
+        normalizeBankSearchText(selected) ||
         normalizeBankSearchText(bank.shortName) ===
-          normalizeBankSearchText(selected) ||
+        normalizeBankSearchText(selected) ||
         normalizeBankSearchText(bank.code) ===
-          normalizeBankSearchText(selected);
+        normalizeBankSearchText(selected);
 
       const selectedClass = isSelected ? " is-selected" : "";
       const selectedIcon = isSelected ? '<i class="bi bi-check-lg"></i>' : "";
       const logoHtml = bank.logo
         ? `<img src="${escapeHtml(bank.logo)}" alt="${escapeHtml(
-            bank.displayName
-          )}" class="delivery-refund-bank-logo" />`
+          bank.displayName
+        )}" class="delivery-refund-bank-logo" />`
         : `<span class="delivery-refund-bank-logo is-empty"><i class="bi bi-bank"></i></span>`;
 
       return `
@@ -4016,8 +3657,8 @@ const openDeliveryRefundBankModal = async (order: CustomerOrderResponse) => {
         <div class="delivery-refund-modal-alert">
           <i class="bi bi-info-circle"></i>
           <span>Shop sẽ hoàn <strong>${escapeHtml(
-            formatMoney(getDeliveryRefundAmount(order))
-          )}</strong> cho đơn ${escapeHtml(
+      formatMoney(getDeliveryRefundAmount(order))
+    )}</strong> cho đơn ${escapeHtml(
       generateOrderCode(order.orderId)
     )}. Thông tin này chỉ gửi được 1 lần và không thể tự chỉnh sửa.</span>
         </div>
@@ -4108,7 +3749,7 @@ const openDeliveryRefundBankModal = async (order: CustomerOrderResponse) => {
         if (bankHiddenInput) {
           bankHiddenInput.value =
             matchedBank &&
-            normalizeBankSearchText(matchedBank.displayName) ===
+              normalizeBankSearchText(matchedBank.displayName) ===
               normalizeBankSearchText(keyword)
               ? matchedBank.displayName
               : "";
@@ -4186,14 +3827,14 @@ const openDeliveryRefundBankModal = async (order: CustomerOrderResponse) => {
       <div style="text-align:left;line-height:1.6">
         <p style="margin-bottom:8px">Thông tin tài khoản hoàn tiền <b>chỉ gửi được 1 lần</b>. Sau khi gửi, bạn không thể tự chỉnh sửa trên hệ thống. Vui lòng kiểm tra thật kĩ</p>
         <p style="margin-bottom:4px"><b>Ngân hàng:</b> ${escapeHtml(
-          result.value.bankName
-        )}</p>
+      result.value.bankName
+    )}</p>
         <p style="margin-bottom:4px"><b>Số tài khoản:</b> ${escapeHtml(
-          result.value.bankAccountNumber
-        )}</p>
+      result.value.bankAccountNumber
+    )}</p>
         <p style="margin-bottom:0"><b>Chủ tài khoản:</b> ${escapeHtml(
-          result.value.bankAccountHolder
-        )}</p>
+      result.value.bankAccountHolder
+    )}</p>
       </div>
     `,
     showCancelButton: true,
@@ -4348,40 +3989,40 @@ const getRawReturnItemsPayload = (order: any) => {
 const getReturnPayloadOrderItemId = (payload: any) => {
   return toPositiveNumberOrNull(
     payload?.orderItemId ??
-      payload?.orderItem?.id ??
-      payload?.orderItem?.orderItemId ??
-      payload?.itemId ??
-      payload?.orderDetailId ??
-      null
+    payload?.orderItem?.id ??
+    payload?.orderItem?.orderItemId ??
+    payload?.itemId ??
+    payload?.orderDetailId ??
+    null
   );
 };
 
 const getReturnPayloadProductId = (payload: any) => {
   return toPositiveNumberOrNull(
     payload?.productId ??
-      payload?.product?.id ??
-      payload?.product?.productId ??
-      payload?.orderItem?.productId ??
-      payload?.orderItem?.product?.id ??
-      payload?.orderItem?.product?.productId ??
-      payload?.productVariant?.productId ??
-      payload?.productVariant?.product?.id ??
-      payload?.productVariant?.product?.productId ??
-      null
+    payload?.product?.id ??
+    payload?.product?.productId ??
+    payload?.orderItem?.productId ??
+    payload?.orderItem?.product?.id ??
+    payload?.orderItem?.product?.productId ??
+    payload?.productVariant?.productId ??
+    payload?.productVariant?.product?.id ??
+    payload?.productVariant?.product?.productId ??
+    null
   );
 };
 
 const getReturnPayloadVariantId = (payload: any) => {
   return toPositiveNumberOrNull(
     payload?.productVariantId ??
-      payload?.variantId ??
-      payload?.productVariant?.id ??
-      payload?.productVariant?.variantId ??
-      payload?.orderItem?.productVariantId ??
-      payload?.orderItem?.variantId ??
-      payload?.orderItem?.productVariant?.id ??
-      payload?.orderItem?.productVariant?.variantId ??
-      null
+    payload?.variantId ??
+    payload?.productVariant?.id ??
+    payload?.productVariant?.variantId ??
+    payload?.orderItem?.productVariantId ??
+    payload?.orderItem?.variantId ??
+    payload?.orderItem?.productVariant?.id ??
+    payload?.orderItem?.productVariant?.variantId ??
+    null
   );
 };
 
@@ -4490,12 +4131,12 @@ const getReturnItemQuantity = (payload: any) => {
   return (
     toPositiveNumberOrNull(
       payload?.returnQuantity ??
-        payload?.quantity ??
-        payload?.qty ??
-        payload?.returnedQuantity ??
-        payload?.requestQuantity ??
-        payload?.orderItemQuantity ??
-        null
+      payload?.quantity ??
+      payload?.qty ??
+      payload?.returnedQuantity ??
+      payload?.requestQuantity ??
+      payload?.orderItemQuantity ??
+      null
     ) ?? 0
   );
 };
@@ -4559,11 +4200,11 @@ const getOrderReturnSelectedItems = (order: any): ReturnSelectedItemView[] => {
       const orderedQuantity =
         toPositiveNumberOrNull(
           payload?.orderedQuantity ??
-            payload?.orderQuantity ??
-            payload?.quantityPurchased ??
-            payload?.orderItem?.quantity ??
-            baseItem?.quantity ??
-            null
+          payload?.orderQuantity ??
+          payload?.quantityPurchased ??
+          payload?.orderItem?.quantity ??
+          baseItem?.quantity ??
+          null
         ) ?? 0;
       const returnQuantity = getReturnItemQuantity(payload);
       const unitFinalPrice = pickMoneyValue(
@@ -4587,8 +4228,8 @@ const getOrderReturnSelectedItems = (order: any): ReturnSelectedItemView[] => {
         rawItemAmount > 0
           ? rawItemAmount
           : unitFinalPrice > 0 && returnQuantity > 0
-          ? unitFinalPrice * returnQuantity
-          : 0;
+            ? unitFinalPrice * returnQuantity
+            : 0;
       const voucherAllocatedAmount = pickMoneyValue(
         payload?.voucherAllocatedAmount,
         payload?.allocatedVoucherAmount,
@@ -4714,22 +4355,22 @@ const getReturnMediaUrl = (media: any) => {
     typeof media === "string"
       ? media
       : media?.mediaUrl ??
-        media?.url ??
-        media?.imageUrl ??
-        media?.fileUrl ??
-        media?.src ??
-        media?.path ??
-        "";
+      media?.url ??
+      media?.imageUrl ??
+      media?.fileUrl ??
+      media?.src ??
+      media?.path ??
+      "";
   return normalizeReturnMediaUrl(String(rawUrl || ""));
 };
 
 const isReturnMediaVideo = (media: any, url: string) => {
   const rawType = String(
     media?.mediaType ??
-      media?.type ??
-      media?.contentType ??
-      media?.mimeType ??
-      url
+    media?.type ??
+    media?.contentType ??
+    media?.mimeType ??
+    url
   ).toLowerCase();
   return (
     rawType.includes("video") ||
@@ -4859,8 +4500,8 @@ const buildReturnPreviewThumbHtml = (
         src="${safeUrl}"
         class="return-preview-thumb-image"
         alt="${escapeHtml(
-          `${mediaLabel} ${options.counterLabel} ${index + 1}`
-        )}"
+      `${mediaLabel} ${options.counterLabel} ${index + 1}`
+    )}"
       />
     `;
 
@@ -4875,11 +4516,10 @@ const buildReturnPreviewThumbHtml = (
       <span class="return-preview-thumb-badge">
         ${mediaLabel} ${index + 1}
       </span>
-      ${
-        media.isVideo
-          ? `<span class="return-preview-thumb-play"><i class="bi bi-play-fill"></i></span>`
-          : ""
-      }
+      ${media.isVideo
+      ? `<span class="return-preview-thumb-play"><i class="bi bi-play-fill"></i></span>`
+      : ""
+    }
     </button>
   `;
 };
@@ -4906,30 +4546,26 @@ const buildReturnPreviewHtml = (
   const activeMediaLabel = activeMedia.isVideo ? "Video" : "Ảnh";
   return `<div class="return-preview-modal"><div class="return-preview-counter">${activeMediaLabel} ${escapeHtml(
     options.counterLabel
-  )}<strong>${safeActiveIndex + 1}/${
-    mediaList.length
-  }</strong></div><div class="return-preview-stage">${
-    hasMultipleMedia
+  )}<strong>${safeActiveIndex + 1}/${mediaList.length
+    }</strong></div><div class="return-preview-stage">${hasMultipleMedia
       ? `<button type="button" class="return-preview-nav is-prev" data-preview-direction="-1" aria-label="Xem ảnh/video trước"><i class="bi bi-chevron-left"></i></button>`
       : ""
-  }<div class="return-preview-main">${buildReturnPreviewMainHtml(
-    activeMedia,
-    options
-  )}</div>${
-    hasMultipleMedia
+    }<div class="return-preview-main">${buildReturnPreviewMainHtml(
+      activeMedia,
+      options
+    )}</div>${hasMultipleMedia
       ? `<button type="button" class="return-preview-nav is-next" data-preview-direction="1" aria-label="Xem ảnh/video tiếp theo"><i class="bi bi-chevron-right"></i></button>`
       : ""
-  }</div>${
-    hasMultipleMedia
+    }</div>${hasMultipleMedia
       ? `<div class="return-preview-thumb-title">${escapeHtml(
-          options.thumbTitle
-        )}</div><div class="return-preview-thumb-list">${mediaList
-          .map((media, index) =>
-            buildReturnPreviewThumbHtml(media, index, safeActiveIndex, options)
-          )
-          .join("")}</div>`
+        options.thumbTitle
+      )}</div><div class="return-preview-thumb-list">${mediaList
+        .map((media, index) =>
+          buildReturnPreviewThumbHtml(media, index, safeActiveIndex, options)
+        )
+        .join("")}</div>`
       : ""
-  }</div>`;
+    }</div>`;
 };
 
 const openMediaPreview = async (
@@ -5002,8 +4638,8 @@ const getDeliveryMedia = (rawMedia: any): ReturnMediaView[] => {
   const mediaList = Array.isArray(rawMedia)
     ? rawMedia
     : rawMedia
-    ? [rawMedia]
-    : [];
+      ? [rawMedia]
+      : [];
 
   return mediaList
     .map((media: any) => {
@@ -5017,9 +4653,9 @@ const getDeliveryMedia = (rawMedia: any): ReturnMediaView[] => {
 const getDeliverySuccessMedia = (order: any): ReturnMediaView[] => {
   return getDeliveryMedia(
     order?.deliverySuccessMediaUrls ??
-      order?.deliveryCompletedMediaUrls ??
-      order?.deliveryProofUrls ??
-      []
+    order?.deliveryCompletedMediaUrls ??
+    order?.deliveryProofUrls ??
+    []
   );
 };
 
@@ -5226,8 +4862,8 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
 
         <div class="cancel-reason-grid">
           ${cancelReasons
-            .map(
-              (item, index) => `
+        .map(
+          (item, index) => `
                 <label class="cancel-reason-card" for="cancel-reason-${index}">
                   <input
                     id="cancel-reason-${index}"
@@ -5239,8 +4875,8 @@ const cancelOrder = async (order: CustomerOrderResponse) => {
                   <span class="cancel-reason-text">${item}</span>
                 </label>
               `
-            )
-            .join("")}
+        )
+        .join("")}
         </div>
       </div>
     `,
@@ -5297,9 +4933,9 @@ const getDefaultReturnEmail = () => {
     const currentUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
     return String(
       currentUser.email ||
-        currentUser.Email ||
-        localStorage.getItem("email") ||
-        ""
+      currentUser.Email ||
+      localStorage.getItem("email") ||
+      ""
     ).trim();
   } catch {
     return String(localStorage.getItem("email") || "").trim();
@@ -5311,7 +4947,7 @@ const requestReturn = (order: CustomerOrderResponse) => {
     toast(
       "warning",
       getReturnDeadlineText(order) ||
-        "Đơn hàng không còn đủ điều kiện hoàn hàng"
+      "Đơn hàng không còn đủ điều kiện hoàn hàng"
     );
     return;
   }
@@ -6104,6 +5740,7 @@ const getItemImage = (item: any) => {
   background: #d1fae5;
   border-color: #a7f3d0;
 }
+
 .return-process-badge.is-cancelled {
   color: #475569;
   background: #f1f5f9;
@@ -6248,6 +5885,7 @@ const getItemImage = (item: any) => {
   border-color: #a7f3d0;
   color: #047857;
 }
+
 .return-process-alert.is-cancelled {
   background: #f8fafc;
   border-color: #cbd5e1;
@@ -6367,6 +6005,7 @@ const getItemImage = (item: any) => {
   background: #d1fae5;
   border-color: #a7f3d0;
 }
+
 .return-selected-status.is-cancelled {
   color: #475569;
   background: #f1f5f9;
@@ -6439,7 +6078,7 @@ const getItemImage = (item: any) => {
   padding: 12px;
 }
 
-.delivery-info-card + .delivery-info-card {
+.delivery-info-card+.delivery-info-card {
   margin-top: 12px;
 }
 
@@ -6541,14 +6180,14 @@ const getItemImage = (item: any) => {
   padding: 18px;
 }
 
-.order-total-box > div {
+.order-total-box>div {
   display: flex;
   justify-content: space-between;
   gap: 20px;
   margin-bottom: 10px;
 }
 
-.order-total-box > div:last-child {
+.order-total-box>div:last-child {
   margin-bottom: 0;
 }
 
@@ -7425,7 +7064,7 @@ input.delivery-refund-modal-control {
   white-space: nowrap;
 }
 
-.delivery-refund-bank-option > .bi-check-lg {
+.delivery-refund-bank-option>.bi-check-lg {
   color: #16a34a;
   font-size: 16px;
 }
