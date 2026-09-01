@@ -251,7 +251,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onActivated, onBeforeUnmount } from 'vue';
 
 // 1. SỬA LỖI 2 & 3: Sử dụng alias '@' để trỏ chính xác vị trí file
 import { reviewService } from '@/modules/admin/feature/review/services/review.service';
@@ -288,8 +288,54 @@ const Toast = Swal.mixin({
   timerProgressBar: true
 });
 
+// Đồng bộ danh sách khi quay lại trang/tab mà không cần F5.
+// Chỉ tác động tới việc gọi lại API GET danh sách, không thay đổi nghiệp vụ khác.
+let firstActivation = true;
+let lastReturnRefreshAt = 0;
+
+const refreshReviewsOnReturn = () => {
+  // Tránh focus + visibilitychange/pageshow bắn gần như cùng lúc.
+  const now = Date.now();
+  if (now - lastReturnRefreshAt < 300) return;
+
+  lastReturnRefreshAt = now;
+  fetchReviews();
+};
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    refreshReviewsOnReturn();
+  }
+};
+
+const handlePageShow = (event: PageTransitionEvent) => {
+  if (event.persisted) {
+    refreshReviewsOnReturn();
+  }
+};
+
 onMounted(() => {
   fetchReviews();
+
+  window.addEventListener('focus', refreshReviewsOnReturn);
+  window.addEventListener('pageshow', handlePageShow);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+});
+
+onActivated(() => {
+  // KeepAlive cũng kích hoạt ở lần hiển thị đầu tiên; bỏ lần đầu để không gọi API trùng onMounted.
+  if (firstActivation) {
+    firstActivation = false;
+    return;
+  }
+
+  fetchReviews();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('focus', refreshReviewsOnReturn);
+  window.removeEventListener('pageshow', handlePageShow);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
 });
 
 // 2. SỬA LỖI 1: Đổi tham số val thành (number | string)
