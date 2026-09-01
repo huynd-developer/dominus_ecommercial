@@ -588,7 +588,7 @@ public class PosServiceImpl implements PosService {
 
     /**
      * Snapshot từ FE chỉ dùng để phát hiện màn hình POS đang stale.
-     *
+     * <p>
      * Không dùng expected* để tính tiền hoặc ghi Order.
      */
     private void validatePosSnapshot(
@@ -1497,7 +1497,7 @@ public class PosServiceImpl implements PosService {
 
     /**
      * POS kiểm tra tồn từ InventoryLot.
-     *
+     * <p>
      * Không dùng:
      * - ProductVariant.StockQuantity
      * - ProductVariant.ManufacturingDate
@@ -1592,7 +1592,7 @@ public class PosServiceImpl implements PosService {
     /**
      * Xuất kho theo FEFO:
      * ExpirationDate ASC -> ReceivedDate ASC -> InventoryLot.Id ASC.
-     *
+     * <p>
      * Lot hết hạn và lot hết tồn không được chọn.
      */
     private void postSaleOutByFefo(
@@ -1676,10 +1676,10 @@ public class PosServiceImpl implements PosService {
 
     /**
      * Callback VNPay không có Authentication của thu ngân.
-     *
+     * <p>
      * Vì POS/IN_STORE đã SALE_OUT InventoryLot ngay khi bắt đầu thanh toán
      * VNPAY/MIXED_VNPAY, callback thất bại phải hoàn đúng lot đã xuất.
-     *
+     * <p>
      * Chỉ xử lý tồn kho. Trạng thái đơn, voucher và các nghiệp vụ thanh toán
      * vẫn do VNPayController xử lý như trước.
      */
@@ -1745,13 +1745,13 @@ public class PosServiceImpl implements PosService {
 
     /**
      * Hoàn đúng các InventoryLot đã SALE_OUT của POS order.
-     *
+     * <p>
      * Mỗi RETURN_IN mới phải trỏ:
      * ReferenceLineId = StockMovement.Id của SALE_OUT gốc.
-     *
+     * <p>
      * Nhờ vậy cùng một SALE_OUT không bị hoàn lặp khi order đi qua nhiều vòng:
      * SALE_OUT -> RETURN_IN -> SALE_OUT -> RETURN_IN.
-     *
+     * <p>
      * Không chạy FEFO lại khi hoàn.
      */
     private void restorePosOrderStock(
@@ -1844,11 +1844,11 @@ public class PosServiceImpl implements PosService {
 
     /**
      * Tổng số lượng POS đã RETURN_IN cho từng SALE_OUT gốc.
-     *
+     * <p>
      * Chỉ movement theo chuẩn mới:
      * POS_ORDER_ROLLBACK + RETURN_IN
      * với ReferenceLineId trỏ tới StockMovement.Id của SALE_OUT.
-     *
+     * <p>
      * Nếu gặp dữ liệu rollback legacy không thể truy ngược chính xác SALE_OUT,
      * dừng lại thay vì tự suy đoán và có nguy cơ cộng tồn hai lần.
      */
@@ -1916,16 +1916,16 @@ public class PosServiceImpl implements PosService {
     ) {
         jdbcTemplate.execute(
                 """
-                EXEC dbo.usp_PostStockMovement
-                    @InventoryLotId = ?,
-                    @MovementType = ?,
-                    @QuantityChange = ?,
-                    @CreatedBy = ?,
-                    @ReferenceType = ?,
-                    @ReferenceId = ?,
-                    @ReferenceLineId = ?,
-                    @Reason = ?
-                """,
+                        EXEC dbo.usp_PostStockMovement
+                            @InventoryLotId = ?,
+                            @MovementType = ?,
+                            @QuantityChange = ?,
+                            @CreatedBy = ?,
+                            @ReferenceType = ?,
+                            @ReferenceId = ?,
+                            @ReferenceLineId = ?,
+                            @Reason = ?
+                        """,
                 (PreparedStatementCallback<Void>) statement -> {
                     statement.setObject(1, inventoryLotId);
                     statement.setByte(2, movementType);
@@ -2583,9 +2583,18 @@ public class PosServiceImpl implements PosService {
             return false;
         }
 
-        String roleName = user.getRole().getName().trim().toUpperCase(Locale.ROOT);
+        String roleName = user.getRole().getName()
+                .trim()
+                .toUpperCase(Locale.ROOT);
 
-        return "CASHIER".equals(roleName) || "ROLE_CASHIER".equals(roleName) || "MANAGER".equals(roleName) || "ROLE_MANAGER".equals(roleName) || "OWNER".equals(roleName) || "ROLE_OWNER".equals(roleName);
+        /*
+         * Nghiệp vụ chuyển đơn lưu tạm:
+         * Chỉ tài khoản CASHIER đang hoạt động mới được NHẬN đơn.
+         * MANAGER/OWNER có thể có quyền quản lý/chuyển đơn,
+         * nhưng không phải đối tượng nhận đơn POS.
+         */
+        return "CASHIER".equals(roleName)
+                || "ROLE_CASHIER".equals(roleName);
     }
 
     @Override
@@ -2694,13 +2703,13 @@ public class PosServiceImpl implements PosService {
 
     /**
      * Hủy payment intent đang chờ và đưa hóa đơn online pending quay lại phiếu treo HOLD.
-     *
+     * <p>
      * Lý do cần endpoint này:
      * - Khi bấm VietQR/VNPay, hệ thống đã tạo hóa đơn PENDING_PAYMENT và đã giữ/trừ kho.
      * - Nếu khách chưa thanh toán rồi bấm X/Đổi phương thức để sửa sản phẩm hoặc voucher,
-     *   không được chỉ mở khóa ở FE vì DB đã giữ hàng.
+     * không được chỉ mở khóa ở FE vì DB đã giữ hàng.
      * - Phải hoàn lại lượng tồn kho đã giữ, đổi paymentMethod về HOLD,
-     *   để lần thanh toán sau trừ kho lại đúng một lần.
+     * để lần thanh toán sau trừ kho lại đúng một lần.
      */
     @Override
     @Transactional
@@ -2796,7 +2805,7 @@ public class PosServiceImpl implements PosService {
 
     /**
      * Hủy hóa đơn POS đã nhận tiền mặt một phần.
-     *
+     * <p>
      * Không dùng cancelPendingPayment() cho MIXED vì hàm đó đưa đơn về HOLD để sửa,
      * còn MIXED đã có tiền mặt phải xử lý theo nghiệp vụ hủy + hoàn tiền.
      */
