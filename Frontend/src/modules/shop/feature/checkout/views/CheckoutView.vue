@@ -42,15 +42,6 @@
               Thanh toán đơn hàng
             </h4>
 
-            <div class="timer-box d-flex align-items-center justify-content-center gap-2 mb-2 p-2 rounded-3" style="
-                background-color: #fef2f2;
-                color: #dc2626;
-                border: 1px solid #fecaca;
-                width: 100%;
-              ">
-              <i class="bi bi-clock-history fs-5"></i>
-              <span class="fs-5 fw-bold">{{ formattedCountdown }}</span>
-            </div>
 
             <template v-if="currentPaymentMethod === 'VIETQR'">
               <p class="text-muted small mb-3">
@@ -154,13 +145,7 @@ const isCalculatingShip = ref(false);
 const paymentCountdown = ref(900);
 let paymentTimer: ReturnType<typeof setInterval> | null = null;
 
-const formattedCountdown = computed(() => {
-  const m = Math.floor(paymentCountdown.value / 60)
-    .toString()
-    .padStart(2, "0");
-  const s = (paymentCountdown.value % 60).toString().padStart(2, "0");
-  return `${m}:${s}`;
-});
+
 
 const startPaymentTimer = () => {
   paymentCountdown.value = 900;
