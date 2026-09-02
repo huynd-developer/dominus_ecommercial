@@ -47,6 +47,11 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public ProductResponse createProduct(ProductRequest request) {
 
+        validateActiveProductNameUnique(
+                request.getName(),
+                null
+        );
+
         Brand brand = brandRepository.findById(request.getBrandId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy Brand"));
 
@@ -145,6 +150,15 @@ public class ProductServiceImpl implements ProductService {
         validateExpectedRevision(
                 request.getExpectedRevision(),
                 buildProductRevision(product, existingVariants)
+        );
+
+        /*
+         * Chỉ kiểm tra tên sau khi request đã vượt qua stale protection.
+         * Bỏ qua chính Product hiện tại khi kiểm tra trùng.
+         */
+        validateActiveProductNameUnique(
+                request.getName(),
+                id
         );
 
         Brand brand = brandRepository.findById(request.getBrandId())
@@ -358,6 +372,17 @@ public class ProductServiceImpl implements ProductService {
             throw conflict("Sản phẩm chưa bị xóa.");
         }
 
+        /*
+         * Trước khi khôi phục phải kiểm tra tên Product này
+         * có đang được Product chưa xóa khác sử dụng hay không.
+         *
+         * Không đổi status và không tác động variant/tồn kho/ảnh.
+         */
+        validateActiveProductNameUnique(
+                product.getName(),
+                product.getId()
+        );
+
         product.setIsDeleted(false);
 
         productRepository.save(product);
@@ -555,7 +580,49 @@ public class ProductServiceImpl implements ProductService {
         return new HashSet<>(found);
     }
 
+    /**
+     * Đảm bảo tại một thời điểm không tồn tại 2 Product chưa xóa mềm
+     * có cùng tên.
+     *
+     * excludeProductId:
+     * - null: CREATE
+     * - có giá trị: UPDATE / RESTORE, bỏ qua chính Product đang thao tác
+     */
+    private void validateActiveProductNameUnique(
+            String name,
+            Integer excludeProductId
+    ) {
 
+        if (name == null || name.trim().isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Tên sản phẩm không được để trống."
+            );
+        }
+
+        boolean duplicated;
+
+        if (excludeProductId == null) {
+
+            duplicated =
+                    productRepository.existsActiveByName(name);
+
+        } else {
+
+            duplicated =
+                    productRepository.existsOtherActiveByName(
+                            name,
+                            excludeProductId
+                    );
+        }
+
+        if (duplicated) {
+            throw conflict(
+                    "Tên sản phẩm \"" + name.trim()
+                            + "\" đã được sử dụng bởi một sản phẩm chưa xóa."
+            );
+        }
+    }
     private Product findProductForUpdateOrThrow(Integer id) {
 
         return productRepository.findByIdForUpdate(id)

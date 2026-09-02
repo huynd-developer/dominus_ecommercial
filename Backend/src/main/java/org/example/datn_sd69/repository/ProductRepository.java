@@ -54,4 +54,38 @@ public interface ProductRepository
     );
 
     boolean existsByConcentrationId(Integer concentrationId);
+
+    /**
+     * Kiểm tra tên sản phẩm đã được sử dụng bởi một Product chưa xóa mềm hay chưa.
+     *
+     * Không quan tâm Status = đang bán / ngừng bán.
+     * Chỉ cần IsDeleted = false thì vẫn được xem là Product đang tồn tại trong hệ thống.
+     */
+    @Query("""
+    SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END
+    FROM Product p
+    WHERE p.isDeleted = false
+      AND LOWER(TRIM(p.name)) = LOWER(TRIM(:name))
+""")
+    boolean existsActiveByName(
+            @Param("name") String name
+    );
+
+    /**
+     * Dùng cho UPDATE / RESTORE.
+     *
+     * Loại trừ chính Product đang thao tác để tránh trường hợp
+     * Product tự trùng tên với chính nó.
+     */
+    @Query("""
+    SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END
+    FROM Product p
+    WHERE p.isDeleted = false
+      AND p.id <> :excludeId
+      AND LOWER(TRIM(p.name)) = LOWER(TRIM(:name))
+""")
+    boolean existsOtherActiveByName(
+            @Param("name") String name,
+            @Param("excludeId") Integer excludeId
+    );
 }

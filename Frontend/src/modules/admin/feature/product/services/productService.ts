@@ -109,10 +109,11 @@ export const productService = {
   // PRODUCT IMAGE
   // =====================================
 
-  uploadImage: async (productId: number, file: File) => {
+  uploadImage: async (productId: number, file: File, isPrimary = false) => {
     const formData = new FormData();
 
     formData.append("file", file);
+    formData.append("isPrimary", String(isPrimary));
 
     const response = await request.post(
       `/api/v1/products/admin/${productId}/images`,
