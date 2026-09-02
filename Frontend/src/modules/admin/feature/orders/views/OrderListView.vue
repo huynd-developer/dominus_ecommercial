@@ -28,27 +28,27 @@
 
     <div class="order-filter-tabs mb-3">
       <div class="order-status-tabs">
-  <button
-    v-for="item in statusTabs"
-    :key="String(item.value)"
-    type="button"
-    class="underline-tab"
-    :class="{ active: status === item.value }"
-    :disabled="loading"
-    @click="changeStatusTab(item.value)"
-  >
-    {{ item.label }}
-    
-    <!-- ĐÃ THÊM: Badge hiển thị số lượng yêu cầu hoàn khi tab value = 6 -->
-    <span 
-      v-if="item.value === 6 && pendingReturnCount > 0" 
-      class="badge bg-danger ms-1"
-      style="font-size: 11px; padding: 3px 6px;"
-    >
-      {{ pendingReturnCount }}
-    </span>
-  </button>
-</div>
+        <button
+          v-for="item in statusTabs"
+          :key="String(item.value)"
+          type="button"
+          class="underline-tab"
+          :class="{ active: status === item.value }"
+          :disabled="loading"
+          @click="changeStatusTab(item.value)"
+        >
+          {{ item.label }}
+
+          <!-- ĐÃ THÊM: Badge hiển thị số lượng yêu cầu hoàn khi tab value = 6 -->
+          <span
+            v-if="item.value === 6 && pendingReturnCount > 0"
+            class="badge bg-danger ms-1"
+            style="font-size: 11px; padding: 3px 6px"
+          >
+            {{ pendingReturnCount }}
+          </span>
+        </button>
+      </div>
 
       <div class="order-type-tabs">
         <button
@@ -357,7 +357,7 @@ function isConflict(error: any) {
 
 async function refreshOrderStateSilently(orderId?: number) {
   fetchPendingReturnCount();
-  
+
   try {
     const rawData = await orderService.getOrders({
       keyword: keyword.value,
@@ -1632,7 +1632,20 @@ async function confirmAcceptReturn(order: AdminOrderResponse) {
   loading.value = true;
 
   try {
-    await orderService.acceptReturn(order.orderId);
+    const updatedOrder = await orderService.acceptReturn(order.orderId);
+
+    /*
+     * API đã trả dữ liệu mới nhất.
+     * Cập nhật ngay modal để badge/nút đổi ngay,
+     * không chờ reload list + GET detail lần nữa.
+     */
+    selectedOrder.value = updatedOrder;
+
+    /*
+     * Đồng bộ danh sách/badge ở nền.
+     * Không block việc cập nhật UI trong modal.
+     */
+    void refreshOrderStateSilently(order.orderId);
 
     await Swal.fire({
       icon: "success",
@@ -1640,8 +1653,6 @@ async function confirmAcceptReturn(order: AdminOrderResponse) {
       text: "Yêu cầu hoàn hàng đã được chấp nhận. Hãy hoàn tiền thực tế cho khách trước khi bấm Đã hoàn tiền.",
       confirmButtonColor: "#bd9a5f",
     });
-
-    await refreshOrderAfterWorkflow(order.orderId);
   } catch (error: any) {
     if (await showWorkflowConflict(error, order.orderId)) {
       return;
@@ -2243,7 +2254,20 @@ async function confirmMarkReturnRefunded(order: AdminOrderResponse) {
   loading.value = true;
 
   try {
-    await orderService.markReturnRefunded(order.orderId, shouldRestoreStock);
+    const updatedOrder = await orderService.markReturnRefunded(
+      order.orderId,
+      shouldRestoreStock
+    );
+
+    /*
+     * Cập nhật modal ngay bằng response vừa được BE trả về.
+     */
+    selectedOrder.value = updatedOrder;
+
+    /*
+     * Refresh danh sách/badge ở nền.
+     */
+    void refreshOrderStateSilently(order.orderId);
 
     await Swal.fire({
       icon: "success",
@@ -2255,8 +2279,6 @@ async function confirmMarkReturnRefunded(order: AdminOrderResponse) {
         : "Đơn hàng đã chuyển sang trạng thái hoàn hàng hoàn tất. Sản phẩm hoàn không được cộng về kho.",
       confirmButtonColor: "#bd9a5f",
     });
-
-    await refreshOrderAfterWorkflow(order.orderId);
   } catch (error: any) {
     if (await showWorkflowConflict(error, order.orderId)) {
       return;
@@ -2486,7 +2508,7 @@ const pendingReturnCount = ref(0);
 async function fetchPendingReturnCount() {
   try {
     const rawData = await orderService.getOrders({
-      status: 6, 
+      status: 6,
       page: 0,
       size: 1, // Chỉ lấy 1 bản ghi để nhẹ request, chủ yếu lấy totalElements
     });

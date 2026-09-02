@@ -48,6 +48,8 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.server.ResponseStatusException;
+import org.example.datn_sd69.modules.order.event.OrderMailEvent;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -176,6 +178,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private final EntityManager entityManager;
     private final JdbcTemplate jdbcTemplate;
     private final OrderMailService orderMailService;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     private record KeywordDateRange(
             String keyword,
@@ -508,7 +511,12 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         returnRequestItemRepository.saveAll(returnItems);
 
         Order savedOrder = orderRepository.save(order);
-        orderMailService.sendReturnAccepted(savedOrder);
+        applicationEventPublisher.publishEvent(
+                new OrderMailEvent(
+                        savedOrder.getId(),
+                        OrderMailEvent.Type.RETURN_ACCEPTED
+                )
+        );
 
         return mapOrderToResponse(savedOrder, true);
     }
@@ -588,7 +596,12 @@ public class AdminOrderServiceImpl implements AdminOrderService {
         order.setStatus(STATUS_RETURN_COMPLETED);
         Order savedOrder = orderRepository.save(order);
 
-        orderMailService.sendReturnRefunded(savedOrder);
+        applicationEventPublisher.publishEvent(
+                new OrderMailEvent(
+                        savedOrder.getId(),
+                        OrderMailEvent.Type.RETURN_REFUNDED
+                )
+        );
 
         return mapOrderToResponse(savedOrder, true);
     }
