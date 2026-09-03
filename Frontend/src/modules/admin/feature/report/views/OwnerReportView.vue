@@ -2,7 +2,7 @@
   <div class="owner-report-page">
     <div class="page-header mb-4">
       <div>
-        <h2 class="fw-bold mb-1">Báo cáo Owner</h2>
+        <h2 class="fw-bold mb-1">Dashboard</h2>
         <p class="text-muted mb-0">
           Thống kê doanh thu thuần, đơn hoàn thành và sản phẩm bán chạy
         </p>

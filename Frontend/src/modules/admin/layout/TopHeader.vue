@@ -221,7 +221,7 @@ const menuItems = [
   {
     id: "dashboard",
     path: "/admin/dashboard",
-    name: "Thống kê báo cáo",
+    name: "Dashboard",
     icon: "bi-graph-up-arrow",
     roles: ["OWNER"],
   },

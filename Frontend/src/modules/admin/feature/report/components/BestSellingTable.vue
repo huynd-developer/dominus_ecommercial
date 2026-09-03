@@ -84,12 +84,14 @@
                     <div class="fw-semibold product-name">
                       {{ getProductName(item) }}
                     </div>
+
                     <div
                       v-if="getCapacityText(item) || getBottleTypeText(item)"
                       class="text-muted small mt-1"
                     >
                       <span v-if="getCapacityText(item)">
                         <i class="bi bi-droplet-half me-1"></i>
+
                         {{ getCapacityText(item) }}
                       </span>
 
@@ -98,6 +100,7 @@
                         :class="{ 'ms-2': getCapacityText(item) }"
                       >
                         <i class="bi bi-box-seam me-1"></i>
+
                         {{ getBottleTypeText(item) }}
                       </span>
                     </div>
@@ -127,19 +130,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed } from "vue";
 
 import type { BestSellingProductResponse } from "../types/report.type";
-
-import api from "@/common/api";
 
 const props = defineProps<{
   items: BestSellingProductResponse[];
 }>();
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
-
-const productDetailMap = ref<Record<number, any>>({});
 
 const getImageUrl = (url?: string) => {
   if (!url) return "";
@@ -154,48 +153,27 @@ const getImageUrl = (url?: string) => {
   return url.startsWith("/") ? `${API_URL}${url}` : `${API_URL}/${url}`;
 };
 
-const fetchMissingImages = async () => {
-  if (!Array.isArray(props.items)) return;
-
-  for (const item of props.items) {
-    const productId = Number(item.productId || 0);
-
-    if (productId > 0 && !productDetailMap.value[productId]) {
-      try {
-        const response = await api.get(`/v1/products/${productId}`);
-
-        const data = response.data?.data || response.data;
-
-        if (data) productDetailMap.value[productId] = data;
-      } catch {
-        // Fallback
-      }
-    }
-  }
-};
-
-watch(
-  () => props.items,
-
-  () => {
-    fetchMissingImages();
-  },
-
-  { immediate: true, deep: true }
-);
-
 const safeItems = computed(() => {
   const items = Array.isArray(props.items) ? props.items : [];
 
   /*
+
    * Backend Owner Report đã chịu trách nhiệm GROUP BY Product.
+
    *
+
    * FE tuyệt đối không group lại theo dung tích / loại chai,
+
    * vì màn hình này là "Sản phẩm bán chạy nhất", không phải
+
    * "SKU/biến thể bán chạy nhất".
+
    *
+
    * Copy array để không mutate props.
+
    */
+
   return [...items].sort((a: any, b: any) => {
     const soldDiff = Number(b?.totalSold || 0) - Number(a?.totalSold || 0);
 
@@ -219,10 +197,6 @@ const getProductName = (item: any) => {
   ) {
     return "Sản phẩm ngừng kinh doanh";
   }
-
-  const detail = item.productId ? productDetailMap.value[item.productId] : null;
-
-  if (detail && detail.name) return detail.name;
 
   return rawName;
 };
@@ -254,16 +228,8 @@ const getBrandName = (item: any) => {
     return brand;
   }
 
-  const detail = item.productId ? productDetailMap.value[item.productId] : null;
-
-  if (detail?.brandName) return detail.brandName;
-
-  if (detail?.brand?.name) return detail.brand.name;
-
-  // Dự phòng: nội suy trực tiếp từ tên sản phẩm
-
+  // Dự phòng: nội suy trực tiếp từ tên sản phẩm trong dữ liệu báo cáo.
   const productName = getProductName(item);
-
   const guessed = guessBrandFromName(productName);
 
   if (guessed !== "Khác") return guessed;
@@ -273,27 +239,11 @@ const getBrandName = (item: any) => {
 
 const getCapacityText = (item: any) => {
   // BE trả capacityName riêng; không trộn loại chai vào dung tích.
-
   if (item.capacityName && String(item.capacityName).trim() !== "") {
     return item.capacityName;
   }
 
-  let text = item.capacity || item.variantName || item.subName;
-
-  if (!text && item.productId) {
-    const detail = productDetailMap.value[item.productId];
-
-    if (
-      detail &&
-      Array.isArray(detail.variants) &&
-      detail.variants.length > 0
-    ) {
-      text =
-        detail.variants[0].capacityName ||
-        detail.variants[0].capacity ||
-        detail.variants[0].sku;
-    }
-  }
+  const text = item.capacity || item.variantName || item.subName;
 
   if (!text) return "";
 
@@ -306,39 +256,12 @@ const getCapacityText = (item: any) => {
 
 const getBottleTypeText = (item: any) => {
   const text = String(item?.bottleTypeName || item?.bottleType || "").trim();
+
   return text;
 };
 
 const getBestSellingImageUrl = (item: BestSellingProductResponse) => {
   if (!item) return "";
-
-  const productId = Number(item.productId || 0);
-
-  const detail = productId > 0 ? productDetailMap.value[productId] : null;
-
-  if (detail) {
-    const detailUrl =
-      detail.primaryImageUrl ||
-      detail.PrimaryImageUrl ||
-      detail.imageUrl ||
-      detail.ImageUrl ||
-      detail.mainImage;
-
-    if (detailUrl) return getImageUrl(detailUrl);
-
-    if (Array.isArray(detail.images) && detail.images.length > 0) {
-      const primaryImage = detail.images.find((image: any) =>
-        Boolean(image?.isPrimary || image?.is_primary)
-      );
-
-      const fallbackImage = primaryImage || detail.images[0];
-
-      const imageUrl =
-        fallbackImage?.imageUrl || fallbackImage?.url || fallbackImage;
-
-      if (imageUrl) return getImageUrl(imageUrl);
-    }
-  }
 
   const rawUrl =
     (item as any).primaryImageUrl ||
@@ -399,7 +322,7 @@ const getRankClass = (index: number) => {
 };
 
 const FALLBACK_IMAGE =
-  "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww\.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23f1f5f9%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20fill%3D%22%2394a3b8%22%20font-family%3D%22Arial%22%20font-size%3D%2214%22%3EKh%C3%B4ng%20c%C3%B3%20%E1%BA%A3nh%3C%2Ftext%3E%3C%2Fsvg%3E";
+  "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww\\.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23f1f5f9%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20fill%3D%22%2394a3b8%22%20font-family%3D%22Arial%22%20font-size%3D%2214%22%3EKh%C3%B4ng%20c%C3%B3%20%E1%BA%A3nh%3C%2Ftext%3E%3C%2Fsvg%3E";
 
 const handleImageError = (event: Event) => {
   const target = event.target as HTMLImageElement | null;
@@ -413,15 +336,21 @@ const handleImageError = (event: Event) => {
 <style scoped>
 .image-box {
   width: 55px;
+
   height: 55px;
 }
 
 .product-img {
   width: 100%;
+
   height: 100%;
+
   object-fit: cover;
+
   border-radius: 10px;
+
   border: 1px solid #e2e8f0;
+
   flex-shrink: 0;
 }
 
@@ -435,31 +364,49 @@ const handleImageError = (event: Event) => {
 
 .placeholder-img {
   display: flex;
+
   align-items: center;
+
   justify-content: center;
+
   background: #f1f5f9;
+
   color: #94a3b8;
+
   font-size: 20px;
+
   border-radius: 10px;
 }
 
 .product-name {
   max-width: 360px;
+
   white-space: nowrap;
+
   overflow: hidden;
+
   text-overflow: ellipsis;
 }
 
 .rank-badge {
   display: inline-flex;
+
   align-items: center;
+
   justify-content: center;
+
   min-width: 42px;
+
   height: 30px;
+
   border-radius: 999px;
+
   background: #111827;
+
   color: #fff;
+
   font-weight: 700;
+
   font-size: 13px;
 }
 
@@ -477,8 +424,11 @@ const handleImageError = (event: Event) => {
 
 .empty-box {
   padding: 50px;
+
   text-align: center;
+
   color: #6b7280;
+
   background: #f9fafb;
 }
 

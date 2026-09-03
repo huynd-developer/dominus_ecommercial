@@ -233,7 +233,10 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
                     0
                 ) AS revenue,
 
-                MAX(oi.Image) AS imageUrl
+                COALESCE(
+                    MAX(NULLIF(LTRIM(RTRIM(oi.Image)), '')),
+                    MAX(productImage.ImageUrl)
+                ) AS imageUrl
 
             FROM [OrderItem] oi
 
@@ -254,6 +257,18 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
 
             LEFT JOIN [BottleType] bt
                 ON bt.Id = pv.BottleTypeId
+                OUTER APPLY (
+                    SELECT TOP 1
+                        pi.ImageUrl
+                    FROM [ProductImage] pi
+                    WHERE pi.ProductId = p.Id
+                    ORDER BY
+                        CASE
+                            WHEN ISNULL(pi.IsPrimary, 0) = 1 THEN 0
+                            ELSE 1
+                        END,
+                        pi.Id ASC
+                ) productImage
 
             WHERE o.CompletedAt IS NOT NULL
               AND o.CompletedAt >= :fromDate

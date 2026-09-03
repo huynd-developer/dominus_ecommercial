@@ -50,7 +50,8 @@
       v-if="!readonly && (!startDate || !endDate)"
       class="alert alert-warning py-3 mb-4 fw-semibold"
     >
-      <i class="bi bi-exclamation-triangle-fill me-2"></i> Chọn thời gian bắt đầu và kết thúc trước để hệ thống kiểm tra trùng khuyến mãi.
+      <i class="bi bi-exclamation-triangle-fill me-2"></i> Chọn thời gian bắt
+      đầu và kết thúc trước để hệ thống kiểm tra trùng khuyến mãi.
     </div>
 
     <div v-if="!readonly" class="card border-0 shadow-sm mb-4">
@@ -71,7 +72,9 @@
           <tbody>
             <tr v-if="store.optionLoading || isVerifying">
               <td colspan="7" class="text-center py-5">
-                <span class="spinner-border spinner-border-sm me-2 text-dark"></span>
+                <span
+                  class="spinner-border spinner-border-sm me-2 text-dark"
+                ></span>
                 Đang tải và kiểm tra biến thể...
               </td>
             </tr>
@@ -94,7 +97,8 @@
                 :key="item.productVariantId"
                 :class="{
                   'table-secondary':
-                    !item.availableForPromotion && !isSelected(item.productVariantId),
+                    !item.availableForPromotion &&
+                    !isSelected(item.productVariantId),
                 }"
               >
                 <td class="ps-4">
@@ -104,7 +108,8 @@
                     type="checkbox"
                     :checked="isSelected(item.productVariantId)"
                     :disabled="
-                      !item.availableForPromotion && !isSelected(item.productVariantId)
+                      !item.availableForPromotion &&
+                      !isSelected(item.productVariantId)
                     "
                     @change="toggleVariant(item)"
                   />
@@ -114,23 +119,28 @@
                   <div class="fw-bold">
                     {{ item.productName || "Không rõ tên sản phẩm" }}
                   </div>
-                  <small v-if="item.manufacturingDate" class="text-muted d-block mt-1">
-                    NSX: {{ formatDate(item.manufacturingDate) }}
-                  </small>
-                  <small v-if="item.expirationDate" class="text-muted d-block">
-                    HSD: {{ formatDate(item.expirationDate) }}
-                  </small>
                 </td>
 
                 <td class="fw-semibold">{{ item.capacity || "N/A" }}</td>
                 <td>{{ item.bottleType || "N/A" }}</td>
-                <td class="text-end fw-bold">{{ formatCurrency(item.price) }}</td>
-                <td class="text-end fw-semibold">{{ item.stockQuantity ?? 0 }}</td>
+                <td class="text-end fw-bold">
+                  {{ formatCurrency(item.price) }}
+                </td>
+                <td class="text-end fw-semibold">
+                  {{ item.stockQuantity ?? 0 }}
+                </td>
                 <td class="pe-4">
-                  <span v-if="item.availableForPromotion" class="badge bg-success px-2 py-1">
+                  <span
+                    v-if="item.availableForPromotion"
+                    class="badge bg-success px-2 py-1"
+                  >
                     Có thể chọn
                   </span>
-                  <span v-else class="badge bg-danger text-wrap px-2 py-1" :title="item.unavailableReason || ''">
+                  <span
+                    v-else
+                    class="badge bg-danger text-wrap px-2 py-1"
+                    :title="item.unavailableReason || ''"
+                  >
                     {{ item.unavailableReason || "Không thể chọn" }}
                   </span>
                 </td>
@@ -182,27 +192,39 @@
             <thead class="table-light">
               <tr>
                 <th class="ps-4">Sản phẩm</th>
-                <th>NSX/HSD</th>
+                <th class="text-end">Tồn có thể bán</th>
                 <th class="text-end">Giá gốc</th>
                 <th style="width: 170px">% giảm</th>
                 <th class="text-end">Giá sau giảm</th>
-                <th v-if="!readonly" class="text-center pe-4" style="width: 100px">Thao tác</th>
+                <th
+                  v-if="!readonly"
+                  class="text-center pe-4"
+                  style="width: 100px"
+                >
+                  Thao tác
+                </th>
               </tr>
             </thead>
 
             <tbody>
-              <tr v-for="selected in modelValue" :key="selected.productVariantId">
+              <tr
+                v-for="selected in modelValue"
+                :key="selected.productVariantId"
+              >
                 <td class="ps-4">
                   <div class="fw-bold text-success">
-                    {{ selected.productName || "Biến thể #" + selected.productVariantId }}
+                    {{
+                      selected.productName ||
+                      "Biến thể #" + selected.productVariantId
+                    }}
                   </div>
                   <small class="text-muted fw-semibold">
-                    {{ selected.capacity || "N/A" }} - {{ selected.bottleType || "N/A" }}
+                    {{ selected.capacity || "N/A" }} -
+                    {{ selected.bottleType || "N/A" }}
                   </small>
                 </td>
-                <td class="small">
-                  <span class="text-muted d-block">NSX: {{ selected.manufacturingDate ? formatDate(selected.manufacturingDate) : "-" }}</span>
-                  <span class="text-muted d-block">HSD: {{ selected.expirationDate ? formatDate(selected.expirationDate) : "-" }}</span>
+                <td class="text-end fw-semibold">
+                  {{ selected.stockQuantity ?? 0 }}
                 </td>
                 <td class="text-end fw-semibold">
                   {{ formatCurrency(resolveOriginalPrice(selected)) }}
@@ -237,7 +259,8 @@
         </div>
       </div>
       <small class="text-muted d-block mt-3 fst-italic">
-        * Giá sau giảm chỉ để hiển thị. Khi checkout, BE sẽ tự tính lại giá Flash Sale.
+        * Giá sau giảm chỉ để hiển thị. Khi checkout, BE sẽ tự tính lại giá
+        Flash Sale.
       </small>
     </div>
 
@@ -280,8 +303,10 @@ const localVariantOptions = ref<any[]>([]);
 const isVerifying = ref(false);
 
 const displayOptions = computed(() => {
-  return localVariantOptions.value.filter(item => {
-    const isDiscontinued = item.unavailableReason && item.unavailableReason.toLowerCase().includes('ngừng bán');
+  return localVariantOptions.value.filter((item) => {
+    const isDiscontinued =
+      item.unavailableReason &&
+      item.unavailableReason.toLowerCase().includes("ngừng bán");
     return !isDiscontinued || isSelected(item.productVariantId);
   });
 });
@@ -310,31 +335,51 @@ const handleSearch = async (page = 0) => {
 
   isVerifying.value = true;
   const validOptions = [];
-  
+
   for (const item of store.variantOptions) {
     try {
-      const res = await api.get(`/v1/products`, { params: { keyword: item.sku || item.productName || "", size: 50, t: Date.now() } });
-      const list = res.data?.data?.content || res.data?.data || res.data?.content || res.data || [];
-      
+      const res = await api.get(`/v1/products`, {
+        params: {
+          keyword: item.sku || item.productName || "",
+          size: 50,
+          t: Date.now(),
+        },
+      });
+      const list =
+        res.data?.data?.content ||
+        res.data?.data ||
+        res.data?.content ||
+        res.data ||
+        [];
+
       const exists = list.some((p: any) => {
         if (p.isDeleted || p.deleted || Number(p.status) === 0) return false;
         if (p.variants) {
           return p.variants.some((pv: any) => {
             const vId = Number(pv.productVariantId || pv.variantId || pv.id);
             // ĐÃ SỬA LỖI TẠI ĐÂY BẰNG CÁCH ÉP KIỂU
-            const targetId = Number((item as any).productVariantId || (item as any).variantId || (item as any).id);
-            return vId === targetId && !pv.isDeleted && !pv.deleted && Number(pv.status) !== 0;
+            const targetId = Number(
+              (item as any).productVariantId ||
+                (item as any).variantId ||
+                (item as any).id
+            );
+            return (
+              vId === targetId &&
+              !pv.isDeleted &&
+              !pv.deleted &&
+              Number(pv.status) !== 0
+            );
           });
         }
         return false;
       });
-      
+
       if (exists) validOptions.push(item);
     } catch {
       validOptions.push(item); // Fallback
     }
   }
-  
+
   localVariantOptions.value = validOptions;
   isVerifying.value = false;
 };
@@ -357,7 +402,8 @@ const toggleVariant = async (item: PromotionProductVariantOptionResponse) => {
     await Swal.fire({
       icon: "warning",
       title: "Không thể chọn biến thể",
-      text: item.unavailableReason || "Biến thể này không đủ điều kiện khuyến mãi.",
+      text:
+        item.unavailableReason || "Biến thể này không đủ điều kiện khuyến mãi.",
       confirmButtonColor: "#bd9a5f",
     });
     return;
@@ -389,7 +435,9 @@ const removeSelected = (productVariantId: number) => {
   if (props.readonly) return;
   emit(
     "update:modelValue",
-    props.modelValue.filter((item) => item.productVariantId !== productVariantId)
+    props.modelValue.filter(
+      (item) => item.productVariantId !== productVariantId
+    )
   );
 };
 
@@ -398,7 +446,7 @@ const onDiscountInput = (productVariantId: number, event: Event) => {
   if (props.readonly) return;
   const target = event.target as HTMLInputElement;
   let val = Number(target.value);
-  
+
   if (val > 99) {
     val = 99;
     target.value = "99";
@@ -406,7 +454,7 @@ const onDiscountInput = (productVariantId: number, event: Event) => {
     val = 0;
     target.value = "0";
   }
-  
+
   updateDiscount(productVariantId, val);
 };
 
@@ -437,14 +485,5 @@ const calculateSalePrice = (item: PromotionVariantFormItem) => {
 
 const formatCurrency = (value?: number | null) => {
   return Number(value || 0).toLocaleString("vi-VN") + " ₫";
-};
-
-const formatDate = (value: string) => {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-  return date.toLocaleDateString("vi-VN");
 };
 </script>
