@@ -1228,6 +1228,19 @@ const isLoadingVariants = ref(false);
 const selectedVariant = ref<any>(null);
 const fullVariants = ref<any[]>([]);
 const currentTargetProduct = ref<any>(null);
+/*
+ * Snapshot GIÁ BÌNH THƯỜNG của từng variant
+ * lấy trực tiếp từ /v1/products/{id}.
+ *
+ * Chỉ dùng để trả popup về giá thường khi Flash Sale kết thúc.
+ * Không dùng cho tồn kho / cart / checkout.
+ */
+const modalNormalPriceByVariantId = new Map<number, any>();
+/*
+ * Chỉ dùng để nhận biết đúng thời điểm:
+ * Flash Sale ACTIVE -> INACTIVE.
+ */
+let modalLastFlashSaleActive = false;
 const imageLoadError = ref(false);
 
 const BACKEND_URL = "http://localhost:8080";
@@ -2382,12 +2395,25 @@ const openVariantModal = async (
   currentTargetProduct.value = customProduct || activeProduct.value;
   selectedVariant.value = null;
   fullVariants.value = [];
+
+  /*
+   * Popup mới -> bỏ snapshot của lần mở trước.
+   */
+  modalNormalPriceByVariantId.clear();
+
   quantity.value = 1;
   showVariantModal.value = true;
   isLoadingVariants.value = true;
 
   try {
     const tp = currentTargetProduct.value;
+
+    /*
+     * Ghi nhận popup được mở khi campaign
+     * đang active hay không.
+     */
+    modalLastFlashSaleActive = Boolean(tp?.isFlashSale ?? tp?.flashSale);
+
     const tId = getProductIdNum(tp);
 
     const salePriceMap = new Map<number, number>();
@@ -2438,13 +2464,28 @@ const openVariantModal = async (
 
     const processedVariants = rawVariants.map((v: any) => {
       const vId = Number(v.productVariantId || v.variantId || v.id);
+
       const displayCap = formatVariantName(v);
 
       let capObj = v.capacityName || v.capacityValue || v.volume || v.capacity;
-      if (typeof capObj === "object") capObj = capObj?.value ?? capObj?.name;
+
+      if (typeof capObj === "object") {
+        capObj = capObj?.value ?? capObj?.name;
+      }
+
       const numericCap =
         parseFloat(String(capObj || "").replace("ml", "")) || 0;
 
+      /*
+       * ==============================
+       * GIÁ BÌNH THƯỜNG TỪ PRODUCT API
+       * ==============================
+       *
+       * Đây là dữ liệu của:
+       * GET /v1/products/{id}
+       *
+       * Chưa lấy giá Flash Sale từ parent.
+       */
       const apiSale = Number(
         v.salePrice ?? v.promotionPrice ?? v.flashSalePrice ?? v.price ?? 0
       );
@@ -2453,12 +2494,60 @@ const openVariantModal = async (
         v.originalPrice ?? v.oldPrice ?? v.price ?? apiSale
       );
 
+      const normalDiscount = Number(v.discountPercent ?? v.discount ?? 0);
+
+      let normalSale = apiSale;
+      let normalOrig = apiOrig;
+
       /*
-       * Giá Flash Sale đã có sẵn trên tp.variants
-       * và phải ghép theo đúng ProductVariantId.
+       * Giữ nguyên behavior cũ:
+       * nếu API chỉ trả % giảm mà chưa tính salePrice
+       * thì tính giá bình thường như trước.
+       */
+      if (normalDiscount > 0 && normalOrig <= normalSale && normalSale > 0) {
+        normalOrig = normalSale;
+
+        normalSale = Math.round(normalOrig * (1 - normalDiscount / 100));
+      }
+
+      /*
+       * Lưu snapshot bình thường của đúng variant.
+       *
+       * Không reactive.
+       * Không gửi BE.
+       * Không ảnh hưởng stock/status.
+       */
+      if (vId > 0) {
+        modalNormalPriceByVariantId.set(vId, {
+          salePrice: normalSale > 0 ? normalSale : normalOrig,
+
+          originalPrice: normalOrig > 0 ? normalOrig : normalSale,
+
+          discountPercent: normalDiscount,
+
+          promotionPrice: v.promotionPrice ?? null,
+
+          flashSalePrice: v.flashSalePrice ?? null,
+
+          promotionId: v.promotionId ?? null,
+
+          promotionName: v.promotionName ?? null,
+
+          promotionEndDate: v.promotionEndDate ?? v.endDate ?? null,
+        });
+      }
+
+      /*
+       * ============================
+       * FLASH SALE TỪ PROPS / PARENT
+       * ============================
+       *
+       * Ghép đúng theo ProductVariantId.
        */
       const mappedSale = salePriceMap.get(vId);
+
       const mappedOrig = origPriceMap.get(vId);
+
       const mappedDiscount = discountMap.get(vId);
 
       const calculatedMappedDiscount =
@@ -2479,31 +2568,38 @@ const openVariantModal = async (
         mappedOrig > mappedSale &&
         flashDiscount > 0;
 
-      let finalSale = hasMappedFlashSale ? mappedSale : apiSale;
+      /*
+       * Có Flash Sale -> dùng Flash Sale.
+       * Không có -> giữ đúng giá bình thường.
+       */
+      let finalSale = hasMappedFlashSale ? mappedSale : normalSale;
 
-      let finalOrig = hasMappedFlashSale ? mappedOrig : apiOrig;
+      let finalOrig = hasMappedFlashSale ? mappedOrig : normalOrig;
+
+      let finalDisc = hasMappedFlashSale ? flashDiscount : normalDiscount;
 
       /*
-       * Không dùng discountPercent của PRODUCT cho tất cả SKU.
-       * Variant nào nằm Flash Sale thì variant đó mới được giảm.
+       * Safety compatibility với behavior cũ.
        */
-      let finalDisc = hasMappedFlashSale
-        ? flashDiscount
-        : Number(v.discountPercent ?? v.discount ?? 0);
-
       if (finalDisc > 0 && finalOrig <= finalSale && finalSale > 0) {
         finalOrig = finalSale;
+
         finalSale = Math.round(finalOrig * (1 - finalDisc / 100));
       }
 
       return {
         ...v,
+
         productVariantId: vId,
         id: vId,
+
         salePrice: finalSale,
         originalPrice: finalOrig,
+
         price: finalSale > 0 ? finalSale : finalOrig,
+
         discountPercent: finalDisc,
+
         displayCapacity: displayCap,
         numericCapacity: numericCap,
       };
@@ -2549,6 +2645,20 @@ const openVariantModal = async (
  * - cập nhật tồn kho
  * - cập nhật status
  */
+/**
+ * Chỉ đồng bộ GIÁ / FLASH SALE
+ * vào popup đang mở.
+ *
+ * TUYỆT ĐỐI KHÔNG:
+ * - gọi API
+ * - đóng popup
+ * - mở lại popup
+ * - đổi selectedVariant
+ * - reset quantity
+ * - sửa sellableQuantity
+ * - sửa stock
+ * - sửa status
+ */
 const syncOpenVariantModalFlashSale = (latestProduct: any) => {
   if (!showVariantModal.value || !latestProduct) {
     return;
@@ -2562,17 +2672,48 @@ const syncOpenVariantModalFlashSale = (latestProduct: any) => {
     ? latestProduct.productVariantList
     : [];
 
-  if (
-    latestVariants.length === 0 ||
-    !Array.isArray(fullVariants.value) ||
-    fullVariants.value.length === 0
-  ) {
+  /*
+   * Popup chưa có variant thì không làm gì.
+   */
+  if (!Array.isArray(fullVariants.value) || fullVariants.value.length === 0) {
     return;
   }
+  /*
+   * Xác định đúng transition của campaign:
+   *
+   * true -> false = Flash Sale vừa kết thúc.
+   *
+   * Chỉ transition này mới buộc toàn bộ variant
+   * trong popup quay về snapshot giá thường.
+   */
+  const latestProductIsFlashSale = Boolean(
+    latestProduct?.isFlashSale ?? latestProduct?.flashSale
+  );
 
+  const flashSaleJustEnded =
+    modalLastFlashSaleActive && !latestProductIsFlashSale;
+
+  /*
+   * Lưu cho lần đồng bộ tiếp theo.
+   */
+  modalLastFlashSaleActive = latestProductIsFlashSale;
+
+  /*
+   * Khi campaign vừa END:
+   * coi như không còn variant Flash Sale nào.
+   *
+   * Như vậy logic restore CŨ phía dưới sẽ tự
+   * trả 30ml, 50ml, 100ml về giá bình thường.
+   */
+  const variantsForSync = flashSaleJustEnded ? [] : latestVariants;
+
+  /*
+   * Index dữ liệu mới nhất từ parent
+   * theo đúng ProductVariantId.
+   */
   const latestVariantById = new Map<number, any>();
 
-  latestVariants.forEach((variant: any) => {
+  variantsForSync.forEach((variant: any) => {
     const variantId = Number(
       variant?.productVariantId ?? variant?.variantId ?? variant?.id ?? 0
     );
@@ -2583,9 +2724,12 @@ const syncOpenVariantModalFlashSale = (latestProduct: any) => {
   });
 
   /*
-   * Patch trực tiếp object Variant đang có trong popup.
-   * selectedVariant đang trỏ vào object trong fullVariants,
-   * nên Vue sẽ tự reactive giá mới.
+   * Patch trực tiếp object trong fullVariants.
+   *
+   * selectedVariant đang trỏ vào đúng object này,
+   * nên giá trên popup tự reactive.
+   *
+   * KHÔNG replace selectedVariant.
    */
   fullVariants.value.forEach((currentVariant: any) => {
     const variantId = Number(
@@ -2601,9 +2745,77 @@ const syncOpenVariantModalFlashSale = (latestProduct: any) => {
 
     const latestVariant = latestVariantById.get(variantId);
 
+    /*
+     * ======================================
+     * VARIANT KHÔNG CÒN TRONG FLASH SALE
+     * ======================================
+     *
+     * Ví dụ:
+     *
+     * popup đang có:
+     * 30 / 50 / 100ml
+     *
+     * campaign vừa kết thúc,
+     * parent chỉ còn variant đại diện 30ml.
+     *
+     * 50/100 không được phép giữ sale cũ.
+     * Trả chúng về snapshot giá thường.
+     */
     if (!latestVariant) {
+      const normal = modalNormalPriceByVariantId.get(variantId);
+
+      /*
+       * Không có snapshot thì KHÔNG đoán giá.
+       * Giữ nguyên để tránh tác động sai
+       * tới nghiệp vụ khác.
+       */
+      if (!normal) {
+        return;
+      }
+
+      const normalSale = Number(normal.salePrice ?? 0);
+
+      const normalOrig = Number(normal.originalPrice ?? normalSale);
+
+      const normalDiscount = Number(normal.discountPercent ?? 0);
+
+      currentVariant.price = normalSale > 0 ? normalSale : normalOrig;
+
+      currentVariant.salePrice = normalSale > 0 ? normalSale : normalOrig;
+
+      currentVariant.originalPrice = normalOrig > 0 ? normalOrig : normalSale;
+
+      currentVariant.oldPrice = normalOrig > normalSale ? normalOrig : null;
+
+      currentVariant.discountPercent = normalDiscount;
+
+      /*
+       * Variant này không còn Flash Sale.
+       */
+      currentVariant.isFlashSale = false;
+
+      /*
+       * Trả metadata promotion về đúng
+       * snapshot bình thường.
+       */
+      currentVariant.promotionPrice = normal.promotionPrice ?? null;
+
+      currentVariant.flashSalePrice = normal.flashSalePrice ?? null;
+
+      currentVariant.promotionId = normal.promotionId ?? null;
+
+      currentVariant.promotionName = normal.promotionName ?? null;
+
+      currentVariant.promotionEndDate = normal.promotionEndDate ?? null;
+
       return;
     }
+
+    /*
+     * ======================================
+     * VARIANT VẪN CÓ TRONG DATA MỚI NHẤT
+     * ======================================
+     */
 
     const latestSalePrice = Number(
       latestVariant?.salePrice ??
@@ -2625,7 +2837,10 @@ const syncOpenVariantModalFlashSale = (latestProduct: any) => {
     );
 
     /*
-     * CHỈ UPDATE FIELD LIÊN QUAN GIÁ / FLASH SALE.
+     * CHỈ cập nhật field liên quan giá /
+     * metadata promotion.
+     *
+     * Không chạm stock/status.
      */
     currentVariant.price =
       latestSalePrice > 0 ? latestSalePrice : latestOriginalPrice;

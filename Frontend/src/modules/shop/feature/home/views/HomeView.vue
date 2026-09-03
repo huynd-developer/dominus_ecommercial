@@ -807,61 +807,117 @@ const mergeFlashSaleIntoProduct = (
    * Flash Sale chỉ ghi đè giá/metadata khuyến mãi.
    * Tồn sellable của variant luôn được giữ từ /v1/products.
    */
-  const mergedVariants =
-    productVariants.length > 0
-      ? productVariants.map((variant) => {
-          const variantId = toNumber(
-            variant.productVariantId ?? variant.variantId ?? variant.id,
-            0
-          );
+  /*
+   * 1. Giữ nguyên cách merge cũ cho những variant
+   * đã có trong product.variants.
+   */
+  const mergedProductVariants = productVariants.map((variant) => {
+    const variantId = toNumber(
+      variant.productVariantId ?? variant.variantId ?? variant.id,
+      0
+    );
 
-          const flashVariant = flashSaleVariants.find(
-            (item) =>
-              toNumber(
-                item.productVariantId ?? item.variantId ?? item.id,
-                0
-              ) === variantId
-          );
+    const flashVariant = flashSaleVariants.find(
+      (item) =>
+        toNumber(item.productVariantId ?? item.variantId ?? item.id, 0) ===
+        variantId
+    );
 
-          if (!flashVariant) {
-            return variant;
-          }
+    if (!flashVariant) {
+      return variant;
+    }
 
-          const variantOriginalPrice = toNumber(
-            flashVariant.originalPrice ??
-              flashVariant.price ??
-              variant.originalPrice ??
-              variant.price,
-            originalPrice
-          );
+    const variantOriginalPrice = toNumber(
+      flashVariant.originalPrice ??
+        flashVariant.price ??
+        variant.originalPrice ??
+        variant.price,
+      originalPrice
+    );
 
-          const variantSalePrice = toNumber(
-            flashVariant.salePrice ??
-              flashVariant.promotionPrice ??
-              flashVariant.flashSalePrice,
-            salePrice
-          );
+    const variantSalePrice = toNumber(
+      flashVariant.salePrice ??
+        flashVariant.promotionPrice ??
+        flashVariant.flashSalePrice,
+      salePrice
+    );
 
-          return {
-            ...variant,
-            price: variantOriginalPrice,
-            originalPrice: variantOriginalPrice,
-            salePrice: variantSalePrice,
-            promotionPrice: variantSalePrice,
-            flashSalePrice: variantSalePrice,
-            imageUrl: variant.imageUrl || productImage,
-            image: variant.image || productImage,
-            images:
-              Array.isArray(variant.images) && variant.images.length > 0
-                ? variant.images
-                : productImages,
-          };
-        })
-      : flashSaleVariants.map((variant) => ({
-          ...variant,
-          sellableQuantity: toNumber(variant.sellableQuantity, 0),
-          stockQuantity: toNumber(variant.sellableQuantity, 0),
-        }));
+    return {
+      ...variant,
+
+      price: variantOriginalPrice,
+      originalPrice: variantOriginalPrice,
+      salePrice: variantSalePrice,
+
+      promotionPrice: variantSalePrice,
+      flashSalePrice: variantSalePrice,
+
+      imageUrl: variant.imageUrl || productImage,
+
+      image: variant.image || productImage,
+
+      images:
+        Array.isArray(variant.images) && variant.images.length > 0
+          ? variant.images
+          : productImages,
+    };
+  });
+
+  /*
+   * 2. Ghi lại những VariantId đã tồn tại,
+   * tránh duplicate.
+   */
+  const existingVariantIds = new Set<number>(
+    mergedProductVariants
+      .map((variant) =>
+        toNumber(variant.productVariantId ?? variant.variantId ?? variant.id, 0)
+      )
+      .filter((variantId) => variantId > 0)
+  );
+
+  /*
+   * 3. Flash Sale có variant nào mà product.variants
+   * chưa chứa thì chỉ BỔ SUNG variant đó.
+   *
+   * Không sửa variant thường khác.
+   */
+  const missingFlashSaleVariants = flashSaleVariants
+    .filter((variant) => {
+      const variantId = toNumber(
+        variant.productVariantId ?? variant.variantId ?? variant.id,
+        0
+      );
+
+      return variantId > 0 && !existingVariantIds.has(variantId);
+    })
+    .map((variant) => ({
+      ...variant,
+
+      sellableQuantity: toNumber(variant.sellableQuantity, 0),
+
+      /*
+       * Compatibility thôi.
+       * Nguồn tồn thực tế vẫn là sellableQuantity.
+       */
+      stockQuantity: toNumber(variant.sellableQuantity, 0),
+
+      imageUrl: variant.imageUrl || productImage,
+
+      image: variant.image || productImage,
+
+      images:
+        Array.isArray(variant.images) && variant.images.length > 0
+          ? variant.images
+          : productImages,
+    }));
+
+  /*
+   * 4. Variant hiện có + những Flash Sale variant bị thiếu.
+   */
+  const mergedVariants = [
+    ...mergedProductVariants,
+    ...missingFlashSaleVariants,
+  ];
 
   return {
     ...product,
