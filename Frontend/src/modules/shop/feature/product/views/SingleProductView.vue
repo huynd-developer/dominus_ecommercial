@@ -5,14 +5,14 @@
     <main class="single-product-main">
       <div
         v-if="isLoading"
-        style="padding: 100px; text-align: center; color: #666;"
+        style="padding: 100px; text-align: center; color: #666"
       >
         Đang tải thông tin sản phẩm...
       </div>
 
       <div
         v-else-if="!product"
-        style="padding: 100px; text-align: center; color: #e53e3e;"
+        style="padding: 100px; text-align: center; color: #e53e3e"
       >
         Không tìm thấy sản phẩm!
       </div>
@@ -45,6 +45,18 @@ const router = useRouter();
 const product = ref<any>(null);
 const isLoading = ref(true);
 
+/*
+ * Timer chỉ dùng để đồng bộ UI tại đúng mốc
+ * bắt đầu / kết thúc Flash Sale.
+ *
+ * Không polling liên tục.
+ */
+let flashSaleStartTimer: ReturnType<typeof window.setTimeout> | null = null;
+let flashSaleEndTimer: ReturnType<typeof window.setTimeout> | null = null;
+
+const FLASH_SALE_BOUNDARY_EPSILON_MS = 200;
+const MAX_SAFE_TIMEOUT_MS = 2_147_000_000;
+
 const BACKEND_URL = "http://localhost:8080";
 
 interface FlashSaleProductResponse {
@@ -67,6 +79,12 @@ interface FlashSaleProductResponse {
 interface FlashSaleIndex {
   byVariantId: Map<number, FlashSaleProductResponse>;
   bySku: Map<string, FlashSaleProductResponse>;
+
+  /*
+   * Mốc bắt đầu gần nhất của Flash Sale tương lai.
+   * Dùng để FE tự refresh đúng thời điểm.
+   */
+  nextStartDate: string | null;
 }
 
 const extractArrayData = (data: any): any[] => {
@@ -311,11 +329,30 @@ const getPageTotalPages = (data: any) => {
   );
 };
 
-const fetchFlashSalePage = async (page: number, size: number) => {
+const fetchFlashSalePage = async (
+  page: number,
+  size: number,
+  includeTiming = false
+) => {
   const res = await api.get("/promotions/flash-sale", {
     params: {
       page,
       size,
+
+      /*
+       * Chỉ page đầu cần metadata nextStartDate.
+       */
+      ...(includeTiming
+        ? {
+            includeTiming: true,
+          }
+        : {}),
+
+      /*
+       * Tránh browser/proxy giữ response cũ đúng thời điểm
+       * Flash Sale bắt đầu/kết thúc.
+       */
+      t: Date.now(),
     },
   });
 
@@ -324,6 +361,8 @@ const fetchFlashSalePage = async (page: number, size: number) => {
   return {
     rows: extractArrayData(data) as FlashSaleProductResponse[],
     totalPages: getPageTotalPages(data),
+
+    nextStartDate: includeTiming ? data?.nextStartDate ?? null : null,
   };
 };
 
@@ -331,11 +370,18 @@ const fetchActiveFlashSaleIndex = async (): Promise<FlashSaleIndex> => {
   const index: FlashSaleIndex = {
     byVariantId: new Map<number, FlashSaleProductResponse>(),
     bySku: new Map<string, FlashSaleProductResponse>(),
+    nextStartDate: null,
   };
 
   try {
     const size = 24;
-    const firstPage = await fetchFlashSalePage(0, size);
+
+    /*
+     * Page đầu lấy thêm metadata thời gian.
+     */
+    const firstPage = await fetchFlashSalePage(0, size, true);
+
+    index.nextStartDate = firstPage.nextStartDate ?? null;
 
     const addRowsToIndex = (rows: FlashSaleProductResponse[]) => {
       rows.forEach((item) => {
@@ -393,10 +439,7 @@ const findFlashSaleForVariant = (
   return null;
 };
 
-const mapVariant = (
-  variant: any,
-  flashSaleIndex: FlashSaleIndex
-) => {
+const mapVariant = (variant: any, flashSaleIndex: FlashSaleIndex) => {
   const flashSale = findFlashSaleForVariant(variant, flashSaleIndex);
   const variantId = getVariantId(variant);
   const stock = normalizeStock(variant, flashSale);
@@ -525,19 +568,220 @@ const mapProduct = (
     isFlashSale: mappedVariants.some((variant: any) => variant.isFlashSale),
   };
 };
+const clearFlashSaleStartTimer = () => {
+  if (flashSaleStartTimer !== null) {
+    window.clearTimeout(flashSaleStartTimer);
+    flashSaleStartTimer = null;
+  }
+};
 
-const loadProductDetail = async () => {
+const clearFlashSaleEndTimer = () => {
+  if (flashSaleEndTimer !== null) {
+    window.clearTimeout(flashSaleEndTimer);
+    flashSaleEndTimer = null;
+  }
+};
+
+const parseFlashSaleBoundary = (value?: string | null): number | null => {
+  if (!value) {
+    return null;
+  }
+
+  const timestamp = new Date(value).getTime();
+
+  return Number.isFinite(timestamp) ? timestamp : null;
+};
+
+/**
+ * Hẹn đúng thời điểm Flash Sale tiếp theo bắt đầu.
+ *
+ * Không polling liên tục.
+ * Đến đúng StartDate mới gọi API lại.
+ */
+const scheduleNextFlashSaleStart = (nextStartDate?: string | null) => {
+  clearFlashSaleStartTimer();
+
+  const startTime = parseFlashSaleBoundary(nextStartDate);
+
+  if (startTime === null) {
+    return;
+  }
+
+  const now = Date.now();
+
+  if (startTime <= now) {
+    return;
+  }
+
+  const delay = Math.min(
+    Math.max(startTime - now + FLASH_SALE_BOUNDARY_EPSILON_MS, 0),
+    MAX_SAFE_TIMEOUT_MS
+  );
+
+  flashSaleStartTimer = window.setTimeout(async () => {
+    flashSaleStartTimer = null;
+
+    /*
+     * Refresh âm thầm.
+     * Không loading lại cả trang.
+     */
+    await loadProductDetail({
+      silent: true,
+    });
+  }, delay);
+};
+
+/**
+ * Hẹn đúng thời điểm Flash Sale đang áp dụng
+ * cho Product hiện tại kết thúc.
+ */
+const scheduleCurrentProductFlashSaleEnd = (nextProduct: any) => {
+  clearFlashSaleEndTimer();
+
+  const now = Date.now();
+
+  const variants: any[] = Array.isArray(nextProduct?.variants)
+    ? nextProduct.variants
+    : [];
+
+  const endTimes: number[] = variants
+    .map((variant: any): number | null =>
+      parseFlashSaleBoundary(
+        variant?.promotionEndDate ?? variant?.endDate ?? null
+      )
+    )
+    .filter(
+      (value: number | null): value is number => value !== null && value > now
+    )
+    .sort((a: number, b: number) => a - b);
+
+  if (endTimes.length === 0) {
+    return;
+  }
+
+  const nextEndTime = endTimes[0]!;
+
+  const delay = Math.min(
+    Math.max(nextEndTime - now + FLASH_SALE_BOUNDARY_EPSILON_MS, 0),
+    MAX_SAFE_TIMEOUT_MS
+  );
+
+  flashSaleEndTimer = window.setTimeout(async () => {
+    flashSaleEndTimer = null;
+
+    /*
+     * Flash Sale vừa kết thúc:
+     * lấy lại giá thường âm thầm.
+     */
+    await loadProductDetail({
+      silent: true,
+    });
+  }, delay);
+};
+
+/**
+ * Cập nhật dữ liệu Product tại chỗ khi timer chạy.
+ *
+ * QUAN TRỌNG:
+ * Không thay reference Product/Variant hiện tại,
+ * để ProductDetail.vue không:
+ * - reset biến thể đang chọn
+ * - reset quantity
+ * - scroll lên đầu
+ */
+const patchProductInPlace = (nextProduct: any) => {
+  const currentProduct = product.value;
+
+  if (!currentProduct) {
+    product.value = nextProduct;
+    return;
+  }
+
+  const currentVariants = Array.isArray(currentProduct?.variants)
+    ? currentProduct.variants
+    : [];
+
+  const nextVariants = Array.isArray(nextProduct?.variants)
+    ? nextProduct.variants
+    : [];
+
+  /*
+   * Chỉ đồng bộ các field liên quan trực tiếp Flash Sale.
+   * Không đụng tồn kho, trạng thái, ảnh, SKU,
+   * dung tích, loại chai hay dữ liệu nghiệp vụ khác.
+   */
+  nextVariants.forEach((nextVariant: any) => {
+    const variantId = getVariantId(nextVariant);
+
+    if (variantId <= 0) {
+      return;
+    }
+
+    const currentVariant = currentVariants.find(
+      (variant: any) => getVariantId(variant) === variantId
+    );
+
+    if (!currentVariant) {
+      return;
+    }
+
+    currentVariant.price = nextVariant.price;
+    currentVariant.salePrice = nextVariant.salePrice;
+    currentVariant.originalPrice = nextVariant.originalPrice;
+    currentVariant.oldPrice = nextVariant.oldPrice;
+
+    currentVariant.discountPercent = nextVariant.discountPercent;
+    currentVariant.isFlashSale = nextVariant.isFlashSale;
+
+    currentVariant.promotionId = nextVariant.promotionId;
+    currentVariant.promotionName = nextVariant.promotionName;
+    currentVariant.promotionEndDate = nextVariant.promotionEndDate;
+  });
+
+  /*
+   * Product-level cũng chỉ cập nhật thông tin giá/Flash Sale.
+   */
+  currentProduct.price = nextProduct.price;
+  currentProduct.salePrice = nextProduct.salePrice;
+  currentProduct.originalPrice = nextProduct.originalPrice;
+  currentProduct.discountPercent = nextProduct.discountPercent;
+  currentProduct.isFlashSale = nextProduct.isFlashSale;
+};
+const loadProductDetail = async (
+  options: {
+    silent?: boolean;
+  } = {}
+) => {
+  const silent = options.silent === true;
+
   const productId = Number(route.params.id);
 
   if (!productId || Number.isNaN(productId)) {
-    product.value = null;
-    isLoading.value = false;
+    /*
+     * Load bình thường giữ behavior cũ.
+     * Silent refresh không phá UI đang có.
+     */
+    if (!silent) {
+      product.value = null;
+      isLoading.value = false;
+    }
+
     return;
   }
 
   try {
-    isLoading.value = true;
-    product.value = null;
+    /*
+     * Load lần đầu / đổi Product:
+     * giữ nguyên behavior cũ.
+     *
+     * Timer refresh:
+     * không hiện màn loading và
+     * không xóa Product đang hiển thị.
+     */
+    if (!silent) {
+      isLoading.value = true;
+      product.value = null;
+    }
 
     const [productRes, flashSaleIndex] = await Promise.all([
       api.get(`/v1/products/${productId}`),
@@ -552,10 +796,50 @@ const loadProductDetail = async () => {
       productData?.productVariantList ||
       [];
 
-    product.value = mapProduct(productData, variantData, flashSaleIndex);
+    const nextProduct = mapProduct(productData, variantData, flashSaleIndex);
+
+    /*
+     * Timer chạy cho cùng Product:
+     * patch tại chỗ.
+     *
+     * Load bình thường:
+     * vẫn thay Product như logic cũ.
+     */
+    if (
+      silent &&
+      product.value &&
+      Number(product.value?.id) === Number(nextProduct?.id)
+    ) {
+      patchProductInPlace(nextProduct);
+    } else {
+      product.value = nextProduct;
+    }
+
+    /*
+     * Sau mỗi lần lấy dữ liệu,
+     * luôn tính lại mốc tiếp theo.
+     */
+    scheduleNextFlashSaleStart(flashSaleIndex.nextStartDate);
+
+    scheduleCurrentProductFlashSaleEnd(nextProduct);
   } catch (error: any) {
     console.error("Lỗi tải chi tiết sản phẩm:", error);
 
+    /*
+     * Timer refresh lỗi mạng:
+     * giữ màn hình hiện tại.
+     *
+     * Không popup,
+     * không đá khách ra khỏi trang.
+     */
+    if (silent) {
+      return;
+    }
+
+    /*
+     * Load bình thường vẫn giữ
+     * nguyên logic lỗi ban đầu.
+     */
     product.value = null;
 
     await Swal.fire({
@@ -572,7 +856,13 @@ const loadProductDetail = async () => {
       name: "ProductList",
     });
   } finally {
-    isLoading.value = false;
+    /*
+     * Timer refresh không được
+     * làm thay đổi loading state.
+     */
+    if (!silent) {
+      isLoading.value = false;
+    }
   }
 };
 
@@ -586,12 +876,22 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  clearFlashSaleStartTimer();
+  clearFlashSaleEndTimer();
+
   window.removeEventListener("focus", handleWindowFocus);
 });
 
 watch(
   () => route.params.id,
   () => {
+    /*
+     * Hủy timer của Product cũ
+     * trước khi load Product mới.
+     */
+    clearFlashSaleStartTimer();
+    clearFlashSaleEndTimer();
+
     loadProductDetail();
   }
 );
