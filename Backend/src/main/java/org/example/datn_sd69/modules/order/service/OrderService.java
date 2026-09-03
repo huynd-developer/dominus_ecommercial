@@ -71,23 +71,12 @@ public class OrderService {
     public Map<String, Object> placeOrder(Integer customerId, OrderRequest request) {
         validateCheckoutRequest(customerId, request);
 
-        Customer customer = customerRepo.findById(customerId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy khách hàng"
-                ));
+        Customer customer = customerRepo.findById(customerId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy khách hàng"));
 
-        Cart cart = cartRepo.findByCustomerUserId(customerId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Giỏ hàng trống"
-                ));
+        Cart cart = cartRepo.findByCustomerUserId(customerId).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Giỏ hàng trống"));
 
         if (cart.getCartItems() == null || cart.getCartItems().isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Giỏ hàng không có sản phẩm nào"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Giỏ hàng không có sản phẩm nào");
         }
 
         String paymentMethod = normalizePaymentMethod(request.getPaymentMethod());
@@ -101,10 +90,7 @@ public class OrderService {
         LocalDateTime now = LocalDateTime.now();
 
         if (request.getVoucherCode() != null && !request.getVoucherCode().trim().isEmpty()) {
-            appliedVoucher = lockValidVoucherForCheckout(
-                    request.getVoucherCode(),
-                    now
-            );
+            appliedVoucher = lockValidVoucherForCheckout(request.getVoucherCode(), now);
         }
 
         for (CartItem item : cartItems) {
@@ -112,25 +98,13 @@ public class OrderService {
             ProductVariant variant = item.getProductVariant();
 
             if (!Integer.valueOf(1).equals(variant.getStatus())) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Sản phẩm '" + getSnapshotProductName(variant)
-                                + "' (Loại: " + formatVariantName(variant)
-                                + ") đang ngừng kinh doanh. Vui lòng quay lại giỏ hàng và xóa sản phẩm này!"
-                );
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sản phẩm '" + getSnapshotProductName(variant) + "' (Loại: " + formatVariantName(variant) + ") đang ngừng kinh doanh. Vui lòng quay lại giỏ hàng và xóa sản phẩm này!");
             }
 
             int sellableQuantity = getSellableQuantity(variant);
 
             if (sellableQuantity < item.getQuantity()) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Sản phẩm '" + getSnapshotProductName(variant)
-                                + "' (Loại: " + formatVariantName(variant)
-                                + ") không đủ số lượng. Kho chỉ còn "
-                                + sellableQuantity
-                                + " sản phẩm có thể bán!"
-                );
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sản phẩm '" + getSnapshotProductName(variant) + "' (Loại: " + formatVariantName(variant) + ") không đủ số lượng. Kho chỉ còn " + sellableQuantity + " sản phẩm có thể bán!");
             }
 
             CheckoutItemPrice itemPrice = calculateCheckoutItemPrice(variant);
@@ -144,10 +118,7 @@ public class OrderService {
             BigDecimal minOrderValue = appliedVoucher.getMinOrderValue() != null ? appliedVoucher.getMinOrderValue() : BigDecimal.ZERO;
 
             if (totalAmount.compareTo(minOrderValue) < 0) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Đơn hàng chưa đạt giá trị tối thiểu " + minOrderValue + "đ để dùng mã giảm giá này."
-                );
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Đơn hàng chưa đạt giá trị tối thiểu " + minOrderValue + "đ để dùng mã giảm giá này.");
             }
 
             String discountType = appliedVoucher.getDiscountType() != null ? appliedVoucher.getDiscountType().toUpperCase() : "";
@@ -179,13 +150,7 @@ public class OrderService {
         }
         finalAmount = normalizeMoney(finalAmount);
 
-        validateCheckoutSnapshot(
-                request,
-                totalAmount,
-                discountAmount,
-                shippingFee,
-                finalAmount
-        );
+        validateCheckoutSnapshot(request, totalAmount, discountAmount, shippingFee, finalAmount);
 
         Order order = new Order();
         order.setCustomer(customer);
@@ -195,13 +160,7 @@ public class OrderService {
 
         String finalShippingAddress = normalizeText(request.getShippingAddress(), "Địa chỉ giao hàng");
         if (Boolean.TRUE.equals(request.getIsVatRequired())) {
-            String vatInfo = String.format(
-                    " | [YÊU CẦU XUẤT VAT] MST: %s - Email: %s - Cty: %s - ĐC: %s",
-                    request.getTaxCode().trim(),
-                    request.getVatEmail().trim(),
-                    request.getCompanyName().trim(),
-                    request.getCompanyAddress().trim()
-            );
+            String vatInfo = String.format(" | [YÊU CẦU XUẤT VAT] MST: %s - Email: %s - Cty: %s - ĐC: %s", request.getTaxCode().trim(), request.getVatEmail().trim(), request.getCompanyName().trim(), request.getCompanyAddress().trim());
             if ((finalShippingAddress + vatInfo).length() > 500) {
                 finalShippingAddress = (finalShippingAddress + vatInfo).substring(0, 500);
             } else {
@@ -234,15 +193,7 @@ public class OrderService {
             String itemImage = item.getThumbnailUrl();
             if ((itemImage == null || itemImage.trim().isEmpty()) && variant.getProduct() != null) {
                 try {
-                    itemImage = entityManager.createQuery(
-                                    "SELECT img.imageUrl FROM ProductImage img WHERE img.product.id = :productId",
-                                    String.class
-                            )
-                            .setParameter("productId", variant.getProduct().getId())
-                            .setMaxResults(1)
-                            .getResultStream()
-                            .findFirst()
-                            .orElse(null);
+                    itemImage = entityManager.createQuery("SELECT img.imageUrl FROM ProductImage img WHERE img.product.id = :productId", String.class).setParameter("productId", variant.getProduct().getId()).setMaxResults(1).getResultStream().findFirst().orElse(null);
                 } catch (Exception e) {
                     System.out.println("=== LỖI QUERY ẢNH ĐẶT HÀNG: " + e.getMessage());
                 }
@@ -250,10 +201,7 @@ public class OrderService {
 
             CheckoutItemPrice itemPrice = checkoutPriceMap.get(item.getId());
             if (itemPrice == null) {
-                throw new ResponseStatusException(
-                        HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Không tìm thấy dữ liệu giá của sản phẩm trong giỏ hàng"
-                );
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Không tìm thấy dữ liệu giá của sản phẩm trong giỏ hàng");
             }
 
             OrderItem orderItem = new OrderItem();
@@ -279,7 +227,11 @@ public class OrderService {
         cart.getCartItems().clear();
         cartRepo.save(cart);
 
-        orderMailService.sendOrderPlaced(savedOrder);
+// Chỉ COD gửi mail ngay khi đặt hàng.
+// VNPay và VietQR sẽ gửi mail sau khi thanh toán/báo thanh toán thành công.
+        if (PAYMENT_METHOD_COD.equals(savedOrder.getPaymentMethod())) {
+            orderMailService.sendOrderPlacedAsync(savedOrder);
+        }
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("orderId", savedOrder.getId());
@@ -305,11 +257,7 @@ public class OrderService {
                 vnp_Params.put("vnp_Locale", "vn");
                 vnp_Params.put("vnp_ReturnUrl", vnp_ReturnUrl);
 
-                jakarta.servlet.http.HttpServletRequest httpRequest =
-                        ((org.springframework.web.context.request.ServletRequestAttributes)
-                                org.springframework.web.context.request.RequestContextHolder
-                                        .currentRequestAttributes()
-                        ).getRequest();
+                jakarta.servlet.http.HttpServletRequest httpRequest = ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.currentRequestAttributes()).getRequest();
 
                 String ipAddr = httpRequest.getHeader("X-FORWARDED-FOR");
                 if (ipAddr == null || ipAddr.isEmpty()) {
@@ -340,13 +288,9 @@ public class OrderService {
                     String fieldValue = vnp_Params.get(fieldName);
 
                     if ((fieldValue != null) && (fieldValue.length() > 0)) {
-                        hashData.append(fieldName)
-                                .append('=')
-                                .append(java.net.URLEncoder.encode(fieldValue, java.nio.charset.StandardCharsets.US_ASCII));
+                        hashData.append(fieldName).append('=').append(java.net.URLEncoder.encode(fieldValue, java.nio.charset.StandardCharsets.US_ASCII));
 
-                        query.append(java.net.URLEncoder.encode(fieldName, java.nio.charset.StandardCharsets.US_ASCII))
-                                .append('=')
-                                .append(java.net.URLEncoder.encode(fieldValue, java.nio.charset.StandardCharsets.US_ASCII));
+                        query.append(java.net.URLEncoder.encode(fieldName, java.nio.charset.StandardCharsets.US_ASCII)).append('=').append(java.net.URLEncoder.encode(fieldValue, java.nio.charset.StandardCharsets.US_ASCII));
 
                         if (itr.hasNext()) {
                             query.append('&');
@@ -356,8 +300,7 @@ public class OrderService {
                 }
 
                 String queryUrl = query.toString();
-                String vnp_SecureHash = org.example.datn_sd69.common.config.VNPayConfig
-                        .hmacSHA512(secretKey, hashData.toString());
+                String vnp_SecureHash = org.example.datn_sd69.common.config.VNPayConfig.hmacSHA512(secretKey, hashData.toString());
 
                 queryUrl += "&vnp_SecureHash=" + vnp_SecureHash;
 
@@ -365,10 +308,7 @@ public class OrderService {
                 response.put("message", "Chuyển hướng đến cổng thanh toán VNPay...");
             } catch (Exception e) {
                 e.printStackTrace();
-                throw new ResponseStatusException(
-                        HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Lỗi khi tạo link thanh toán VNPay"
-                );
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Lỗi khi tạo link thanh toán VNPay");
             }
         } else if (PAYMENT_METHOD_VIETQR.equals(savedOrder.getPaymentMethod())) {
             response.put("message", "Đơn hàng đã được tạo. Vui lòng quét mã QR để hoàn tất thanh toán.");
@@ -398,9 +338,7 @@ public class OrderService {
                 String fieldValue = params.get(fieldName);
 
                 if ((fieldValue != null) && (fieldValue.length() > 0)) {
-                    hashData.append(fieldName)
-                            .append('=')
-                            .append(java.net.URLEncoder.encode(fieldValue, java.nio.charset.StandardCharsets.US_ASCII));
+                    hashData.append(fieldName).append('=').append(java.net.URLEncoder.encode(fieldValue, java.nio.charset.StandardCharsets.US_ASCII));
 
                     if (itr.hasNext()) {
                         hashData.append('&');
@@ -408,8 +346,7 @@ public class OrderService {
                 }
             }
 
-            String signValue = org.example.datn_sd69.common.config.VNPayConfig
-                    .hmacSHA512(secretKey, hashData.toString());
+            String signValue = org.example.datn_sd69.common.config.VNPayConfig.hmacSHA512(secretKey, hashData.toString());
 
             if (signValue.equals(vnp_SecureHash)) {
                 String responseCode = params.get("vnp_ResponseCode");
@@ -429,7 +366,7 @@ public class OrderService {
                             Order savedOrder = orderRepo.save(order);
 
                             if (!wasPaymentReported) {
-                                orderMailService.sendPaymentSuccess(savedOrder);
+                                orderMailService.sendPaymentSuccessAsync(savedOrder);
                             }
 
                             response.put("success", true);
@@ -439,8 +376,7 @@ public class OrderService {
                             response.put("message", "Đơn hàng đã được xử lý trước đó.");
                         }
                     } else if ("24".equals(responseCode)) {
-                        boolean canCancel = Integer.valueOf(ORDER_STATUS_PENDING).equals(order.getStatus())
-                                && !Boolean.TRUE.equals(order.getIsPaymentReported());
+                        boolean canCancel = Integer.valueOf(ORDER_STATUS_PENDING).equals(order.getStatus()) && !Boolean.TRUE.equals(order.getIsPaymentReported());
 
                         if (canCancel) {
                             order.setStatus(ORDER_STATUS_CANCELLED);
@@ -451,8 +387,7 @@ public class OrderService {
                         response.put("success", false);
                         response.put("message", "Khách hàng đã hủy giao dịch");
                     } else {
-                        boolean canCancel = Integer.valueOf(ORDER_STATUS_PENDING).equals(order.getStatus())
-                                && !Boolean.TRUE.equals(order.getIsPaymentReported());
+                        boolean canCancel = Integer.valueOf(ORDER_STATUS_PENDING).equals(order.getStatus()) && !Boolean.TRUE.equals(order.getIsPaymentReported());
 
                         if (canCancel) {
                             order.setStatus(ORDER_STATUS_CANCELLED);
@@ -482,35 +417,18 @@ public class OrderService {
     private Voucher lockValidVoucherForCheckout(String rawCode, LocalDateTime now) {
         String cleanCode = rawCode == null ? "" : rawCode.trim();
 
-        Voucher candidate = voucherRepo.findByCodeIgnoreCase(cleanCode)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Rất tiếc! Mã giảm giá không tồn tại, đã hết hạn, hoặc hết lượt sử dụng."
-                ));
+        Voucher candidate = voucherRepo.findByCodeIgnoreCase(cleanCode).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rất tiếc! Mã giảm giá không tồn tại, đã hết hạn, hoặc hết lượt sử dụng."));
 
-        Voucher lockedVoucher = voucherRepo.findByIdForUpdate(candidate.getId())
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Rất tiếc! Mã giảm giá không tồn tại, đã hết hạn, hoặc hết lượt sử dụng."
-                ));
+        Voucher lockedVoucher = voucherRepo.findByIdForUpdate(candidate.getId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rất tiếc! Mã giảm giá không tồn tại, đã hết hạn, hoặc hết lượt sử dụng."));
 
-        int usedCount = lockedVoucher.getUsedCount() != null
-                ? lockedVoucher.getUsedCount()
-                : 0;
+        int usedCount = lockedVoucher.getUsedCount() != null ? lockedVoucher.getUsedCount() : 0;
 
         Integer usageLimit = lockedVoucher.getUsageLimit();
 
-        boolean invalid = lockedVoucher.getCode() == null
-                || !lockedVoucher.getCode().equalsIgnoreCase(cleanCode)
-                || Boolean.TRUE.equals(lockedVoucher.getIsDeleted())
-                || !Integer.valueOf(1).equals(lockedVoucher.getStatus())
-                || (usageLimit != null && usedCount >= usageLimit);
+        boolean invalid = lockedVoucher.getCode() == null || !lockedVoucher.getCode().equalsIgnoreCase(cleanCode) || Boolean.TRUE.equals(lockedVoucher.getIsDeleted()) || !Integer.valueOf(1).equals(lockedVoucher.getStatus()) || (usageLimit != null && usedCount >= usageLimit);
 
         if (invalid) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Rất tiếc! Mã giảm giá không tồn tại, đã hết hạn, hoặc hết lượt sử dụng."
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rất tiếc! Mã giảm giá không tồn tại, đã hết hạn, hoặc hết lượt sử dụng.");
         }
 
         return lockedVoucher;
@@ -531,8 +449,7 @@ public class OrderService {
             return;
         }
 
-        Voucher lockedVoucher = voucherRepo.findByIdForUpdate(order.getVoucher().getId())
-                .orElse(null);
+        Voucher lockedVoucher = voucherRepo.findByIdForUpdate(order.getVoucher().getId()).orElse(null);
 
         if (lockedVoucher == null) {
             return;
@@ -590,12 +507,7 @@ public class OrderService {
     private int getSellableQuantity(ProductVariant variant) {
         if (variant == null || variant.getId() == null) return 0;
         try {
-            Long stock = entityManager.createQuery(
-                            "SELECT COALESCE(SUM(i.quantityOnHand), 0) FROM InventoryLot i WHERE i.productVariant.id = :variantId",
-                            Long.class
-                    )
-                    .setParameter("variantId", variant.getId())
-                    .getSingleResult();
+            Long stock = entityManager.createQuery("SELECT COALESCE(SUM(i.quantityOnHand), 0) FROM InventoryLot i WHERE i.productVariant.id = :variantId", Long.class).setParameter("variantId", variant.getId()).getSingleResult();
             return stock != null ? stock.intValue() : 0;
         } catch (Exception e) {
             // Đã sửa: Sửa getQuantity() thành getStockQuantity()
@@ -685,18 +597,11 @@ public class OrderService {
 
     public String generateVnPayUrl(Integer orderId) {
         // 1. Tìm đơn hàng
-        Order order = orderRepo.findById(orderId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy đơn hàng"
-                ));
+        Order order = orderRepo.findById(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy đơn hàng"));
 
         // 2. Kiểm tra điều kiện: Chỉ cho phép tạo link nếu đơn hàng đang ở trạng thái PENDING
         if (!Integer.valueOf(ORDER_STATUS_PENDING).equals(order.getStatus())) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Đơn hàng không ở trạng thái chờ thanh toán hoặc đã bị hủy."
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Đơn hàng không ở trạng thái chờ thanh toán hoặc đã bị hủy.");
         }
 
         // 3. Tạo link VNPay (Tái sử dụng logic từ hàm placeOrder)
@@ -717,11 +622,7 @@ public class OrderService {
             vnp_Params.put("vnp_ReturnUrl", vnp_ReturnUrl);
 
             // Lấy IP Address của client
-            jakarta.servlet.http.HttpServletRequest httpRequest =
-                    ((org.springframework.web.context.request.ServletRequestAttributes)
-                            org.springframework.web.context.request.RequestContextHolder
-                                    .currentRequestAttributes()
-                    ).getRequest();
+            jakarta.servlet.http.HttpServletRequest httpRequest = ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.currentRequestAttributes()).getRequest();
 
             String ipAddr = httpRequest.getHeader("X-FORWARDED-FOR");
             if (ipAddr == null || ipAddr.isEmpty()) {
@@ -753,13 +654,9 @@ public class OrderService {
                 String fieldValue = vnp_Params.get(fieldName);
 
                 if ((fieldValue != null) && (fieldValue.length() > 0)) {
-                    hashData.append(fieldName)
-                            .append('=')
-                            .append(java.net.URLEncoder.encode(fieldValue, java.nio.charset.StandardCharsets.US_ASCII));
+                    hashData.append(fieldName).append('=').append(java.net.URLEncoder.encode(fieldValue, java.nio.charset.StandardCharsets.US_ASCII));
 
-                    query.append(java.net.URLEncoder.encode(fieldName, java.nio.charset.StandardCharsets.US_ASCII))
-                            .append('=')
-                            .append(java.net.URLEncoder.encode(fieldValue, java.nio.charset.StandardCharsets.US_ASCII));
+                    query.append(java.net.URLEncoder.encode(fieldName, java.nio.charset.StandardCharsets.US_ASCII)).append('=').append(java.net.URLEncoder.encode(fieldValue, java.nio.charset.StandardCharsets.US_ASCII));
 
                     if (itr.hasNext()) {
                         query.append('&');
@@ -769,8 +666,7 @@ public class OrderService {
             }
 
             String queryUrl = query.toString();
-            String vnp_SecureHash = org.example.datn_sd69.common.config.VNPayConfig
-                    .hmacSHA512(secretKey, hashData.toString());
+            String vnp_SecureHash = org.example.datn_sd69.common.config.VNPayConfig.hmacSHA512(secretKey, hashData.toString());
 
             queryUrl += "&vnp_SecureHash=" + vnp_SecureHash;
 
@@ -779,35 +675,22 @@ public class OrderService {
 
         } catch (Exception e) {
             e.printStackTrace();
-            throw new ResponseStatusException(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Lỗi khi tạo link thanh toán VNPay"
-            );
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Lỗi khi tạo link thanh toán VNPay");
         }
     }
 
     public void reportPayment(Integer orderId) {
         // 1. Tìm đơn hàng
-        Order order = orderRepo.findById(orderId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Không tìm thấy đơn hàng"
-                ));
+        Order order = orderRepo.findById(orderId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy đơn hàng"));
 
         // 2. Kiểm tra trạng thái: Chỉ cho phép báo cáo khi đơn đang chờ xử lý
         if (!Integer.valueOf(ORDER_STATUS_PENDING).equals(order.getStatus())) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Chỉ có thể báo cáo thanh toán cho đơn hàng đang chờ xử lý."
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chỉ có thể báo cáo thanh toán cho đơn hàng đang chờ xử lý.");
         }
 
         // 3. Tránh việc báo cáo trùng lặp
         if (Boolean.TRUE.equals(order.getIsPaymentReported())) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Đơn hàng này đã được báo cáo thanh toán trước đó."
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Đơn hàng này đã được báo cáo thanh toán trước đó.");
         }
 
         // 4. Cập nhật trạng thái báo cáo thanh toán
@@ -815,7 +698,7 @@ public class OrderService {
         Order savedOrder = orderRepo.save(order);
 
         if (PAYMENT_METHOD_VIETQR.equals(savedOrder.getPaymentMethod())) {
-            orderMailService.sendPaymentSuccess(savedOrder);
+            orderMailService.sendPaymentSuccessAsync(savedOrder);
         }
     }
 }

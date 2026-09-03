@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.example.datn_sd69.modules.order.service.OrderMailService;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -60,6 +61,7 @@ public class VNPayController {
     private final CustomerRepository customerRepository;
     private final VoucherRepository voucherRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final OrderMailService orderMailService;
 
     /**
      * VNPay IPN server-to-server.
@@ -666,12 +668,20 @@ public class VNPayController {
 
             order.setStatus(ORDER_STATUS_PENDING);
             order.setIsPaymentReported(true);
-            orderRepository.save(order);
+
+            Order savedOrder = orderRepository.save(order);
+
+// Chỉ bổ sung mail cho đơn ONLINE thanh toán hoàn toàn bằng VNPay.
+// Không thay đổi hành vi mail của MIXED/POS.
+            if (isFullVnpayOrder(savedOrder)) {
+                orderMailService.sendPaymentSuccessAsync(savedOrder);
+            }
 
             log.info(
                     "[VNPay] Đơn ONLINE #{} thanh toán thành công, giữ trạng thái Chờ xác nhận.",
                     order.getId()
             );
+
             return;
         }
 
@@ -787,7 +797,7 @@ public class VNPayController {
 
     /**
      * Khóa row Orders trong transaction callback hiện tại.
-     *
+     * <p>
      * VNPay có thể gọi IPN và Return gần như đồng thời. Khóa này đảm bảo chỉ
      * một callback xử lý trạng thái/kho của cùng một order tại một thời điểm,
      * tránh SALE_OUT hoặc RETURN_IN hai lần.

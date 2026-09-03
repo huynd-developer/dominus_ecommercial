@@ -19,6 +19,7 @@ import java.text.NumberFormat;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -76,6 +77,34 @@ public class OrderMailService {
         );
     }
 
+    public void sendOrderPlacedAsync(Order order) {
+        String paymentMethod = normalizeText(
+                order == null ? null : order.getPaymentMethod()
+        );
+
+        String message;
+
+        if ("VNPAY".equalsIgnoreCase(paymentMethod)) {
+            message = "Đơn hàng của bạn đã được tạo. Vui lòng hoàn tất thanh toán VNPay để shop tiếp nhận xử lý.";
+        } else if ("VIETQR".equalsIgnoreCase(paymentMethod)) {
+            message = "Đơn hàng của bạn đã được tạo. Vui lòng chuyển khoản hoặc báo thanh toán để shop tiếp nhận xử lý.";
+        } else {
+            message = "Đơn hàng của bạn đã được tạo thành công và đang chờ shop xác nhận.";
+        }
+
+        sendOrderMail(
+                order,
+                "Đặt hàng thành công - " + resolveOrderCode(order),
+                "Đặt hàng thành công",
+                message,
+                "Chờ xác nhận",
+                TONE_WARNING,
+                null,
+                true,
+                true
+        );
+    }
+
     public void sendPaymentSuccess(Order order) {
         String paymentMethod = normalizeText(order == null ? null : order.getPaymentMethod());
         String paymentName;
@@ -98,6 +127,32 @@ public class OrderMailService {
                 TONE_SUCCESS,
                 null,
                 false
+        );
+    }
+
+    public void sendPaymentSuccessAsync(Order order) {
+        String paymentMethod = normalizeText(order == null ? null : order.getPaymentMethod());
+        String paymentName;
+
+        if ("VNPAY".equalsIgnoreCase(paymentMethod)) {
+            paymentName = "VNPay";
+        } else if ("VIETQR".equalsIgnoreCase(paymentMethod)) {
+            paymentName = "VietQR";
+        } else {
+            paymentName = formatPaymentMethod(paymentMethod);
+        }
+
+        sendOrderMail(
+                order,
+                "Thanh toán " + paymentName + " thành công - " + resolveOrderCode(order),
+                "Thanh toán thành công",
+                "Shop đã ghi nhận thanh toán " + paymentName
+                        + " thành công. Đơn hàng vẫn đang ở trạng thái Chờ xác nhận và sẽ được shop xử lý sớm.",
+                "Đã thanh toán",
+                TONE_SUCCESS,
+                null,
+                false,
+                true
         );
     }
 
@@ -298,6 +353,30 @@ public class OrderMailService {
             String extraMessage,
             boolean createdTemplate
     ) {
+        sendOrderMail(
+                order,
+                subject,
+                title,
+                mainMessage,
+                badgeText,
+                tone,
+                extraMessage,
+                createdTemplate,
+                false
+        );
+    }
+
+    private void sendOrderMail(
+            Order order,
+            String subject,
+            String title,
+            String mainMessage,
+            String badgeText,
+            String tone,
+            String extraMessage,
+            boolean createdTemplate,
+            boolean async
+    ) {
         if (!mailEnabled) {
             return;
         }
@@ -335,7 +414,23 @@ public class OrderMailService {
                     : orderMailTemplateService.renderOrderStatus(model);
 
             helper.setText(htmlContent, true);
-            javaMailSender.send(mimeMessage);
+
+            if (async) {
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        javaMailSender.send(mimeMessage);
+                    } catch (Exception exception) {
+                        log.warn(
+                                "Không gửi được mail đơn hàng {} đến {}: {}",
+                                resolveOrderCode(order),
+                                recipient,
+                                exception.getMessage()
+                        );
+                    }
+                });
+            } else {
+                javaMailSender.send(mimeMessage);
+            }
         } catch (Exception exception) {
             log.warn("Không gửi được mail đơn hàng {} đến {}: {}", resolveOrderCode(order), recipient, exception.getMessage());
         }
