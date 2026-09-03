@@ -13,7 +13,6 @@
             <CountdownTimer
               v-if="flashSaleEndDate"
               :target-date="flashSaleEndDate"
-              @expired="handleFlashSaleExpired"
             />
           </div>
 
@@ -257,7 +256,7 @@ const productLoading = ref(false);
 const BACKEND_URL = "http://localhost:8080";
 
 let flashSaleStartTimer: ReturnType<typeof window.setTimeout> | null = null;
-
+let flashSaleEndTimer: ReturnType<typeof window.setTimeout> | null = null;
 const flashSaleEndDate = computed(() => {
   const validEndDates = flashSaleProducts.value
     .map((item) => item.endDate)
@@ -272,7 +271,12 @@ const clearFlashSaleStartTimer = () => {
     flashSaleStartTimer = null;
   }
 };
-
+const clearFlashSaleEndTimer = () => {
+  if (flashSaleEndTimer !== null) {
+    window.clearTimeout(flashSaleEndTimer);
+    flashSaleEndTimer = null;
+  }
+};
 const scheduleNextFlashSaleStart = (nextStartDate?: string | null) => {
   clearFlashSaleStartTimer();
 
@@ -312,7 +316,38 @@ const scheduleNextFlashSaleStart = (nextStartDate?: string | null) => {
     await fetchFlashSaleProducts(false);
   }, delay);
 };
+const scheduleNextFlashSaleEnd = (activeProducts: ProductCardItem[]) => {
+  clearFlashSaleEndTimer();
 
+  const now = Date.now();
+
+  const endTimes: number[] = (activeProducts || [])
+    .map((product) => {
+      if (!product?.endDate) return null;
+
+      const timestamp = new Date(product.endDate).getTime();
+
+      return Number.isFinite(timestamp) ? timestamp : null;
+    })
+    .filter(
+      (value: number | null): value is number => value !== null && value > now
+    )
+    .sort((a: number, b: number) => a - b);
+
+  if (endTimes.length === 0) {
+    return;
+  }
+
+  const nextEndTime = endTimes[0]!;
+
+  const delay = Math.max(0, nextEndTime - Date.now() + 200);
+
+  flashSaleEndTimer = window.setTimeout(async () => {
+    flashSaleEndTimer = null;
+
+    await fetchFlashSaleProducts(false);
+  }, delay);
+};
 const toNumber = (value: unknown, fallback = 0) => {
   const numberValue = Number(value);
 
@@ -1057,8 +1092,14 @@ const fetchFlashSaleProducts = async (showLoading = true) => {
         validProductIds.has(Number(p.productId))
       );
     } else {
-      flashSaleProducts.value = groupedProducts; // Fallback
+      flashSaleProducts.value = groupedProducts;
     }
+
+    /*
+     * Sau khi có danh sách Flash Sale active mới nhất,
+     * hẹn đúng EndDate gần nhất.
+     */
+    scheduleNextFlashSaleEnd(flashSaleProducts.value);
 
     refreshHomeProductSections();
   } catch (error) {
@@ -1075,9 +1116,17 @@ const fetchFlashSaleProducts = async (showLoading = true) => {
   }
 };
 
-const fetchNormalProducts = async () => {
+const fetchNormalProducts = async (
+  options: {
+    silent?: boolean;
+  } = {}
+) => {
+  const silent = options.silent === true;
+
   try {
-    productLoading.value = true;
+    if (!silent) {
+      productLoading.value = true;
+    }
 
     const res = await api.get("/v1/products", {
       params: {
@@ -1092,17 +1141,17 @@ const fetchNormalProducts = async () => {
   } catch (error) {
     console.error("Lỗi tải sản phẩm trang chủ:", error);
 
-    normalHomeProducts.value = [];
-    newestProducts.value = [];
-    featuredProducts.value = [];
-    specialProducts.value = [];
+    if (!silent) {
+      normalHomeProducts.value = [];
+      newestProducts.value = [];
+      featuredProducts.value = [];
+      specialProducts.value = [];
+    }
   } finally {
-    productLoading.value = false;
+    if (!silent) {
+      productLoading.value = false;
+    }
   }
-};
-
-const handleFlashSaleExpired = async () => {
-  await fetchFlashSaleProducts();
 };
 
 // Khi quay lại cửa sổ chỉ đồng bộ Flash Sale ở nền.
@@ -1110,7 +1159,10 @@ const handleFlashSaleExpired = async () => {
 // Khi quay lại cửa sổ, ép tải lại cả Flash Sale và Sản phẩm thường
 const handleFocus = async () => {
   await fetchFlashSaleProducts(false);
-  await fetchNormalProducts(); // BỔ SUNG DÒNG NÀY VÀO ĐÂY
+
+  await fetchNormalProducts({
+    silent: true,
+  });
 };
 
 onMounted(async () => {
@@ -1121,6 +1173,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   clearFlashSaleStartTimer();
+  clearFlashSaleEndTimer();
+
   window.removeEventListener("focus", handleFocus);
 });
 </script>

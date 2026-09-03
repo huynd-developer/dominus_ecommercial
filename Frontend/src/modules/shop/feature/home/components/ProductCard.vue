@@ -2448,15 +2448,48 @@ const openVariantModal = async (
       const apiSale = Number(
         v.salePrice ?? v.promotionPrice ?? v.flashSalePrice ?? v.price ?? 0
       );
+
       const apiOrig = Number(
         v.originalPrice ?? v.oldPrice ?? v.price ?? apiSale
       );
 
-      let finalSale = apiSale;
-      let finalOrig = apiOrig;
-      let finalDisc = Number(
-        v.discountPercent ?? tp?.discountPercent ?? tp?.discount ?? 0
-      );
+      /*
+       * Giá Flash Sale đã có sẵn trên tp.variants
+       * và phải ghép theo đúng ProductVariantId.
+       */
+      const mappedSale = salePriceMap.get(vId);
+      const mappedOrig = origPriceMap.get(vId);
+      const mappedDiscount = discountMap.get(vId);
+
+      const calculatedMappedDiscount =
+        mappedOrig != null &&
+        mappedSale != null &&
+        mappedOrig > 0 &&
+        mappedSale > 0 &&
+        mappedSale < mappedOrig
+          ? Math.round(((mappedOrig - mappedSale) / mappedOrig) * 100)
+          : 0;
+
+      const flashDiscount = mappedDiscount ?? calculatedMappedDiscount;
+
+      const hasMappedFlashSale =
+        mappedSale != null &&
+        mappedOrig != null &&
+        mappedSale > 0 &&
+        mappedOrig > mappedSale &&
+        flashDiscount > 0;
+
+      let finalSale = hasMappedFlashSale ? mappedSale : apiSale;
+
+      let finalOrig = hasMappedFlashSale ? mappedOrig : apiOrig;
+
+      /*
+       * Không dùng discountPercent của PRODUCT cho tất cả SKU.
+       * Variant nào nằm Flash Sale thì variant đó mới được giảm.
+       */
+      let finalDisc = hasMappedFlashSale
+        ? flashDiscount
+        : Number(v.discountPercent ?? v.discount ?? 0);
 
       if (finalDisc > 0 && finalOrig <= finalSale && finalSale > 0) {
         finalOrig = finalSale;
@@ -2504,6 +2537,172 @@ const openVariantModal = async (
     isLoadingVariants.value = false;
   }
 };
+
+/**
+ * Chỉ đồng bộ giá Flash Sale vào popup đang mở.
+ *
+ * Không:
+ * - gọi lại API
+ * - đóng/mở popup
+ * - đổi variant đang chọn
+ * - reset quantity
+ * - cập nhật tồn kho
+ * - cập nhật status
+ */
+const syncOpenVariantModalFlashSale = (latestProduct: any) => {
+  if (!showVariantModal.value || !latestProduct) {
+    return;
+  }
+
+  const latestVariants = Array.isArray(latestProduct?.variants)
+    ? latestProduct.variants
+    : Array.isArray(latestProduct?.productVariants)
+    ? latestProduct.productVariants
+    : Array.isArray(latestProduct?.productVariantList)
+    ? latestProduct.productVariantList
+    : [];
+
+  if (
+    latestVariants.length === 0 ||
+    !Array.isArray(fullVariants.value) ||
+    fullVariants.value.length === 0
+  ) {
+    return;
+  }
+
+  const latestVariantById = new Map<number, any>();
+
+  latestVariants.forEach((variant: any) => {
+    const variantId = Number(
+      variant?.productVariantId ?? variant?.variantId ?? variant?.id ?? 0
+    );
+
+    if (variantId > 0) {
+      latestVariantById.set(variantId, variant);
+    }
+  });
+
+  /*
+   * Patch trực tiếp object Variant đang có trong popup.
+   * selectedVariant đang trỏ vào object trong fullVariants,
+   * nên Vue sẽ tự reactive giá mới.
+   */
+  fullVariants.value.forEach((currentVariant: any) => {
+    const variantId = Number(
+      currentVariant?.productVariantId ??
+        currentVariant?.variantId ??
+        currentVariant?.id ??
+        0
+    );
+
+    if (variantId <= 0) {
+      return;
+    }
+
+    const latestVariant = latestVariantById.get(variantId);
+
+    if (!latestVariant) {
+      return;
+    }
+
+    const latestSalePrice = Number(
+      latestVariant?.salePrice ??
+        latestVariant?.promotionPrice ??
+        latestVariant?.flashSalePrice ??
+        latestVariant?.price ??
+        0
+    );
+
+    const latestOriginalPrice = Number(
+      latestVariant?.originalPrice ??
+        latestVariant?.oldPrice ??
+        latestVariant?.price ??
+        latestSalePrice
+    );
+
+    const latestDiscountPercent = Number(
+      latestVariant?.discountPercent ?? latestVariant?.discount ?? 0
+    );
+
+    /*
+     * CHỈ UPDATE FIELD LIÊN QUAN GIÁ / FLASH SALE.
+     */
+    currentVariant.price =
+      latestSalePrice > 0 ? latestSalePrice : latestOriginalPrice;
+
+    currentVariant.salePrice =
+      latestSalePrice > 0 ? latestSalePrice : latestOriginalPrice;
+
+    currentVariant.originalPrice = latestOriginalPrice;
+
+    currentVariant.oldPrice =
+      latestOriginalPrice > latestSalePrice ? latestOriginalPrice : null;
+
+    currentVariant.discountPercent = latestDiscountPercent;
+
+    currentVariant.isFlashSale =
+      latestDiscountPercent > 0 && latestOriginalPrice > latestSalePrice;
+
+    currentVariant.promotionId = latestVariant?.promotionId ?? null;
+
+    currentVariant.promotionName = latestVariant?.promotionName ?? null;
+
+    currentVariant.promotionEndDate =
+      latestVariant?.promotionEndDate ?? latestVariant?.endDate ?? null;
+  });
+};
+
+/**
+ * Signature chỉ gồm dữ liệu liên quan giá Flash Sale.
+ *
+ * Các thay đổi khác như tồn kho, ảnh, review...
+ * sẽ không kích hoạt logic đồng bộ popup này.
+ */
+const modalFlashSaleSignature = computed(() => {
+  const p = props.product as any;
+
+  const variants = Array.isArray(p?.variants)
+    ? p.variants
+    : Array.isArray(p?.productVariants)
+    ? p.productVariants
+    : Array.isArray(p?.productVariantList)
+    ? p.productVariantList
+    : [];
+
+  return JSON.stringify({
+    productId: Number(p?.productId ?? p?.id ?? 0),
+
+    isFlashSale: Boolean(p?.isFlashSale ?? p?.flashSale),
+
+    price: p?.price ?? null,
+    salePrice: p?.salePrice ?? null,
+    originalPrice: p?.originalPrice ?? p?.oldPrice ?? null,
+
+    discountPercent: p?.discountPercent ?? null,
+
+    variants: variants.map((variant: any) => ({
+      id: Number(
+        variant?.productVariantId ?? variant?.variantId ?? variant?.id ?? 0
+      ),
+
+      price: variant?.price ?? null,
+
+      salePrice:
+        variant?.salePrice ??
+        variant?.promotionPrice ??
+        variant?.flashSalePrice ??
+        null,
+
+      originalPrice: variant?.originalPrice ?? variant?.oldPrice ?? null,
+
+      discountPercent: variant?.discountPercent ?? variant?.discount ?? null,
+
+      promotionId: variant?.promotionId ?? null,
+
+      promotionEndDate: variant?.promotionEndDate ?? variant?.endDate ?? null,
+    })),
+  });
+});
 
 const getPrimaryVariantId = () => {
   const sortedVariants = getSortedVariants(activeProduct.value);
@@ -2731,6 +2930,20 @@ watch(
     }
   }
 );
+/*
+ * Parent /products đã tự fetch lại đúng mốc
+ * bắt đầu / kết thúc Flash Sale.
+ *
+ * ProductCard chỉ đồng bộ giá vào popup nếu popup
+ * đang mở, không tác động các nghiệp vụ khác.
+ */
+watch(modalFlashSaleSignature, () => {
+  if (!showVariantModal.value) {
+    return;
+  }
+
+  syncOpenVariantModalFlashSale(props.product as any);
+});
 </script>
 
 <style scoped>
@@ -2940,7 +3153,7 @@ watch(
   font-weight: 700;
 }
 .product-name {
-   font-family: Arial, "Segoe UI", sans-serif;
+  font-family: Arial, "Segoe UI", sans-serif;
   font-size: 17px;
   font-weight: 700;
   color: var(--aura-black);

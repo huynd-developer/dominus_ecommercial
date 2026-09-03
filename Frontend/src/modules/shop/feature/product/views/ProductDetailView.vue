@@ -839,10 +839,12 @@ const scheduleNextFlashSaleStart = (nextStartDate?: string | null) => {
   );
 
   flashSaleStartTimer = window.setTimeout(async () => {
-    flashSaleStartTimer = null;
+  flashSaleStartTimer = null;
 
-    await fetchProducts();
-  }, delay);
+  await fetchProducts({
+    silent: true,
+  });
+}, delay);
 };
 
 /*
@@ -871,10 +873,12 @@ const scheduleNextFlashSaleEnd = (activeFlashSaleProducts: any[]) => {
   );
 
   flashSaleEndTimer = window.setTimeout(async () => {
-    flashSaleEndTimer = null;
+  flashSaleEndTimer = null;
 
-    await fetchProducts();
-  }, delay);
+  await fetchProducts({
+    silent: true,
+  });
+}, delay);
 };
 const fetchActiveFlashSaleGroupedProducts = async () => {
   try {
@@ -1099,9 +1103,24 @@ const mergeFlashSaleIntoProducts = (
   });
 };
 
-const fetchProducts = async () => {
+const fetchProducts = async (
+  options: {
+    silent?: boolean;
+  } = {}
+) => {
+  const silent = options.silent === true;
+
   try {
-    isLoading.value = true;
+    /*
+     * Load bình thường:
+     * vẫn hiện loading như logic cũ.
+     *
+     * Refresh Flash Sale / focus:
+     * không được tháo ProductGrid khỏi DOM.
+     */
+    if (!silent) {
+      isLoading.value = true;
+    }
     const isFlashSaleQuery = route.query.flashSale === "true";
 
     if (isFlashSaleQuery) {
@@ -1154,12 +1173,25 @@ const fetchProducts = async () => {
         flashSaleProducts
       );
     }
-  } catch (error) {
-    console.error("Lỗi fetch API List:", error);
+ } catch (error) {
+  console.error("Lỗi fetch API List:", error);
+
+  /*
+   * Load bình thường lỗi:
+   * giữ behavior cũ.
+   *
+   * Silent refresh lỗi:
+   * giữ nguyên danh sách đang có,
+   * không làm ProductCard biến mất.
+   */
+  if (!silent) {
     productList.value = [];
-  } finally {
+  }
+} finally {
+  if (!silent) {
     isLoading.value = false;
   }
+}
 };
 
 const filteredProductList = computed(() => {
@@ -1398,9 +1430,10 @@ const handleOpenDetail = (item: any) => {
   });
 };
 
-// BẮT SỰ KIỆN CLICK CHUỘT QUAY LẠI CỬA SỔ ĐỂ TỰ ĐỘNG CẬP NHẬT DANH SÁCH & FLASH SALE MỚI NHẤT
 const handleFocus = async () => {
-  await fetchProducts();
+  await fetchProducts({
+    silent: true,
+  });
 };
 
 onMounted(() => {
