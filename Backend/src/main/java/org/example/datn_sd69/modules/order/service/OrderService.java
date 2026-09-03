@@ -279,9 +279,7 @@ public class OrderService {
         cart.getCartItems().clear();
         cartRepo.save(cart);
 
-        if (PAYMENT_METHOD_COD.equals(savedOrder.getPaymentMethod())) {
-            orderMailService.sendOrderPlaced(savedOrder);
-        }
+        orderMailService.sendOrderPlaced(savedOrder);
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("orderId", savedOrder.getId());
@@ -605,7 +603,9 @@ public class OrderService {
         }
     }
 
-    private record CheckoutItemPrice(BigDecimal originalUnitPrice, BigDecimal unitDiscountAmount, BigDecimal finalUnitPrice) {}
+    private record CheckoutItemPrice(BigDecimal originalUnitPrice, BigDecimal unitDiscountAmount,
+                                     BigDecimal finalUnitPrice) {
+    }
 
     private CheckoutItemPrice calculateCheckoutItemPrice(ProductVariant variant) {
         BigDecimal originalPrice = variant.getPrice() != null ? variant.getPrice() : BigDecimal.ZERO;
@@ -656,7 +656,8 @@ public class OrderService {
             try {
                 Object val = variant.getCapacity().getClass().getMethod("getValue").invoke(variant.getCapacity());
                 if (val != null) return val.toString();
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
 
             return variant.getCapacity().toString();
         }
@@ -668,12 +669,14 @@ public class OrderService {
             try {
                 Object val = variant.getBottleType().getClass().getMethod("getName").invoke(variant.getBottleType());
                 if (val != null) return val.toString();
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
 
             try {
                 Object val = variant.getBottleType().getClass().getMethod("getBottleTypeName").invoke(variant.getBottleType());
                 if (val != null) return val.toString();
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
 
             return variant.getBottleType().toString();
         }
@@ -809,6 +812,10 @@ public class OrderService {
 
         // 4. Cập nhật trạng thái báo cáo thanh toán
         order.setIsPaymentReported(true);
-        orderRepo.save(order);
+        Order savedOrder = orderRepo.save(order);
+
+        if (PAYMENT_METHOD_VIETQR.equals(savedOrder.getPaymentMethod())) {
+            orderMailService.sendPaymentSuccess(savedOrder);
+        }
     }
 }
