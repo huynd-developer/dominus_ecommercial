@@ -415,7 +415,7 @@ public class AdminOrderServiceImpl implements AdminOrderService {
 
         Order savedOrder = orderRepository.save(order);
 
-        orderMailService.sendDeliveryRefunded(savedOrder);
+        orderMailService.sendDeliveryRefundedAsync(savedOrder);
 
         return mapOrderToResponse(savedOrder, true);
     }

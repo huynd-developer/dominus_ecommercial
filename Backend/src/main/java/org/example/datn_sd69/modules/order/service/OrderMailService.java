@@ -250,7 +250,19 @@ public class OrderMailService {
                 false
         );
     }
-
+    public void sendDeliveryRefundedAsync(Order order) {
+        sendOrderMail(
+                order,
+                "Đã hoàn tiền đơn giao thất bại - " + resolveOrderCode(order),
+                "Đã hoàn tiền",
+                "Shop đã xác nhận hoàn tiền cho đơn giao hàng thất bại.",
+                "Đã hoàn tiền",
+                TONE_SUCCESS,
+                "Số tiền hoàn: " + formatMoney(order == null ? null : order.getDeliveryRefundAmount()),
+                false,
+                true
+        );
+    }
     // Gửi mail khi admin đã xác nhận hoàn tiền cho đơn hủy Online
     public void sendCancelRefunded(Order order) {
         sendOrderMail(
